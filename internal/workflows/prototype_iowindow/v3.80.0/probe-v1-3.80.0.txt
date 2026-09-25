@@ -1,0 +1,20 @@
+v1 obs no window limit=10        200 rows=10 io=True total=68
+v1 obs 30d window                200 rows=67 io=True total=67
+v1 obs limit=100                 200 rows=68 io=True total=68
+v1 obs limit=101                 400 {"message":"Invalid request data","error":[{"origin":"number","code":"too_big","maximum":100,"inclusive":true,"path":["limit"],"message":"Too big: expected number to be <=100"}]}
+v1 obs limit=1000                400 {"message":"Invalid request data","error":[{"origin":"number","code":"too_big","maximum":100,"inclusive":true,"path":["limit"],"message":"Too big: expected number to be <=100"}]}
+v1 obs limit=1001                400 {"message":"Invalid request data","error":[{"origin":"number","code":"too_big","maximum":100,"inclusive":true,"path":["limit"],"message":"Too big: expected number to be <=100"}]}
+v1 obs traceId d40               200 rows=1 io=True total=1
+traces no window                 200 rows=8 io=True total=8
+traces fields=io 30d             200 rows=7 io=True total=7
+traces limit=101                 400 {"message":"Invalid request data","error":[{"origin":"number","code":"too_big","maximum":100,"inclusive":true,"path":["limit"],"message":"Too big: expected number to be <=100"}]}
+v1 obs 13d window                200 rows=62 io=True total=62
+v1 obs 15d window                200 rows=64 io=True total=64
+traces 60d window                200 rows=8 io=True total=8
+traces limit=1001                400 {"message":"Invalid request data","error":[{"origin":"number","code":"too_big","maximum":100,"inclusive":true,"path":["limit"],"message":"Too big: expected number to be <=100"}]}
+trace get bulk (io+obs)          200 rows=0 io=False total=None
+sessions                         200 rows=0 io=False total=0
+scores v2                        200 rows=0 io=False total=0
+metrics v1 traces count 60d      200 rows=1 io=False total=None
+trace get bulk: observations embedded = 61 | has input: True
+{"status":"OK","version":"3.80.0"}
