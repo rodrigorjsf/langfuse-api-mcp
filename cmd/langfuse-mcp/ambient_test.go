@@ -46,6 +46,69 @@ func TestStartupLoadsEachAmbientVariableAsAnAmbientSource(t *testing.T) {
 	}
 }
 
+func TestStartupLoadsEachAmbientVariableSetInTheConfigFileAsAnAmbientSource(t *testing.T) {
+	t.Parallel()
+	for _, variable := range []string{"SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"} {
+		t.Run(variable, func(t *testing.T) {
+			t.Parallel()
+			path := writeCA(t, 1)
+			if variable == "SSL_CERT_DIR" {
+				path = filepath.Dir(path)
+			}
+
+			stderr, err := runExecutableWithConfigFile(t, variable+"="+path+"\n")
+			if err != nil {
+				t.Fatalf("executable did not exit 0: %v\nstderr:\n%s", err, stderr)
+			}
+
+			want := []any{map[string]any{
+				"variable": variable, "path": path, "kind": "ambient", "origin": "config-file",
+				"certificates": float64(1),
+			}}
+			if got := loggedSources(t, stderr); !reflect.DeepEqual(got, want) {
+				t.Fatalf("logged sources = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestStartupLetsAnAmbientVariableInTheEnvironmentOverrideTheConfigFile(t *testing.T) {
+	t.Parallel()
+	for _, variable := range []string{"SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS"} { // one removed at capture, one only read
+		t.Run(variable, func(t *testing.T) {
+			t.Parallel()
+			fromEnv, fromFile := writeCA(t, 1), writeCA(t, 2)
+
+			stderr, err := runExecutableWithConfigFile(t, variable+"="+fromFile+"\n", variable+"="+fromEnv)
+			if err != nil {
+				t.Fatalf("executable did not exit 0: %v\nstderr:\n%s", err, stderr)
+			}
+
+			want := []any{map[string]any{
+				"variable": variable, "path": fromEnv, "kind": "ambient", "origin": "environment",
+				"certificates": float64(1),
+			}}
+			if got := loggedSources(t, stderr); !reflect.DeepEqual(got, want) {
+				t.Fatalf("logged sources = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestStartupIgnoresAmbientVariablesInTheConfigFileWhenTheIgnoreFlagIsSet(t *testing.T) {
+	t.Parallel()
+	path := writeCA(t, 1)
+
+	stderr, err := runExecutableWithConfigFile(t, "NODE_EXTRA_CA_CERTS="+path+"\nLANGFUSE_MCP_IGNORE_AMBIENT_CA=true\n")
+	if err != nil {
+		t.Fatalf("executable did not exit 0: %v\nstderr:\n%s", err, stderr)
+	}
+
+	if got := loggedSources(t, stderr); len(got) != 0 {
+		t.Fatalf("logged sources = %v, want none with LANGFUSE_MCP_IGNORE_AMBIENT_CA=true in the file", got)
+	}
+}
+
 func TestStartupWarnsAboutAMissingAmbientFileAndStillSucceeds(t *testing.T) {
 	t.Parallel()
 	missing := filepath.Join(t.TempDir(), "deleted.pem")

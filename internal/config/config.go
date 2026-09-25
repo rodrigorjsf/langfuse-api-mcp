@@ -26,6 +26,15 @@ const (
 	EnvIgnoreAmbientCA = "LANGFUSE_MCP_IGNORE_AMBIENT_CA"
 )
 
+// Names of the ambient CA source variables (ADR-0006).
+const (
+	EnvSSLCertFile      = "SSL_CERT_FILE"
+	EnvSSLCertDir       = "SSL_CERT_DIR"
+	EnvNodeExtraCACerts = "NODE_EXTRA_CA_CERTS"
+	EnvRequestsCABundle = "REQUESTS_CA_BUNDLE"
+	EnvCurlCABundle     = "CURL_CA_BUNDLE"
+)
+
 // Names of the Langfuse key variables. They are secrets, so they may come only
 // from the environment, never from the config file (ADR-0011).
 const (
@@ -41,6 +50,38 @@ type Config struct {
 	CACertsPath Setting
 	// IgnoreAmbientCA is true when the ambient CA sources must not be used.
 	IgnoreAmbientCA bool
+	// AmbientInFile holds the ambient CA variables set in the config file.
+	AmbientInFile Ambient
+}
+
+// Ambient holds the values of the ambient CA source variables; "" when unset.
+//
+// Load fills it from the config file only: the executable reads the
+// environment's values itself, before config loads, because it must remove
+// SSL_CERT_FILE/SSL_CERT_DIR from the environment first (ADR-0006).
+type Ambient struct {
+	SSLCertFile      string
+	SSLCertDir       string
+	NodeExtraCACerts string
+	RequestsCABundle string
+	CurlCABundle     string
+}
+
+// Lookup returns the value of the ambient variable named variable, or "".
+func (a Ambient) Lookup(variable string) string {
+	switch variable {
+	case EnvSSLCertFile:
+		return a.SSLCertFile
+	case EnvSSLCertDir:
+		return a.SSLCertDir
+	case EnvNodeExtraCACerts:
+		return a.NodeExtraCACerts
+	case EnvRequestsCABundle:
+		return a.RequestsCABundle
+	case EnvCurlCABundle:
+		return a.CurlCABundle
+	}
+	return ""
 }
 
 // Setting is one configured value and where it was read.
@@ -109,6 +150,13 @@ func Load(env map[string]string, file File) (Config, error) {
 	cfg := Config{
 		CACert:      setting(EnvCACert),
 		CACertsPath: setting(EnvCACertsPath),
+		AmbientInFile: Ambient{
+			SSLCertFile:      fromFile[EnvSSLCertFile],
+			SSLCertDir:       fromFile[EnvSSLCertDir],
+			NodeExtraCACerts: fromFile[EnvNodeExtraCACerts],
+			RequestsCABundle: fromFile[EnvRequestsCABundle],
+			CurlCABundle:     fromFile[EnvCurlCABundle],
+		},
 	}
 	if flag := setting(EnvIgnoreAmbientCA); flag.Value != "" {
 		ignore, err := strconv.ParseBool(flag.Value)

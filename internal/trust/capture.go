@@ -33,30 +33,39 @@ const originEnvironment = "environment"
 // certificate locations (and on macOS/Windows as a switch-off of the platform
 // verifier), so they must be gone before anything touches certificate handling:
 // the executable calls this first. The other three variables are only read; Go
-// ignores them. Empty values and empty SSL_CERT_DIR entries are skipped.
-// Every returned source has Origin "environment".
+// ignores them. Every returned source has Origin "environment".
 //
 // It is the only function of this module that touches the environment; Build
 // takes the returned sources as plain values.
 func CaptureAmbient() ([]Source, error) {
-	var paths []Source
-	if f := os.Getenv(EnvSSLCertFile); f != "" {
-		paths = append(paths, Source{Variable: EnvSSLCertFile, Path: f, Origin: originEnvironment})
-	}
-	for _, d := range filepath.SplitList(os.Getenv(EnvSSLCertDir)) {
-		if d != "" {
-			paths = append(paths, Source{Variable: EnvSSLCertDir, Path: d, Directory: true, Origin: originEnvironment})
-		}
-	}
-	for _, v := range []string{EnvNodeExtraCACerts, EnvRequestsCABundle, EnvCurlCABundle} {
-		if f := os.Getenv(v); f != "" {
-			paths = append(paths, Source{Variable: v, Path: f, Origin: originEnvironment})
-		}
-	}
+	paths := AmbientSources(os.Getenv, originEnvironment)
 	for _, v := range []string{EnvSSLCertFile, EnvSSLCertDir} {
 		if err := os.Unsetenv(v); err != nil {
 			return nil, fmt.Errorf("remove %s from the environment: %w", v, err)
 		}
 	}
 	return paths, nil
+}
+
+// AmbientSources returns the ambient CA sources named by the variables that
+// lookup returns a value for, each tagged with origin. SSL_CERT_DIR is split
+// with the OS list separator. Empty values and empty SSL_CERT_DIR entries are
+// skipped. It reads nothing itself, so the executable can also pass the
+// ambient variables set in the config file.
+func AmbientSources(lookup func(variable string) string, origin string) []Source {
+	var paths []Source
+	if f := lookup(EnvSSLCertFile); f != "" {
+		paths = append(paths, Source{Variable: EnvSSLCertFile, Path: f, Origin: origin})
+	}
+	for _, d := range filepath.SplitList(lookup(EnvSSLCertDir)) {
+		if d != "" {
+			paths = append(paths, Source{Variable: EnvSSLCertDir, Path: d, Directory: true, Origin: origin})
+		}
+	}
+	for _, v := range []string{EnvNodeExtraCACerts, EnvRequestsCABundle, EnvCurlCABundle} {
+		if f := lookup(v); f != "" {
+			paths = append(paths, Source{Variable: v, Path: f, Origin: origin})
+		}
+	}
+	return paths
 }

@@ -88,6 +88,25 @@ func TestLoadLetsTheEnvironmentOverrideTheConfigFile(t *testing.T) {
 	}
 }
 
+func TestLoadReadsTheAmbientCAVariablesFromTheConfigFileOnly(t *testing.T) {
+	t.Parallel()
+	content := "SSL_CERT_FILE=/f/ssl.pem\nSSL_CERT_DIR=/f/a:/f/b\nNODE_EXTRA_CA_CERTS=/f/node.pem\n" +
+		"REQUESTS_CA_BUNDLE=/f/requests.pem\nCURL_CA_BUNDLE=/f/curl.pem\n"
+
+	cfg := mustLoad(t, map[string]string{"NODE_EXTRA_CA_CERTS": "/env/node.pem"}, configFile(content))
+
+	want := config.Ambient{
+		SSLCertFile: "/f/ssl.pem", SSLCertDir: "/f/a:/f/b", NodeExtraCACerts: "/f/node.pem",
+		RequestsCABundle: "/f/requests.pem", CurlCABundle: "/f/curl.pem",
+	}
+	if cfg.AmbientInFile != want {
+		t.Fatalf("AmbientInFile = %+v, want %+v", cfg.AmbientInFile, want)
+	}
+	if got := cfg.AmbientInFile.Lookup("CURL_CA_BUNDLE"); got != "/f/curl.pem" {
+		t.Fatalf("Lookup(CURL_CA_BUNDLE) = %q, want /f/curl.pem", got)
+	}
+}
+
 func TestLoadFailsNamingTheConfigFileAndLineNumberOfAMalformedLine(t *testing.T) {
 	t.Parallel()
 

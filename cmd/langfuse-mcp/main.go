@@ -9,6 +9,7 @@ package main
 import (
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/config"
@@ -55,7 +56,7 @@ func run(log *slog.Logger, environ []string, ambient []trust.Source) (trust.Pool
 		return trust.Pool{}, false
 	}
 
-	pool, report, err := trust.Build(trustSources(cfg, ambient))
+	pool, report, err := trust.Build(trustSources(cfg, slices.Concat(ambient, ambientInFile(cfg, ambient))))
 	if err != nil {
 		log.Error("startup failed", "error", err.Error())
 		return trust.Pool{}, false
@@ -78,6 +79,18 @@ func envMap(environ []string) map[string]string {
 		}
 	}
 	return env
+}
+
+// ambientInFile returns the ambient CA sources set in the config file, except
+// those whose variable the environment already set (captured): the environment
+// wins, per variable.
+func ambientInFile(cfg config.Config, captured []trust.Source) []trust.Source {
+	return trust.AmbientSources(func(variable string) string {
+		if slices.ContainsFunc(captured, func(s trust.Source) bool { return s.Variable == variable }) {
+			return ""
+		}
+		return cfg.AmbientInFile.Lookup(variable)
+	}, string(config.OriginConfigFile))
 }
 
 // trustSources maps the configured and ambient CA paths to the trust module's

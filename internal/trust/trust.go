@@ -36,7 +36,7 @@ type Sources struct {
 	// loaded is an error.
 	Explicit []Source
 	// Ambient sources come from widely used variables already present in the
-	// environment (SSL_CERT_FILE, SSL_CERT_DIR, NODE_EXTRA_CA_CERTS,
+	// environment or set in the config file (SSL_CERT_FILE, SSL_CERT_DIR, NODE_EXTRA_CA_CERTS,
 	// REQUESTS_CA_BUNDLE, CURL_CA_BUNDLE); one that cannot be loaded is skipped
 	// with a warning in the report.
 	Ambient []Source
@@ -63,8 +63,8 @@ type Kind string
 const (
 	// KindExplicit marks a source named through this server's own settings.
 	KindExplicit Kind = "explicit"
-	// KindAmbient marks a source named through a widely used variable that was
-	// already present in the environment.
+	// KindAmbient marks a source named through a widely used variable, from
+	// the environment or the config file.
 	KindAmbient Kind = "ambient"
 )
 
