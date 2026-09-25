@@ -4,3 +4,4 @@
 *.pem
 *.key
 .codegraph/
+docs/architecture/*.visual-check.*

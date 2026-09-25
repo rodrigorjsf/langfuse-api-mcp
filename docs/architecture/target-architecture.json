@@ -1,0 +1,248 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "langfuse-api-mcp target architecture (M0)",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1100,
+      530
+    ]
+  },
+  "components": [
+    {
+      "id": "agent",
+      "type": "external",
+      "label": "MCP host / agent",
+      "sublabel": "Claude Code, Cursor, \u2026",
+      "pos": [
+        40,
+        240
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "server",
+      "type": "backend",
+      "label": "internal/server",
+      "sublabel": "MCP tools",
+      "pos": [
+        330,
+        240
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "write tool gated"
+    },
+    {
+      "id": "client",
+      "type": "backend",
+      "label": "internal/langfuse",
+      "sublabel": "HTTP client",
+      "pos": [
+        620,
+        240
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "same-host redirects"
+    },
+    {
+      "id": "proxy",
+      "type": "cloud",
+      "label": "Corporate proxy",
+      "sublabel": "optional, TLS re-signing",
+      "pos": [
+        910,
+        240
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "langfuse",
+      "type": "external",
+      "label": "Langfuse",
+      "sublabel": "Cloud regions / self-hosted",
+      "pos": [
+        910,
+        430
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "config",
+      "type": "backend",
+      "label": "internal/config",
+      "sublabel": "env: keys, host, CA, writes",
+      "pos": [
+        330,
+        50
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "trust",
+      "type": "security",
+      "label": "Trust pool",
+      "sublabel": "OS + explicit + ambient CA",
+      "pos": [
+        620,
+        50
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "catalog",
+      "type": "database",
+      "label": "internal/catalog",
+      "sublabel": "OpenAPI minus ADR-0004",
+      "pos": [
+        330,
+        430
+      ],
+      "size": [
+        150,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Your machine or container (stateless process)",
+      "wraps": [
+        "config",
+        "trust",
+        "server",
+        "client",
+        "catalog"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "TLS verification",
+      "wraps": [
+        "trust",
+        "client"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "mcp",
+      "from": "agent",
+      "to": "server",
+      "label": "stdio / HTTP+token",
+      "variant": "emphasis"
+    },
+    {
+      "id": "exec",
+      "from": "server",
+      "to": "client",
+      "label": "operationId + params"
+    },
+    {
+      "id": "https",
+      "from": "client",
+      "to": "proxy",
+      "label": "HTTPS Basic",
+      "variant": "emphasis"
+    },
+    {
+      "id": "egress",
+      "from": "proxy",
+      "to": "langfuse",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "lookup",
+      "from": "server",
+      "to": "catalog",
+      "label": "catalog lookup",
+      "labelAt": [
+        405,
+        367
+      ],
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "startup",
+      "from": "config",
+      "to": "server",
+      "label": "tool set at startup",
+      "labelAt": [
+        405,
+        177
+      ],
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "ca",
+      "from": "config",
+      "to": "trust",
+      "label": "CA sources"
+    },
+    {
+      "id": "roots",
+      "from": "trust",
+      "to": "client",
+      "label": "RootCAs",
+      "variant": "security",
+      "labelAt": [
+        695,
+        177
+      ],
+      "fromSide": "bottom",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Tools",
+      "items": [
+        "search_operations, execute_read (GET only), workflow tools",
+        "execute_write registered only with LANGFUSE_MCP_ALLOW_WRITES=true"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Security",
+      "items": [
+        "Keys from config only, never from the agent",
+        "No skip-verify; redirects off-host refused",
+        "Untrusted payloads labelled and sanitized"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Decisions",
+      "items": [
+        "ADR-0001 Go, 0002 tool surface, 0003 read-only",
+        "ADR-0005 local-first, 0006 TLS trust in code"
+      ]
+    }
+  ]
+}
