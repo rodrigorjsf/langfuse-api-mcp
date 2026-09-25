@@ -98,16 +98,19 @@ func ambientInFile(cfg config.Config, captured []trust.Source) []trust.Source {
 // environment.
 func trustSources(cfg config.Config, ambient []trust.Source) trust.Sources {
 	src := trust.Sources{Ambient: ambient, IgnoreAmbient: cfg.IgnoreAmbientCA}
-	if cfg.CACert.Value != "" {
-		src.Explicit = append(src.Explicit, trust.Source{
-			Variable: config.EnvCACert, Path: cfg.CACert.Value, Origin: string(cfg.CACert.Origin),
-		})
-	}
-	if cfg.CACertsPath.Value != "" {
-		src.Explicit = append(src.Explicit, trust.Source{
-			Variable: config.EnvCACertsPath, Path: cfg.CACertsPath.Value, Directory: true,
-			Origin: string(cfg.CACertsPath.Origin),
-		})
+	for _, e := range []struct {
+		variable  string
+		setting   config.Setting
+		directory bool
+	}{
+		{config.EnvCACert, cfg.CACert, false},
+		{config.EnvCACertsPath, cfg.CACertsPath, true},
+	} {
+		if e.setting.Value != "" {
+			src.Explicit = append(src.Explicit, trust.Source{
+				Variable: e.variable, Path: e.setting.Value, Directory: e.directory, Origin: string(e.setting.Origin),
+			})
+		}
 	}
 	return src
 }
