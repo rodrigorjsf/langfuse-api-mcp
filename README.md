@@ -78,8 +78,8 @@ Cloud regions: EU `https://cloud.langfuse.com` · US `https://us.cloud.langfuse.
 
 | Variable | Kind | If it can't be loaded | Status |
 |---|---|---|---|
-| `LANGFUSE_CA_CERT` | PEM file with one or more CA certificates | startup fails with an error naming the variable and the path (missing, unreadable, empty or no PEM certificate) | works: loaded into the trust pool at startup |
-| `LANGFUSE_CA_CERTS_PATH` | directory of PEM files; every regular file directly inside it that holds PEM certificates is loaded (subdirectories and non-PEM files are ignored) | startup fails with an error naming the variable and the path (missing directory, unreadable file, or no PEM certificate at all) | works: loaded into the trust pool at startup |
+| `LANGFUSE_CA_CERT` | PEM file with one or more CA certificates | startup fails with an error naming the variable and the path (missing, unreadable, empty, no PEM certificate, or a damaged certificate) | works: loaded into the trust pool at startup |
+| `LANGFUSE_CA_CERTS_PATH` | directory of PEM files; every regular file directly inside it that holds PEM certificates is loaded (subdirectories and non-PEM files are ignored) | startup fails with an error naming the variable and the path (missing directory, unreadable file, a damaged certificate, or no PEM certificate at all) | works: loaded into the trust pool at startup |
 | `SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE` | picked up automatically if already set | warning in the log, then skipped | **Planned** |
 | `LANGFUSE_MCP_IGNORE_AMBIENT_CA` | `true` = do not pick up the variables in the row above | — | **Planned** |
 | `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY` | standard proxy variables | — | **Planned** |

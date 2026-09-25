@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -109,9 +110,11 @@ func TestBuildFailsNamingTheVariableAndPathOfABrokenExplicitSource(t *testing.T)
 	writeFile(t, junkDir, "notes.txt", []byte("no certificates here"))
 
 	tests := map[string]trust.Source{
-		"missing file":       {Variable: "LANGFUSE_CA_CERT", Path: filepath.Join(dir, "missing.pem")},
-		"empty file":         {Variable: "LANGFUSE_CA_CERT", Path: writeFile(t, dir, "empty.pem", nil)},
-		"non-PEM file":       {Variable: "LANGFUSE_CA_CERT", Path: writeFile(t, dir, "key.der", []byte{0x30, 0x82, 0x01})},
+		"missing file": {Variable: "LANGFUSE_CA_CERT", Path: filepath.Join(dir, "missing.pem")},
+		"empty file":   {Variable: "LANGFUSE_CA_CERT", Path: writeFile(t, dir, "empty.pem", nil)},
+		"non-PEM file": {Variable: "LANGFUSE_CA_CERT", Path: writeFile(t, dir, "key.der", []byte{0x30, 0x82, 0x01})},
+		"corrupt certificate in a bundle": {Variable: "LANGFUSE_CA_CERT", Path: writeFile(t, dir, "corrupt.pem",
+			append(append([]byte{}, newTestCA(t, "good").pem...), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte{0x30, 0x03, 0x02, 0x01, 0x01}})...))},
 		"missing directory":  {Variable: "LANGFUSE_CA_CERTS_PATH", Path: filepath.Join(dir, "missing-dir"), Directory: true},
 		"empty directory":    {Variable: "LANGFUSE_CA_CERTS_PATH", Path: emptyDir, Directory: true},
 		"directory, no PEMs": {Variable: "LANGFUSE_CA_CERTS_PATH", Path: junkDir, Directory: true},

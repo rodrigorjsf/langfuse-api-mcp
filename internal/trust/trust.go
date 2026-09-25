@@ -83,7 +83,7 @@ type SourceReport struct {
 // first explicit source that cannot be loaded.
 func Build(src Sources) (Pool, Report, error) {
 	roots, origin := baseRoots()
-	report := Report{Roots: origin}
+	report := Report{Roots: origin, Sources: make([]SourceReport, 0, len(src.Explicit))}
 	for _, s := range src.Explicit {
 		certs, err := load(s)
 		if err == nil && len(certs) == 0 {
@@ -138,10 +138,14 @@ func readFile(path string) ([]*x509.Certificate, error) {
 	}
 	var certs []*x509.Certificate
 	for block, rest := pem.Decode(data); block != nil; block, rest = pem.Decode(rest) {
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err == nil {
-			certs = append(certs, cert)
+		if block.Type != "CERTIFICATE" {
+			continue // other PEM blocks (e.g. keys) are not CA certificates
 		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+		certs = append(certs, cert)
 	}
 	return certs, nil
 }
