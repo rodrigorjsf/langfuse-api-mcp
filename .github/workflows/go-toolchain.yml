@@ -5,7 +5,7 @@
 #
 # Needs the repository setting "Allow GitHub Actions to create and approve pull requests".
 # A pull request opened with GITHUB_TOKEN does not trigger CI on its own; close and reopen it
-# (or push to its branch) to run CI before merging.
+# (or push to its branch) to run CI before merging. See #24.
 name: Go toolchain
 
 on:
