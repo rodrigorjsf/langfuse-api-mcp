@@ -36,7 +36,7 @@ func start() (trust.Pool, bool) {
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	var pool trust.Pool
 	if err == nil {
-		pool, err = run(log, os.Environ(), ambient)
+		pool, err = startWith(log, os.Environ(), ambient)
 	}
 	if err != nil {
 		log.Error("startup failed", "error", err.Error())
@@ -45,9 +45,10 @@ func start() (trust.Pool, bool) {
 	return pool, true
 }
 
-// run starts the server with the given environment ("KEY=value" entries) and
-// the ambient CA sources captured at process start, and returns its trust pool.
-func run(log *slog.Logger, environ []string, ambient []trust.Source) (trust.Pool, error) {
+// startWith is start after the capture: it never touches the process
+// environment, only the given entries ("KEY=value") and the ambient CA sources
+// captured at process start, and returns the trust pool.
+func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (trust.Pool, error) {
 	file, err := config.ReadFile()
 	if err != nil {
 		return trust.Pool{}, err
