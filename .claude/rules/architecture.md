@@ -16,3 +16,7 @@ Deep modules with small interfaces; each boundary below is a **seam** tested thr
 | `internal/langfuse` | HTTP client: auth, TLS pool, proxy, timeouts, retries/429, response caps | `http.RoundTripper` / `httptest.Server` |
 | `internal/catalog` | operations from `docs/langfuse-openapi.json`, scope exclusions (ADR-0004), search | pure data + functions |
 | `internal/server` | MCP tool registration, annotations, read/write split (ADR-0002/0003) | in-memory MCP client from go-sdk |
+
+## Known tension to resolve at M1
+
+`/tdd` (mocking.md) prefers an SDK-style client — one function per external operation, no generic `Do(endpoint)`. The catalog-driven `execute_read`/`execute_write` (ADR-0002) is inherently generic. Proposed resolution: generic executor for the catalog (tested against `httptest`, no mocks), typed per-operation functions only for the dedicated workflow tools. Decide with `archify` + `/codebase-design` before the first `internal/langfuse` code.

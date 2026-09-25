@@ -12,7 +12,7 @@ stay valid when the files change.
 
 **Precondition already met.** `/setup-matt-pocock-skills` has already run in this repo. The files
 `docs/agents/issue-tracker.md` (GitHub), `docs/agents/triage-labels.md` (default labels) and
-`docs/agents/domain.md` (single-context) exist, and the `## Agent skills` block is present in
+`docs/agents/domain.md` exist, the repo `CLAUDE.md` declares single-context, and the `## Agent skills` block is present in
 `CLAUDE.md`. Sources: `engineering/setup-matt-pocock-skills/SKILL.md`,
 `engineering/ask-matt/SKILL.md` (section "Precondition").
 
@@ -132,7 +132,7 @@ The skill requires these exact words: "don't substitute 'component,' 'service,' 
 | **Glossary gap** | "If the concept you need isn't in the glossary yet, that's a signal — either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/domain-modeling`)." | When you need a term that is missing from the glossary, either reuse an existing term or record the gap. | `domain-modeling` (A) | `engineering/setup-matt-pocock-skills/domain.md` |
 | **ADR** | A record of "*that* a decision was made and *why*". The whole template is a title plus 1–3 sentences. Files are `docs/adr/NNNN-slug.md`, numbered sequentially. | Write ADRs with the minimal template, and add optional sections only when they add value. | `domain-modeling` (A) | `engineering/domain-modeling/ADR-FORMAT.md` |
 | **ADR conflict** | "If your output contradicts an existing ADR, surface it explicitly rather than silently overriding". | Quote the ADR number and your reason whenever a change contradicts an ADR. | any | `engineering/setup-matt-pocock-skills/domain.md`, `engineering/improve-codebase-architecture/SKILL.md` |
-| **Single vs multi-context** / **`CONTEXT-MAP.md`** | Most repos have one root `CONTEXT.md`. A `CONTEXT-MAP.md` exists only for multi-context repos. | This repo is single-context: one root `CONTEXT.md` plus `docs/adr/`. | — | `engineering/domain-modeling/CONTEXT-FORMAT.md`, `docs/agents/domain.md` (repo) |
+| **Single vs multi-context** / **`CONTEXT-MAP.md`** | Most repos have one root `CONTEXT.md`. A `CONTEXT-MAP.md` exists only for multi-context repos. | This repo is single-context: one root `CONTEXT.md` plus `docs/adr/`. | — | `engineering/domain-modeling/CONTEXT-FORMAT.md`; repo `CLAUDE.md` (`## Agent skills` → Domain docs) |
 
 ### 2.D Grilling (`grilling`, `grill-with-docs`, `grill-me`)
 
@@ -345,7 +345,7 @@ A plainer linear reading, for rule files that need one line: **idea → `/grill-
 - **Update inline.** Update the moment a term resolves, without batching.
   (`engineering/domain-modeling/SKILL.md`)
 - **Layout.** Single-context uses a root `CONTEXT.md`. Multi-context uses a root `CONTEXT-MAP.md`
-  that points to per-context files. This repo is single-context (`docs/agents/domain.md`).
+  that points to per-context files. This repo is single-context (repo `CLAUDE.md`, `## Agent skills`).
 
 ### 4.2 ADRs
 

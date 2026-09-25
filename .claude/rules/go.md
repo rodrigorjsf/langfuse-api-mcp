@@ -14,5 +14,5 @@ paths:
 - Errors: wrap with `fmt.Errorf("…: %w", err)`; sentinel/typed errors for cases callers branch on; never `panic` on input.
 - Logging: `log/slog` to **stderr** only (stdout is the stdio transport); redact secrets and Authorization headers.
 - TLS: build `tls.Config.RootCAs` in code (ADR-0006); never set `InsecureSkipVerify`; `MinVersion: tls.VersionTLS12`.
-- Tests: table-driven, `t.Parallel()` where safe, `httptest.Server` for Langfuse, no network in unit tests; `go test -race ./...` in CI on linux, macOS, windows.
+- Tests (details in `testing.md`): table-driven, `t.Parallel()` where safe, `httptest.Server` for Langfuse, no network in unit tests; `go test -race ./...` in CI on linux, macOS, windows.
 - Cross-platform: `filepath` not `path` for files; no shell-outs; no OS-specific code outside `_windows.go`/`_unix.go` files.
