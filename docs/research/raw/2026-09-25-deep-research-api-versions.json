@@ -1,0 +1,297 @@
+{
+ "question": "For the Langfuse public REST API (/api/public/*), determine in which Langfuse server versions (self-hosted OSS releases v2.x, v3.x, v4.x and Langfuse Cloud) each route/operation was ADDED, CHANGED (params, limits, pagination style, response shape) or REMOVED/DEPRECATED. Cover at least: OTLP endpoint /api/public/otel/v1/traces (reportedly 3.22.0), Observations API v2 (/api/public/v2/observations), Metrics API v2 (/api/public/v2/metrics), legacy Metrics v1 (/api/public/metrics), Scores API v3 (/api/public/v3/scores) and v2 scores, experiments and experiment-items, datasets v2 and dataset runs/run-items, sessions, traces v1, annotation queues and queue assignments, comments, media, models, prompts v2, score configs, LLM connections, evaluators and evaluation-rules (v2), unstable dashboards and dashboard widgets, blob storage integrations, organizations/projects/API keys/memberships, SCIM, feedback, health. Also: Langfuse v4 'events_only' mode and LANGFUSE_MIGRATION_V4_* settings (which deprecated read APIs are removed on v4 and when), the 'Versions & Compatibility' docs page (e.g. requirements like 'self-hosted server >= 3.63.0', '>= 3.153.0'), and the Cloud sunset date for deprecated routes (2026-11-16). Preferred sources: langfuse.com docs and changelog, GitHub releases of langfuse/langfuse, the fern API definitions in the langfuse/langfuse repo, api.reference.langfuse.com. Goal: build a version -> available-operations matrix so an MCP server can expose, transparently and per detected Langfuse version, every API operation that version supports (old versions keep their legacy APIs, new versions get new ones). Output a table of operation -> introduced-in version -> deprecated/removed-in version with citations, plus how a client can detect server version/capabilities at runtime (e.g. GET /api/public/health returns version).",
+ "summary": "Langfuse's public REST API falls into two families. The v3-era family is offset-paginated: v1 traces, observations, sessions, scores and metrics, v2 scores, and dataset runs and run-items. The v4-era family is cursor-paginated: Observations API v2, Metrics API v2, Scores API v3 and the Experiments API. On self-hosted servers, verified sources give these version floors: OTLP ingestion (POST /api/public/otel/v1/traces) from 3.22.0, and Scores API v3 (GET /api/public/v3/scores) from 3.179.0. Observations v2, Metrics v2 and the Experiments API (GET /api/public/experiments, /experiment-items) need v4+. They are absent on v3; this repo's own evidence confirms self-hosted 3.80.0 returns 404 for them. On v4 the legacy read routes (traces, observations, sessions, spans, generations, scores v1/v2, metrics v1/daily, dataset runs and run-items) and the legacy ingestion routes return 404, but only in the default `events_only` write mode. In `legacy` or `dual` mode (LANGFUSE_MIGRATION_V4_WRITE_MODE) they keep working. So what a server exposes depends on its configuration, not only its version. Langfuse Cloud serves both families until 2026-11-16 and then becomes v4-only. Self-hosted v3 has no forced cutover and gets security patches through January 2027. An MCP server should therefore choose its operations by version floors plus a live probe of each endpoint family (404 vs 200), not by version number alone.",
+ "findings": [
+  {
+   "claim": "OTLP/OpenTelemetry ingestion (POST /api/public/otel/v1/traces) was introduced in self-hosted Langfuse OSS 3.22.0. Older self-hosted versions return 4xx. Cloud has no version gate. Later OTel improvements, such as the v4 header `x-langfuse-ingestion-version: 4`, may need newer versions.",
+   "confidence": "high",
+   "sources": [
+    "https://langfuse.com/docs/compatibility",
+    "https://langfuse.com/integrations/native/opentelemetry"
+   ],
+   "evidence": "Compatibility page: 'available since OSS 3.22.0'. OTel integration page: 'first introduced in Langfuse v3.22.0'. Links the GitHub tag v3.22.0.",
+   "vote": "3-0"
+  },
+  {
+   "claim": "Observations API v2 (GET /api/public/v2/observations) and Metrics API v2 (GET /api/public/v2/metrics) were announced in beta on 2025-12-17 and are GA now. They are available on Cloud and on self-hosted v4+ only. Self-hosted v3 must use the v1 endpoints (/api/public/observations, /api/public/metrics). SDK note: the default `api.observations` / `api.metrics` resources call v2 and fail on OSS v3, so v3 users need `api.legacy.*`.",
+   "confidence": "high",
+   "sources": [
+    "https://langfuse.com/changelog/2025-12-17-v2-metrics-and-observations-api",
+    "https://langfuse.com/docs/api-and-data-platform/features/observations-api",
+    "https://langfuse.com/docs/metrics/features/metrics-api",
+    "https://langfuse.com/docs/compatibility",
+    "/home/rodrigo/Workspace/langfuse-api-mcp/docs/adr/0012-legacy-reads-on-v3-deployments.md"
+   ],
+   "evidence": "Changelog: 'available on Langfuse Cloud and on self-hosted deployments running Langfuse v4'. Availability tables: 'Self Hosted | Langfuse v4+'. Compatibility matrix: Unsupported on OSS v2/v3, Full on OSS v4. Repo evidence: self-hosted 3.80.0 returns an HTML 404 for /v2/observations and /v2/metrics.",
+   "vote": "3-0 (claims 9, 11, 15 merged)"
+  },
+  {
+   "claim": "Observations API v2 response and param shape: cursor-based pagination (cursor returned in meta.cursor), default limit 50, max 1,000 (v1 max was 100), and field-group selection via `fields` (default core+basic). Current field groups: core, basic, time, io, metadata, model, usage, prompt, metrics, trace_context. `trace_context` (tags, release, traceName) was added on 2026-05-15; no self-hosted version is named. `parseIoAsJson` is deprecated: `true` now returns 400.",
+   "confidence": "high",
+   "sources": [
+    "https://langfuse.com/changelog/2025-12-17-v2-metrics-and-observations-api",
+    "https://langfuse.com/changelog/2026-05-15-v2-observations-trace-context",
+    "https://langfuse.com/docs/api-and-data-platform/features/public-api"
+   ],
+   "evidence": "Changelog: 'Cursor-based pagination ... Default limit of 50 (max 1,000)'. 2026-05-15 changelog: 'now supports a `trace_context` field group'.",
+   "vote": "3-0 (claims 16, 20 merged)"
+  },
+  {
+   "claim": "Scores API v3 (GET /api/public/v3/scores) was announced 2026-06-10. It is available on self-hosted from v3.179.0 and on all Cloud plans. It uses cursor pagination and a typed value, and has no get-by-id route (use the `id=` filter). Score reads through GET /api/public/scores (v1) and /api/public/v2/scores (+/{id}) are deprecated and return 404 on fully migrated (events_only) v4. Score writes (POST /api/public/scores, score-create through /ingestion) stay supported.",
+   "confidence": "high",
+   "sources": [
+    "https://langfuse.com/changelog/2026-06-10-scores-v3-api",
+    "https://langfuse.com/docs/api-and-data-platform/features/observations-api",
+    "https://langfuse.com/faq/all/deprecated-api-migration",
+    "https://langfuse.com/docs/compatibility"
+   ],
+   "evidence": "Availability table: 'Self Hosted | Langfuse v3.179.0+'. Changelog: 'The previous /api/public/v2/scores endpoints are deprecated. On deployments fully migrated to Langfuse v4, they return a 404 error'. Compatibility line 84: POST /scores Full/Full.",
+   "vote": "3-0 (claims 10, 17, 18 merged)"
+  },
+  {
+   "claim": "The Experiments API (GET /api/public/experiments, GET /api/public/experiment-items) was announced 2026-07-07. It uses cursor pagination and requires `fromStartTime`. It needs self-hosted v4+. It replaces the dataset run reads: GET /datasets/{name}/runs[/{runName}] maps to /experiments then /experiment-items, and GET /dataset-run-items maps to /experiment-items. DELETE /datasets/{name}/runs/{runName} has no replacement. POST /dataset-run-items stays on v4 but returns a stale compatibility object. Datasets and dataset items themselves are not deprecated.",
+   "confidence": "high",
+   "sources": [
+    "https://langfuse.com/changelog/2026-07-07-experiments-public-api-and-mcp",
+    "https://langfuse.com/docs/api-and-data-platform/features/observations-api",
+    "https://langfuse.com/faq/all/deprecated-api-migration",
+    "https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4"
+   ],
+   "evidence": "Experiments availability table: 'Self Hosted | Langfuse v4+'. The changelog names no self-hosted version. Migration FAQ quick-reference maps dataset runs to experiments.",
+   "vote": "3-0 (claims 8, 10, 19 merged)"
+  },
+  {
+   "claim": "On self-hosted v4 in `events_only` write mode (the default), these legacy read endpoints return 404: GET /api/public/traces(+/:id), /observations(+/:id), /sessions(+/:id), /spans, /generations, /scores(+/:id), /v2/scores(+/:id), /metrics, /metrics/daily, /dataset-run-items, and GET/DELETE /datasets/:name/runs(+/:runName). Replacements: traces, observations and sessions go to /v2/observations, filtered by traceId or sessionId; metrics go to /v2/metrics; scores go to /v3/scores; dataset runs go to experiments. The replacements return different shapes: traces and sessions must be rebuilt on the client by grouping observation rows.",
+   "confidence": "high",
+   "sources": [
+    "https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4",
+    "https://langfuse.com/faq/all/deprecated-api-migration",
+    "https://langfuse.com/docs/compatibility"
+   ],
+   "evidence": "Upgrade guide API changes tables: each route listed as 'Returns 404'. FAQ: 'None of these replacements return the legacy session object shape'.",
+   "vote": "3-0 / 2-1 (claims 1, 2, 4, 7 merged; claim 1 split vote because its quote spliced ingestion wording onto read endpoints)"
+  },
+  {
+   "claim": "Legacy ingestion in v4 events_only mode: POST /api/public/traces, /spans, /generations and /events return 404. POST /api/public/ingestion still returns 207 but answers 400 per event for every type except score-create and sdk-log. The supported trace path is POST /api/public/otel/v1/traces (OTLP/HTTP). On Cloud, the legacy ingestion paths work until 2026-11-16.",
+   "confidence": "high",
+   "sources": [
+    "https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4",
+    "https://langfuse.com/faq/all/deprecated-api-migration"
+   ],
+   "evidence": "Upgrade guide: POST /ingestion 'Keeps the 207 status code, but returns 400 for every event type except score-create or sdk-log'. The four routes are 'Returns 404'.",
+   "vote": "3-0 (claims 3, 8 merged)"
+  },
+  {
+   "claim": "Available operations depend on configuration as well as version. LANGFUSE_MIGRATION_V4_WRITE_MODE takes `legacy` (full v3 behavior; v2 APIs return no data), `dual` (both families work) or `events_only` (default; legacy returns 404). LANGFUSE_MIGRATION_V4_ALLOW_PREVIEW_OPT_IN=false turns off the v2 APIs in legacy or dual mode. The server refuses to start if events_only is combined with opt-in=false. The migration variables will be removed in a future major version. Consequence for the MCP: a v4 server can expose the v3 family, the v4 family, or both. Availability must be probed per family, not inferred from the version.",
+   "confidence": "high",
+   "sources": [
+    "https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4"
+   ],
+   "evidence": "Config reference: 'legacy retains the full v3 behavior; dual writes old and new tables ...'. Also: 'While you run the legacy or dual write mode during your migration, these endpoints keep working as before'.",
+   "vote": "3-0 (claim 5)"
+  },
+  {
+   "claim": "Timeline: Langfuse Cloud runs v3 and v4 side by side until 2026-11-16. After that date it is v4-only, and the deprecated reads and legacy ingestion are removed. Self-hosted has no forced cutover. v3 gets security patches through January 2027, so self-hosted v3 servers that need the legacy APIs will remain in the field.",
+   "confidence": "high",
+   "sources": [
+    "https://langfuse.com/changelog/2026-08-17-langfuse-v4",
+    "https://langfuse.com/faq/all/deprecated-api-migration",
+    "https://langfuse.com/docs/compatibility"
+   ],
+   "evidence": "'v3 and the v4 preview run side by side until November 16, 2026. From then, Langfuse Cloud is v4-only and legacy APIs, features, and ingestion are removed.' 'There is no forced cutover date, and Langfuse v3 will receive security patches through January 2027.'",
+   "vote": "3-0 (claims 6, 13, 14 merged)"
+  },
+  {
+   "claim": "The legacy Metrics v1 routes (GET /api/public/metrics, /metrics/daily) are deprecated, and a migration guide covers moving to /v2/metrics. They remain the only working metrics endpoints on self-hosted v2 and v3, so the deprecation takes effect only on Cloud (after 2026-11-16) and on v4 events_only.",
+   "confidence": "high",
+   "sources": [
+    "https://langfuse.com/docs/metrics/features/metrics-api",
+    "https://langfuse.com/faq/all/deprecated-api-migration"
+   ],
+   "evidence": "'The deprecated GET /api/public/metrics and GET /api/public/metrics/daily endpoints are documented, with migration steps, in Migration of deprecated APIs.'",
+   "vote": "3-0 (claim 12)"
+  },
+  {
+   "claim": "Derived operation matrix, synthesized from the findings above (verified sources only). Each row reads: operation, then self-hosted introduced-in, then removed-in. (a) OTLP ingest: added 3.22.0, never removed. (b) v1 reads (traces, observations, sessions, scores, metrics, metrics/daily) and v2 scores: available on v2 and v3, removed on v4 events_only and on Cloud from 2026-11-16. (c) Dataset runs and run-items reads: same removal as (b). (d) /v3/scores: added 3.179.0. (e) /v2/observations, /v2/metrics, /experiments, /experiment-items: added in v4 (first v4.x; exact minor unknown), and on Cloud already. (f) POST /ingestion trace/observation events and POST /traces|/spans|/generations|/events: removed on v4 events_only and on Cloud from 2026-11-16. score-create and sdk-log are kept. Suggested version ranges: [<3.22.0], [3.22.0, 3.179.0), [3.179.0, 4.0.0), then v4 split by write mode (legacy / dual / events_only), and Cloud before and after 2026-11-16.",
+   "confidence": "medium",
+   "sources": [
+    "https://langfuse.com/docs/compatibility",
+    "https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4",
+    "https://langfuse.com/faq/all/deprecated-api-migration"
+   ],
+   "evidence": "Synthesis of the confirmed claims above. No single source states this full matrix, and the v4 lower bound is 'v4+' with no exact minor version.",
+   "vote": "derived"
+  }
+ ],
+ "caveats": "1. Coverage gap. Only about 10 of the ~25 route families in the research question have verified version data. No surviving claim covers these families: comments, media, models, prompts v2, annotation queues and queue assignments, score configs, LLM connections, evaluators and evaluation-rules, unstable dashboards and widgets, blob storage integrations, organizations/projects/API keys/memberships, SCIM, feedback, health, sessions-v2, and datasets v2. Treat their introduction versions as unknown, not as 'always present'. The MCP should probe for them or fall back to the embedded spec.\n2. Exact v4 minor versions are not documented. Sources say only 'v4+', so the first v4.x release is the practical floor.\n3. Changelog dates are Cloud announcement dates, not OSS release versions. The 3.179.0 floor for Scores v3 and the 3.22.0 floor for OTLP come from the docs and were not cross-checked against GitHub release notes or fern definitions.\n4. Refuted claims to avoid: '3.63.0 is a floor for the v2/v3 read resources' was refuted 0-3. The claim that v4 'introduces' Observations and Metrics v2 was refuted 1-2 (they were announced in 2025-12, and Cloud had them before v4 GA). The claim bundling GA status and SDK defaults, and the one bundling v2 pagination with required fromStartTime/toStartTime, were refuted 0-3, so the fromStartTime requirement on /v2/observations is unconfirmed. The docs do confirm fromStartTime is required on /experiments.\n5. Time sensitivity: these facts are as of 2026-09-25. The Cloud cutover (2026-11-16), the end of v3 patches (January 2027) and the planned removal of the LANGFUSE_MIGRATION_V4_* variables will all change the matrix.\n6. On v4, availability is decided by configuration, not version. The write mode and opt-in flag can make a v4 server behave like v3, like v4, or like both. A version check alone gives wrong answers.\n7. Runtime version detection (GET /api/public/health returning `version`) is not among the verified claims. Confirm it before designing detection around it.",
+ "openQuestions": [
+  "Does GET /api/public/health reliably return the server `version` on both self-hosted and Cloud, and is it unauthenticated? Is there any endpoint that exposes LANGFUSE_MIGRATION_V4_WRITE_MODE, or can the MCP only probe each endpoint family (for example, a cheap GET /v2/observations?limit=1 and GET /traces?limit=1, reading 404 vs 200)?",
+  "Which OSS releases introduced the families not covered here (annotation queues, comments, media, models, prompts v2, LLM connections, evaluation-rules, dashboards, blob storage, org/project/API-key management, SCIM)? These likely need a diff of fern definitions across langfuse/langfuse release tags.",
+  "What is the exact first v4.x release that ships /v2/observations, /v2/metrics and /experiments? Did any of them ship behind flags in late 3.x releases?",
+  "How does Cloud behave per region and per project before 2026-11-16? Can a Cloud project already be v4-only and return 404 for the legacy reads, so that probing is needed on Cloud too?"
+ ],
+ "refuted": [
+  {
+   "claim": "The new SDKs (Python SDK v4 / JS SDK v5) need a self-hosted server at 3.63.0 or later for tracing, prompts, datasets and scores. That makes 3.63.0 a floor for the v2/v3 read resources those SDKs use.",
+   "vote": "0-3",
+   "source": "https://langfuse.com/docs/compatibility"
+  },
+  {
+   "claim": "Observations API v2, Metrics API v2 and Scores API v3 are GA. They are the default resources in Python SDK v4 (api.observations, api.metrics) and JS/TS SDK v5.",
+   "vote": "0-3",
+   "source": "https://langfuse.com/docs/compatibility"
+  },
+  {
+   "claim": "Observations v2 uses cursor-based pagination instead of offset page numbers. The limit defaults to 50 and can go up to 1,000 (v1 max was 100). fromStartTime/toStartTime are required, and fields not requested via the 'fields' groups are absent from the response rather than null.",
+   "vote": "0-3",
+   "source": "https://langfuse.com/docs/api-and-data-platform/features/observations-api"
+  },
+  {
+   "claim": "Langfuse v4 introduces Observations API v2 (cursor-based pagination) and Metrics API v2 (aggregates cost, tokens, volume, latency, scores) as the new read APIs.",
+   "vote": "1-2",
+   "source": "https://langfuse.com/changelog/2026-08-17-langfuse-v4"
+  }
+ ],
+ "unverified": [],
+ "sources": [
+  {
+   "url": "https://langfuse.com/docs/compatibility",
+   "quality": "primary",
+   "angle": "Official compatibility docs",
+   "claimCount": 5
+  },
+  {
+   "url": "https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4",
+   "quality": "primary",
+   "angle": "Official compatibility docs",
+   "claimCount": 5
+  },
+  {
+   "url": "https://langfuse.com/faq/all/deprecated-api-migration",
+   "quality": "primary",
+   "angle": "Official compatibility docs",
+   "claimCount": 5
+  },
+  {
+   "url": "https://langfuse.com/docs/api-and-data-platform/features/observations-api",
+   "quality": "primary",
+   "angle": "Official compatibility docs",
+   "claimCount": 5
+  },
+  {
+   "url": "https://langfuse.com/docs/metrics/features/metrics-api",
+   "quality": "primary",
+   "angle": "Official compatibility docs",
+   "claimCount": 5
+  },
+  {
+   "url": "https://langfuse.com/changelog/2026-08-17-langfuse-v4",
+   "quality": "primary",
+   "angle": "Official compatibility docs",
+   "claimCount": 5
+  },
+  {
+   "url": "https://langfuse.com/changelog/2025-12-17-v2-metrics-and-observations-api",
+   "quality": "primary",
+   "angle": "Changelog announcements of new routes",
+   "claimCount": 5
+  },
+  {
+   "url": "https://langfuse.com/changelog/2026-06-10-scores-v3-api",
+   "quality": "primary",
+   "angle": "Changelog announcements of new routes",
+   "claimCount": 5
+  },
+  {
+   "url": "https://langfuse.com/changelog/2026-07-07-experiments-public-api-and-mcp",
+   "quality": "primary",
+   "angle": "Changelog announcements of new routes",
+   "claimCount": 5
+  },
+  {
+   "url": "https://langfuse.com/changelog/2026-05-15-v2-observations-trace-context",
+   "quality": "primary",
+   "angle": "Changelog announcements of new routes",
+   "claimCount": 4
+  },
+  {
+   "url": "https://github.com/langfuse/langfuse/releases",
+   "quality": "primary",
+   "angle": "Changelog announcements of new routes",
+   "claimCount": 5
+  },
+  {
+   "url": "https://langfuse.com/docs/api-and-data-platform/features/public-api",
+   "quality": "primary",
+   "angle": "Deprecation, v4 events_only, Cloud sunset",
+   "claimCount": 5
+  },
+  {
+   "url": "https://github.com/orgs/langfuse/discussions/14157",
+   "quality": "primary",
+   "angle": "Deprecation, v4 events_only, Cloud sunset",
+   "claimCount": 5
+  },
+  {
+   "url": "https://github.com/avivsinai/langfuse-mcp/issues/83",
+   "quality": "forum",
+   "angle": "Deprecation, v4 events_only, Cloud sunset",
+   "claimCount": 4
+  },
+  {
+   "url": "https://langfuse.com/changelog/2025-03-13-public-api-annotation-queues",
+   "quality": "primary",
+   "angle": "GitHub releases and fern definitions",
+   "claimCount": 4
+  },
+  {
+   "url": "https://langfuse.com/changelog",
+   "quality": "primary",
+   "angle": "GitHub releases and fern definitions",
+   "claimCount": 5
+  },
+  {
+   "url": "https://github.com/langfuse/langfuse",
+   "quality": "primary",
+   "angle": "GitHub releases and fern definitions",
+   "claimCount": 5
+  },
+  {
+   "url": "https://github.com/langfuse/langfuse/blob/main/web/src/pages/api/public/health.ts",
+   "quality": "primary",
+   "angle": "Runtime version detection",
+   "claimCount": 4
+  },
+  {
+   "url": "https://langfuse.com/self-hosting/configuration/health-readiness-endpoints",
+   "quality": "primary",
+   "angle": "Runtime version detection",
+   "claimCount": 5
+  },
+  {
+   "url": "https://langfuse.com/self-hosting/upgrade/versioning",
+   "quality": "primary",
+   "angle": "Runtime version detection",
+   "claimCount": 5
+  },
+  {
+   "url": "https://langfuse.com/faq/all/self-hosting-api-reference",
+   "quality": "primary",
+   "angle": "Runtime version detection",
+   "claimCount": 4
+  }
+ ],
+ "stats": {
+  "angles": 5,
+  "sourcesFetched": 21,
+  "claimsExtracted": 100,
+  "claimsVerified": 25,
+  "confirmed": 21,
+  "killed": 4,
+  "unverified": 0,
+  "afterSynthesis": 11,
+  "urlDupes": 7,
+  "budgetDropped": 2,
+  "agentCalls": 103
+ }
+}

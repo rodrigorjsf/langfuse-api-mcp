@@ -9,6 +9,7 @@ Evidence behind the ADRs. Labels: `[verified 3-0]` passed 3-vote adversarial che
 | [langfuse.md](langfuse.md) | auth, regions, org vs project keys, rate limits, pagination, deprecations, glossary, workflows, official MCP limits, spec-vs-docs mismatches | ADR-0004, `CONTEXT.md`, M6 skills |
 | [security.md](security.md) | OWASP LLM 2025/2026, Agentic 2026, MCP Top 10 2025, MCP spec security, Anthropic review criteria, supply chain → control mapping | ADR-0003, `.claude/rules/security.md` |
 | [engineering-process.md](engineering-process.md) | Matt Pocock skill vocabulary, workflow, doc rules | `.claude/rules/engineering-process.md`, `testing.md` |
+| [langfuse-api-versions.md](langfuse-api-versions.md) | which operations exist per Langfuse version and write mode; how to detect them at runtime; per-family version floors | #16 version-aware catalog ADR |
 | [go-tls-facts.md](go-tls-facts.md) | Go 1.27 status, `SSL_CERT_*` override semantics per OS, Linux default cert paths, fallback roots, go-sdk min Go | ADR-0006 |
 | [mcp-hosts-env.md](mcp-hosts-env.md) | how each MCP host (Claude Code/Desktop, Cursor, VS Code, Codex, Gemini, Windsurf, Docker) passes env to a stdio server; which filter it | install docs, config guidance |
 | prototype branches | `prototype/tls-trust-pool` (capture-and-unset proof, Linux ×3 + Windows 11) → `go-tls-facts.md` §7; `prototype/langfuse-io-window` (self-hosted 4.46.0 io/metadata window, limits, error shapes; self-hosted 3.80.0 operation availability) → `langfuse.md` §1.7–1.8 | #4/#13, #2/#15, M1 error mapping |
@@ -17,7 +18,7 @@ Evidence behind the ADRs. Labels: `[verified 3-0]` passed 3-vote adversarial che
 ## Open questions
 
 - Does **Langfuse Cloud** REST enforce the 14-day window / 50-row cap on io/metadata projections? Self-hosted 4.46.0 does not — `langfuse.md` §1.6–1.7, #15.
-- Should the catalog support self-hosted v3 (only legacy read routes exist there, which ADR-0004 excludes)? — `langfuse.md` §1.8.
+- Version-aware catalog decisions (floor version, Cloud legacy until 2026-11-16, workflow tools per family, schemas for removed operations) — #16, `langfuse-api-versions.md`.
 - macOS behavior of the `SSL_CERT_*` capture-and-unset design — CI proof in #13.
 - Claude Code, Cursor, Windsurf env inheritance is undocumented (`mcp-hosts-env.md`); README tells users to reference variables explicitly.
 - Official Langfuse MCP/CLI TLS failure root cause (Node default trust is an unreproduced inference).
