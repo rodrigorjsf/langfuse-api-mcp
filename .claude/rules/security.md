@@ -4,6 +4,7 @@ Full risk→control mapping with sources: `docs/research/security.md`. Cite OWAS
 
 **Credentials**
 - Langfuse keys come only from the server's environment/config — never from tool arguments, never forwarded from the MCP client (no token passthrough). Langfuse keys cannot be read-only, so the server is the only write gate.
+- The config file (ADR-0011) must never hold keys: reject `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` found there with a startup error; tests prove it.
 - Redact `Authorization`, `sk-lf-…`, `pk-lf-…` and the HTTP bearer token from logs, errors and tool output.
 
 **Write gating** (ADR-0003)

@@ -8,7 +8,7 @@ Packages are organized **by domain concept** (terms from `CONTEXT.md`), never by
 .
 ├── cmd/langfuse-mcp/        main.go only: parse flags → config.Load → build modules → run transport
 ├── internal/
-│   ├── config/              Config: env/flag parsing, validation, defaults, region presets, Secret type
+│   ├── config/              Config: env + config-file parsing (ADR-0011), validation, defaults, region presets, Secret type
 │   ├── trust/               Trust pool: OS store + explicit + ambient CA sources → *x509.CertPool
 │   ├── langfuse/            Langfuse HTTP client: Basic auth, transport, proxy, redirects, rate limit,
 │   │                        retries, response caps, APIError; knows HTTP, not MCP

@@ -16,5 +16,5 @@ Evidence behind the ADRs. Labels: `[verified 3-0]` passed 3-vote adversarial che
 ## Open questions
 
 - Does the REST API itself enforce the 14-day window on io/metadata projections? — `langfuse.md` §1.6.
-- Which MCP hosts pass the user's environment to stdio servers? — partly answered in `mcp-hosts-env.md`; Claude Code, Cursor, Windsurf still undocumented.
+- Claude Code, Cursor, Windsurf env inheritance is undocumented (`mcp-hosts-env.md`); README tells users to reference variables explicitly.
 - Official Langfuse MCP/CLI TLS failure root cause (Node default trust is an unreproduced inference).

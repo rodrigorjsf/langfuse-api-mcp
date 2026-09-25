@@ -62,7 +62,7 @@ The server keeps nothing between calls (it is stateless). It never takes a URL, 
 
 ## Configuration **(Planned)**
 
-All settings are environment variables. Values set **system-wide** (shell profile, Windows environment variables, container env) are picked up automatically. You only need to repeat them in your MCP client's JSON `env` block if that client does not pass your environment through (see [Where do environment variables come from?](#where-do-environment-variables-come-from)).
+Settings come from environment variables, then from an optional [config file](#config-file-non-secret-settings-planned) for non-secret settings. Values set **system-wide** reach the server only if your MCP client passes its environment through; several clients do not (see [Where do environment variables come from?](#where-do-environment-variables-come-from)).
 
 ### Connection
 
@@ -150,14 +150,36 @@ Per-client snippets (Claude Code, Claude Desktop, Cursor, VS Code, Codex) will b
 
 ### Where do environment variables come from?
 
-The server reads its own process environment. Whether your *system* variables reach it depends on how your MCP client starts it:
+The server reads its own process environment, then an optional config file. Whether your *system* variables reach the process depends on the MCP client (facts and sources: [docs/research/mcp-hosts-env.md](docs/research/mcp-hosts-env.md), checked 2026-09-25):
 
-| Launch | Sees your shell or system variables? |
+| Client | Passes your system/shell variables? | What to do |
+|---|---|---|
+| VS Code / GitHub Copilot | yes (full environment) | nothing, or `"env"` / `${env:NAME}` |
+| Claude Code | not documented, likely yes | reference them: `"env": {"LANGFUSE_SECRET_KEY": "${LANGFUSE_SECRET_KEY}"}` |
+| Cursor, Windsurf | not documented | reference them with `${env:NAME}` in `"env"` |
+| Claude Desktop | **no**, only a limited subset | put values in `"env"`, or install the `.mcpb` bundle (keys stored in the OS keychain) |
+| Codex CLI | **no**, the environment is cleared | list names in `env_vars = ["LANGFUSE_PUBLIC_KEY", …]` |
+| Gemini CLI | yes, but **hides names containing `KEY`/`SECRET`/`TOKEN`** | declare the keys explicitly in `"env"` |
+| Docker | only what you pass with `-e` | `-e LANGFUSE_PUBLIC_KEY -e LANGFUSE_SECRET_KEY …` |
+
+### Config file (non-secret settings) **(Planned)**
+
+To set the CA, host or proxy once for every client, put them in a config file at your OS's standard config location:
+
+| OS | Path |
 |---|---|
-| Client started from a terminal (e.g. Claude Code) | usually yes |
-| GUI app on Windows | yes for user and system environment variables |
-| GUI app on macOS started from Dock or Finder | often **no** for variables exported in your shell profile. Put them in the client's `env` block. |
-| Docker | only what you pass with `-e` |
+| Linux | `~/.config/langfuse-mcp/config.env` (or `$XDG_CONFIG_HOME/langfuse-mcp/config.env`) |
+| macOS | `~/Library/Application Support/langfuse-mcp/config.env` |
+| Windows | `%AppData%\langfuse-mcp\config.env` |
+
+```ini
+# KEY=VALUE per line; environment variables win over this file
+LANGFUSE_BASE_URL=https://langfuse.internal.example.com
+LANGFUSE_CA_CERT=/etc/ssl/private/corp-root.pem
+HTTPS_PROXY=http://proxy.example.com:8080
+```
+
+**Keys are not allowed in this file.** If it contains `LANGFUSE_PUBLIC_KEY` or `LANGFUSE_SECRET_KEY`, the server refuses to start and tells you why, so that no secret sits in a plaintext file ([ADR-0011](docs/adr/0011-non-secret-config-file.md)).
 
 The log at startup lists which CA sources were loaded (paths and counts, never contents). Use it to confirm the setup.
 

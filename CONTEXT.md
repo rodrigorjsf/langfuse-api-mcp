@@ -36,6 +36,9 @@ _Avoid_: endpoint, server URL
 
 **Organization key**: a key pair scoped to a Langfuse organization; required by organization operations (projects admin, memberships, SCIM).
 
+**Config file**: an optional per-user file at the OS config location holding non-secret settings; environment variables take precedence over it and it may never hold keys.
+_Avoid_: dotenv, settings file
+
 ## Trust
 
 **Explicit CA source**: a CA file or directory named through this server's own variables (`LANGFUSE_CA_CERT`, `LANGFUSE_CA_CERTS_PATH`); failing to load it stops startup.
