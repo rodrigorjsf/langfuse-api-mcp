@@ -34,32 +34,32 @@ func start() (trust.Pool, bool) {
 	ambient, err := trust.CaptureAmbient()
 	// Logs go to stderr: stdout is reserved for the stdio transport.
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	var pool trust.Pool
+	if err == nil {
+		pool, err = run(log, os.Environ(), ambient)
+	}
 	if err != nil {
 		log.Error("startup failed", "error", err.Error())
 		return trust.Pool{}, false
 	}
-	return run(log, os.Environ(), ambient)
+	return pool, true
 }
 
 // run starts the server with the given environment ("KEY=value" entries) and
 // the ambient CA sources captured at process start, and returns its trust pool.
-// It reports whether startup succeeded; on failure it has logged one error line.
-func run(log *slog.Logger, environ []string, ambient []trust.Source) (trust.Pool, bool) {
+func run(log *slog.Logger, environ []string, ambient []trust.Source) (trust.Pool, error) {
 	file, err := config.ReadFile()
 	if err != nil {
-		log.Error("startup failed", "error", err.Error())
-		return trust.Pool{}, false
+		return trust.Pool{}, err
 	}
 	cfg, err := config.Load(envMap(environ), file)
 	if err != nil {
-		log.Error("startup failed", "error", err.Error())
-		return trust.Pool{}, false
+		return trust.Pool{}, err
 	}
 
 	pool, report, err := trust.Build(trustSources(cfg, slices.Concat(ambient, ambientInFile(cfg, ambient))))
 	if err != nil {
-		log.Error("startup failed", "error", err.Error())
-		return trust.Pool{}, false
+		return trust.Pool{}, err
 	}
 	for _, s := range report.Sources {
 		if s.Warning != "" {
@@ -67,7 +67,7 @@ func run(log *slog.Logger, environ []string, ambient []trust.Source) (trust.Pool
 		}
 	}
 	log.Info("CA sources loaded", "roots", report.Roots, "sources", report.Sources)
-	return pool, true
+	return pool, nil
 }
 
 // envMap turns "KEY=value" entries into a map; the last entry for a key wins.
