@@ -62,7 +62,7 @@ The server keeps nothing between calls (it is stateless). It never takes a URL, 
 
 ## Configuration **(Planned)**
 
-Settings come from environment variables, then from an optional [config file](#config-file-non-secret-settings-planned) for non-secret settings. Values set **system-wide** reach the server only if your MCP client passes its environment through; several clients do not (see [Where do environment variables come from?](#where-do-environment-variables-come-from)).
+Settings come from environment variables, then from an optional [config file](#config-file-non-secret-settings) for non-secret settings. Values set **system-wide** reach the server only if your MCP client passes its environment through; several clients do not (see [Where do environment variables come from?](#where-do-environment-variables-come-from)).
 
 ### Connection
 
@@ -164,7 +164,7 @@ The server reads its own process environment, then an optional config file. Whet
 | Gemini CLI | yes, but **hides names containing `KEY`/`SECRET`/`TOKEN`** | declare the keys explicitly in `"env"` |
 | Docker | only what you pass with `-e` | `-e LANGFUSE_PUBLIC_KEY -e LANGFUSE_SECRET_KEY …` |
 
-### Config file (non-secret settings) **(Planned)**
+### Config file (non-secret settings)
 
 To set the CA, host or proxy once for every client, put them in a config file at your OS's standard config location:
 
@@ -181,15 +181,30 @@ LANGFUSE_CA_CERT=/etc/ssl/private/corp-root.pem
 HTTPS_PROXY=http://proxy.example.com:8080
 ```
 
-**Keys are not allowed in this file.** If it contains `LANGFUSE_PUBLIC_KEY` or `LANGFUSE_SECRET_KEY`, the server refuses to start and tells you why, so that no secret sits in a plaintext file ([ADR-0011](docs/adr/0011-non-secret-config-file.md)).
+How the file is read:
+
+| Rule | Example |
+|---|---|
+| One `KEY=VALUE` per line; spaces around the key and the value are trimmed | `LANGFUSE_CA_CERT = /etc/corp/root.pem` |
+| A leading `export ` (dotenv style) is ignored | `export LANGFUSE_CA_CERT=/etc/corp/root.pem` |
+| Blank lines and lines starting with `#` are ignored | `# corporate CA` |
+| Values are taken literally: no quotes, no `${VAR}` expansion | write `C:\corp\root.pem`, not `"C:\corp\root.pem"` |
+| A variable set (non-empty) in the environment wins over the file; an empty one does not | `LANGFUSE_CA_CERT=` in the environment still uses the file's value |
+| A line without `=`, or with nothing before `=`, stops startup with an error naming the file and the line number | `config file …/config.env line 2: expected KEY=VALUE` |
+| No file at that location is fine; the server starts with environment variables only | — |
+| Files saved by Windows editors (byte order mark, CRLF line endings) work | — |
+
+CA paths from the file (`LANGFUSE_CA_CERT`, `LANGFUSE_CA_CERTS_PATH`) are explicit CA sources, exactly like the environment variables: if one cannot be loaded, startup fails naming the variable and the path. Today the server acts on the CA settings in the file; host, proxy and behavior settings are accepted in the file but used only once those settings exist **(Planned)**. `LANGFUSE_MCP_IGNORE_AMBIENT_CA` is read from the environment only; in the file it is ignored. A misspelled name is currently ignored without a warning (see [#26](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/26)); if a CA from the file seems missing, check the `sources` list in the startup log.
+
+**Keys are not allowed in this file.** If it contains `LANGFUSE_PUBLIC_KEY` or `LANGFUSE_SECRET_KEY`, the server refuses to start and tells you to set the key in the environment or your MCP client's `env` block (the error names the line, never the value), so that no secret sits in a plaintext file ([ADR-0011](docs/adr/0011-non-secret-config-file.md)).
 
 The log at startup lists which CA sources were loaded (paths and counts, never contents). Use it to confirm the setup. It is one JSON line on stderr, for example:
 
 ```json
-{"time":"…","level":"INFO","msg":"CA sources loaded","roots":"os","sources":[{"variable":"LANGFUSE_CA_CERT","path":"/etc/ssl/private/corp-root.pem","kind":"explicit","certificates":2},{"variable":"NODE_EXTRA_CA_CERTS","path":"/home/me/corp-root.pem","kind":"ambient","certificates":1}]}
+{"time":"…","level":"INFO","msg":"CA sources loaded","roots":"os","sources":[{"variable":"LANGFUSE_CA_CERT","path":"/etc/ssl/private/corp-root.pem","kind":"explicit","origin":"environment","certificates":2},{"variable":"NODE_EXTRA_CA_CERTS","path":"/home/me/corp-root.pem","kind":"ambient","origin":"environment","certificates":1}]}
 ```
 
-`roots` is `os` (your operating system's certificate store) or `bundled-fallback` (the OS offered none). `kind` is `explicit` (`LANGFUSE_CA_CERT`, `LANGFUSE_CA_CERTS_PATH`) or `ambient` (the five widely used variables). `certificates` is how many CA certificates each source added. An ambient source that could not be fully loaded also carries a `warning`, and a separate `WARN` line is logged before the summary:
+`roots` is `os` (your operating system's certificate store) or `bundled-fallback` (the OS offered none). `kind` is `explicit` (`LANGFUSE_CA_CERT`, `LANGFUSE_CA_CERTS_PATH`) or `ambient` (the five widely used variables). `origin` is where the setting was read: `environment` or `config-file` (ambient sources are always `environment`). `certificates` is how many CA certificates each source added. An ambient source that could not be fully loaded also carries a `warning`, and a separate `WARN` line is logged before the summary:
 
 ```json
 {"time":"…","level":"WARN","msg":"CA source not fully loaded","variable":"REQUESTS_CA_BUNDLE","path":"/old/bundle.pem","warning":"source skipped: open /old/bundle.pem: no such file or directory"}
@@ -203,9 +218,9 @@ Designed against the OWASP Top 10 for LLM Applications (2025 and 2026), the OWAS
 |---|---|
 | **Read-only unless you opt in** | Langfuse API keys cannot be made read-only, so the server enforces it. Without `LANGFUSE_MCP_ALLOW_WRITES=true` the write tool is not registered at all. |
 | **No data kept** | Stateless. No cache or database, no files written. |
-| **Your keys stay with the server** | Read only from your configuration. Never accepted from the agent, never logged, never included in results. |
+| **Your keys stay with the server** | Read only from the server's environment; a config file holding a key stops startup. Never accepted from the agent, never logged, never included in results. |
 | **No arbitrary requests** | The agent picks operations from a fixed catalog. It cannot pass URLs or hosts. Redirects to another host are refused. |
-| **No local system access** | No shell commands, no file access beyond reading the CA files you configured. |
+| **No local system access** | No shell commands, no file access beyond reading the CA files you configured and the optional [config file](#config-file-non-secret-settings). |
 | **Verified TLS only** | OS store + your CAs, TLS 1.2+, no skip-verify option. |
 | **Untrusted data is labelled** | Trace and prompt content returned to the agent is marked as untrusted data and cleaned of hidden Unicode characters. |
 | **Bounded** | Timeouts, rate and concurrency limits, response size caps. Langfuse's `Retry-After` is honored. |

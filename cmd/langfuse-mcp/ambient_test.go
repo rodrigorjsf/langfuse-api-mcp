@@ -36,7 +36,8 @@ func TestStartupLoadsEachAmbientVariableAsAnAmbientSource(t *testing.T) {
 			}
 
 			want := []any{map[string]any{
-				"variable": variable, "path": path, "kind": "ambient", "certificates": float64(1),
+				"variable": variable, "path": path, "kind": "ambient", "origin": "environment",
+				"certificates": float64(1),
 			}}
 			if got := loggedSources(t, stderr); !reflect.DeepEqual(got, want) {
 				t.Fatalf("logged sources = %v, want %v", got, want)

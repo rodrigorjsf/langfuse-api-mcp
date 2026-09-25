@@ -23,12 +23,12 @@ func TestCaptureAmbientReadsTheFiveVariablesAndSplitsSSLCertDir(t *testing.T) {
 	}
 
 	want := []trust.Source{
-		{Variable: "SSL_CERT_FILE", Path: "/etc/corp/ssl.pem"},
-		{Variable: "SSL_CERT_DIR", Path: "/etc/corp/one", Directory: true},
-		{Variable: "SSL_CERT_DIR", Path: "/etc/corp/two", Directory: true},
-		{Variable: "NODE_EXTRA_CA_CERTS", Path: "/etc/corp/node.pem"},
-		{Variable: "REQUESTS_CA_BUNDLE", Path: "/etc/corp/requests.pem"},
-		{Variable: "CURL_CA_BUNDLE", Path: "/etc/corp/curl.pem"},
+		{Variable: "SSL_CERT_FILE", Path: "/etc/corp/ssl.pem", Origin: "environment"},
+		{Variable: "SSL_CERT_DIR", Path: "/etc/corp/one", Directory: true, Origin: "environment"},
+		{Variable: "SSL_CERT_DIR", Path: "/etc/corp/two", Directory: true, Origin: "environment"},
+		{Variable: "NODE_EXTRA_CA_CERTS", Path: "/etc/corp/node.pem", Origin: "environment"},
+		{Variable: "REQUESTS_CA_BUNDLE", Path: "/etc/corp/requests.pem", Origin: "environment"},
+		{Variable: "CURL_CA_BUNDLE", Path: "/etc/corp/curl.pem", Origin: "environment"},
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("CaptureAmbient() = %+v, want %+v", got, want)

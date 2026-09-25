@@ -1,8 +1,8 @@
 // Command langfuse-mcp is the MCP server for the Langfuse public API.
 //
 // This package only wires modules together (ADR-0009): capture the ambient CA
-// variables, load config, build the trust pool, then (in later milestones) the
-// Langfuse client and a transport.
+// variables, load config (environment, then the optional config file), build
+// the trust pool, then (in later milestones) the Langfuse client and a transport.
 // For now the executable builds the trust pool, logs its CA sources and exits.
 package main
 
@@ -34,7 +34,12 @@ func main() {
 // the ambient CA sources captured at process start. It reports whether startup
 // succeeded; on failure it has logged one error line.
 func run(log *slog.Logger, environ []string, ambient []trust.Source) bool {
-	cfg, err := config.Load(envMap(environ))
+	file, err := config.ReadFile()
+	if err != nil {
+		log.Error("startup failed", "error", err.Error())
+		return false
+	}
+	cfg, err := config.Load(envMap(environ), file)
 	if err != nil {
 		log.Error("startup failed", "error", err.Error())
 		return false
@@ -65,15 +70,20 @@ func envMap(environ []string) map[string]string {
 	return env
 }
 
-// trustSources maps the configured and ambient CA paths to the trust module's sources.
+// trustSources maps the configured and ambient CA paths to the trust module's
+// sources. Paths from the config file are explicit sources, like those from the
+// environment.
 func trustSources(cfg config.Config, ambient []trust.Source) trust.Sources {
 	src := trust.Sources{Ambient: ambient, IgnoreAmbient: cfg.IgnoreAmbientCA}
-	if cfg.CACert != "" {
-		src.Explicit = append(src.Explicit, trust.Source{Variable: config.EnvCACert, Path: cfg.CACert})
-	}
-	if cfg.CACertsPath != "" {
+	if cfg.CACert.Value != "" {
 		src.Explicit = append(src.Explicit, trust.Source{
-			Variable: config.EnvCACertsPath, Path: cfg.CACertsPath, Directory: true,
+			Variable: config.EnvCACert, Path: cfg.CACert.Value, Origin: string(cfg.CACert.Origin),
+		})
+	}
+	if cfg.CACertsPath.Value != "" {
+		src.Explicit = append(src.Explicit, trust.Source{
+			Variable: config.EnvCACertsPath, Path: cfg.CACertsPath.Value, Directory: true,
+			Origin: string(cfg.CACertsPath.Origin),
 		})
 	}
 	return src
