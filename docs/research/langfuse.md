@@ -153,6 +153,32 @@ output). Upstream `docker-compose.yml` at commit `fd5c9ee18e07`, images `:4` = *
   - A project key on org-scoped routes gets 403 `Organization-scoped API key required for this operation.`
   - `experiments_list` and `experiment-items` return 400 without `fromStartTime`.
 
+
+### 1.8 Old self-hosted: Langfuse 3.80.0 (prototype, 2026-09-25) `[verified]`
+
+Same branch, `internal/workflows/prototype_iowindow/v3.80.0/`. Compose from tag `v3.80.0`, released 2025-07-09.
+
+- **Operation availability.** Every spec operation was probed with every method.
+  - **All 15 deprecated operations are present.**
+  - **40 of the 102 non-deprecated operations are missing** and return an HTML 404: `/v2/observations`,
+    `/v2/metrics`, `/v3/scores`, `/experiments`, `/experiment-items`, evaluators, evaluation rules, LLM connections,
+    dashboards, blob-storage integrations, annotation-queue assignments, feedback, and organization API keys.
+  - **Consequence.** Under ADR-0004's "exclude deprecated" rule, a v3 deployment exposes **no way to read traces,
+    observations, sessions, scores or metrics**.
+  - The docs agree: OSS v3 uses the legacy APIs, and v4 removes them. `[sourced]`
+    `/self-hosting/upgrade/versioning` ("Public API & querying — OSS v3: use the legacy APIs `observations_v1` /
+    `metrics_v1`; deprecated read APIs are removed on v4").
+- **Legacy read limits.** `GET /observations` and `GET /traces` return input/output by default.
+  - There is **no window enforcement**.
+  - **`limit` max is 100**, against 1000 on v4's `/v2/observations`.
+  - `GET /traces/{id}` embeds every observation, together with its input.
+- **OTLP/JSON bug in 3.80.0.** A hex `traceId` is stored as the hex of its ASCII bytes. **OTLP/protobuf is correct.**
+- **The upstream compose file for v3.80.0 no longer starts as shipped.**
+  - `postgres:latest` now pulls PostgreSQL 18, which rejects the `/var/lib/postgresql/data` mount. Pin it with
+    `POSTGRES_VERSION=17`.
+  - The untagged `clickhouse-server` now pulls ClickHouse 26.9. With it, every timestamp is stored as
+    `9999-12-31 23:59:59`. Pin `24.3`.
+  - Any test matrix for old versions must pin every image.
 ---
 
 ## 2. Deprecations
