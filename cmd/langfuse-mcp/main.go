@@ -1,12 +1,12 @@
 // Command langfuse-mcp is the MCP server for the Langfuse public API.
 //
-// This package only wires modules together (ADR-0009): load config, build the
-// trust pool, then (in later milestones) the Langfuse client and a transport.
+// This package only wires modules together (ADR-0009): capture the ambient CA
+// variables, load config, build the trust pool, then (in later milestones) the
+// Langfuse client and a transport.
 // For now the executable builds the trust pool, logs its CA sources and exits.
 package main
 
 import (
-	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -16,22 +16,39 @@ import (
 )
 
 func main() {
-	if !run(os.Environ(), os.Stderr) {
+	// First, before anything touches certificate handling: Go would let
+	// SSL_CERT_FILE/SSL_CERT_DIR replace the OS roots (ADR-0006).
+	ambient, err := config.CaptureAmbientCA()
+	// Logs go to stderr: stdout is reserved for the stdio transport.
+	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	if err != nil {
+		log.Error("startup failed", "error", err.Error())
+		os.Exit(1)
+	}
+	if !run(log, os.Environ(), ambient) {
 		os.Exit(1)
 	}
 }
 
 // run starts the server with the given environment ("KEY=value" entries) and
-// logs to stderr (stdout is reserved for the stdio transport). It reports
-// whether startup succeeded; on failure it has logged one error line.
-func run(environ []string, stderr io.Writer) bool {
-	log := slog.New(slog.NewJSONHandler(stderr, nil))
-	cfg := config.Load(envMap(environ))
-
-	_, report, err := trust.Build(trustSources(cfg))
+// the ambient CA sources captured at process start. It reports whether startup
+// succeeded; on failure it has logged one error line.
+func run(log *slog.Logger, environ []string, ambient []config.CAPath) bool {
+	cfg, err := config.Load(envMap(environ))
 	if err != nil {
 		log.Error("startup failed", "error", err.Error())
 		return false
+	}
+
+	_, report, err := trust.Build(trustSources(cfg, ambient))
+	if err != nil {
+		log.Error("startup failed", "error", err.Error())
+		return false
+	}
+	for _, s := range report.Sources {
+		if s.Warning != "" {
+			log.Warn("CA source not fully loaded", "variable", s.Variable, "path", s.Path, "warning", s.Warning)
+		}
 	}
 	log.Info("CA sources loaded", "roots", report.Roots, "sources", report.Sources)
 	return true
@@ -48,9 +65,12 @@ func envMap(environ []string) map[string]string {
 	return env
 }
 
-// trustSources maps the configured CA paths to the trust module's sources.
-func trustSources(cfg config.Config) trust.Sources {
-	var src trust.Sources
+// trustSources maps the configured and ambient CA paths to the trust module's sources.
+func trustSources(cfg config.Config, ambient []config.CAPath) trust.Sources {
+	src := trust.Sources{IgnoreAmbient: cfg.IgnoreAmbientCA}
+	for _, a := range ambient {
+		src.Ambient = append(src.Ambient, trust.Source{Variable: a.Variable, Path: a.Path, Directory: a.Directory})
+	}
 	if cfg.CACert != "" {
 		src.Explicit = append(src.Explicit, trust.Source{Variable: config.EnvCACert, Path: cfg.CACert})
 	}

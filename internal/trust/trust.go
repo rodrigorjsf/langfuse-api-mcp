@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/crypto/x509roots/fallback/bundle"
 )
@@ -31,6 +32,14 @@ type Sources struct {
 	// Explicit sources come from this server's own settings; one that cannot be
 	// loaded is an error.
 	Explicit []Source
+	// Ambient sources come from widely used variables already present in the
+	// environment (SSL_CERT_FILE, SSL_CERT_DIR, NODE_EXTRA_CA_CERTS,
+	// REQUESTS_CA_BUNDLE, CURL_CA_BUNDLE); one that cannot be loaded is skipped
+	// with a warning in the report.
+	Ambient []Source
+	// IgnoreAmbient drops every ambient source: only the OS roots and the
+	// explicit sources are trusted.
+	IgnoreAmbient bool
 }
 
 var errNoCertificates = errors.New("no PEM certificate found")
@@ -48,8 +57,13 @@ func (p Pool) TLSConfig() *tls.Config {
 // Kind says how a CA source was configured.
 type Kind string
 
-// KindExplicit marks a source named through this server's own settings.
-const KindExplicit Kind = "explicit"
+const (
+	// KindExplicit marks a source named through this server's own settings.
+	KindExplicit Kind = "explicit"
+	// KindAmbient marks a source named through a widely used variable that was
+	// already present in the environment.
+	KindAmbient Kind = "ambient"
+)
 
 // Report describes what Build loaded, for the startup log. It holds paths and
 // counts only, never certificate contents.
@@ -71,21 +85,30 @@ const (
 	RootsFallback Roots = "bundled-fallback"
 )
 
-// SourceReport describes one loaded CA source.
+// SourceReport describes one CA source and what was loaded from it.
 type SourceReport struct {
 	Variable     string `json:"variable"`
 	Path         string `json:"path"`
 	Kind         Kind   `json:"kind"`
 	Certificates int    `json:"certificates"`
+	// Warning says what could not be loaded from an ambient source: the whole
+	// source (Certificates is 0) or single files of a directory. Empty when
+	// everything loaded.
+	Warning string `json:"warning,omitempty"`
 }
 
 // Build returns the trust pool for src, or an error naming the variable of the
-// first explicit source that cannot be loaded.
+// first explicit source that cannot be loaded. Ambient sources never fail
+// Build: what cannot be loaded is skipped and named in the report's warning.
 func Build(src Sources) (Pool, Report, error) {
 	roots, origin := baseRoots()
-	report := Report{Roots: origin, Sources: make([]SourceReport, 0, len(src.Explicit))}
+	ambient := src.Ambient
+	if src.IgnoreAmbient {
+		ambient = nil
+	}
+	report := Report{Roots: origin, Sources: make([]SourceReport, 0, len(src.Explicit)+len(ambient))}
 	for _, s := range src.Explicit {
-		certs, err := load(s)
+		certs, _, err := load(s, true)
 		if err == nil && len(certs) == 0 {
 			err = errNoCertificates
 		}
@@ -99,35 +122,67 @@ func Build(src Sources) (Pool, Report, error) {
 			Variable: s.Variable, Path: s.Path, Kind: KindExplicit, Certificates: len(certs),
 		})
 	}
+	for _, s := range ambient {
+		certs, skipped, err := load(s, false)
+		if err == nil && len(certs) == 0 {
+			err = fmt.Errorf("%s: %w", s.Path, errNoCertificates)
+		}
+		var warnings []string
+		if err != nil {
+			certs = nil
+			warnings = append(warnings, "source skipped: "+err.Error())
+		}
+		for _, e := range skipped {
+			warnings = append(warnings, "file skipped: "+e.Error())
+		}
+		for _, c := range certs {
+			roots.AddCert(c)
+		}
+		report.Sources = append(report.Sources, SourceReport{
+			Variable: s.Variable, Path: s.Path, Kind: KindAmbient, Certificates: len(certs),
+			Warning: strings.Join(warnings, "; "),
+		})
+	}
 	return Pool{roots: roots}, report, nil
 }
 
-// load reads every certificate of one source.
-func load(s Source) ([]*x509.Certificate, error) {
+// load reads every certificate of one source. A file of a directory that
+// cannot be loaded is an error when strict; otherwise it is returned in
+// skipped and the rest of the directory is still loaded.
+func load(s Source, strict bool) (certs []*x509.Certificate, skipped []error, err error) {
 	if !s.Directory {
-		return readFile(s.Path)
+		certs, err = readFile(s.Path)
+		return certs, nil, err
 	}
 	entries, err := os.ReadDir(s.Path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	var certs []*x509.Certificate
 	for _, e := range entries {
-		path := filepath.Join(s.Path, e.Name())
-		info, err := os.Stat(path) // follows symlinks, as in OS certificate directories
+		found, err := readDirEntry(filepath.Join(s.Path, e.Name()))
 		if err != nil {
-			return nil, err
-		}
-		if !info.Mode().IsRegular() {
+			if strict {
+				return nil, nil, err
+			}
+			skipped = append(skipped, err)
 			continue
-		}
-		found, err := readFile(path)
-		if err != nil {
-			return nil, err
 		}
 		certs = append(certs, found...)
 	}
-	return certs, nil
+	return certs, skipped, nil
+}
+
+// readDirEntry returns every certificate of a regular file of a CA directory,
+// and nothing for other entries (subdirectories, devices).
+func readDirEntry(path string) ([]*x509.Certificate, error) {
+	info, err := os.Stat(path) // follows symlinks, as in OS certificate directories
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, nil
+	}
+	return readFile(path)
 }
 
 // readFile returns every certificate in the PEM file at path.

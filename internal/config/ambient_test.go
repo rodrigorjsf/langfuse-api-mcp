@@ -1,0 +1,73 @@
+package config_test
+
+import (
+	"os"
+	"slices"
+	"testing"
+
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/config"
+)
+
+// Not parallel: the capture step reads and changes the process environment.
+func TestCaptureAmbientCAReadsTheFiveVariablesAndSplitsSSLCertDir(t *testing.T) {
+	sep := string(os.PathListSeparator)
+	t.Setenv("SSL_CERT_FILE", "/etc/corp/ssl.pem")
+	t.Setenv("SSL_CERT_DIR", "/etc/corp/one"+sep+sep+"/etc/corp/two")
+	t.Setenv("NODE_EXTRA_CA_CERTS", "/etc/corp/node.pem")
+	t.Setenv("REQUESTS_CA_BUNDLE", "/etc/corp/requests.pem")
+	t.Setenv("CURL_CA_BUNDLE", "/etc/corp/curl.pem")
+
+	got, err := config.CaptureAmbientCA()
+	if err != nil {
+		t.Fatalf("CaptureAmbientCA: %v", err)
+	}
+
+	want := []config.CAPath{
+		{Variable: "SSL_CERT_FILE", Path: "/etc/corp/ssl.pem"},
+		{Variable: "SSL_CERT_DIR", Path: "/etc/corp/one", Directory: true},
+		{Variable: "SSL_CERT_DIR", Path: "/etc/corp/two", Directory: true},
+		{Variable: "NODE_EXTRA_CA_CERTS", Path: "/etc/corp/node.pem"},
+		{Variable: "REQUESTS_CA_BUNDLE", Path: "/etc/corp/requests.pem"},
+		{Variable: "CURL_CA_BUNDLE", Path: "/etc/corp/curl.pem"},
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("CaptureAmbientCA() = %+v, want %+v", got, want)
+	}
+}
+
+// Not parallel: the capture step reads and changes the process environment.
+func TestCaptureAmbientCARemovesOnlySSLCertFileAndDirFromTheEnvironment(t *testing.T) {
+	for _, v := range []string{"SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"} {
+		t.Setenv(v, "/etc/corp/"+v)
+	}
+
+	if _, err := config.CaptureAmbientCA(); err != nil {
+		t.Fatalf("CaptureAmbientCA: %v", err)
+	}
+
+	for _, v := range []string{"SSL_CERT_FILE", "SSL_CERT_DIR"} {
+		if value, ok := os.LookupEnv(v); ok {
+			t.Errorf("%s is still in the environment (%q); Go would let it replace the OS roots", v, value)
+		}
+	}
+	for _, v := range []string{"NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"} {
+		if _, ok := os.LookupEnv(v); !ok {
+			t.Errorf("%s was removed from the environment; only SSL_CERT_FILE/SSL_CERT_DIR should be", v)
+		}
+	}
+}
+
+// Not parallel: the capture step reads and changes the process environment.
+func TestCaptureAmbientCAFindsNothingWhenTheVariablesAreEmpty(t *testing.T) {
+	for _, v := range []string{"SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"} {
+		t.Setenv(v, "")
+	}
+
+	got, err := config.CaptureAmbientCA()
+	if err != nil {
+		t.Fatalf("CaptureAmbientCA: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("CaptureAmbientCA() = %+v, want no ambient CA sources", got)
+	}
+}

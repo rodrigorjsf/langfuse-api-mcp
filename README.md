@@ -80,8 +80,8 @@ Cloud regions: EU `https://cloud.langfuse.com` · US `https://us.cloud.langfuse.
 |---|---|---|---|
 | `LANGFUSE_CA_CERT` | PEM file with one or more CA certificates | startup fails with an error naming the variable and the path (missing, unreadable, empty, no PEM certificate, or a damaged certificate) | works: loaded into the trust pool at startup |
 | `LANGFUSE_CA_CERTS_PATH` | directory of PEM files; every regular file directly inside it that holds PEM certificates is loaded (subdirectories and non-PEM files are ignored) | startup fails with an error naming the variable and the path (missing directory, unreadable file, a damaged certificate, or no PEM certificate at all) | works: loaded into the trust pool at startup |
-| `SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE` | picked up automatically if already set | warning in the log, then skipped | **Planned** |
-| `LANGFUSE_MCP_IGNORE_AMBIENT_CA` | `true` = do not pick up the variables in the row above | — | **Planned** |
+| `SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE` (**ambient**) | picked up automatically if already set, so a CA you exported for other tools works here too. `SSL_CERT_DIR` may list several directories, separated by your OS's path-list separator (`:` on Linux/macOS, `;` on Windows); each is loaded like `LANGFUSE_CA_CERTS_PATH` | a `WARN` log line naming the variable and the path, then the source is skipped and startup continues. In a directory, only the files that cannot be loaded are skipped | works: loaded into the trust pool at startup |
+| `LANGFUSE_MCP_IGNORE_AMBIENT_CA` | `true` = do not pick up the variables in the row above; only the OS store and `LANGFUSE_CA_CERT`/`LANGFUSE_CA_CERTS_PATH` are trusted. Accepts `true`/`false` (also `1`/`0`) | any other value stops startup with an error naming the variable | works |
 | `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY` | standard proxy variables | — | **Planned** |
 
 "Works" means the server builds its trust pool from these sources when it starts and logs them. The Langfuse client that will use the pool for its connections is still **Planned** (M1).
@@ -186,10 +186,14 @@ HTTPS_PROXY=http://proxy.example.com:8080
 The log at startup lists which CA sources were loaded (paths and counts, never contents). Use it to confirm the setup. It is one JSON line on stderr, for example:
 
 ```json
-{"time":"…","level":"INFO","msg":"CA sources loaded","roots":"os","sources":[{"variable":"LANGFUSE_CA_CERT","path":"/etc/ssl/private/corp-root.pem","kind":"explicit","certificates":2}]}
+{"time":"…","level":"INFO","msg":"CA sources loaded","roots":"os","sources":[{"variable":"LANGFUSE_CA_CERT","path":"/etc/ssl/private/corp-root.pem","kind":"explicit","certificates":2},{"variable":"NODE_EXTRA_CA_CERTS","path":"/home/me/corp-root.pem","kind":"ambient","certificates":1}]}
 ```
 
-`roots` is `os` (your operating system's certificate store) or `bundled-fallback` (the OS offered none). `certificates` is how many CA certificates each source added.
+`roots` is `os` (your operating system's certificate store) or `bundled-fallback` (the OS offered none). `kind` is `explicit` (`LANGFUSE_CA_CERT`, `LANGFUSE_CA_CERTS_PATH`) or `ambient` (the five widely used variables). `certificates` is how many CA certificates each source added. An ambient source that could not be fully loaded also carries a `warning`, and a separate `WARN` line is logged before the summary:
+
+```json
+{"time":"…","level":"WARN","msg":"CA source not fully loaded","variable":"REQUESTS_CA_BUNDLE","path":"/old/bundle.pem","warning":"source skipped: open /old/bundle.pem: no such file or directory"}
+```
 
 ## Security model
 
