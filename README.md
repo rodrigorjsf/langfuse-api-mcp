@@ -76,15 +76,17 @@ Cloud regions: EU `https://cloud.langfuse.com` · US `https://us.cloud.langfuse.
 
 ### Certificates and proxy
 
-| Variable | Kind | If it can't be loaded |
-|---|---|---|
-| `LANGFUSE_CA_CERT` | PEM file with one or more CA certificates | startup fails with a clear error |
-| `LANGFUSE_CA_CERTS_PATH` | directory of PEM files | startup fails with a clear error |
-| `SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE` | picked up automatically if already set | warning in the log, then skipped |
-| `LANGFUSE_MCP_IGNORE_AMBIENT_CA` | `true` = do not pick up the variables in the row above | — |
-| `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY` | standard proxy variables | — |
+| Variable | Kind | If it can't be loaded | Status |
+|---|---|---|---|
+| `LANGFUSE_CA_CERT` | PEM file with one or more CA certificates | startup fails with an error naming the variable and the path (missing, unreadable, empty or no PEM certificate) | works: loaded into the trust pool at startup |
+| `LANGFUSE_CA_CERTS_PATH` | directory of PEM files; every regular file directly inside it that holds PEM certificates is loaded (subdirectories and non-PEM files are ignored) | startup fails with an error naming the variable and the path (missing directory, unreadable file, or no PEM certificate at all) | works: loaded into the trust pool at startup |
+| `SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE` | picked up automatically if already set | warning in the log, then skipped | **Planned** |
+| `LANGFUSE_MCP_IGNORE_AMBIENT_CA` | `true` = do not pick up the variables in the row above | — | **Planned** |
+| `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY` | standard proxy variables | — | **Planned** |
 
-Trusted roots = **your operating system's certificate store + every CA from the sources above**. Nothing replaces the OS store: Go normally lets `SSL_CERT_FILE`/`SSL_CERT_DIR` *replace* it, so the server reads them as extra CA sources and removes them from its own environment before building the trust pool ([ADR-0006](docs/adr/0006-tls-trust-in-code.md)). **There is no option to disable certificate verification.** This is deliberate.
+"Works" means the server builds its trust pool from these sources when it starts and logs them. The Langfuse client that will use the pool for its connections is still **Planned** (M1).
+
+Trusted roots = **your operating system's certificate store + every CA from the sources above**. Nothing replaces the OS store: Go normally lets `SSL_CERT_FILE`/`SSL_CERT_DIR` *replace* it, so the server reads them as extra CA sources and removes them from its own environment before building the trust pool ([ADR-0006](docs/adr/0006-tls-trust-in-code.md)). If the OS offers no certificates at all (for example a minimal container image without a CA bundle), the server starts from the public roots bundled into the binary instead, then adds your CAs. TLS 1.2 is the minimum version. **There is no option to disable certificate verification.** This is deliberate.
 
 ### Behavior
 
@@ -181,7 +183,13 @@ HTTPS_PROXY=http://proxy.example.com:8080
 
 **Keys are not allowed in this file.** If it contains `LANGFUSE_PUBLIC_KEY` or `LANGFUSE_SECRET_KEY`, the server refuses to start and tells you why, so that no secret sits in a plaintext file ([ADR-0011](docs/adr/0011-non-secret-config-file.md)).
 
-The log at startup lists which CA sources were loaded (paths and counts, never contents). Use it to confirm the setup.
+The log at startup lists which CA sources were loaded (paths and counts, never contents). Use it to confirm the setup. It is one JSON line on stderr, for example:
+
+```json
+{"time":"…","level":"INFO","msg":"CA sources loaded","roots":"os","sources":[{"variable":"LANGFUSE_CA_CERT","path":"/etc/ssl/private/corp-root.pem","kind":"explicit","certificates":2}]}
+```
+
+`roots` is `os` (your operating system's certificate store) or `bundled-fallback` (the OS offered none). `certificates` is how many CA certificates each source added.
 
 ## Security model
 
