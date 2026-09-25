@@ -1,0 +1,22 @@
+core, no window                          200 rows=67 io=n ages=- cursor=n
+io, no window                            200 rows=10 io=y ages=- cursor=y
+metadata, no window                      200 rows=10 io=n ages=- cursor=y
+io, 13d                                  200 rows=10 io=y ages=- cursor=y
+io, 14d exact                            200 rows=10 io=y ages=- cursor=y
+io, 14d+1s                               200 rows=10 io=y ages=- cursor=y
+io, 15d                                  200 rows=10 io=y ages=- cursor=y
+io, 30d                                  200 rows=10 io=y ages=- cursor=y
+metadata, 30d                            200 rows=10 io=n ages=- cursor=y
+core, 30d                                200 rows=10 io=n ages=- cursor=y
+io, only fromStartTime 30d               200 rows=10 io=y ages=- cursor=y
+io, traceId (d40), no window             200 rows=1 io=y ages=- cursor=n
+io, traceId (d40) + 60d window           200 rows=1 io=y ages=- cursor=n
+io, filter traceId (d20), no window      200 rows=1 io=y ages=- cursor=n
+io, 13d, limit=50                        200 rows=50 io=y ages=- cursor=y
+io, 13d, limit=51                        200 rows=51 io=y ages=- cursor=y
+io, 13d, limit=1000                      200 rows=62 io=y ages=- cursor=n
+io, traceId bulk, limit=1000             200 rows=61 io=y ages=- cursor=n
+core, limit=1001                         400 {"message":"Invalid request data","error":[{"origin":"number","code":"too_big","maximum":1000,"inclusive":true,"path":["limit"],"message":"Too big: expected number to be <=1000"}]}
+core, 13d, limit=1000                    200 rows=62 io=n ages=- cursor=n
+no fields param, 30d                     200 rows=10 io=n ages=d1 cursor=y
+{"status":"OK","version":"4.46.0"}
