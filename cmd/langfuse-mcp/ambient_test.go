@@ -55,8 +55,8 @@ func TestStartupWarnsAboutAMissingAmbientFileAndStillSucceeds(t *testing.T) {
 	}
 
 	for _, line := range logLines(t, stderr) {
-		if line["level"] == "WARN" && line["variable"] == "NODE_EXTRA_CA_CERTS" &&
-			strings.Contains(line["warning"].(string), missing) {
+		warning, _ := line["warning"].(string)
+		if line["level"] == "WARN" && line["variable"] == "NODE_EXTRA_CA_CERTS" && strings.Contains(warning, missing) {
 			return
 		}
 	}

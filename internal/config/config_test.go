@@ -35,7 +35,7 @@ func TestLoadLeavesExplicitCASourcesUnsetWhenTheVariablesAreAbsentOrEmpty(t *tes
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			if cfg, err := config.Load(env); err != nil || cfg != (config.Config{}) {
-				t.Fatalf("Load() = %+v, want no CA sources", cfg)
+				t.Fatalf("Load() = %+v, %v; want no CA sources and no error", cfg, err)
 			}
 		})
 	}
@@ -66,4 +66,21 @@ func TestLoadFailsNamingTheVariableOfAnInvalidIgnoreAmbientCAFlag(t *testing.T) 
 	if err == nil || !strings.Contains(err.Error(), "LANGFUSE_MCP_IGNORE_AMBIENT_CA") {
 		t.Fatalf("Load error = %v, want an error naming LANGFUSE_MCP_IGNORE_AMBIENT_CA", err)
 	}
+}
+
+// FuzzLoad checks that Load never panics and either fails or returns a flag
+// consistent with the input (go.md: fuzz every config parser).
+func FuzzLoad(f *testing.F) {
+	for _, seed := range []string{"", "true", "false", "1", "yes", "\x00"} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, value string) {
+		cfg, err := config.Load(map[string]string{"LANGFUSE_MCP_IGNORE_AMBIENT_CA": value})
+		if err != nil && cfg != (config.Config{}) {
+			t.Fatalf("Load(%q) returned a config %+v together with error %v", value, cfg, err)
+		}
+		if value == "" && (err != nil || cfg.IgnoreAmbientCA) {
+			t.Fatalf("Load(\"\") = %+v, %v; want the flag unset", cfg, err)
+		}
+	})
 }

@@ -1,15 +1,15 @@
-package config_test
+package trust_test
 
 import (
 	"os"
 	"slices"
 	"testing"
 
-	"github.com/rodrigorjsf/langfuse-api-mcp/internal/config"
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/trust"
 )
 
 // Not parallel: the capture step reads and changes the process environment.
-func TestCaptureAmbientCAReadsTheFiveVariablesAndSplitsSSLCertDir(t *testing.T) {
+func TestCaptureAmbientReadsTheFiveVariablesAndSplitsSSLCertDir(t *testing.T) {
 	sep := string(os.PathListSeparator)
 	t.Setenv("SSL_CERT_FILE", "/etc/corp/ssl.pem")
 	t.Setenv("SSL_CERT_DIR", "/etc/corp/one"+sep+sep+"/etc/corp/two")
@@ -17,12 +17,12 @@ func TestCaptureAmbientCAReadsTheFiveVariablesAndSplitsSSLCertDir(t *testing.T) 
 	t.Setenv("REQUESTS_CA_BUNDLE", "/etc/corp/requests.pem")
 	t.Setenv("CURL_CA_BUNDLE", "/etc/corp/curl.pem")
 
-	got, err := config.CaptureAmbientCA()
+	got, err := trust.CaptureAmbient()
 	if err != nil {
-		t.Fatalf("CaptureAmbientCA: %v", err)
+		t.Fatalf("CaptureAmbient: %v", err)
 	}
 
-	want := []config.CAPath{
+	want := []trust.Source{
 		{Variable: "SSL_CERT_FILE", Path: "/etc/corp/ssl.pem"},
 		{Variable: "SSL_CERT_DIR", Path: "/etc/corp/one", Directory: true},
 		{Variable: "SSL_CERT_DIR", Path: "/etc/corp/two", Directory: true},
@@ -31,18 +31,18 @@ func TestCaptureAmbientCAReadsTheFiveVariablesAndSplitsSSLCertDir(t *testing.T) 
 		{Variable: "CURL_CA_BUNDLE", Path: "/etc/corp/curl.pem"},
 	}
 	if !slices.Equal(got, want) {
-		t.Fatalf("CaptureAmbientCA() = %+v, want %+v", got, want)
+		t.Fatalf("CaptureAmbient() = %+v, want %+v", got, want)
 	}
 }
 
 // Not parallel: the capture step reads and changes the process environment.
-func TestCaptureAmbientCARemovesOnlySSLCertFileAndDirFromTheEnvironment(t *testing.T) {
+func TestCaptureAmbientRemovesOnlySSLCertFileAndDirFromTheEnvironment(t *testing.T) {
 	for _, v := range []string{"SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"} {
 		t.Setenv(v, "/etc/corp/"+v)
 	}
 
-	if _, err := config.CaptureAmbientCA(); err != nil {
-		t.Fatalf("CaptureAmbientCA: %v", err)
+	if _, err := trust.CaptureAmbient(); err != nil {
+		t.Fatalf("CaptureAmbient: %v", err)
 	}
 
 	for _, v := range []string{"SSL_CERT_FILE", "SSL_CERT_DIR"} {
@@ -58,16 +58,16 @@ func TestCaptureAmbientCARemovesOnlySSLCertFileAndDirFromTheEnvironment(t *testi
 }
 
 // Not parallel: the capture step reads and changes the process environment.
-func TestCaptureAmbientCAFindsNothingWhenTheVariablesAreEmpty(t *testing.T) {
+func TestCaptureAmbientFindsNothingWhenTheVariablesAreEmpty(t *testing.T) {
 	for _, v := range []string{"SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"} {
 		t.Setenv(v, "")
 	}
 
-	got, err := config.CaptureAmbientCA()
+	got, err := trust.CaptureAmbient()
 	if err != nil {
-		t.Fatalf("CaptureAmbientCA: %v", err)
+		t.Fatalf("CaptureAmbient: %v", err)
 	}
 	if len(got) != 0 {
-		t.Fatalf("CaptureAmbientCA() = %+v, want no ambient CA sources", got)
+		t.Fatalf("CaptureAmbient() = %+v, want no ambient CA sources", got)
 	}
 }

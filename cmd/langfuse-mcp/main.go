@@ -18,7 +18,7 @@ import (
 func main() {
 	// First, before anything touches certificate handling: Go would let
 	// SSL_CERT_FILE/SSL_CERT_DIR replace the OS roots (ADR-0006).
-	ambient, err := config.CaptureAmbientCA()
+	ambient, err := trust.CaptureAmbient()
 	// Logs go to stderr: stdout is reserved for the stdio transport.
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	if err != nil {
@@ -33,7 +33,7 @@ func main() {
 // run starts the server with the given environment ("KEY=value" entries) and
 // the ambient CA sources captured at process start. It reports whether startup
 // succeeded; on failure it has logged one error line.
-func run(log *slog.Logger, environ []string, ambient []config.CAPath) bool {
+func run(log *slog.Logger, environ []string, ambient []trust.Source) bool {
 	cfg, err := config.Load(envMap(environ))
 	if err != nil {
 		log.Error("startup failed", "error", err.Error())
@@ -66,11 +66,8 @@ func envMap(environ []string) map[string]string {
 }
 
 // trustSources maps the configured and ambient CA paths to the trust module's sources.
-func trustSources(cfg config.Config, ambient []config.CAPath) trust.Sources {
-	src := trust.Sources{IgnoreAmbient: cfg.IgnoreAmbientCA}
-	for _, a := range ambient {
-		src.Ambient = append(src.Ambient, trust.Source{Variable: a.Variable, Path: a.Path, Directory: a.Directory})
-	}
+func trustSources(cfg config.Config, ambient []trust.Source) trust.Sources {
+	src := trust.Sources{Ambient: ambient, IgnoreAmbient: cfg.IgnoreAmbientCA}
 	if cfg.CACert != "" {
 		src.Explicit = append(src.Explicit, trust.Source{Variable: config.EnvCACert, Path: cfg.CACert})
 	}

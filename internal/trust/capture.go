@@ -1,4 +1,4 @@
-package config
+package trust
 
 import (
 	"fmt"
@@ -22,15 +22,7 @@ const (
 	EnvCurlCABundle = "CURL_CA_BUNDLE"
 )
 
-// CAPath is one CA source path and the variable that named it.
-type CAPath struct {
-	Variable string
-	Path     string
-	// Directory is true when Path names a directory of PEM files.
-	Directory bool
-}
-
-// CaptureAmbientCA reads the ambient CA source variables from the process
+// CaptureAmbient reads the ambient CA source variables from the process
 // environment, then removes SSL_CERT_FILE and SSL_CERT_DIR from it.
 //
 // Go treats SSL_CERT_FILE/SSL_CERT_DIR as a replacement of its default
@@ -38,19 +30,22 @@ type CAPath struct {
 // verifier), so they must be gone before anything touches certificate handling:
 // the executable calls this first. The other three variables are only read; Go
 // ignores them. Empty values and empty SSL_CERT_DIR entries are skipped.
-func CaptureAmbientCA() ([]CAPath, error) {
-	var paths []CAPath
+//
+// It is the only function of this module that touches the environment; Build
+// takes the returned sources as plain values.
+func CaptureAmbient() ([]Source, error) {
+	var paths []Source
 	if f := os.Getenv(EnvSSLCertFile); f != "" {
-		paths = append(paths, CAPath{Variable: EnvSSLCertFile, Path: f})
+		paths = append(paths, Source{Variable: EnvSSLCertFile, Path: f})
 	}
 	for _, d := range filepath.SplitList(os.Getenv(EnvSSLCertDir)) {
 		if d != "" {
-			paths = append(paths, CAPath{Variable: EnvSSLCertDir, Path: d, Directory: true})
+			paths = append(paths, Source{Variable: EnvSSLCertDir, Path: d, Directory: true})
 		}
 	}
 	for _, v := range []string{EnvNodeExtraCACerts, EnvRequestsCABundle, EnvCurlCABundle} {
 		if f := os.Getenv(v); f != "" {
-			paths = append(paths, CAPath{Variable: v, Path: f})
+			paths = append(paths, Source{Variable: v, Path: f})
 		}
 	}
 	for _, v := range []string{EnvSSLCertFile, EnvSSLCertDir} {
