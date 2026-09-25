@@ -41,7 +41,8 @@ type Sources struct {
 	// with a warning in the report.
 	Ambient []Source
 	// IgnoreAmbient drops every ambient source: only the OS roots and the
-	// explicit sources are trusted.
+	// explicit sources are trusted. Dropped sources are still reported, marked
+	// Ignored.
 	IgnoreAmbient bool
 }
 
@@ -99,6 +100,9 @@ type SourceReport struct {
 	// source (Certificates is 0) or single files of a directory. Empty when
 	// everything loaded.
 	Warning string `json:"warning,omitempty"`
+	// Ignored is true for an ambient source dropped by IgnoreAmbient: nothing
+	// was loaded from it (Certificates is 0), on purpose, so it has no warning.
+	Ignored bool `json:"ignored,omitempty"`
 }
 
 // Build returns the trust pool for src, or an error naming the variable of the
@@ -107,9 +111,6 @@ type SourceReport struct {
 func Build(src Sources) (Pool, Report, error) {
 	roots, origin := baseRoots()
 	ambient := src.Ambient
-	if src.IgnoreAmbient {
-		ambient = nil // ignored sources are not reported yet; see #25
-	}
 	report := Report{Roots: origin, Sources: make([]SourceReport, 0, len(src.Explicit)+len(ambient))}
 	for _, s := range src.Explicit {
 		certs, _, err := load(s, true)
@@ -127,6 +128,12 @@ func Build(src Sources) (Pool, Report, error) {
 		})
 	}
 	for _, s := range ambient {
+		if src.IgnoreAmbient { // listed, so a log paste tells "ignored" from "not set"
+			report.Sources = append(report.Sources, SourceReport{
+				Variable: s.Variable, Path: s.Path, Kind: KindAmbient, Origin: s.Origin, Ignored: true,
+			})
+			continue
+		}
 		certs, skipped, err := load(s, false)
 		if err == nil && len(certs) == 0 {
 			err = fmt.Errorf("%s: %w", s.Path, errNoCertificates)

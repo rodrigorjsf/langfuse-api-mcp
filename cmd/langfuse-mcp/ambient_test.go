@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -104,8 +105,12 @@ func TestStartupIgnoresAmbientVariablesInTheConfigFileWhenTheIgnoreFlagIsSet(t *
 		t.Fatalf("executable did not exit 0: %v\nstderr:\n%s", err, stderr)
 	}
 
-	if got := loggedSources(t, stderr); len(got) != 0 {
-		t.Fatalf("logged sources = %v, want none with LANGFUSE_MCP_IGNORE_AMBIENT_CA=true in the file", got)
+	want := []any{map[string]any{
+		"variable": "NODE_EXTRA_CA_CERTS", "path": path, "kind": "ambient", "origin": "config-file",
+		"certificates": float64(0), "ignored": true,
+	}}
+	if got := loggedSources(t, stderr); !reflect.DeepEqual(got, want) {
+		t.Fatalf("logged sources = %v, want %v", got, want)
 	}
 }
 
@@ -136,8 +141,15 @@ func TestStartupIgnoresAmbientSourcesWhenTheIgnoreFlagIsSet(t *testing.T) {
 		t.Fatalf("executable did not exit 0: %v\nstderr:\n%s", err, stderr)
 	}
 
-	if got := loggedSources(t, stderr); len(got) != 0 {
-		t.Fatalf("logged sources = %v, want none with LANGFUSE_MCP_IGNORE_AMBIENT_CA=true", got)
+	want := []any{map[string]any{
+		"variable": "SSL_CERT_FILE", "path": path, "kind": "ambient", "origin": "environment",
+		"certificates": float64(0), "ignored": true,
+	}}
+	if got := loggedSources(t, stderr); !reflect.DeepEqual(got, want) {
+		t.Fatalf("logged sources = %v, want %v", got, want)
+	}
+	if bytes.Contains(stderr, []byte(`"level":"WARN"`)) {
+		t.Fatalf("an ignored source is logged as a warning:\n%s", stderr)
 	}
 }
 

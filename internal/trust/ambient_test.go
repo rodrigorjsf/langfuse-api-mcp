@@ -3,6 +3,7 @@ package trust_test
 import (
 	"encoding/pem"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -129,6 +130,26 @@ func TestTrustPoolIgnoresAmbientSourcesWhenAskedTo(t *testing.T) {
 
 	if err := handshake(t, pool.TLSConfig(), addr); err == nil {
 		t.Fatal("handshake succeeded with a CA from an ignored ambient source")
+	}
+}
+
+func TestReportListsIgnoredAmbientSourcesAsIgnoredWithoutAWarning(t *testing.T) {
+	t.Parallel()
+	path := writeFile(t, t.TempDir(), "ambient-root.pem", newTestCA(t, "ambient root").pem)
+
+	_, report, err := trust.Build(trust.Sources{
+		Ambient:       []trust.Source{{Variable: "SSL_CERT_FILE", Path: path, Origin: "environment"}},
+		IgnoreAmbient: true,
+	})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	want := []trust.SourceReport{{
+		Variable: "SSL_CERT_FILE", Path: path, Kind: trust.KindAmbient, Origin: "environment", Ignored: true,
+	}}
+	if !reflect.DeepEqual(report.Sources, want) {
+		t.Fatalf("report sources = %+v, want %+v", report.Sources, want)
 	}
 }
 
