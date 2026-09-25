@@ -106,7 +106,8 @@ func Load(env map[string]string, file File) (Config, error) {
 	}, nil
 }
 
-// parseFile returns the KEY=VALUE settings of a config file. Errors name the
+// parseFile returns the KEY=VALUE settings of a config file. Unknown keys are
+// kept and ignored by Load, without a warning (see #26). Errors name the
 // file and line number but never quote the line, which could hold a secret.
 func parseFile(file File) (map[string]string, error) {
 	settings := map[string]string{}
