@@ -1,0 +1,7 @@
+services:
+  langfuse-web:
+    environment: &mig
+      LANGFUSE_MIGRATION_V4_WRITE_MODE: dual
+      LANGFUSE_MIGRATION_V4_NATIVE_OTEL_BEHAVIOUR: dual_write
+  langfuse-worker:
+    environment: *mig

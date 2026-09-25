@@ -1,0 +1,1118 @@
+[
+ {
+  "op": "annotationQueues_listQueues",
+  "method": "GET",
+  "path": "/api/public/annotation-queues",
+  "deprecated": false,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[],\"meta\":{\"page\":1,\"limit\":50,\"totalItems\":0,\"totalPages\":0}}"
+ },
+ {
+  "op": "annotationQueues_createQueue",
+  "method": "POST",
+  "path": "/api/public/annotation-queues",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"name\"],\"message\":\"Invalid input: expected string, received undefi"
+ },
+ {
+  "op": "annotationQueues_getQueue",
+  "method": "GET",
+  "path": "/api/public/annotation-queues/{queueId}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Annotation queue not found\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "annotationQueues_listQueueItems",
+  "method": "GET",
+  "path": "/api/public/annotation-queues/{queueId}/items",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Annotation queue not found\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "annotationQueues_createQueueItem",
+  "method": "POST",
+  "path": "/api/public/annotation-queues/{queueId}/items",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"objectId\"],\"message\":\"Invalid input: expected string, received un"
+ },
+ {
+  "op": "annotationQueues_getQueueItem",
+  "method": "GET",
+  "path": "/api/public/annotation-queues/{queueId}/items/{itemId}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Annotation queue not found\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "annotationQueues_updateQueueItem",
+  "method": "PATCH",
+  "path": "/api/public/annotation-queues/{queueId}/items/{itemId}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Annotation queue not found\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "annotationQueues_deleteQueueItem",
+  "method": "DELETE",
+  "path": "/api/public/annotation-queues/{queueId}/items/{itemId}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Annotation queue not found\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "annotationQueues_createQueueAssignment",
+  "method": "POST",
+  "path": "/api/public/annotation-queues/{queueId}/assignments",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"userId\"],\"message\":\"Invalid input: expected string, received unde"
+ },
+ {
+  "op": "annotationQueues_deleteQueueAssignment",
+  "method": "DELETE",
+  "path": "/api/public/annotation-queues/{queueId}/assignments",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"userId\"],\"message\":\"Invalid input: expected string, received unde"
+ },
+ {
+  "op": "blobStorageIntegrations_getBlobStorageIntegrations",
+  "method": "GET",
+  "path": "/api/public/integrations/blob-storage",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"message\":\"Invalid API key. Organization-scoped API key required for this operation.\",\"error\":\"ForbiddenError\"}"
+ },
+ {
+  "op": "blobStorageIntegrations_upsertBlobStorageIntegration",
+  "method": "PUT",
+  "path": "/api/public/integrations/blob-storage",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"message\":\"Invalid API key. Organization-scoped API key required for this operation.\",\"error\":\"ForbiddenError\"}"
+ },
+ {
+  "op": "blobStorageIntegrations_getBlobStorageIntegrationStatus",
+  "method": "GET",
+  "path": "/api/public/integrations/blob-storage/{id}",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"message\":\"Invalid API key. Organization-scoped API key required for this operation.\",\"error\":\"ForbiddenError\"}"
+ },
+ {
+  "op": "blobStorageIntegrations_deleteBlobStorageIntegration",
+  "method": "DELETE",
+  "path": "/api/public/integrations/blob-storage/{id}",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"message\":\"Invalid API key. Organization-scoped API key required for this operation.\",\"error\":\"ForbiddenError\"}"
+ },
+ {
+  "op": "comments_create",
+  "method": "POST",
+  "path": "/api/public/comments",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"projectId\"],\"message\":\"Invalid input: expected string, received u"
+ },
+ {
+  "op": "comments_get",
+  "method": "GET",
+  "path": "/api/public/comments",
+  "deprecated": false,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[],\"meta\":{\"page\":1,\"limit\":50,\"totalItems\":0,\"totalPages\":0}}"
+ },
+ {
+  "op": "comments_get-by-id",
+  "method": "GET",
+  "path": "/api/public/comments/{commentId}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Comment not found within authorized project\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "datasetItems_create",
+  "method": "POST",
+  "path": "/api/public/dataset-items",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"datasetName\"],\"message\":\"Invalid input: expected string, received"
+ },
+ {
+  "op": "datasetItems_list",
+  "method": "GET",
+  "path": "/api/public/dataset-items",
+  "deprecated": false,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[],\"meta\":{\"page\":1,\"limit\":50,\"totalItems\":0,\"totalPages\":0}}"
+ },
+ {
+  "op": "datasetItems_get",
+  "method": "GET",
+  "path": "/api/public/dataset-items/{id}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Dataset item not found\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "datasetItems_delete",
+  "method": "DELETE",
+  "path": "/api/public/dataset-items/{id}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Dataset item with id proto-nonexistent not found for project proto-project\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "datasetRunItems_create",
+  "method": "POST",
+  "path": "/api/public/dataset-run-items",
+  "deprecated": true,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"runName\"],\"message\":\"Invalid input: expected string, received und"
+ },
+ {
+  "op": "datasetRunItems_list",
+  "method": "GET",
+  "path": "/api/public/dataset-run-items",
+  "deprecated": true,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"datasetId\"],\"message\":\"Invalid input: expected string, received u"
+ },
+ {
+  "op": "datasets_list",
+  "method": "GET",
+  "path": "/api/public/v2/datasets",
+  "deprecated": false,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[],\"meta\":{\"page\":1,\"limit\":50,\"totalItems\":0,\"totalPages\":0}}"
+ },
+ {
+  "op": "datasets_create",
+  "method": "POST",
+  "path": "/api/public/v2/datasets",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"name\"],\"message\":\"Invalid input: expected string, received undefi"
+ },
+ {
+  "op": "datasets_get",
+  "method": "GET",
+  "path": "/api/public/v2/datasets/{datasetName}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Dataset not found\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "datasets_getRun",
+  "method": "GET",
+  "path": "/api/public/datasets/{datasetName}/runs/{runName}",
+  "deprecated": true,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Dataset run not found\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "datasets_deleteRun",
+  "method": "DELETE",
+  "path": "/api/public/datasets/{datasetName}/runs/{runName}",
+  "deprecated": true,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Dataset run not found\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "datasets_getRuns",
+  "method": "GET",
+  "path": "/api/public/datasets/{datasetName}/runs",
+  "deprecated": true,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Dataset not found\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "evaluationRules_create",
+  "method": "POST",
+  "path": "/api/public/v2/evaluation-rules",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request body\",\"code\":\"invalid_body\",\"details\":{\"issues\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"name\"],\"message\":\"Invalid input"
+ },
+ {
+  "op": "evaluationRules_list",
+  "method": "GET",
+  "path": "/api/public/v2/evaluation-rules",
+  "deprecated": false,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[],\"meta\":{}}"
+ },
+ {
+  "op": "evaluationRules_get",
+  "method": "GET",
+  "path": "/api/public/v2/evaluation-rules/{evaluationRuleId}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Evaluation rule not found\",\"code\":\"resource_not_found\"}"
+ },
+ {
+  "op": "evaluationRules_update",
+  "method": "PATCH",
+  "path": "/api/public/v2/evaluation-rules/{evaluationRuleId}",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request body\",\"code\":\"invalid_body\",\"details\":{\"issues\":[{\"code\":\"custom\",\"path\":[],\"message\":\"Request body cannot be empty\"}]}}"
+ },
+ {
+  "op": "evaluationRules_delete",
+  "method": "DELETE",
+  "path": "/api/public/v2/evaluation-rules/{evaluationRuleId}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Evaluation rule not found\",\"code\":\"resource_not_found\"}"
+ },
+ {
+  "op": "evaluators_create",
+  "method": "POST",
+  "path": "/api/public/v2/evaluators",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request body\",\"code\":\"invalid_body\",\"details\":{\"issues\":[{\"code\":\"invalid_union\",\"errors\":[],\"note\":\"No matching discriminator\",\"discriminat"
+ },
+ {
+  "op": "evaluators_list",
+  "method": "GET",
+  "path": "/api/public/v2/evaluators",
+  "deprecated": false,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[],\"meta\":{}}"
+ },
+ {
+  "op": "evaluators_get",
+  "method": "GET",
+  "path": "/api/public/v2/evaluators/{evaluatorId}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Evaluator not found\",\"code\":\"resource_not_found\"}"
+ },
+ {
+  "op": "evaluators_update",
+  "method": "PATCH",
+  "path": "/api/public/v2/evaluators/{evaluatorId}",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request body\",\"code\":\"invalid_body\",\"details\":{\"issues\":[{\"code\":\"custom\",\"path\":[],\"message\":\"Request body cannot be empty\"}]}}"
+ },
+ {
+  "op": "evaluators_delete",
+  "method": "DELETE",
+  "path": "/api/public/v2/evaluators/{evaluatorId}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Evaluator not found\",\"code\":\"resource_not_found\"}"
+ },
+ {
+  "op": "evaluators_listVersions",
+  "method": "GET",
+  "path": "/api/public/v2/evaluators/{evaluatorId}/versions",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Evaluator not found\",\"code\":\"resource_not_found\"}"
+ },
+ {
+  "op": "experiments_list",
+  "method": "GET",
+  "path": "/api/public/experiments",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"fromStartTime\"],\"message\":\"fromStartTime is required. It bounds t"
+ },
+ {
+  "op": "experiments_listItems",
+  "method": "GET",
+  "path": "/api/public/experiment-items",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"fromStartTime\"],\"message\":\"fromStartTime is required. It bounds t"
+ },
+ {
+  "op": "feedback_submit",
+  "method": "POST",
+  "path": "/api/public/feedback",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"code\":\"invalid_value\",\"values\":[\"skill\",\"mcp-tool\",\"cli\",\"docs\",\"public-api\",\"other\"],\"path\":[\"targetType\"],\"messag"
+ },
+ {
+  "op": "health_health",
+  "method": "GET",
+  "path": "/api/public/health",
+  "deprecated": false,
+  "status": 200,
+  "class": "present",
+  "body": "{\"status\":\"OK\",\"version\":\"4.46.0\"}"
+ },
+ {
+  "op": "ingestion_batch",
+  "method": "POST",
+  "path": "/api/public/ingestion",
+  "deprecated": true,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"errors\":[\"Invalid input: expected array, received undefined\"]}"
+ },
+ {
+  "op": "legacy_metricsV1_metrics",
+  "method": "GET",
+  "path": "/api/public/metrics",
+  "deprecated": true,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"query\"],\"message\":\"Invalid input: expected string, received undef"
+ },
+ {
+  "op": "legacy_observationsV1_get",
+  "method": "GET",
+  "path": "/api/public/observations/{observationId}",
+  "deprecated": true,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Observation with id proto-nonexistent not found\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "legacy_observationsV1_getMany",
+  "method": "GET",
+  "path": "/api/public/observations",
+  "deprecated": true,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[{\"id\":\"b1dbdb7dbb652216\",\"traceId\":\"1c498e2ead47952ce6c9ee39f9a30654\",\"startTime\":\"2026-09-24T16:47:29.252Z\",\"endTime\":\"2026-09-24T16:47:29.752Z\",\"proj"
+ },
+ {
+  "op": "legacy_scoreV1_delete",
+  "method": "DELETE",
+  "path": "/api/public/scores/{scoreId}",
+  "deprecated": false,
+  "status": 202,
+  "class": "present",
+  "body": "{\"message\":\"Score deletion queued successfully\"}"
+ },
+ {
+  "op": "llmConnections_list",
+  "method": "GET",
+  "path": "/api/public/llm-connections",
+  "deprecated": false,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[],\"meta\":{\"page\":1,\"limit\":50,\"totalItems\":0,\"totalPages\":0}}"
+ },
+ {
+  "op": "llmConnections_upsert",
+  "method": "PUT",
+  "path": "/api/public/llm-connections",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"provider\"],\"message\":\"Invalid input: expected string, received un"
+ },
+ {
+  "op": "llmConnections_delete",
+  "method": "DELETE",
+  "path": "/api/public/llm-connections/{id}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"LLM connection not found\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "media_get",
+  "method": "GET",
+  "path": "/api/public/media/{mediaId}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Media asset not found\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "media_patch",
+  "method": "PATCH",
+  "path": "/api/public/media/{mediaId}",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"date\",\"code\":\"invalid_type\",\"received\":\"Invalid Date\",\"path\":[\"uploadedAt\"],\"message\":\"Invalid input: ex"
+ },
+ {
+  "op": "media_getUploadUrl",
+  "method": "POST",
+  "path": "/api/public/media",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"code\":\"invalid_union\",\"errors\":[[{\"code\":\"invalid_value\",\"values\":[\"image/png\",\"image/jpeg\",\"image/jpg\",\"image/webp"
+ },
+ {
+  "op": "metrics_metrics",
+  "method": "GET",
+  "path": "/api/public/v2/metrics",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"query\"],\"message\":\"Invalid input: expected string, received undef"
+ },
+ {
+  "op": "models_create",
+  "method": "POST",
+  "path": "/api/public/models",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"modelName\"],\"message\":\"Invalid input: expected string, received u"
+ },
+ {
+  "op": "models_list",
+  "method": "GET",
+  "path": "/api/public/models",
+  "deprecated": false,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[{\"id\":\"clrs2dnql000108l46vo0gp2t\",\"createdAt\":\"2026-09-25T16:46:54.336Z\",\"modelName\":\"babbage-002\",\"matchPattern\":\"(?i)^(babbage-002)$\",\"startDate\":nul"
+ },
+ {
+  "op": "models_upsert",
+  "method": "PUT",
+  "path": "/api/public/models/{id}",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"modelName\"],\"message\":\"Invalid input: expected string, received u"
+ },
+ {
+  "op": "models_get",
+  "method": "GET",
+  "path": "/api/public/models/{id}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"No model with this id found.\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "models_delete",
+  "method": "DELETE",
+  "path": "/api/public/models/{id}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"No model with this id found. Note: You cannot delete built-in models, override them with a model with the same name.\",\"error\":\"LangfuseNotFoundError"
+ },
+ {
+  "op": "observations_getMany",
+  "method": "GET",
+  "path": "/api/public/v2/observations",
+  "deprecated": false,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[],\"meta\":{}}"
+ },
+ {
+  "op": "opentelemetry_exportTraces",
+  "method": "POST",
+  "path": "/api/public/otel/v1/traces",
+  "deprecated": false,
+  "status": 200,
+  "class": "present",
+  "body": "{}"
+ },
+ {
+  "op": "organizations_getOrganizationMemberships",
+  "method": "GET",
+  "path": "/api/public/organizations/memberships",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"error\":\"Invalid API key. Organization-scoped API key required for this operation.\"}"
+ },
+ {
+  "op": "organizations_updateOrganizationMembership",
+  "method": "PUT",
+  "path": "/api/public/organizations/memberships",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"error\":\"Invalid API key. Organization-scoped API key required for this operation.\"}"
+ },
+ {
+  "op": "organizations_deleteOrganizationMembership",
+  "method": "DELETE",
+  "path": "/api/public/organizations/memberships",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"error\":\"Invalid API key. Organization-scoped API key required for this operation.\"}"
+ },
+ {
+  "op": "organizations_getProjectMemberships",
+  "method": "GET",
+  "path": "/api/public/projects/{projectId}/memberships",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"error\":\"Invalid API key. Organization-scoped API key required for this operation.\"}"
+ },
+ {
+  "op": "organizations_updateProjectMembership",
+  "method": "PUT",
+  "path": "/api/public/projects/{projectId}/memberships",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"error\":\"Invalid API key. Organization-scoped API key required for this operation.\"}"
+ },
+ {
+  "op": "organizations_deleteProjectMembership",
+  "method": "DELETE",
+  "path": "/api/public/projects/{projectId}/memberships",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"error\":\"Invalid API key. Organization-scoped API key required for this operation.\"}"
+ },
+ {
+  "op": "organizations_getOrganizationProjects",
+  "method": "GET",
+  "path": "/api/public/organizations/projects",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"error\":\"Invalid API key. Organization-scoped API key required for this operation.\"}"
+ },
+ {
+  "op": "organizations_getOrganizationApiKeys",
+  "method": "GET",
+  "path": "/api/public/organizations/apiKeys",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"error\":\"Invalid API key. Organization-scoped API key required for this operation.\"}"
+ },
+ {
+  "op": "projects_get",
+  "method": "GET",
+  "path": "/api/public/projects",
+  "deprecated": false,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[{\"id\":\"proto-project\",\"name\":\"Provisioned Project\",\"organization\":{\"id\":\"proto-org\",\"name\":\"Provisioned Org\"},\"metadata\":{}}]}"
+ },
+ {
+  "op": "projects_create",
+  "method": "POST",
+  "path": "/api/public/projects",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"message\":\"Invalid API key. Organization-scoped API key required for this operation.\"}"
+ },
+ {
+  "op": "projects_update",
+  "method": "PUT",
+  "path": "/api/public/projects/{projectId}",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"message\":\"Invalid API key. Organization-scoped API key required for this operation.\"}"
+ },
+ {
+  "op": "projects_delete",
+  "method": "DELETE",
+  "path": "/api/public/projects/{projectId}",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"message\":\"Invalid API key. Organization-scoped API key required for this operation.\"}"
+ },
+ {
+  "op": "projects_getApiKeys",
+  "method": "GET",
+  "path": "/api/public/projects/{projectId}/apiKeys",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"message\":\"Invalid API key. Organization-scoped API key required for this operation.\"}"
+ },
+ {
+  "op": "projects_createApiKey",
+  "method": "POST",
+  "path": "/api/public/projects/{projectId}/apiKeys",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"message\":\"Invalid API key. Organization-scoped API key required for this operation.\"}"
+ },
+ {
+  "op": "projects_deleteApiKey",
+  "method": "DELETE",
+  "path": "/api/public/projects/{projectId}/apiKeys/{apiKeyId}",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"message\":\"Invalid API key. Organization-scoped API key required for this operation.\"}"
+ },
+ {
+  "op": "promptVersion_update",
+  "method": "PATCH",
+  "path": "/api/public/v2/prompts/{name}/versions/{version}",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"array\",\"code\":\"invalid_type\",\"path\":[\"newLabels\"],\"message\":\"Invalid input: expected array, received und"
+ },
+ {
+  "op": "prompts_get",
+  "method": "GET",
+  "path": "/api/public/v2/prompts/{promptName}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Prompt not found: 'proto-nonexistent' with label 'production'\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "prompts_delete",
+  "method": "DELETE",
+  "path": "/api/public/v2/prompts/{promptName}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Prompt not found\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "prompts_list",
+  "method": "GET",
+  "path": "/api/public/v2/prompts",
+  "deprecated": false,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[],\"meta\":{\"page\":1,\"limit\":10,\"totalPages\":0,\"totalItems\":0},\"pagination\":{\"page\":1,\"limit\":10,\"totalPages\":0,\"totalItems\":0}}"
+ },
+ {
+  "op": "prompts_create",
+  "method": "POST",
+  "path": "/api/public/v2/prompts",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"code\":\"invalid_union\",\"errors\":[[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"name\"],\"message\":\"Invalid inpu"
+ },
+ {
+  "op": "scim_getServiceProviderConfig",
+  "method": "GET",
+  "path": "/api/public/scim/ServiceProviderConfig",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"schemas\":[\"urn:ietf:params:scim:api:messages:2.0:Error\"],\"detail\":\"Invalid API key. Organization-scoped API key required for this operation.\",\"status\":403}"
+ },
+ {
+  "op": "scim_getResourceTypes",
+  "method": "GET",
+  "path": "/api/public/scim/ResourceTypes",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"schemas\":[\"urn:ietf:params:scim:api:messages:2.0:Error\"],\"detail\":\"Invalid API key. Organization-scoped API key required for this operation.\",\"status\":403}"
+ },
+ {
+  "op": "scim_getSchemas",
+  "method": "GET",
+  "path": "/api/public/scim/Schemas",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"schemas\":[\"urn:ietf:params:scim:api:messages:2.0:Error\"],\"detail\":\"Invalid API key. Organization-scoped API key required for this operation.\",\"status\":403}"
+ },
+ {
+  "op": "scim_listUsers",
+  "method": "GET",
+  "path": "/api/public/scim/Users",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"schemas\":[\"urn:ietf:params:scim:api:messages:2.0:Error\"],\"detail\":\"Invalid API key. Organization-scoped API key required for this operation.\",\"status\":403}"
+ },
+ {
+  "op": "scim_createUser",
+  "method": "POST",
+  "path": "/api/public/scim/Users",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"schemas\":[\"urn:ietf:params:scim:api:messages:2.0:Error\"],\"detail\":\"Invalid API key. Organization-scoped API key required for this operation.\",\"status\":403}"
+ },
+ {
+  "op": "scim_getUser",
+  "method": "GET",
+  "path": "/api/public/scim/Users/{userId}",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"schemas\":[\"urn:ietf:params:scim:api:messages:2.0:Error\"],\"detail\":\"Invalid API key. Organization-scoped API key required for this operation.\",\"status\":403}"
+ },
+ {
+  "op": "scim_deleteUser",
+  "method": "DELETE",
+  "path": "/api/public/scim/Users/{userId}",
+  "deprecated": false,
+  "status": 403,
+  "class": "present",
+  "body": "{\"schemas\":[\"urn:ietf:params:scim:api:messages:2.0:Error\"],\"detail\":\"Invalid API key. Organization-scoped API key required for this operation.\",\"status\":403}"
+ },
+ {
+  "op": "scoreConfigs_create",
+  "method": "POST",
+  "path": "/api/public/score-configs",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"code\":\"invalid_union\",\"errors\":[],\"note\":\"No matching discriminator\",\"discriminator\":\"dataType\",\"path\":[\"dataType\"]"
+ },
+ {
+  "op": "scoreConfigs_get",
+  "method": "GET",
+  "path": "/api/public/score-configs",
+  "deprecated": false,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[],\"meta\":{\"page\":1,\"limit\":50,\"totalItems\":0,\"totalPages\":0}}"
+ },
+ {
+  "op": "scoreConfigs_get-by-id",
+  "method": "GET",
+  "path": "/api/public/score-configs/{configId}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Score config not found within authorized project\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "scoreConfigs_update",
+  "method": "PATCH",
+  "path": "/api/public/score-configs/{configId}",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"code\":\"custom\",\"path\":[],\"message\":\"Request body cannot be empty. At least one field must be provided for update.\"}"
+ },
+ {
+  "op": "scoresV3_getManyV3",
+  "method": "GET",
+  "path": "/api/public/v3/scores",
+  "deprecated": false,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[],\"meta\":{\"limit\":50}}"
+ },
+ {
+  "op": "scores_create",
+  "method": "POST",
+  "path": "/api/public/scores",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"name\"],\"message\":\"Invalid input: expected string, received undefi"
+ },
+ {
+  "op": "scores_get-many",
+  "method": "GET",
+  "path": "/api/public/v2/scores",
+  "deprecated": true,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[],\"meta\":{\"page\":1,\"limit\":50,\"totalItems\":0,\"totalPages\":0}}"
+ },
+ {
+  "op": "scores_get-by-id",
+  "method": "GET",
+  "path": "/api/public/v2/scores/{scoreId}",
+  "deprecated": true,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Score not found\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "sessions_list",
+  "method": "GET",
+  "path": "/api/public/sessions",
+  "deprecated": true,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[],\"meta\":{\"totalItems\":0,\"totalPages\":0,\"page\":1,\"limit\":50}}"
+ },
+ {
+  "op": "sessions_get",
+  "method": "GET",
+  "path": "/api/public/sessions/{sessionId}",
+  "deprecated": true,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Session not found within authorized project\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "trace_get",
+  "method": "GET",
+  "path": "/api/public/traces/{traceId}",
+  "deprecated": true,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Trace proto-nonexistent not found within authorized project\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "trace_delete",
+  "method": "DELETE",
+  "path": "/api/public/traces/{traceId}",
+  "deprecated": false,
+  "status": 200,
+  "class": "present",
+  "body": "{\"message\":\"Trace deleted successfully\"}"
+ },
+ {
+  "op": "trace_list",
+  "method": "GET",
+  "path": "/api/public/traces",
+  "deprecated": true,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[{\"id\":\"1c498e2ead47952ce6c9ee39f9a30654\",\"projectId\":\"proto-project\",\"name\":\"age-d1\",\"timestamp\":\"2026-09-24T16:47:29.252Z\",\"environment\":\"default\",\"ta"
+ },
+ {
+  "op": "trace_deleteMultiple",
+  "method": "DELETE",
+  "path": "/api/public/traces",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"array\",\"code\":\"invalid_type\",\"path\":[\"traceIds\"],\"message\":\"Invalid input: expected array, received unde"
+ },
+ {
+  "op": "unstable_dashboardWidgets_list",
+  "method": "GET",
+  "path": "/api/public/unstable/dashboard-widgets",
+  "deprecated": false,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[],\"meta\":{\"page\":1,\"limit\":50,\"totalItems\":0,\"totalPages\":0}}"
+ },
+ {
+  "op": "unstable_dashboardWidgets_create",
+  "method": "POST",
+  "path": "/api/public/unstable/dashboard-widgets",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request body\",\"code\":\"invalid_body\",\"details\":{\"issues\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"name\"],\"message\":\"Invalid input"
+ },
+ {
+  "op": "unstable_dashboardWidgets_get",
+  "method": "GET",
+  "path": "/api/public/unstable/dashboard-widgets/{widgetId}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Dashboard widget proto-nonexistent not found\",\"code\":\"resource_not_found\"}"
+ },
+ {
+  "op": "unstable_dashboardWidgets_update",
+  "method": "PATCH",
+  "path": "/api/public/unstable/dashboard-widgets/{widgetId}",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request body\",\"code\":\"invalid_body\",\"details\":{\"issues\":[{\"code\":\"custom\",\"path\":[],\"message\":\"At least one field is required\"}]}}"
+ },
+ {
+  "op": "unstable_dashboardWidgets_delete",
+  "method": "DELETE",
+  "path": "/api/public/unstable/dashboard-widgets/{widgetId}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Dashboard widget proto-nonexistent not found\",\"code\":\"resource_not_found\"}"
+ },
+ {
+  "op": "unstable_dashboards_list",
+  "method": "GET",
+  "path": "/api/public/unstable/dashboards",
+  "deprecated": false,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[],\"meta\":{\"page\":1,\"limit\":50,\"totalItems\":0,\"totalPages\":0}}"
+ },
+ {
+  "op": "unstable_dashboards_create",
+  "method": "POST",
+  "path": "/api/public/unstable/dashboards",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request body\",\"code\":\"invalid_body\",\"details\":{\"issues\":[{\"expected\":\"string\",\"code\":\"invalid_type\",\"path\":[\"name\"],\"message\":\"Invalid input"
+ },
+ {
+  "op": "unstable_dashboards_get",
+  "method": "GET",
+  "path": "/api/public/unstable/dashboards/{dashboardId}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Dashboard proto-nonexistent not found\",\"code\":\"resource_not_found\"}"
+ },
+ {
+  "op": "unstable_dashboards_update",
+  "method": "PATCH",
+  "path": "/api/public/unstable/dashboards/{dashboardId}",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request body\",\"code\":\"invalid_body\",\"details\":{\"issues\":[{\"code\":\"custom\",\"path\":[],\"message\":\"At least one field is required\"}]}}"
+ },
+ {
+  "op": "unstable_dashboards_delete",
+  "method": "DELETE",
+  "path": "/api/public/unstable/dashboards/{dashboardId}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Dashboard proto-nonexistent not found\",\"code\":\"resource_not_found\"}"
+ },
+ {
+  "op": "unstable_dashboards_addPlacement",
+  "method": "POST",
+  "path": "/api/public/unstable/dashboards/{dashboardId}/placements",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request body\",\"code\":\"invalid_body\",\"details\":{\"issues\":[{\"code\":\"invalid_union\",\"errors\":[],\"note\":\"No matching discriminator\",\"discriminat"
+ },
+ {
+  "op": "unstable_dashboards_updatePlacement",
+  "method": "PATCH",
+  "path": "/api/public/unstable/dashboards/{dashboardId}/placements/{placementId}",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request body\",\"code\":\"invalid_body\",\"details\":{\"issues\":[{\"code\":\"custom\",\"path\":[],\"message\":\"At least one field is required\"}]}}"
+ },
+ {
+  "op": "unstable_dashboards_deletePlacement",
+  "method": "DELETE",
+  "path": "/api/public/unstable/dashboards/{dashboardId}/placements/{placementId}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Dashboard proto-nonexistent not found\",\"code\":\"resource_not_found\"}"
+ },
+ {
+  "op": "unstable_skills_list",
+  "method": "GET",
+  "path": "/api/public/unstable/skills",
+  "deprecated": false,
+  "status": 200,
+  "class": "present",
+  "body": "{\"data\":[],\"meta\":{\"page\":1,\"limit\":10,\"totalItems\":0,\"totalPages\":0,\"hasNextPage\":false}}"
+ },
+ {
+  "op": "unstable_skills_createVersion",
+  "method": "POST",
+  "path": "/api/public/unstable/skills",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"array\",\"code\":\"invalid_type\",\"path\":[\"files\"],\"message\":\"Invalid input: expected array, received undefin"
+ },
+ {
+  "op": "unstable_skills_get",
+  "method": "GET",
+  "path": "/api/public/unstable/skills/{skillName}",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Skill version not found\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "unstable_skills_update",
+  "method": "PATCH",
+  "path": "/api/public/unstable/skills/{skillName}",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"array\",\"code\":\"invalid_type\",\"path\":[\"tags\"],\"message\":\"Invalid input: expected array, received undefine"
+ },
+ {
+  "op": "unstable_skills_getFileContent",
+  "method": "GET",
+  "path": "/api/public/unstable/skills/files/{fileId}/content",
+  "deprecated": false,
+  "status": 404,
+  "class": "present",
+  "body": "{\"message\":\"Skill file not found\",\"error\":\"LangfuseNotFoundError\"}"
+ },
+ {
+  "op": "unstable_skills_setLabels",
+  "method": "PATCH",
+  "path": "/api/public/unstable/skills/{skillName}/versions/{skillVersion}",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"number\",\"code\":\"invalid_type\",\"received\":\"NaN\",\"path\":[\"skillVersion\"],\"message\":\"Invalid input: expecte"
+ },
+ {
+  "op": "unstable_skills_deleteVersion",
+  "method": "DELETE",
+  "path": "/api/public/unstable/skills/{skillName}/versions/{skillVersion}",
+  "deprecated": false,
+  "status": 400,
+  "class": "present",
+  "body": "{\"message\":\"Invalid request data\",\"error\":[{\"expected\":\"number\",\"code\":\"invalid_type\",\"received\":\"NaN\",\"path\":[\"skillVersion\"],\"message\":\"Invalid input: expecte"
+ }
+]

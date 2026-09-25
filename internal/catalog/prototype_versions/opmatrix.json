@@ -1,0 +1,1652 @@
+{
+ "tags": 648,
+ "latest": "v4.46.0",
+ "ops": [
+  {
+   "op": "GET /api/public/datasets/{datasetName}",
+   "operationIds": [
+    "datasets_get"
+   ],
+   "introduced": "v1.0.1",
+   "lastSeen": "v2.57.0",
+   "removed": "v2.58.0",
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/datasets/{datasetName}/runs/{runName}",
+   "operationIds": [
+    "datasets_getRun",
+    "datasets_getRuns"
+   ],
+   "introduced": "v1.0.1",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": "v4.12.0",
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/observations",
+   "operationIds": [
+    "legacy_observationsV1_getMany",
+    "observations_getMany"
+   ],
+   "introduced": "v1.0.1",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": "v4.12.0",
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/observations/{observationId}",
+   "operationIds": [
+    "legacy_observationsV1_get",
+    "observations_get"
+   ],
+   "introduced": "v1.0.1",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": "v4.12.0",
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/scores",
+   "operationIds": [
+    "score_get"
+   ],
+   "introduced": "v1.0.1",
+   "lastSeen": "v3.52.0",
+   "removed": "v3.53.0",
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/traces",
+   "operationIds": [
+    "trace_list"
+   ],
+   "introduced": "v1.0.1",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": "v4.12.0",
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/traces/{traceId}",
+   "operationIds": [
+    "trace_get"
+   ],
+   "introduced": "v1.0.1",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": "v4.12.0",
+   "gapTags": 0
+  },
+  {
+   "op": "PATCH /api/public/generations",
+   "operationIds": [
+    "generations_update"
+   ],
+   "introduced": "v1.0.1",
+   "lastSeen": "v1.17.3",
+   "removed": "v1.18.0",
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "PATCH /api/public/spans",
+   "operationIds": [
+    "span_update"
+   ],
+   "introduced": "v1.0.1",
+   "lastSeen": "v1.17.3",
+   "removed": "v1.18.0",
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/dataset-items",
+   "operationIds": [
+    "datasetItems_create"
+   ],
+   "introduced": "v1.0.1",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/dataset-run-items",
+   "operationIds": [
+    "datasetRunItems_create"
+   ],
+   "introduced": "v1.0.1",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": "v4.12.0",
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/datasets",
+   "operationIds": [
+    "datasets_create"
+   ],
+   "introduced": "v1.0.1",
+   "lastSeen": "v2.57.0",
+   "removed": "v2.58.0",
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/events",
+   "operationIds": [
+    "event_create"
+   ],
+   "introduced": "v1.0.1",
+   "lastSeen": "v1.17.3",
+   "removed": "v1.18.0",
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/generations",
+   "operationIds": [
+    "generations_log"
+   ],
+   "introduced": "v1.0.1",
+   "lastSeen": "v1.17.3",
+   "removed": "v1.18.0",
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/ingestion",
+   "operationIds": [
+    "ingestion_batch"
+   ],
+   "introduced": "v1.0.1",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": "v4.12.0",
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/scores",
+   "operationIds": [
+    "legacy_scoreV1_create",
+    "score_create",
+    "scores_create"
+   ],
+   "introduced": "v1.0.1",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/spans",
+   "operationIds": [
+    "span_create"
+   ],
+   "introduced": "v1.0.1",
+   "lastSeen": "v1.17.3",
+   "removed": "v1.18.0",
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/traces",
+   "operationIds": [
+    "trace_create"
+   ],
+   "introduced": "v1.0.1",
+   "lastSeen": "v1.17.3",
+   "removed": "v1.18.0",
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/health",
+   "operationIds": [
+    "health_health"
+   ],
+   "introduced": "v1.3.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/projects",
+   "operationIds": [
+    "projects_get"
+   ],
+   "introduced": "v1.7.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/dataset-items/{id}",
+   "operationIds": [
+    "datasetItems_get"
+   ],
+   "introduced": "v1.10.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/sessions/{sessionId}",
+   "operationIds": [
+    "sessions_get"
+   ],
+   "introduced": "v1.17.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": "v4.12.0",
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/prompts",
+   "operationIds": [
+    "prompts_get"
+   ],
+   "introduced": "v1.25.0",
+   "lastSeen": "v2.16.1",
+   "removed": "v2.38.0",
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/prompts",
+   "operationIds": [
+    "prompts_create"
+   ],
+   "introduced": "v1.25.0",
+   "lastSeen": "v2.16.1",
+   "removed": "v2.38.0",
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/scores/{scoreId}",
+   "operationIds": [
+    "legacy_scoreV1_delete",
+    "score_delete"
+   ],
+   "introduced": "v2.6.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/metrics/daily",
+   "operationIds": [
+    "metrics_daily"
+   ],
+   "introduced": "v2.6.0",
+   "lastSeen": "v3.61.0",
+   "removed": "v3.62.0",
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/datasets",
+   "operationIds": [
+    "datasets_list"
+   ],
+   "introduced": "v2.38.0",
+   "lastSeen": "v2.57.0",
+   "removed": "v2.58.0",
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/scores/{scoreId}",
+   "operationIds": [
+    "score_get-by-id"
+   ],
+   "introduced": "v2.38.0",
+   "lastSeen": "v3.52.0",
+   "removed": "v3.53.0",
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/v2/prompts",
+   "operationIds": [
+    "prompts_list"
+   ],
+   "introduced": "v2.38.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/v2/prompts/{promptName}",
+   "operationIds": [
+    "prompts_get"
+   ],
+   "introduced": "v2.38.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/v2/prompts",
+   "operationIds": [
+    "prompts_create"
+   ],
+   "introduced": "v2.38.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/score-configs",
+   "operationIds": [
+    "scoreConfigs_get"
+   ],
+   "introduced": "v2.56.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/score-configs/{configId}",
+   "operationIds": [
+    "scoreConfigs_get-by-id"
+   ],
+   "introduced": "v2.56.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/dataset-items",
+   "operationIds": [
+    "datasetItems_list"
+   ],
+   "introduced": "v2.58.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/datasets/{datasetName}/runs",
+   "operationIds": [
+    "datasets_getRuns"
+   ],
+   "introduced": "v2.58.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": "v4.12.0",
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/v2/datasets",
+   "operationIds": [
+    "datasets_list"
+   ],
+   "introduced": "v2.58.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/v2/datasets/{datasetName}",
+   "operationIds": [
+    "datasets_get"
+   ],
+   "introduced": "v2.58.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/v2/datasets",
+   "operationIds": [
+    "datasets_create"
+   ],
+   "introduced": "v2.58.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/models/{id}",
+   "operationIds": [
+    "models_delete"
+   ],
+   "introduced": "v2.59.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/models",
+   "operationIds": [
+    "models_list"
+   ],
+   "introduced": "v2.59.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/models/{id}",
+   "operationIds": [
+    "models_get"
+   ],
+   "introduced": "v2.59.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/models",
+   "operationIds": [
+    "models_create"
+   ],
+   "introduced": "v2.59.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/score-configs",
+   "operationIds": [
+    "scoreConfigs_create"
+   ],
+   "introduced": "v2.60.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/sessions",
+   "operationIds": [
+    "sessions_list"
+   ],
+   "introduced": "v2.61.1",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": "v4.12.0",
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/comments",
+   "operationIds": [
+    "comments_get"
+   ],
+   "introduced": "v2.86.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/comments/{commentId}",
+   "operationIds": [
+    "comments_get-by-id"
+   ],
+   "introduced": "v2.86.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/comments",
+   "operationIds": [
+    "comments_create"
+   ],
+   "introduced": "v2.86.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/media/{mediaId}",
+   "operationIds": [
+    "media_get"
+   ],
+   "introduced": "v2.90.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "PATCH /api/public/media/{mediaId}",
+   "operationIds": [
+    "media_patch"
+   ],
+   "introduced": "v2.90.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/media",
+   "operationIds": [
+    "media_getUploadUrl"
+   ],
+   "introduced": "v2.90.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "PATCH /api/public/v2/prompts/{promptName}/version/{version}",
+   "operationIds": [
+    "promptVersion_update"
+   ],
+   "introduced": "v3.15.0",
+   "lastSeen": "v3.17.1",
+   "removed": "v3.18.0",
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "PATCH /api/public/v2/prompts/{name}/versions/{version}",
+   "operationIds": [
+    "promptVersion_update"
+   ],
+   "introduced": "v3.18.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 1
+  },
+  {
+   "op": "DELETE /api/public/dataset-items/{id}",
+   "operationIds": [
+    "datasetItems_delete"
+   ],
+   "introduced": "v3.35.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/datasets/{datasetName}/runs/{runName}",
+   "operationIds": [
+    "datasets_deleteRun"
+   ],
+   "introduced": "v3.35.1",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": "v4.12.0",
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/traces",
+   "operationIds": [
+    "trace_deleteMultiple"
+   ],
+   "introduced": "v3.39.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/traces/{traceId}",
+   "operationIds": [
+    "trace_delete"
+   ],
+   "introduced": "v3.39.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/annotation-queues/{queueId}/items/{itemId}",
+   "operationIds": [
+    "annotationQueues_deleteQueueItem"
+   ],
+   "introduced": "v3.42.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/annotation-queues",
+   "operationIds": [
+    "annotationQueues_listQueues"
+   ],
+   "introduced": "v3.42.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/annotation-queues/{queueId}",
+   "operationIds": [
+    "annotationQueues_getQueue"
+   ],
+   "introduced": "v3.42.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/annotation-queues/{queueId}/items",
+   "operationIds": [
+    "annotationQueues_listQueueItems"
+   ],
+   "introduced": "v3.42.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/annotation-queues/{queueId}/items/{itemId}",
+   "operationIds": [
+    "annotationQueues_getQueueItem"
+   ],
+   "introduced": "v3.42.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "PATCH /api/public/annotation-queues/{queueId}/items/{itemId}",
+   "operationIds": [
+    "annotationQueues_updateQueueItem"
+   ],
+   "introduced": "v3.42.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/annotation-queues/{queueId}/items",
+   "operationIds": [
+    "annotationQueues_createQueueItem"
+   ],
+   "introduced": "v3.42.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/projects/{projectId}",
+   "operationIds": [
+    "projects_delete"
+   ],
+   "introduced": "v3.50.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/projects/{projectId}/apiKeys/{apiKeyId}",
+   "operationIds": [
+    "projects_deleteApiKey"
+   ],
+   "introduced": "v3.50.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/scim/Users/{userId}",
+   "operationIds": [
+    "scim_deleteUser"
+   ],
+   "introduced": "v3.50.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/organizations/memberships",
+   "operationIds": [
+    "memberships_getOrganizationMemberships",
+    "organizations_getOrganizationMemberships"
+   ],
+   "introduced": "v3.50.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/projects/{projectId}/apiKeys",
+   "operationIds": [
+    "projects_getApiKeys"
+   ],
+   "introduced": "v3.50.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/projects/{projectId}/memberships",
+   "operationIds": [
+    "memberships_getProjectMemberships",
+    "organizations_getProjectMemberships"
+   ],
+   "introduced": "v3.50.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/scim/ResourceTypes",
+   "operationIds": [
+    "scim_getResourceTypes"
+   ],
+   "introduced": "v3.50.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/scim/Schemas",
+   "operationIds": [
+    "scim_getSchemas"
+   ],
+   "introduced": "v3.50.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/scim/ServiceProviderConfig",
+   "operationIds": [
+    "scim_getServiceProviderConfig"
+   ],
+   "introduced": "v3.50.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/scim/Users",
+   "operationIds": [
+    "scim_listUsers"
+   ],
+   "introduced": "v3.50.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/scim/Users/{userId}",
+   "operationIds": [
+    "scim_getUser"
+   ],
+   "introduced": "v3.50.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/projects",
+   "operationIds": [
+    "projects_create"
+   ],
+   "introduced": "v3.50.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/projects/{projectId}/apiKeys",
+   "operationIds": [
+    "projects_createApiKey"
+   ],
+   "introduced": "v3.50.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/scim/Users",
+   "operationIds": [
+    "scim_createUser"
+   ],
+   "introduced": "v3.50.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "PUT /api/public/organizations/memberships",
+   "operationIds": [
+    "memberships_updateOrganizationMembership",
+    "organizations_updateOrganizationMembership"
+   ],
+   "introduced": "v3.50.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "PUT /api/public/projects/{projectId}",
+   "operationIds": [
+    "projects_update"
+   ],
+   "introduced": "v3.50.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "PUT /api/public/projects/{projectId}/memberships",
+   "operationIds": [
+    "memberships_updateProjectMembership",
+    "organizations_updateProjectMembership"
+   ],
+   "introduced": "v3.50.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/v2/scores",
+   "operationIds": [
+    "legacy_scoresV2_get-many",
+    "scoreV2_get",
+    "scores_get-many"
+   ],
+   "introduced": "v3.53.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": "v4.12.0",
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/v2/scores/{scoreId}",
+   "operationIds": [
+    "legacy_scoresV2_get-by-id",
+    "scoreV2_get-by-id",
+    "scores_get-by-id"
+   ],
+   "introduced": "v3.53.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": "v4.12.0",
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/metrics",
+   "operationIds": [
+    "legacy_metricsV1_metrics",
+    "metrics_metrics"
+   ],
+   "introduced": "v3.57.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": "v4.12.0",
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/dataset-run-items",
+   "operationIds": [
+    "datasetRunItems_list"
+   ],
+   "introduced": "v3.57.1",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": "v4.12.0",
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/organizations/projects",
+   "operationIds": [
+    "organizations_getOrganizationProjects"
+   ],
+   "introduced": "v3.63.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/llm-connections",
+   "operationIds": [
+    "llmConnections_list"
+   ],
+   "introduced": "v3.92.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "PUT /api/public/llm-connections",
+   "operationIds": [
+    "llmConnections_upsert"
+   ],
+   "introduced": "v3.92.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/annotation-queues/{queueId}/assignments",
+   "operationIds": [
+    "annotationQueues_deleteQueueAssignment"
+   ],
+   "introduced": "v3.95.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/annotation-queues/{queueId}/assignments",
+   "operationIds": [
+    "annotationQueues_createQueueAssignment"
+   ],
+   "introduced": "v3.95.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/annotation-queues",
+   "operationIds": [
+    "annotationQueues_createQueue"
+   ],
+   "introduced": "v3.97.3",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/organizations/memberships",
+   "operationIds": [
+    "organizations_deleteOrganizationMembership"
+   ],
+   "introduced": "v3.99.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/projects/{projectId}/memberships",
+   "operationIds": [
+    "organizations_deleteProjectMembership"
+   ],
+   "introduced": "v3.99.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/integrations/blob-storage/{id}",
+   "operationIds": [
+    "blobStorageIntegrations_deleteBlobStorageIntegration"
+   ],
+   "introduced": "v3.110.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/integrations/blob-storage",
+   "operationIds": [
+    "blobStorageIntegrations_getBlobStorageIntegrations"
+   ],
+   "introduced": "v3.110.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "PUT /api/public/integrations/blob-storage",
+   "operationIds": [
+    "blobStorageIntegrations_upsertBlobStorageIntegration"
+   ],
+   "introduced": "v3.110.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "PATCH /api/public/score-configs/{configId}",
+   "operationIds": [
+    "scoreConfigs_update"
+   ],
+   "introduced": "v3.113.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/otel/v1/traces",
+   "operationIds": [
+    "opentelemetry_exportTraces"
+   ],
+   "introduced": "v3.120.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/organizations/apiKeys",
+   "operationIds": [
+    "organizations_getOrganizationApiKeys"
+   ],
+   "introduced": "v3.124.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/v2/prompts/{promptName}",
+   "operationIds": [
+    "prompts_delete"
+   ],
+   "introduced": "v3.138.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/v2/metrics",
+   "operationIds": [
+    "metricsV2_metrics",
+    "metrics_metrics"
+   ],
+   "introduced": "v3.141.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/v2/observations",
+   "operationIds": [
+    "observationsV2_getMany",
+    "observations_getMany"
+   ],
+   "introduced": "v3.141.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/integrations/blob-storage/{id}",
+   "operationIds": [
+    "blobStorageIntegrations_getBlobStorageIntegrationStatus"
+   ],
+   "introduced": "v3.158.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/llm-connections/{id}",
+   "operationIds": [
+    "llmConnections_delete"
+   ],
+   "introduced": "v3.170.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/unstable/evaluation-rules/{evaluationRuleId}",
+   "operationIds": [
+    "unstable_evaluationRules_delete"
+   ],
+   "introduced": "v3.170.0",
+   "lastSeen": "v4.30.0",
+   "removed": "v4.31.0",
+   "deprecatedSince": "v4.23.0",
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/unstable/evaluation-rules",
+   "operationIds": [
+    "unstable_evaluationRules_list"
+   ],
+   "introduced": "v3.170.0",
+   "lastSeen": "v4.30.0",
+   "removed": "v4.31.0",
+   "deprecatedSince": "v4.23.0",
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/unstable/evaluation-rules/{evaluationRuleId}",
+   "operationIds": [
+    "unstable_evaluationRules_get"
+   ],
+   "introduced": "v3.170.0",
+   "lastSeen": "v4.30.0",
+   "removed": "v4.31.0",
+   "deprecatedSince": "v4.23.0",
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/unstable/evaluators",
+   "operationIds": [
+    "unstable_evaluators_list"
+   ],
+   "introduced": "v3.170.0",
+   "lastSeen": "v4.30.0",
+   "removed": "v4.31.0",
+   "deprecatedSince": "v4.23.0",
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/unstable/evaluators/{evaluatorId}",
+   "operationIds": [
+    "unstable_evaluators_get"
+   ],
+   "introduced": "v3.170.0",
+   "lastSeen": "v4.30.0",
+   "removed": "v4.31.0",
+   "deprecatedSince": "v4.23.0",
+   "gapTags": 0
+  },
+  {
+   "op": "PATCH /api/public/unstable/evaluation-rules/{evaluationRuleId}",
+   "operationIds": [
+    "unstable_evaluationRules_update"
+   ],
+   "introduced": "v3.170.0",
+   "lastSeen": "v4.30.0",
+   "removed": "v4.31.0",
+   "deprecatedSince": "v4.23.0",
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/unstable/evaluation-rules",
+   "operationIds": [
+    "unstable_evaluationRules_create"
+   ],
+   "introduced": "v3.170.0",
+   "lastSeen": "v4.30.0",
+   "removed": "v4.31.0",
+   "deprecatedSince": "v4.23.0",
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/unstable/evaluators",
+   "operationIds": [
+    "unstable_evaluators_create"
+   ],
+   "introduced": "v3.170.0",
+   "lastSeen": "v4.30.0",
+   "removed": "v4.31.0",
+   "deprecatedSince": "v4.23.0",
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/v3/scores",
+   "operationIds": [
+    "scoresV3_getManyV3",
+    "scores_getMany"
+   ],
+   "introduced": "v3.180.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/unstable/evaluators/{evaluatorId}",
+   "operationIds": [
+    "unstable_evaluators_delete"
+   ],
+   "introduced": "v3.187.0",
+   "lastSeen": "v4.30.0",
+   "removed": "v4.31.0",
+   "deprecatedSince": "v4.23.0",
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/unstable/dashboard-widgets",
+   "operationIds": [
+    "unstable_dashboardWidgets_create"
+   ],
+   "introduced": "v3.205.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/experiment-items",
+   "operationIds": [
+    "experiments_listItems"
+   ],
+   "introduced": "v3.206.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/experiments",
+   "operationIds": [
+    "experiments_list"
+   ],
+   "introduced": "v3.206.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/unstable/dashboard-widgets/{widgetId}",
+   "operationIds": [
+    "unstable_dashboardWidgets_delete"
+   ],
+   "introduced": "v3.216.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/unstable/dashboards/{dashboardId}",
+   "operationIds": [
+    "unstable_dashboards_delete"
+   ],
+   "introduced": "v3.216.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/unstable/dashboards/{dashboardId}/placements/{placementId}",
+   "operationIds": [
+    "unstable_dashboards_deletePlacement"
+   ],
+   "introduced": "v3.216.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/unstable/dashboard-widgets",
+   "operationIds": [
+    "unstable_dashboardWidgets_list"
+   ],
+   "introduced": "v3.216.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/unstable/dashboard-widgets/{widgetId}",
+   "operationIds": [
+    "unstable_dashboardWidgets_get"
+   ],
+   "introduced": "v3.216.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/unstable/dashboards",
+   "operationIds": [
+    "unstable_dashboards_list"
+   ],
+   "introduced": "v3.216.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/unstable/dashboards/{dashboardId}",
+   "operationIds": [
+    "unstable_dashboards_get"
+   ],
+   "introduced": "v3.216.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "PATCH /api/public/unstable/dashboard-widgets/{widgetId}",
+   "operationIds": [
+    "unstable_dashboardWidgets_update"
+   ],
+   "introduced": "v3.216.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "PATCH /api/public/unstable/dashboards/{dashboardId}",
+   "operationIds": [
+    "unstable_dashboards_update"
+   ],
+   "introduced": "v3.216.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "PATCH /api/public/unstable/dashboards/{dashboardId}/placements/{placementId}",
+   "operationIds": [
+    "unstable_dashboards_updatePlacement"
+   ],
+   "introduced": "v3.216.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/unstable/dashboards",
+   "operationIds": [
+    "unstable_dashboards_create"
+   ],
+   "introduced": "v3.216.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/unstable/dashboards/{dashboardId}/placements",
+   "operationIds": [
+    "unstable_dashboards_addPlacement"
+   ],
+   "introduced": "v3.216.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/feedback",
+   "operationIds": [
+    "feedback_submit"
+   ],
+   "introduced": "v4.0.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "PUT /api/public/models/{id}",
+   "operationIds": [
+    "models_upsert"
+   ],
+   "introduced": "v4.19.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/v2/evaluation-rules/{evaluationRuleId}",
+   "operationIds": [
+    "evaluationRules_delete"
+   ],
+   "introduced": "v4.23.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/v2/evaluators/{evaluatorId}",
+   "operationIds": [
+    "evaluators_delete"
+   ],
+   "introduced": "v4.23.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/v2/evaluation-rules",
+   "operationIds": [
+    "evaluationRules_list"
+   ],
+   "introduced": "v4.23.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/v2/evaluation-rules/{evaluationRuleId}",
+   "operationIds": [
+    "evaluationRules_get"
+   ],
+   "introduced": "v4.23.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/v2/evaluators",
+   "operationIds": [
+    "evaluators_list"
+   ],
+   "introduced": "v4.23.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/v2/evaluators/{evaluatorId}",
+   "operationIds": [
+    "evaluators_get"
+   ],
+   "introduced": "v4.23.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/v2/evaluators/{evaluatorId}/versions",
+   "operationIds": [
+    "evaluators_listVersions"
+   ],
+   "introduced": "v4.23.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "PATCH /api/public/v2/evaluation-rules/{evaluationRuleId}",
+   "operationIds": [
+    "evaluationRules_update"
+   ],
+   "introduced": "v4.23.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "PATCH /api/public/v2/evaluators/{evaluatorId}",
+   "operationIds": [
+    "evaluators_update"
+   ],
+   "introduced": "v4.23.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/v2/evaluation-rules",
+   "operationIds": [
+    "evaluationRules_create"
+   ],
+   "introduced": "v4.23.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/v2/evaluators",
+   "operationIds": [
+    "evaluators_create"
+   ],
+   "introduced": "v4.23.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "DELETE /api/public/unstable/skills/{skillName}/versions/{skillVersion}",
+   "operationIds": [
+    "unstable_skills_deleteVersion"
+   ],
+   "introduced": "v4.46.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/unstable/skills",
+   "operationIds": [
+    "unstable_skills_list"
+   ],
+   "introduced": "v4.46.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/unstable/skills/files/{fileId}/content",
+   "operationIds": [
+    "unstable_skills_getFileContent"
+   ],
+   "introduced": "v4.46.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "GET /api/public/unstable/skills/{skillName}",
+   "operationIds": [
+    "unstable_skills_get"
+   ],
+   "introduced": "v4.46.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "PATCH /api/public/unstable/skills/{skillName}",
+   "operationIds": [
+    "unstable_skills_update"
+   ],
+   "introduced": "v4.46.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "PATCH /api/public/unstable/skills/{skillName}/versions/{skillVersion}",
+   "operationIds": [
+    "unstable_skills_setLabels"
+   ],
+   "introduced": "v4.46.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  },
+  {
+   "op": "POST /api/public/unstable/skills",
+   "operationIds": [
+    "unstable_skills_createVersion"
+   ],
+   "introduced": "v4.46.0",
+   "lastSeen": "v4.46.0",
+   "removed": null,
+   "deprecatedSince": null,
+   "gapTags": 0
+  }
+ ]
+}
