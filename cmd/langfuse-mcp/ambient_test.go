@@ -125,9 +125,13 @@ func TestStartupFailsNamingAMissingAmbientFileSetInTheConfigFile(t *testing.T) {
 	if err == nil {
 		t.Fatalf("executable exited 0 with a missing CA file in the config file; stderr:\n%s", stderr)
 	}
-	if !strings.Contains(string(stderr), "REQUESTS_CA_BUNDLE="+missing) {
-		t.Fatalf("startup error does not name REQUESTS_CA_BUNDLE and %s:\n%s", missing, stderr)
+	// Match the decoded error field: JSON escapes Windows path separators.
+	for _, line := range logLines(t, stderr) {
+		if msg, _ := line["error"].(string); strings.Contains(msg, "REQUESTS_CA_BUNDLE="+missing) {
+			return
+		}
 	}
+	t.Fatalf("startup error does not name REQUESTS_CA_BUNDLE and %s:\n%s", missing, stderr)
 }
 
 func TestStartupWarnsAboutAMissingAmbientFileAndStillSucceeds(t *testing.T) {
