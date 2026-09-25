@@ -84,7 +84,8 @@ func envMap(environ []string) map[string]string {
 
 // ambientInFile returns the ambient CA sources set in the config file, except
 // those whose variable the environment already set (captured): the environment
-// wins, per variable.
+// wins, per variable. They stay ambient sources (warn and skip, ignorable);
+// whether they should count as explicit is open in #29.
 //
 // This precedence would belong in config, but config.Load never sees the
 // environment's ambient values: start must capture and unset
