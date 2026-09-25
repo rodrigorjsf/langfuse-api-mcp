@@ -29,8 +29,10 @@ jobs:
         with:
           go-version-file: go.mod # go + toolchain directives pick the exact toolchain
           cache-dependency-path: go.mod
-      - name: Build
+      - name: Build (no cgo)
         run: go build ./...
+        env:
+          CGO_ENABLED: "0"
       - name: Vet
         run: go vet ./...
       - name: Lint

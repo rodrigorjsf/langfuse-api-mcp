@@ -56,6 +56,7 @@ Platform-mandated locations are not design choices and need no ADR: `.github/` h
 cmd → transport → server → workflows → langfuse → trust
                          ↘ catalog     ↘ sanitize
 config is imported only by cmd; every other package receives plain values/structs (accept dependencies, don't create them).
+server also imports langfuse (its error types, errors.md) and sanitize (wraps executor results).
 ```
 
 - Lower packages never import higher ones (`langfuse` never imports `server`; `catalog` imports nothing internal).

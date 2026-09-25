@@ -1,3 +1,4 @@
+// Package main, not main_test: TestMain must call the unexported main() in the child process.
 package main
 
 import (
