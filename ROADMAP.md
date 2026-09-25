@@ -22,7 +22,7 @@ flowchart LR
 | **M0 Foundations** | research, ADRs, agent rules, glossary, license | ADR-0001…0007 accepted; `.claude/rules` + `CONTEXT.md` in place; architecture diagram via `archify` | in progress |
 | **M1 Tracer bullet** | `go.mod`, stdio server exposing one read tool (`GET /api/public/health`) end-to-end against `httptest` and a real Langfuse | runs on linux/macOS/windows CI; README "Quick start" true | planned |
 | **M2 TLS & config** | keys, host/region presets, explicit + ambient CA sources, proxy, timeouts (ADR-0006) | CI proves a private-CA `httptest` server is trusted via each source on all 3 OSes; no insecure mode exists | planned |
-| **M3 Full read surface** | catalog generated from the OpenAPI spec, `search_operations`, `execute_read`, dedicated trace-investigation tools, pagination, response caps | catalog test = spec − ADR-0004 exclusions; every GET reachable | planned |
+| **M3 Full read surface** | version-aware union catalog (ADR-0012) with startup deployment profile, `search_operations`, `execute_read`, dedicated trace-investigation tools, pagination, response caps | union catalog generated and fresh; per-deployment-profile fixture test (ADR-0012); every GET reachable on each pinned deployment | planned |
 | **M4 Gated writes** | `execute_write` registered only with `LANGFUSE_MCP_ALLOW_WRITES=true`; elicitation for DELETE | tests prove absence when disabled; annotations per op | planned |
 | **M5 Distribution & supply chain** | goreleaser binaries (5 targets), minimal Docker image, MCPB bundle, SBOM, signatures, provenance, `govulncheck` gate | a fresh machine installs via each channel following only the README | planned |
 | **M6 User skills** | installable skills (authored with `/writing-great-skills`) that teach agents to use this MCP well | see below | planned |
@@ -42,3 +42,7 @@ Authored with `/writing-great-skills`, shipped in `skills/`, each tied to real t
 | `langfuse-mcp-setup-doctor` | diagnose connectivity: host/region, keys, TLS/CA sources loaded, proxy, 401/403/429 meaning |
 
 Workflow evidence: `docs/research/langfuse.md` §4.
+
+## Later
+
+- Legacy-family adapters for the workflow tools, so self-hosted v3 (patched until January 2027) gets guided flows too (ADR-0012 §6).

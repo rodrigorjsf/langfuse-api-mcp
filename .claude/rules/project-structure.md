@@ -12,8 +12,8 @@ Packages are organized **by domain concept** (terms from `CONTEXT.md`), never by
 │   ├── trust/               Trust pool: OS store + explicit + ambient CA sources → *x509.CertPool
 │   ├── langfuse/            Langfuse HTTP client: Basic auth, transport, proxy, redirects, rate limit,
 │   │                        retries, response caps, APIError; knows HTTP, not MCP
-│   ├── catalog/             Catalog: operations from the embedded spec, ADR-0004 exclusions, search,
-│   │   └── spec/            param validation; spec/ holds the go:embed'ed langfuse-openapi.json
+│   ├── catalog/             Catalog: union catalog (ADR-0012), version-range + family filtering, ADR-0004
+│   │   └── spec/            exclusions, search, param validation; spec/ holds the go:embed'ed generated catalog
 │   ├── sanitize/            Untrusted-data envelope, invisible/bidi Unicode + control-char stripping,
 │   │                        size truncation; pure functions
 │   ├── workflows/           Workflow tools' logic, one file per workflow (trace.go, errors.go, cost.go…);
@@ -37,7 +37,9 @@ Go tooling files that must sit at the root stay there: `go.mod`, `go.sum`, `.gol
 | reading/validating an env var or flag, defaults, region names | `internal/config` | `cmd/`, `langfuse/` |
 | loading/parsing certificates, CA files/dirs, ambient CA variables | `internal/trust` | `config/` (config only carries paths) |
 | HTTP to Langfuse: headers, auth, retry, backoff, 429, body limits, status → `APIError` | `internal/langfuse` | `server/` |
-| which operations exist, exclusions, operation search, operation-param schema checks | `internal/catalog` | `server/` |
+| which operations exist, version ranges, family filtering (pure, given a deployment profile), exclusions, operation search, operation-param schema checks | `internal/catalog` | `server/` |
+| detecting the deployment profile: `/health` version, family sentinel probes | `internal/langfuse` | `catalog/` (catalog stays pure) |
+| regenerating the union catalog from Langfuse release specs | `scripts/` (maintainer script) | `internal/` |
 | cleaning or wrapping Langfuse payloads before the agent sees them | `internal/sanitize` | inline in handlers |
 | a multi-call read flow (trace tree, error triage, cost/latency spike) | `internal/workflows/<flow>.go` | `server/` (server only registers it) |
 | tool names, descriptions, annotations, input/output schemas, `isError` shape, write gate | `internal/server` | anywhere else |

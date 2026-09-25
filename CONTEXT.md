@@ -5,7 +5,7 @@
 **Operation**: one method+path pair of the Langfuse public API, identified by its OpenAPI `operationId`.
 _Avoid_: endpoint (when you mean a single method), route, action
 
-**Catalog**: the set of in-scope operations the server can execute, derived from the bundled OpenAPI spec minus the exclusion list (ADR-0004).
+**Catalog**: the set of in-scope operations the server can execute for the connected deployment: the bundled union of Langfuse release specs, minus the exclusion list, filtered by the deployment profile.
 _Avoid_: registry, tool list
 
 **Read operation**: an operation using HTTP GET; executable only through `execute_read`.
@@ -32,10 +32,12 @@ _Avoid_: endpoint, server URL
 
 **Self-hosted instance**: a Langfuse deployment run by the user's organization at its own host.
 
-**Legacy deployment**: a self-hosted instance whose Langfuse major version is below 4; it lacks the current read APIs for traces, observations, scores and metrics.
-_Avoid_: old instance, v3 mode
+**Operation family**: a group of operations that a deployment turns on or off together through its write mode (legacy family, v4 read family, experiments family).
 
-**Legacy read operation**: a deprecated read operation that is in the catalog only when the host is a Legacy deployment.
+**Legacy operation**: a deprecated operation, part of the legacy family; exposed only when the connected deployment still answers it.
+_Avoid_: v1 API, old API
+
+**Deployment profile**: the detected Langfuse version plus the families that answered at startup; it decides which operations are in the catalog for the process lifetime.
 
 **Project key**: a public/secret key pair (`pk-lf-…`/`sk-lf-…`) scoped to one Langfuse project; it has full access to that project.
 
