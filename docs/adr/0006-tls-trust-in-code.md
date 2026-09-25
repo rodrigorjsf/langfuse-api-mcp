@@ -19,6 +19,10 @@ All variables are read from the process environment, so a value exported system-
 
 Since Go 1.27, when either is set on macOS/Windows Go stops using the platform verifier and *replaces* the OS store with that file — a corporate user with `SSL_CERT_FILE` exported would silently lose every other OS-trusted root. The main package therefore sets `//go:debug x509sslcertoverrideplatform=0` (keep the platform verifier) and the server appends those files itself.
 
+## Linux caveat (open, issue #4)
+
+On every platform Go's `SystemCertPool()` treats `SSL_CERT_FILE`/`SSL_CERT_DIR` as an **override** of the default locations. On Linux that means a user with `SSL_CERT_FILE` exported gets only that file, not the distro bundle plus that file. The M2 slice must also load the distro default bundle paths explicitly (or build the pool before those variables are consulted) so that "OS store + CA sources" holds on Linux as well.
+
 ## Consequences
 
 - Requires Go ≥ 1.27 in `go.mod` (the `//go:debug` key must exist in the toolchain) — `[sourced — unverified]`, confirm in the TLS slice.

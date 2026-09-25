@@ -84,7 +84,7 @@ Cloud regions: EU `https://cloud.langfuse.com` · US `https://us.cloud.langfuse.
 | `LANGFUSE_MCP_IGNORE_AMBIENT_CA` | `true` = do not pick up the variables in the row above | — |
 | `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY` | standard proxy variables | — |
 
-Trusted roots = **your operating system's certificate store + every CA from the sources above**. Nothing replaces the OS store. **There is no option to disable certificate verification.** This is deliberate.
+Trusted roots = **your operating system's certificate store + every CA from the sources above**. The design goal is that nothing replaces the OS store. On Linux, Go normally lets `SSL_CERT_FILE`/`SSL_CERT_DIR` *replace* the distro bundle; closing that gap is tracked in [issue #4](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/4). **There is no option to disable certificate verification.** This is deliberate.
 
 ### Behavior
 
