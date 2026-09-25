@@ -23,7 +23,7 @@ An MCP host that launches a Node-based server without those variables fails behi
 - `SystemCertPool()` returns an in-memory copy; appending does not touch the host. `[sourced]`
 - `AppendCertsFromPEM` reports whether any cert parsed → fail loudly on an empty/invalid CA file. `[sourced]`
 - `SetFallbackRoots` (e.g. `golang.org/x/crypto/x509roots/fallback`) supplies roots only when no system pool exists (scratch/distroless). Callable once. `[sourced]`
-- `SSL_CERT_DIR` list separator (colon / semicolon on Windows): **refuted 1-2, unsettled** — irrelevant since we don't use the variable.
+- `SSL_CERT_DIR` is a colon-separated list (semicolon on Windows). Run 1 refuted this 1-2; `security.md` later settled it from pkg.go.dev `[sourced]`. The ambient-CA loader must split it the same way.
 
 ## Containers
 
