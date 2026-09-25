@@ -46,4 +46,5 @@ Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agent
 When something fails repeatedly, when User has to re-explain, or when a workaround is found for a platform/tool limitation, add a one-line bullet here. Keep each bullet under 15 words. No explanations. Only add things that will save time in future sessions.
 
 - archify showcase: landscape viewBox ~1100x530; wider fails readability, taller overflows viewport.
+- Wizard `template.sh` ships CRLF; `sed -i 's/\r$//'` before `bash -n`.
 - Vertical archify edge labels overlap nodes by default; set `labelAt` at segment midpoint.

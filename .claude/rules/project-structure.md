@@ -23,7 +23,7 @@ Packages are organized **by domain concept** (terms from `CONTEXT.md`), never by
 │   └── transport/           stdio start-up; loopback Streamable HTTP: bind, bearer token, Origin/Host checks
 ├── skills/<skill-name>/     M6 user-facing skills (SKILL.md + references), authored with /writing-great-skills
 ├── packaging/               Dockerfile, .goreleaser.yaml inputs, mcpb/manifest.json
-├── scripts/                 repeatable maintainer procedures (WHAT/WHY/WHEN/HOW header)
+├── scripts/                 repeatable maintainer procedures (WHAT/WHY/WHEN/HOW header), e.g. setup-ci-langfuse-cloud.sh
 ├── docs/                    adr/, architecture/, research/, agents/ — no code
 └── .claude/                 rules/, hooks/, settings.json
 ```

@@ -229,6 +229,8 @@ Every failure reaches the agent as a structured error with a stable `code` (e.g.
 
 ## For contributors
 
+Integration-test setup (Langfuse Cloud project + CI secrets): run [`scripts/setup-ci-langfuse-cloud.sh`](scripts/setup-ci-langfuse-cloud.sh).
+
 Start with [CLAUDE.md](CLAUDE.md) (agent and contributor index), [CONTEXT.md](CONTEXT.md) (glossary), [docs/adr/](docs/adr/) (decisions) and [ROADMAP.md](ROADMAP.md).
 
 ## References
