@@ -16,39 +16,49 @@ import (
 )
 
 func main() {
-	// First, before anything touches certificate handling: Go would let
-	// SSL_CERT_FILE/SSL_CERT_DIR replace the OS roots (ADR-0006).
+	// Nothing may run here before start: see start.
+	if _, ok := start(); !ok {
+		os.Exit(1)
+	}
+	// Later milestones build the Langfuse client with the trust pool and run a transport.
+}
+
+// start starts the server and returns its trust pool. Its first statement
+// captures the ambient CA variables, before anything touches certificate
+// handling: Go would let SSL_CERT_FILE/SSL_CERT_DIR replace the OS roots, and
+// it caches the OS roots the first time they are loaded (ADR-0006). The
+// process-level trust test (trustproof_test.go) fails if this order breaks.
+// It reports whether startup succeeded; on failure it has logged one error line.
+func start() (trust.Pool, bool) {
 	ambient, err := trust.CaptureAmbient()
 	// Logs go to stderr: stdout is reserved for the stdio transport.
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	if err != nil {
 		log.Error("startup failed", "error", err.Error())
-		os.Exit(1)
+		return trust.Pool{}, false
 	}
-	if !run(log, os.Environ(), ambient) {
-		os.Exit(1)
-	}
+	return run(log, os.Environ(), ambient)
 }
 
 // run starts the server with the given environment ("KEY=value" entries) and
-// the ambient CA sources captured at process start. It reports whether startup
-// succeeded; on failure it has logged one error line.
-func run(log *slog.Logger, environ []string, ambient []trust.Source) bool {
+// the ambient CA sources captured at process start, and returns its trust pool.
+// It reports whether startup succeeded; on failure it has logged one error line.
+func run(log *slog.Logger, environ []string, ambient []trust.Source) (trust.Pool, bool) {
 	file, err := config.ReadFile()
 	if err != nil {
 		log.Error("startup failed", "error", err.Error())
-		return false
+		return trust.Pool{}, false
 	}
 	cfg, err := config.Load(envMap(environ), file)
 	if err != nil {
 		log.Error("startup failed", "error", err.Error())
-		return false
+		return trust.Pool{}, false
 	}
 
-	_, report, err := trust.Build(trustSources(cfg, ambient))
+	pool, report, err := trust.Build(trustSources(cfg, ambient))
 	if err != nil {
 		log.Error("startup failed", "error", err.Error())
-		return false
+		return trust.Pool{}, false
 	}
 	for _, s := range report.Sources {
 		if s.Warning != "" {
@@ -56,7 +66,7 @@ func run(log *slog.Logger, environ []string, ambient []trust.Source) bool {
 		}
 	}
 	log.Info("CA sources loaded", "roots", report.Roots, "sources", report.Sources)
-	return true
+	return pool, true
 }
 
 // envMap turns "KEY=value" entries into a map; the last entry for a key wins.

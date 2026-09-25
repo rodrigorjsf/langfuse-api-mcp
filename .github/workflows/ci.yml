@@ -1,4 +1,6 @@
 # CI: build, vet, lint and race-enabled tests on Linux, macOS and Windows, plus govulncheck.
+# The test step also runs the cross-OS trust proof against a throwaway CA installed in each
+# runner's system trust store (spec #7).
 # Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current.
 name: CI
 
@@ -42,8 +44,28 @@ jobs:
           # Build golangci-lint with the module's toolchain: a binary built with an older Go
           # refuses to lint a go 1.27 module.
           install-mode: goinstall
+      # Cross-OS trust proof (spec #7, ADR-0006): install a throwaway "OS" test CA into this
+      # ephemeral runner's system trust store, so cmd/langfuse-mcp's trust test can prove the
+      # executable trusts it together with an SSL_CERT_FILE CA. Never done on developer machines.
+      - name: Generate the OS test CA
+        shell: bash
+        run: go run ./scripts/gen-os-test-ca "$RUNNER_TEMP/os-test-ca"
+      - name: Install the OS test CA (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo cp "$RUNNER_TEMP/os-test-ca/ca.pem" /usr/local/share/ca-certificates/langfuse-mcp-os-test-ca.crt
+          sudo update-ca-certificates
+      - name: Install the OS test CA (macOS)
+        if: runner.os == 'macOS'
+        run: sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "$RUNNER_TEMP/os-test-ca/ca.pem"
+      - name: Install the OS test CA (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: certutil -addstore -f Root "$env:RUNNER_TEMP\os-test-ca\ca.pem"
       - name: Test (race detector)
         run: go test -race -count=1 ./...
+        env:
+          LANGFUSE_MCP_TEST_OS_CA_DIR: ${{ runner.temp }}/os-test-ca
 
   govulncheck:
     runs-on: ubuntu-latest

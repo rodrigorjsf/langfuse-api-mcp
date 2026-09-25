@@ -268,6 +268,8 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the same five c
 | Tests | `go test -race ./...` | tests pass under the race detector (needs a C compiler, which the race detector requires) |
 | Vulnerabilities | `go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...` | no known vulnerability is reachable from the code |
 
+**The cross-OS trust proof runs only in CI.** `TestExecutableTrustsTheOSStoreAndAmbientCAsAtOnce` (in `cmd/langfuse-mcp`) proves that the running executable trusts a CA from the OS certificate store and a CA exported through `SSL_CERT_FILE` at the same time, and that nothing loads certificates before `SSL_CERT_FILE`/`SSL_CERT_DIR` are captured and removed ([ADR-0006](docs/adr/0006-tls-trust-in-code.md)). It needs a test CA installed in the system trust store, so CI generates a throwaway one with [`scripts/gen-os-test-ca`](scripts/gen-os-test-ca/main.go) and installs it on each runner (Linux `update-ca-certificates`, macOS `security add-trusted-cert`, Windows `certutil -addstore Root`). Locally the test is skipped: never install that CA on your own machine. The rest of the proof (the two variables are gone from the environment after startup) runs everywhere.
+
 What you need installed:
 
 - **Any Go from 1.21 on.** `go.mod` pins the exact toolchain (`toolchain go1.27.1`). An older local Go downloads that toolchain automatically the first time you run a `go` command in this repository (the default `GOTOOLCHAIN=auto`).

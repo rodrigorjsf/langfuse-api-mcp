@@ -3,7 +3,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -14,7 +13,6 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -29,6 +27,9 @@ import (
 const runMainEnv = "LANGFUSE_MCP_TEST_RUN_MAIN"
 
 func TestMain(m *testing.M) {
+	if targets := os.Getenv(probeEnv); targets != "" {
+		os.Exit(probe(targets))
+	}
 	if os.Getenv(runMainEnv) == "1" {
 		main()
 		os.Exit(0) // main returned normally: that is a clean exit
@@ -82,20 +83,8 @@ func userConfigLocation(t *testing.T) (env []string, configFile string) {
 // entries and returns its stderr and exit error.
 func runChild(t *testing.T, env []string) ([]byte, error) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	exe, err := os.Executable()
-	if err != nil {
-		t.Fatalf("locate test binary: %v", err)
-	}
-	cmd := exec.CommandContext(ctx, exe, "-test.run=^$") //nolint:gosec // G204: exe is this test binary, not external input
-	cmd.Env = append(append(os.Environ(), runMainEnv+"=1"), hermeticEnv...)
-	cmd.Env = append(cmd.Env, env...) // later entries win
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	err = cmd.Run()
-	return stderr.Bytes(), err
+	_, stderr, err := runChildOutput(t, env)
+	return stderr, err
 }
 
 // hermeticEnv clears the CA-related variables the developer's or runner's own
