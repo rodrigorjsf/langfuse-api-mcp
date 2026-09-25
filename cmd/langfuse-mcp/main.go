@@ -2,26 +2,42 @@
 //
 // This package only wires modules together (ADR-0009): capture the ambient CA
 // variables, load config (environment, then the optional config file), build
-// the trust pool, then (in later milestones) the Langfuse client and a transport.
-// For now the executable builds the trust pool, logs its CA sources and exits.
+// the trust pool, the catalog, the Langfuse client and the MCP server, then
+// serve it over stdio until the client closes stdin.
 package main
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"slices"
 	"strings"
 
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/config"
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse"
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/server"
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/transport"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/trust"
 )
 
 func main() {
 	// Nothing may run here before start: see start.
-	if _, ok := start(); !ok {
+	app, ok := start()
+	if !ok {
 		os.Exit(1)
 	}
-	// Later milestones build the Langfuse client with the trust pool and run a transport.
+	if err := app.serve(context.Background()); err != nil {
+		app.log.Error("server stopped", "error", err.Error())
+		os.Exit(1)
+	}
+}
+
+// app is the started server: its trust pool and the function that serves it.
+type app struct {
+	log   *slog.Logger
+	pool  trust.Pool
+	serve func(context.Context) error
 }
 
 // start starts the server and returns its trust pool. Its first statement
@@ -30,37 +46,37 @@ func main() {
 // it caches the OS roots the first time they are loaded (ADR-0006). The
 // process-level trust test (trustproof_test.go) fails if this order breaks.
 // It reports whether startup succeeded; on failure it has logged one error line.
-func start() (trust.Pool, bool) {
+func start() (app, bool) {
 	ambient, err := trust.CaptureAmbient()
 	// Logs go to stderr: stdout is reserved for the stdio transport.
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-	var pool trust.Pool
+	var a app
 	if err == nil {
-		pool, err = startWith(log, os.Environ(), ambient)
+		a, err = startWith(log, os.Environ(), ambient)
 	}
 	if err != nil {
 		log.Error("startup failed", "error", err.Error())
-		return trust.Pool{}, false
+		return app{}, false
 	}
-	return pool, true
+	return a, true
 }
 
 // startWith is start after the capture: it never touches the process
 // environment, only the given entries ("KEY=value") and the ambient CA sources
-// captured at process start, and returns the trust pool.
-func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (trust.Pool, error) {
+// captured at process start, and returns the started server.
+func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app, error) {
 	file, err := config.ReadFile()
 	if err != nil {
-		return trust.Pool{}, err
+		return app{}, err
 	}
 	cfg, err := config.Load(envMap(environ), file)
 	if err != nil {
-		return trust.Pool{}, err
+		return app{}, err
 	}
 
 	pool, report, err := trust.Build(trustSources(cfg, ambient))
 	if err != nil {
-		return trust.Pool{}, err
+		return app{}, err
 	}
 	for _, s := range report.Sources {
 		if s.Warning != "" {
@@ -68,7 +84,20 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (trus
 		}
 	}
 	log.Info("CA sources loaded", "roots", report.Roots, "sources", report.Sources)
-	return pool, nil
+
+	cat, err := catalog.Load()
+	if err != nil {
+		return app{}, err
+	}
+	client := langfuse.New(langfuse.Options{
+		Host:      cfg.Connection.Host,
+		PublicKey: cfg.Connection.PublicKey.Reveal(),
+		SecretKey: cfg.Connection.SecretKey.Reveal(),
+		TLS:       pool.TLSConfig(),
+	})
+	srv := server.New(cat, client)
+	serve := func(ctx context.Context) error { return transport.Stdio(ctx, srv) }
+	return app{log: log, pool: pool, serve: serve}, nil
 }
 
 // envMap turns "KEY=value" entries into a map; the last entry for a key wins.
