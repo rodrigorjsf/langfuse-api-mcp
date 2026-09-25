@@ -40,3 +40,10 @@ The five canonical triage roles use their default label strings (`needs-triage`,
 ### Domain docs
 
 Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## Applied Learning
+
+When something fails repeatedly, when User has to re-explain, or when a workaround is found for a platform/tool limitation, add a one-line bullet here. Keep each bullet under 15 words. No explanations. Only add things that will save time in future sessions.
+
+- archify showcase: landscape viewBox ~1100x530; wider fails readability, taller overflows viewport.
+- Vertical archify edge labels overlap nodes by default; set `labelAt` at segment midpoint.
