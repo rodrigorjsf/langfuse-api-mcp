@@ -1,0 +1,28 @@
+parent go=go1.27.1 os=linux/amd64
+
+### child-nounset  env=[]  err=<nil>
+{"envAfter":{"SSL_CERT_DIR":false,"SSL_CERT_FILE":false},"go":"go1.27.1","mode":"child-nounset","os":"linux","results":{"ambient-ca":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority","os-store-ca":"OK 200","public":"OK 200"}}
+
+### child-nounset  env=[SSL_CERT_FILE=<dir>/ambient-ca.pem]  err=<nil>
+{"envAfter":{"SSL_CERT_DIR":false,"SSL_CERT_FILE":true},"go":"go1.27.1","mode":"child-nounset","os":"linux","results":{"ambient-ca":"OK 200","os-store-ca":"OK 200","public":"OK 200"}}
+
+### child-unset  env=[SSL_CERT_FILE=<dir>/ambient-ca.pem]  err=<nil>
+{"appendedFiles":1,"envAfter":{"SSL_CERT_DIR":false,"SSL_CERT_FILE":false},"go":"go1.27.1","mode":"child-unset","os":"linux","results":{"ambient-ca":"OK 200","os-store-ca":"OK 200","public":"OK 200"}}
+
+### child-nounset  env=[SSL_CERT_DIR=<dir>/ambient-dir]  err=<nil>
+{"envAfter":{"SSL_CERT_DIR":true,"SSL_CERT_FILE":false},"go":"go1.27.1","mode":"child-nounset","os":"linux","results":{"ambient-ca":"OK 200","os-store-ca":"OK 200","public":"OK 200"}}
+
+### child-unset  env=[SSL_CERT_DIR=<dir>/ambient-dir]  err=<nil>
+{"appendedFiles":1,"envAfter":{"SSL_CERT_DIR":false,"SSL_CERT_FILE":false},"go":"go1.27.1","mode":"child-unset","os":"linux","results":{"ambient-ca":"OK 200","os-store-ca":"OK 200","public":"OK 200"}}
+
+### child-late  env=[SSL_CERT_FILE=<dir>/ambient-ca.pem]  err=<nil>
+{"appendedFiles":1,"envAfter":{"SSL_CERT_DIR":false,"SSL_CERT_FILE":false},"go":"go1.27.1","mode":"child-late","os":"linux","results":{"ambient-ca":"OK 200","os-store-ca":"OK 200","public":"OK 200"}}
+
+### child-nounset  env=[SSL_CERT_FILE=<dir>/ambient-ca.pem SSL_CERT_DIR=<dir>/ambient-dir]  err=<nil>
+{"envAfter":{"SSL_CERT_DIR":true,"SSL_CERT_FILE":true},"go":"go1.27.1","mode":"child-nounset","os":"linux","results":{"ambient-ca":"OK 200","os-store-ca":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority","public":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority"}}
+
+### child-unset  env=[SSL_CERT_FILE=<dir>/ambient-ca.pem SSL_CERT_DIR=<dir>/ambient-dir]  err=<nil>
+{"appendedFiles":2,"envAfter":{"SSL_CERT_DIR":false,"SSL_CERT_FILE":false},"go":"go1.27.1","mode":"child-unset","os":"linux","results":{"ambient-ca":"OK 200","os-store-ca":"OK 200","public":"OK 200"}}
+
+### child-late  env=[SSL_CERT_FILE=<dir>/ambient-ca.pem SSL_CERT_DIR=<dir>/ambient-dir]  err=<nil>
+{"appendedFiles":2,"envAfter":{"SSL_CERT_DIR":false,"SSL_CERT_FILE":false},"go":"go1.27.1","mode":"child-late","os":"linux","results":{"ambient-ca":"OK 200","os-store-ca":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority","public":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority"}}

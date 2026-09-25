@@ -1,0 +1,39 @@
+parent go=go1.27.1 os=windows/amd64
+2026/09/25 13:12:22 http: TLS handshake error from 127.0.0.1:58567: remote error: tls: bad certificate
+2026/09/25 13:12:22 http: TLS handshake error from 127.0.0.1:58566: remote error: tls: bad certificate
+
+### child-nounset  env=[]  err=<nil>
+{"envAfter":{"SSL_CERT_DIR":false,"SSL_CERT_FILE":false},"go":"go1.27.1","mode":"child-nounset","os":"windows","results":{"ambient-ca":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority","os-store-ca":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority","public":"OK 200"}}
+2026/09/25 13:12:23 http: TLS handshake error from 127.0.0.1:58569: remote error: tls: bad certificate
+
+### child-nounset  env=[SSL_CERT_FILE=<dir>\ambient-ca.pem]  err=<nil>
+{"envAfter":{"SSL_CERT_DIR":false,"SSL_CERT_FILE":true},"go":"go1.27.1","mode":"child-nounset","os":"windows","results":{"ambient-ca":"OK 200","os-store-ca":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority","public":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority"}}
+2026/09/25 13:12:23 http: TLS handshake error from 127.0.0.1:58572: remote error: tls: bad certificate
+
+### child-unset  env=[SSL_CERT_FILE=<dir>\ambient-ca.pem]  err=<nil>
+{"appendedFiles":1,"envAfter":{"SSL_CERT_DIR":false,"SSL_CERT_FILE":false},"go":"go1.27.1","mode":"child-unset","os":"windows","results":{"ambient-ca":"OK 200","os-store-ca":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority","public":"OK 200"}}
+2026/09/25 13:12:24 http: TLS handshake error from 127.0.0.1:58575: remote error: tls: bad certificate
+
+### child-nounset  env=[SSL_CERT_DIR=<dir>\ambient-dir]  err=<nil>
+{"envAfter":{"SSL_CERT_DIR":true,"SSL_CERT_FILE":false},"go":"go1.27.1","mode":"child-nounset","os":"windows","results":{"ambient-ca":"OK 200","os-store-ca":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority","public":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority"}}
+2026/09/25 13:12:24 http: TLS handshake error from 127.0.0.1:58579: remote error: tls: bad certificate
+
+### child-unset  env=[SSL_CERT_DIR=<dir>\ambient-dir]  err=<nil>
+{"appendedFiles":1,"envAfter":{"SSL_CERT_DIR":false,"SSL_CERT_FILE":false},"go":"go1.27.1","mode":"child-unset","os":"windows","results":{"ambient-ca":"OK 200","os-store-ca":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority","public":"OK 200"}}
+2026/09/25 13:12:24 http: TLS handshake error from 127.0.0.1:58583: remote error: tls: bad certificate
+
+### child-late  env=[SSL_CERT_FILE=<dir>\ambient-ca.pem]  err=<nil>
+{"appendedFiles":1,"envAfter":{"SSL_CERT_DIR":false,"SSL_CERT_FILE":false},"go":"go1.27.1","mode":"child-late","os":"windows","results":{"ambient-ca":"OK 200","os-store-ca":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority","public":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority"}}
+2026/09/25 13:12:25 http: TLS handshake error from 127.0.0.1:58586: remote error: tls: bad certificate
+
+### child-nounset  env=[SSL_CERT_FILE=<dir>\ambient-ca.pem SSL_CERT_DIR=<dir>\ambient-dir]  err=<nil>
+{"envAfter":{"SSL_CERT_DIR":true,"SSL_CERT_FILE":true},"go":"go1.27.1","mode":"child-nounset","os":"windows","results":{"ambient-ca":"OK 200","os-store-ca":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority","public":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority"}}
+2026/09/25 13:12:25 http: TLS handshake error from 127.0.0.1:58589: remote error: tls: bad certificate
+
+### child-unset  env=[SSL_CERT_FILE=<dir>\ambient-ca.pem SSL_CERT_DIR=<dir>\ambient-dir]  err=<nil>
+{"appendedFiles":2,"envAfter":{"SSL_CERT_DIR":false,"SSL_CERT_FILE":false},"go":"go1.27.1","mode":"child-unset","os":"windows","results":{"ambient-ca":"OK 200","os-store-ca":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority","public":"OK 200"}}
+2026/09/25 13:12:26 http: TLS handshake error from 127.0.0.1:58592: remote error: tls: bad certificate
+
+### child-late  env=[SSL_CERT_FILE=<dir>\ambient-ca.pem SSL_CERT_DIR=<dir>\ambient-dir]  err=<nil>
+{"appendedFiles":2,"envAfter":{"SSL_CERT_DIR":false,"SSL_CERT_FILE":false},"go":"go1.27.1","mode":"child-late","os":"windows","results":{"ambient-ca":"OK 200","os-store-ca":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority","public":"FAIL tls: failed to verify certificate: x509: certificate signed by unknown authority"}}
+Microsoft Windows [vers∆o 10.0.26200.9550]
