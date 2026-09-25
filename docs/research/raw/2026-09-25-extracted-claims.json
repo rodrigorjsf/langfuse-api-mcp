@@ -1,0 +1,708 @@
+[
+ {
+  "sourceQuality": "primary",
+  "claims": [
+   {
+    "claim": "Node.js does not trust the OS certificate store by default. Since v22.19.0 and v24.6.0 it can be told to trust system CAs (such as corporate root CAs) with NODE_USE_SYSTEM_CA=1 or the --use-system-ca flag. System CAs are then used in addition to Node's bundled CAs.",
+    "quote": "From Node.js v22.19.0, v24.6.0 and above, Node.js can be configured to trust these custom CAs using the system's certificate store. ... When enabled, Node.js loads system CAs and uses them in addition to its bundled CAs for TLS validation.",
+    "importance": "central"
+   },
+   {
+    "claim": "NODE_EXTRA_CA_CERTS points Node.js at a PEM file of one or more extra CA certificates, without using the system store. It can be combined with NODE_USE_SYSTEM_CA so that bundled, system and extra CAs are all trusted.",
+    "quote": "With both enabled, Node.js trusts bundled CAs, system CAs, and the additional certificates specified by `NODE_EXTRA_CA_CERTS`.",
+    "importance": "central"
+   },
+   {
+    "claim": "Node's system CA loading depends on the platform: the Windows Certificate Store on Windows, the Keychain on macOS, and OpenSSL defaults on Linux (SSL_CERT_FILE/SSL_CERT_DIR or /etc/ssl paths).",
+    "quote": "Windows: Windows Certificate Store (via Windows Crypto API) - macOS: macOS Keychain - Linux: OpenSSL defaults, typically via `SSL_CERT_FILE`/`SSL_CERT_DIR`, or paths like `/etc/ssl/cert.pem` and `/etc/ssl/certs/` depending on the OpenSSL build",
+    "importance": "supporting"
+   },
+   {
+    "claim": "Node.js only honors the HTTP_PROXY, HTTPS_PROXY and NO_PROXY environment variables when NODE_USE_ENV_PROXY or --use-env-proxy is enabled. This works for fetch() from v22.21.0 or v24.0.0+, and for node:http/https from v22.21.0 or v24.5.0+.",
+    "quote": "Node.js supports these when `NODE_USE_ENV_PROXY` or `--use-env-proxy` is enabled. This works with `node:http` and `node:https` (v22.21.0 or v24.5.0+) methods as well as `fetch()` (v22.21.0 or v24.0.0+).",
+    "importance": "central"
+   },
+   {
+    "claim": "Node's NO_PROXY accepts wildcards, domain suffixes, exact IPs, IP ranges and host:port entries.",
+    "quote": "`.company.com` - Domain suffix match (matches `sub.company.com`) ... `192.168.1.1-192.168.1.100` - IP address range ... `company.com:8080` - Hostname with specific port",
+    "importance": "tangential"
+   }
+  ]
+ },
+ {
+  "claims": [
+   {
+    "claim": "rustls-platform-verifier verifies TLS certificates using the operating system's own certificate facilities rather than a bundled static root set, so certificates trusted by the OS (e.g., corporate root CAs) are honored.",
+    "quote": "A Rust library to verify the validity of TLS certificates based on the operating system's certificate facilities.",
+    "importance": "central"
+   },
+   {
+    "claim": "On Windows it uses the Windows platform certificate store and Windows API verification; on macOS (10.14+) it uses platform roots and keychain via Security.framework; on Linux it uses the system CA bundle or user-provided certs with webpki verification.",
+    "quote": "Linux: \"System CA bundle, or user-provided certs\" with \"webpki\" verification ... macOS: \"macOS platform roots and keychain certificate\" via \"macOS Security.framework\"",
+    "importance": "central"
+   },
+   {
+    "claim": "Extra (e.g., enterprise/custom) root certificates can be added on top of platform roots via Verifier::new_with_extra_roots, supporting an explicit CA-cert config option.",
+    "quote": "users may want to \"augment these certificates\" using the Verifier::new_with_extra_roots method",
+    "importance": "central"
+   },
+   {
+    "claim": "The rustls maintainers recommend platform verification as the default for client-side libraries because it gets live trust information, unlike static root bundles.",
+    "quote": "It is the opinion of the rustls and rustls-platform-verifier teams that this is the best default available for client-side libraries.",
+    "importance": "supporting"
+   },
+   {
+    "claim": "Certificate revocation checking is supported on Windows and macOS but not on Linux.",
+    "quote": "Linux ... notably has \"No\" revocation support",
+    "importance": "tangential"
+   }
+  ],
+  "sourceQuality": "primary"
+ },
+ {
+  "sourceQuality": "primary",
+  "publishDate": "go1.27.1 docs (fetched 2026-09-25)",
+  "claims": [
+   {
+    "claim": "In Go, SSL_CERT_FILE and SSL_CERT_DIR override the system default CA locations. SSL_CERT_DIR accepts a list separated by colons, or by semicolons on Windows.",
+    "quote": "The environment variables SSL_CERT_FILE and SSL_CERT_DIR can be used to override the system default locations for the SSL certificate file and SSL certificate files directory, respectively. The latter can be a colon-separated list, or a semicolon-separated list on Windows.",
+    "importance": "central"
+   },
+   {
+    "claim": "Since Go 1.27, setting SSL_CERT_FILE or SSL_CERT_DIR on macOS and Windows turns off the platform verification APIs, so the OS trust store is no longer used, unless GODEBUG x509sslcertoverrideplatform=0 is set.",
+    "quote": "On platforms which have system APIs for certificate verification (macOS and Windows), setting SSL_CERT_FILE or SSL_CERT_DIR will prevent those APIs from being used, unless the x509sslcertoverrideplatform=0 GODEBUG setting is used. (This changed in Go 1.27.)",
+    "importance": "central"
+   },
+   {
+    "claim": "SystemCertPool returns a copy of the system pool held in memory. Adding a corporate CA to that copy does not change the disk or other pools, so the server can combine system roots with custom roots without touching the host.",
+    "quote": "SystemCertPool returns a copy of the system cert pool. ... Any mutations to the returned pool are not written to disk and do not affect any other pool returned by SystemCertPool.",
+    "importance": "supporting"
+   },
+   {
+    "claim": "SetFallbackRoots supplies roots when no system pool or platform verifier exists, for example in a distroless or scratch container with no CA bundle. It can be called only once. Forcing it with GODEBUG=x509usefallbackroots=1 turns off platform verification on Windows and macOS.",
+    "quote": "SetFallbackRoots sets the roots to use during certificate verification, if no custom roots are specified and a platform verifier or a system certificate pool is not available (for instance in a container which does not have a root certificate bundle). ... SetFallbackRoots may only be called once, if called multiple times it will panic.",
+    "importance": "supporting"
+   },
+   {
+    "claim": "CertPool.AppendCertsFromPEM parses a series of PEM-encoded certificates and reports whether any were parsed. The server can use this to load a user-provided CA file or directory and fail loudly when the file holds no valid certificate.",
+    "quote": "AppendCertsFromPEM attempts to parse a series of PEM encoded certificates. It appends any certificates found to s and reports whether any certificates were successfully parsed.",
+    "importance": "supporting"
+   }
+  ]
+ },
+ {
+  "claims": [
+   {
+    "claim": "Go applications determine which directory to search for trusted root certificate files via the SSL_CERT_DIR environment variable, so pointing it at a mounted/bundled cert directory makes a Go binary trust those CAs.",
+    "quote": "Go uses `SSL_CERT_DIR` to determine the directory to check for SSL certificate files.",
+    "importance": "central"
+   },
+   {
+    "claim": "Root CA certificates can be bundled into a ko-built Go image via the kodata directory, and trust is achieved by setting SSL_CERT_DIR to $KO_DATA_PATH at runtime.",
+    "quote": "Root certificates can be stored in the `<importpath>/kodata` directory ... the Go application will trust the bundled root certificates.",
+    "importance": "supporting"
+   },
+   {
+    "claim": "Custom CA certificates can be appended to an already-built Go container image with the incert tool, without rebuilding.",
+    "quote": "Build and push your Go application container image using `ko build`",
+    "importance": "supporting"
+   },
+   {
+    "claim": "A custom base image with pre-installed root certificates can replace ko's default base image via .ko.yaml or the KO_DEFAULTBASEIMAGE environment variable.",
+    "quote": "Configure `ko` to override the default base image with the custom image",
+    "importance": "tangential"
+   }
+  ],
+  "sourceQuality": "primary"
+ },
+ {
+  "sourceQuality": "primary",
+  "claims": [
+   {
+    "claim": "Truststore lets Python HTTP clients verify TLS against the operating system's native certificate store instead of certifi's bundled CA list. That means a root CA installed by a corporate proxy in the OS store is trusted without any extra configuration.",
+    "quote": "A library which exposes native system certificate stores through an `ssl.SSLContext`-like API",
+    "importance": "central"
+   },
+   {
+    "claim": "The trust store truststore uses depends on the platform: the Security framework on macOS 10.8+, CryptoAPI on Windows, and OpenSSL on Linux.",
+    "quote": "macOS 10.8+: Security framework; Windows: CryptoAPI; Linux: OpenSSL",
+    "importance": "central"
+   },
+   {
+    "claim": "Truststore requires Python 3.10 or later and raises ImportError on older versions. It works with urllib3, requests and aiohttp, either through injection or by passing a truststore.SSLContext directly.",
+    "quote": "Works with urllib3, requests, aiohttp, and more through injection or by passing `truststore.SSLContext` instances directly.",
+    "importance": "supporting"
+   },
+   {
+    "claim": "inject_into_ssl() is meant only for applications and scripts, not libraries. A Python MCP server would call it early, as the application entrypoint.",
+    "quote": "must not be used by libraries or packages",
+    "importance": "supporting"
+   },
+   {
+    "claim": "The docs list advantages of the system store over certifi: certificates update automatically, missing intermediate certificates are fetched, certificates are checked against CRLs, and the store is managed by the system rather than by each application.",
+    "quote": "Fetches missing intermediate certificates ... Checks against certificate revocation lists (CRLs) ... System-managed rather than per-application",
+    "importance": "supporting"
+   }
+  ],
+  "publishDate": "Truststore 0.10.4 docs (no explicit date)"
+ },
+ {
+  "sourceQuality": "primary",
+  "publishDate": "2026-02-23 (official SDK tiering published; conformance tests available 2026-01-23)",
+  "claims": [
+   {
+    "claim": "Tier 1 MCP SDKs must pass 100% of applicable conformance tests and fully implement the protocol, including optional capabilities like sampling and elicitation. Tier 2 needs an 80% pass rate. Tier 3 has no minimum.",
+    "quote": "Tier 1: Fully supported SDKs with complete protocol implementation, including all non-experimental features and optional capabilities like sampling and elicitation ... Conformance Tests | 100% pass rate | 80% pass rate | No minimum",
+    "importance": "central"
+   },
+   {
+    "claim": "Tier 1 SDKs must ship new protocol features before a new spec version is released. Tier 2 SDKs have 6 months. Tier 3 SDKs have no timeline commitment.",
+    "quote": "New Protocol Features | Before new spec version release, timeline agreed per release based on feature complexity | Within 6 months | No timeline commitment",
+    "importance": "central"
+   },
+   {
+    "claim": "Tier 1 SDKs must triage issues within 2 business days and fix critical (P0) bugs within 7 days. P0 includes security vulnerabilities with CVSS >= 7.0.",
+    "quote": "Issue Triage | Within 2 business days | Within a month ... Critical Bug Resolution | Within 7 days | Within two weeks ... Security vulnerabilities with CVSS score \u2265 7.0 (High or Critical severity)",
+    "importance": "supporting"
+   },
+   {
+    "claim": "Tier 1 and Tier 2 both require a stable release (1.0.0 or higher with no pre-release tag) and a published dependency update policy. Tier 3 SDKs may be experimental or only partly implemented.",
+    "quote": "Stable Release is a published version explicitly marked as production-ready (e.g., version `1.0.0` or higher without pre-release identifiers like `-alpha`, `-beta`, or `-rc`).",
+    "importance": "supporting"
+   },
+   {
+    "claim": "An SDK can be moved down a tier if conformance tests on its latest stable release keep failing for 4 weeks, or if issues go unaddressed for two months. So a tier is not permanent and should be re-checked when choosing a stack.",
+    "quote": "An SDK may be moved to a lower tier if existing conformance tests on the latest stable release fail continuously for 4 weeks ... An SDK may also be relegated if issues remain unaddressed for two months.",
+    "importance": "tangential"
+   }
+  ]
+ },
+ {
+  "sourceQuality": "forum",
+  "publishDate": "2021-01-04",
+  "claims": [
+   {
+    "claim": "The user tried to add a custom CA to a distroless image with a multi-stage build: a Debian builder stage installs the certificate and runs update-ca-certificates, then /etc/ssl/certs is copied into the final distroless image.",
+    "quote": "COPY --from=certs /etc/ssl/certs /etc/ssl/certs",
+    "importance": "supporting"
+   },
+   {
+    "claim": "Even though the build appeared to add the certificate, the Go-based Kubernetes controller running in the distroless image still failed TLS verification with an unknown-authority error. So a naive copy of the certs directory is not guaranteed to make the runtime trust the CA, and needs to be checked at runtime.",
+    "quote": "cert was added but in the k8s controller logs I see x509 signed by unknown authority",
+    "importance": "central"
+   },
+   {
+    "claim": "The issue has no maintainer response, comments or confirmed fix in the fetched content, so the distroless project gives no official, documented way to inject custom CA certificates through this thread.",
+    "quote": "x509 signed by unknown authority",
+    "importance": "supporting"
+   }
+  ]
+ },
+ {
+  "publishDate": "2026-07-28",
+  "sourceQuality": "primary",
+  "claims": [
+   {
+    "claim": "The 2026-07-28 MCP spec makes the protocol stateless: it removes the initialize/initialized handshake and session identifiers, and each request carries its protocol version, client identity and capabilities in _meta.",
+    "quote": "Each request now travels on its own, carrying its protocol version, client identity, and client capabilities in `_meta`.",
+    "importance": "central"
+   },
+   {
+    "claim": "Under the 2026-07-28 spec, Tier 1 SDKs already updated for it are TypeScript, Python, Go and C#. Rust (rmcp) supports it only in beta, and the post does not mention a Java SDK.",
+    "quote": "Tier 1 SDKs (fully updated): TypeScript, Python, Go, C#; Beta support: Rust",
+    "importance": "central"
+   },
+   {
+    "claim": "Streamable HTTP requests must now include the Mcp-Method and Mcp-Name headers so gateways can route and meter them.",
+    "quote": "Streamable HTTP requests now must include `Mcp-Method` and `Mcp-Name`",
+    "importance": "supporting"
+   },
+   {
+    "claim": "Roots, Sampling, Logging and the legacy HTTP+SSE transport are deprecated, with an off-ramp of at least twelve months. Multi Round-Trip Requests (MRTR) replace server-initiated requests, which lets a server get user confirmation mid-call without keeping state.",
+    "quote": "Roots, Sampling, and Logging are deprecated",
+    "importance": "supporting"
+   },
+   {
+    "claim": "Authorization is hardened with RFC 9207 issuer validation, a move from Dynamic Client Registration to Client ID Metadata Documents, and credentials bound to their issuer. List/read responses now carry ttlMs and cacheScope for client caching.",
+    "quote": "Responses from `tools/list`, `prompts/list`, `resources/list`, and `resources/read` now carry `ttlMs` and `cacheScope`",
+    "importance": "tangential"
+   }
+  ]
+ },
+ {
+  "publishDate": "2026-08-21",
+  "sourceQuality": "blog",
+  "claims": [
+   {
+    "claim": "Five of ten official MCP SDKs are Tier 1: TypeScript, Python, C#, Go, and Rust (rmcp). Java and Ruby are Tier 2, and Swift, PHP and Kotlin are Tier 3.",
+    "quote": "Tier 1 (5 of 10): TypeScript, Python, C#, Go, and Rust (rmcp) ... Tier 2: Java, Ruby ... Tier 3: Swift, PHP, Kotlin",
+    "importance": "central"
+   },
+   {
+    "claim": "Tier 1 means complete protocol implementation, including all non-experimental features and optional capabilities such as sampling and elicitation. Tier 2 requires at least an 80% conformance-test pass rate.",
+    "quote": "Fully supported SDKs with complete protocol implementation, including all non-experimental features and optional capabilities like sampling and elicitation.",
+    "importance": "central"
+   },
+   {
+    "claim": "Rust rmcp passed 67/67 server and 50/50 client conformance tests (conformance suite 0.2.0-alpha.11). Its stable release is rmcp v3.0.1, published July 29, 2026.",
+    "quote": "server conformance 67/67, client conformance 50/50, 12/12 labels, stable rmcp 3.0.1, same-day spec tracking, and VERSIONING / DEPENDENCY_POLICY / ROADMAP published.",
+    "importance": "central"
+   },
+   {
+    "claim": "The latest MCP spec revision at the time was 2026-07-28, which is newer than 2025-11-25. The rmcp SDK tracks it the same day it ships.",
+    "quote": "No new MCP specification version shipped with this promotion. The spec remains at 2026-07-28",
+    "importance": "supporting"
+   }
+  ]
+ },
+ {
+  "claims": [
+   {
+    "claim": "The Go SDK is the official MCP SDK for Go, used for both servers and clients, and is maintained together with Google.",
+    "quote": "The official Go SDK for Model Context Protocol servers and clients. Maintained in collaboration with Google.",
+    "importance": "central"
+   },
+   {
+    "claim": "Go SDK v1.7.0 and later support the MCP spec versions 2026-07-28, 2025-11-25, 2025-06-18, 2025-03-26 and 2024-11-05.",
+    "quote": "v1.7.0+ supports: 2026-07-28, 2025-11-25, 2025-06-18, 2025-03-26, 2024-11-05",
+    "importance": "central"
+   },
+   {
+    "claim": "The SDK ships separate packages for the core MCP APIs, JSON-RPC transport, OAuth primitives and OAuth extensions.",
+    "quote": "github.com/modelcontextprotocol/go-sdk/mcp (primary APIs) ... /jsonrpc (transport implementation) ... /auth (OAuth primitives) ... /oauthex (OAuth extensions)",
+    "importance": "supporting"
+   },
+   {
+    "claim": "Tool handlers are typed, and the SDK builds each tool's input JSON schema from Go struct tags.",
+    "quote": "jsonschema:\"description\"",
+    "importance": "supporting"
+   },
+   {
+    "claim": "The SDK's license is permissive: new contributions are Apache 2.0 and existing code is MIT, so enterprises can use it.",
+    "quote": "Apache 2.0 for new contributions, with existing code under MIT",
+    "importance": "supporting"
+   }
+  ],
+  "sourceQuality": "primary"
+ },
+ {
+  "sourceQuality": "blog",
+  "claims": [
+   {
+    "claim": "For MCP servers that mainly proxy an upstream API (such as a Langfuse REST wrapper), the language choice barely affects performance. Every framework tested stayed under 3 ms p50 proxy latency, and network latency to the upstream is the real bottleneck.",
+    "quote": "For API proxy MCP servers, language doesn't matter",
+    "importance": "central"
+   },
+   {
+    "claim": "Idle memory differs a lot by language. The Rust rmcp server used about 7 MB idle RSS, Go (mcp-go) about 21 MB, and Python FastMCP about 97 MB.",
+    "quote": "Idle RSS: Rust 7MB, Go 21MB, Python 97MB",
+    "importance": "central"
+   },
+   {
+    "claim": "Go and Rust start fastest, at 33 ms and 38 ms. Under load, Go used 128 MB RSS versus 169 MB for Rust and 185 MB for Python. The Go server used the community mark3labs mcp-go 0.47.0, not the official go-sdk.",
+    "quote": "Startup time: Go 33ms (fastest), Rust 38ms ... Load RSS: Go 128MB, Rust 169MB, Python 185MB",
+    "importance": "supporting"
+   },
+   {
+    "claim": "On the echo proxy tool (p50), Rust rmcp 1.3.0 measured 0.38 ms, Go 0.50 ms, C# 0.60 ms, TypeScript SDK 1.29.0 on Node 24 0.76 ms, and Python FastMCP 3.2.0 2.25 ms, all over Streamable HTTP on localhost.",
+    "quote": "Rust: 0.38ms (fastest) ... Go: 0.50ms ... C#: 0.60ms ... TypeScript: 0.76ms ... Python: 2.25ms",
+    "importance": "supporting"
+   },
+   {
+    "claim": "For compute-heavy tools, the choice of JSON library mattered more than the language. The methodology was 1000 requests per proxy tool, 200 per compute tool, and 3 runs per framework.",
+    "quote": "1000 requests per proxy tool, 200 per compute tool ... 3 runs per framework",
+    "importance": "tangential"
+   }
+  ]
+ },
+ {
+  "sourceQuality": "blog",
+  "claims": [
+   {
+    "claim": "Stainless (a vendor-marketing guide) can generate MCP servers automatically only in TypeScript. Its Python and Go SDKs are for client-side use, so an OpenAPI-to-MCP codegen route through Stainless ties the server to TypeScript.",
+    "quote": "Stainless currently supports automatic MCP server generation only in TypeScript. Python and Go SDKs are fully supported for client-side usage and conceptual examples, but server code must be written or generated in TypeScript.",
+    "importance": "central"
+   },
+   {
+    "claim": "The Python, TypeScript and Go MCP SDKs have equal stdio transport support, but only Python and TypeScript are described as having mature HTTP/SSE server implementations. Go's HTTP/SSE support is described as mainly used on the client side.",
+    "quote": "Python and TypeScript SDKs offer mature HTTP and Server-Sent Events implementations. Go's HTTP/SSE support is efficient but typically used client-side in Go programs.",
+    "importance": "central"
+   },
+   {
+    "claim": "Stdio transport support is the same across the Python, TypeScript and Go SDKs for local and desktop clients.",
+    "quote": "All have parity for local development and desktop clients.",
+    "importance": "supporting"
+   },
+   {
+    "claim": "The page gives only qualitative performance claims, with no benchmarks, memory figures or binary-size data. It says Go's goroutines make it efficient for concurrent workloads, and that Python CPU-bound work is limited by the GIL.",
+    "quote": "Lightweight goroutines and channels make Go clients highly efficient for concurrent workloads.",
+    "importance": "supporting"
+   },
+   {
+    "claim": "The page describes all three SDKs as mature or production-ready, but gives no version, date or spec-revision evidence to support this.",
+    "quote": "Stable and production-ready client library",
+    "importance": "tangential"
+   }
+  ]
+ },
+ {
+  "sourceQuality": "primary",
+  "claims": [
+   {
+    "claim": "The Langfuse Public API authenticates with HTTP Basic Auth: the project public key is the username and the secret key is the password. Both keys come from the project settings.",
+    "quote": "The public and secret keys are available in the Langfuse project settings. ... curl -u public-key:secret-key",
+    "importance": "central"
+   },
+   {
+    "claim": "Langfuse Cloud has four regional base URLs: EU (cloud.langfuse.com), US (us.cloud.langfuse.com), Japan (jp.cloud.langfuse.com) and HIPAA US (hipaa.cloud.langfuse.com). Each one has /api/public appended.",
+    "quote": "US: https://us.cloud.langfuse.com/api/public; EU: https://cloud.langfuse.com/api/public; Japan: https://jp.cloud.langfuse.com/api/public; HIPAA US: https://hipaa.cloud.langfuse.com/api/public",
+    "importance": "central"
+   },
+   {
+    "claim": "A self-hosted Langfuse instance at v4.36.0 or later serves its own OpenAPI spec at /api/openapi.yaml and an interactive reference at /api/docs. The cloud spec is at cloud.langfuse.com/generated/api/openapi.yml. The Organization API has a separate spec.",
+    "quote": "serves its own spec at `/api/openapi.yaml` and an interactive reference at `/api/docs`",
+    "importance": "supporting"
+   },
+   {
+    "claim": "The legacy Ingestion API is deprecated and will be shut down on Langfuse Cloud on November 16, 2026. Traces should be ingested through the OpenTelemetry endpoint instead.",
+    "quote": "The legacy Ingestion API is deprecated and is sunset on Langfuse Cloud on November 16, 2026",
+    "importance": "supporting"
+   },
+   {
+    "claim": "On Langfuse Cloud, Public API requests count toward a general rate limit applied per organization. The Observations v2 and Scores v3 endpoints use cursor-based pagination.",
+    "quote": "On Langfuse Cloud, requests count toward the general per-organization API rate limit ... Pass this cursor via the `cursor` parameter in your next request to continue where you left off.",
+    "importance": "supporting"
+   }
+  ]
+ },
+ {
+  "sourceQuality": "primary",
+  "claims": [
+   {
+    "claim": "Langfuse has a native, authenticated MCP server for the Langfuse data platform. It is exposed at <host>/api/public/mcp over the Streamable HTTP transport and authenticates with Basic Auth: a base64-encoded project-scoped public-key:secret-key pair. Endpoints are listed for Cloud EU, US, Japan, HIPAA US and self-hosted instances.",
+    "quote": "Endpoint: `https://cloud.langfuse.com/api/public/mcp` - Transport: `streamableHttp` - Authentication: Basic Auth via authorization header",
+    "importance": "central"
+   },
+   {
+    "claim": "The official authenticated MCP server exposes both read and write tools by default. Restricting it to read-only is left to the client, which must configure an allowlist; the server offers no read-only mode of its own.",
+    "quote": "Both read and write tools are available by default. If you only want to use read-only tools, configure your MCP client with an allowlist to restrict access to write operations.",
+    "importance": "central"
+   },
+   {
+    "claim": "The official Langfuse MCP server is stateless, and each API key is scoped to a single project.",
+    "quote": "The Langfuse MCP server uses a stateless architecture where each API key is scoped to a specific project.",
+    "importance": "supporting"
+   },
+   {
+    "claim": "Behind a reverse proxy, a self-hosted deployment of the official MCP endpoint returns 403 unless the public Host header is preserved or LANGFUSE_MCP_ALLOWED_HOSTS lists the accepted hostnames. The docs also call HTTPS required for self-hosted instances. The page documents only an HTTP endpoint and says nothing about CA or TLS trust configuration on the client side.",
+    "quote": "make sure the public `Host` header is preserved, or set `LANGFUSE_MCP_ALLOWED_HOSTS` to a comma-separated list of exact additional hostnames or origins accepted by the MCP endpoint. Otherwise, you get a `403` error.",
+    "importance": "supporting"
+   },
+   {
+    "claim": "Where an agent can install CLI tools and run bash, Langfuse recommends its Agent Skill over the MCP server. The page also names https://mcp.reference.langfuse.com as the canonical list of MCP tools and schemas, for example listPrompts, listObservations and getObservationFilterValues.",
+    "quote": "If you are running AI agents in an environment where you can install CLI tools and run bash commands, we recommend using the Langfuse Agent Skill instead of the MCP server.",
+    "importance": "supporting"
+   }
+  ]
+ },
+ {
+  "claims": [
+   {
+    "claim": "Langfuse Cloud has four regional hosts: EU https://cloud.langfuse.com, US https://us.cloud.langfuse.com, Japan https://jp.cloud.langfuse.com, HIPAA https://hipaa.cloud.langfuse.com; an MCP host config/allowlist must cover all of them.",
+    "quote": "EU `https://cloud.langfuse.com` | US `https://us.cloud.langfuse.com` | Japan `https://jp.cloud.langfuse.com` | HIPAA `https://hipaa.cloud.langfuse.com`",
+    "importance": "central"
+   },
+   {
+    "claim": "Official Langfuse SDKs select the region through the LANGFUSE_BASE_URL environment variable or an init parameter, a naming convention the MCP server can reuse.",
+    "quote": "To connect to a specific data region using the Langfuse SDKs, you need to set the base URL environment variable or pass it during initialization",
+    "importance": "central"
+   },
+   {
+    "claim": "Regions are fully isolated, so API keys and data from one region do not work against another region's host.",
+    "quote": "All data, user accounts, and infrastructure are completely separated between the regions.",
+    "importance": "supporting"
+   },
+   {
+    "claim": "Self-hosting is offered as the alternative to Cloud regions, so the server must also accept arbitrary self-hosted base URLs.",
+    "quote": "Alternatively, you can self-host Langfuse for full control over your data and infrastructure",
+    "importance": "supporting"
+   },
+   {
+    "claim": "Secondary (failover) regions stay in the same legal jurisdiction as their primary region.",
+    "quote": "secondary regions are within the same legal jurisdiction as their primary region (EU \u2194 EU, US \u2194 US, Japan \u2194 Japan)",
+    "importance": "tangential"
+   }
+  ],
+  "sourceQuality": "primary"
+ },
+ {
+  "sourceQuality": "primary",
+  "claims": [
+   {
+    "claim": "Langfuse runs an official authenticated MCP server scoped to one project at /api/public/mcp, with endpoints for each Cloud region (EU, US, Japan, HIPAA US) plus self-hosted and local-dev hosts.",
+    "quote": "EU: https://cloud.langfuse.com/api/public/mcp; US: https://us.cloud.langfuse.com/api/public/mcp; Japan: https://jp.cloud.langfuse.com/api/public/mcp; HIPAA US: https://hipaa.cloud.langfuse.com/api/public/mcp; Self-Hosted: https://your-domain.com/api/public/mcp",
+    "importance": "central"
+   },
+   {
+    "claim": "The Cloud MCP authenticates with HTTP Basic auth built from the public key and secret key. The Docs MCP (https://langfuse.com/api/mcp) needs no authentication.",
+    "quote": "\"Authorization\": \"Basic <base64(LANGFUSE_PUBLIC_KEY:LANGFUSE_SECRET_KEY)>\" ... Unauthenticated MCP server for Langfuse documentation search and retrieval",
+    "importance": "central"
+   },
+   {
+    "claim": "The official project MCP exposes both read tools and write/destructive tools. Examples: createTextPrompt, createChatPrompt, updatePromptLabels, creating scores, full CRUD on annotation queues, and deleting model definitions. Any replacement needs to gate writes.",
+    "quote": "Prompt Management: getPrompt, getPromptUnresolved, listPrompts, createTextPrompt, createChatPrompt, updatePromptLabels ... Models: List, create, get, delete custom model definitions",
+    "importance": "central"
+   },
+   {
+    "claim": "The official MCP tool surface is not fixed: tools and fields can be added, removed, or changed, and clients are expected to discover them at runtime. Score writes are eventually consistent.",
+    "quote": "clients should \"dynamically inspect available tools and schemas rather than assuming a static interface.\" ... Score operations exhibit eventual consistency; newly created scores may not immediately appear in read operations.",
+    "importance": "supporting"
+   },
+   {
+    "claim": "The official MCP limits observation queries: a date-scoped query can cover at most 14 days, and date-scoped projections return at most 50 items. The page documents no TLS/CA configuration options. (The 14-day and 50-item limits, and the absence of TLS/CA options, come from the fetch tool's summary, not verbatim quotes.)",
+    "quote": "Date-scoped queries limit ranges to 14 days maximum; date-scoped projections support only 50-item limits.",
+    "importance": "supporting"
+   }
+  ]
+ },
+ {
+  "sourceQuality": "primary",
+  "publishDate": "2026-07-28 (spec version of the page)",
+  "claims": [
+   {
+    "claim": "The MCP spec says MCP servers MUST NOT accept tokens that were not issued specifically for them. Token passthrough to downstream APIs is explicitly forbidden, so a Langfuse MCP must use its own configured Langfuse keys and must not forward credentials supplied by the client.",
+    "quote": "MCP servers **MUST NOT** accept any tokens that were not explicitly issued for the MCP server.",
+    "importance": "central"
+   },
+   {
+    "claim": "MCP servers meant to run locally SHOULD use the stdio transport, or require an auth token (or a restricted IPC channel such as a unix socket) when they expose HTTP. This shapes the default transport and how Streamable HTTP mode is secured.",
+    "quote": "MCP servers intending for their servers to be run locally **SHOULD** implement measures to prevent unauthorized usage from malicious processes: * Use the `stdio` transport to limit access to just the MCP client * Restrict access if using an HTTP transport, such as: * Require an authorization token",
+    "importance": "central"
+   },
+   {
+    "claim": "In the 2026-07-28 spec, MCP has no protocol-level sessions. Servers that need state mint explicit handles, MUST NOT treat holding a handle as authentication, and SHOULD generate handles with a secure random number generator. This supports a stateless server design.",
+    "quote": "MCP is stateless and has no protocol-level sessions. ... MCP servers **MUST NOT** treat possession of a state handle as authentication.",
+    "importance": "supporting"
+   },
+   {
+    "claim": "SSRF guidance (written for OAuth URL fetching by clients, but applicable to validating a user-set host URL): require HTTPS except on loopback, block private, link-local and metadata IP ranges, check redirect targets, and do not hand-write IP validation.",
+    "quote": "MCP clients **SHOULD** require HTTPS for all OAuth-related URLs in production environments: * Reject `http://` URLs except for loopback addresses ... Avoid implementing IP validation manually. Attackers exploit encoding tricks (octal, hex, IPv4-mapped IPv6) that custom parsers often miss.",
+    "importance": "supporting"
+   },
+   {
+    "claim": "Least-privilege scope design: start with a minimal read-only scope set and step up for privileged operations. This backs defaulting the server to read-only and gating write tools behind explicit elevation.",
+    "quote": "Minimal initial scope set (e.g., `mcp:tools-basic`) containing only low-risk discovery/read operations * Incremental elevation via targeted `WWW-Authenticate` `scope=\"...\"` challenges when privileged operations are first attempted",
+    "importance": "supporting"
+   }
+  ]
+ },
+ {
+  "claims": [
+   {
+    "claim": "The OWASP MCP Top 10 (2025) names Token Mismanagement & Secret Exposure as MCP01. It flags hard-coded credentials, long-lived tokens, and secrets kept in model memory or protocol logs, which supports redacting logs and keeping Langfuse secret keys out of tool output.",
+    "quote": "MCP01:2025 - Token Mismanagement & Secret Exposure: \"Hard-coded credentials, long-lived tokens, and secrets stored in model memory or protocol logs can expose sensitive environments\"",
+    "importance": "central"
+   },
+   {
+    "claim": "MCP02:2025 is Privilege Escalation via Scope Creep. It warns that permissions that are temporary or loosely defined grow over time, which supports a read-only default mode and explicit gating of write tools.",
+    "quote": "MCP02:2025 - Privilege Escalation via Scope Creep: \"Temporary or loosely defined permissions within MCP servers often expand over time, granting agents excessive capabilities\"",
+    "importance": "central"
+   },
+   {
+    "claim": "The list includes Tool Poisoning (MCP03) and Prompt Injection via Contextual Payloads (MCP06). Content returned by tools, such as Langfuse trace data, is therefore an attack path and should be treated as untrusted.",
+    "quote": "MCP03:2025 - Tool Poisoning: \"Tool poisoning occurs when an adversary compromises the tools, plugins, or their outputs that an AI model depends on\"",
+    "importance": "central"
+   },
+   {
+    "claim": "MCP04:2025 covers Software Supply Chain Attacks & Dependency Tampering, which supports pinned dependencies, SBOMs, and signed images.",
+    "quote": "MCP04:2025 - Software Supply Chain Attacks & Dependency Tampering: \"A compromised dependency can alter agent behavior or introduce execution-level backdoors\"",
+    "importance": "supporting"
+   },
+   {
+    "claim": "MCP08:2025 is Lack of Audit and Telemetry. It recommends detailed logs of tool invocations with immutable audit trails, and MCP10 warns about context over-sharing across tasks and users. The project is licensed CC BY-NC-SA 4.0 and describes itself as a living document.",
+    "quote": "\"Maintain detailed logs of tool invocations, context changes, and user-agent interactions with immutable audit trails\"",
+    "importance": "supporting"
+   }
+  ],
+  "sourceQuality": "primary",
+  "publishDate": "2025"
+ },
+ {
+  "claims": [
+   {
+    "claim": "OWASP published the Top 10 for Agentic Applications for 2026 on December 9, 2025, as a downloadable guide; it is the current OWASP agentic-risk baseline an MCP server should be designed against.",
+    "quote": "Publication Date: December 9, 2025 ... Format: Downloadable whitepaper/guide",
+    "importance": "central"
+   },
+   {
+    "claim": "The framework covers critical security risks in autonomous and agentic AI systems, meaning agents that plan, act, and make decisions across workflows. That is the category of consumer an MCP server exposing Langfuse write operations serves.",
+    "quote": "provide practical, actionable guidance to help organizations secure AI agents that plan, act, and make decisions across complex workflows.",
+    "importance": "central"
+   },
+   {
+    "claim": "The framework was peer-reviewed by more than 100 industry experts, researchers and practitioners, which makes it an authoritative primary source for security requirements.",
+    "quote": "Developed through extensive collaboration with more than 100 industry experts, researchers, and practitioners.",
+    "importance": "supporting"
+   },
+   {
+    "claim": "OWASP has since published newer related GenAI guidance: an LLM Top 10 2026 (August 2026), an Agent Control Standard (September 2026) and an Industry Framework Crosswalk (September 2026). A 2026-era security design should check these as well as the LLM Top 10 2025.",
+    "quote": "Related Resources: GenAI Security Industry Framework Crosswalk (September 2026); Agent Control Standard (ACS) (September 2026); OWASP GenAI LLM Top 10 2026 (August 2026)",
+    "importance": "supporting"
+   }
+  ],
+  "sourceQuality": "primary",
+  "publishDate": "2025-12-09"
+ },
+ {
+  "publishDate": "2026-03-16",
+  "sourceQuality": "primary",
+  "claims": [
+   {
+    "claim": "MCP tool annotations are only hints, and clients must treat them as untrusted unless the server is trusted. A server therefore cannot rely on annotations alone to gate write or destructive operations.",
+    "quote": "Every property is a hint. The spec is explicit about this: annotations are not guaranteed to faithfully describe tool behavior, and clients must treat them as untrusted unless they come from a trusted server.",
+    "importance": "central"
+   },
+   {
+    "claim": "The annotation defaults are pessimistic: readOnlyHint=false, destructiveHint=true, idempotentHint=false, openWorldHint=true. A tool with no annotations is treated as potentially destructive and open-world.",
+    "quote": "a tool with no annotations is assumed to be non-read-only, potentially destructive, non-idempotent, and open-world.",
+    "importance": "central"
+   },
+   {
+    "claim": "Annotations do not protect against prompt injection that arrives through tool results or other content the model reads.",
+    "quote": "They don't make the model resist prompt injection. Annotations are static metadata on a tool definition; nothing in them tells the model to ignore malicious instructions it reads.",
+    "importance": "central"
+   },
+   {
+    "claim": "Annotations do not enforce anything. Real safety guarantees, such as preventing data exfiltration, need deterministic controls like network controls or sandboxing. This supports adding a server-side read-only mode or allowlist on top of the hints.",
+    "quote": "They aren't enforcement. If you need a guarantee that a tool can't exfiltrate data, that's a job for network controls or sandboxing, not a boolean hint.",
+    "importance": "central"
+   },
+   {
+    "claim": "The post advises server authors to set readOnlyHint: true on read-only tools, destructiveHint: false on additive operations, and openWorldHint: false on closed-domain tools.",
+    "quote": "Set readOnlyHint: true on read-only tools, destructiveHint: false on additive operations, and openWorldHint: false on closed-domain tools.",
+    "importance": "supporting"
+   }
+  ]
+ },
+ {
+  "sourceQuality": "primary",
+  "claims": [
+   {
+    "claim": "Matt Pocock's tdd skill does red-green-refactor and builds features or fixes bugs one vertical slice at a time, so TDD and vertical slices are coupled in his process.",
+    "quote": "tdd: \"Red-green-refactor loop. Builds features or fixes bugs one vertical slice at a time\"",
+    "importance": "central"
+   },
+   {
+    "claim": "The codebase-design skill describes good architecture as small interfaces, clean seams, and code that is tested through its interface. This can be encoded as a .claude/rules architecture rule.",
+    "quote": "codebase-design: \"Small interfaces, clean seams, testable through the interface\"",
+    "importance": "central"
+   },
+   {
+    "claim": "The grill-with-docs skill builds the domain model interactively and updates CONTEXT.md (ubiquitous language) and ADRs inline, so the terminology docs are maintained while the work happens rather than afterwards.",
+    "quote": "grill-with-docs: Interactive session building domain models, refining terminology, updating \"CONTEXT.md and ADRs inline\"",
+    "importance": "central"
+   },
+   {
+    "claim": "The workflow breaks plans into tracer-bullet tickets that declare their blocking edges. The implement skill then drives TDD at pre-agreed seams and runs a code review before commits.",
+    "quote": "to-tickets: Breaks plans into \"tracer-bullet tickets, each declaring its blocking edges\"; implement: drives \"/tdd at pre-agreed seams\" with code review before commits",
+    "importance": "supporting"
+   },
+   {
+    "claim": "The code-review skill reviews along two axes, Standards and Spec, and runs each axis as a parallel sub-agent.",
+    "quote": "code-review: Two-axis review (Standards and Spec) run as parallel sub-agents",
+    "importance": "supporting"
+   }
+  ]
+ },
+ {
+  "sourceQuality": "primary",
+  "publishDate": "2025-03-12 (date on the genai.owasp.org LLM Top 10 2025 listing page. The given PDF URL returned HTTP 404, so the claims come from OWASP's official GenAI Security Project pages.)",
+  "claims": [
+   {
+    "claim": "The OWASP Top 10 for LLM Applications 2025 names Excessive Agency as LLM06:2025. It gives three root causes: excessive functionality, excessive permissions and excessive autonomy. Exposing all 117 Langfuse operations as tools increases the risk from excessive functionality, which is an argument for gating write tools or offering a read-only mode.",
+    "quote": "\"An LLM-based system is often granted a degree of agency by its developer \u2013 the ability to call functions or interface with other systems via extensions.\" Root causes: \"Excessive functionality\u2014tools with unnecessary capabilities beyond what's required ... Excessive permissions\u2014broader access rights than needed ... Excessive autonomy\u2014insufficient oversight before high-impact actions execute\" (the root-cause wording is the fetch tool's summary, not verbatim)",
+    "importance": "central"
+   },
+   {
+    "claim": "For Excessive Agency, OWASP recommends these mitigations: give each extension only the functionality it needs, replace open-ended tools such as arbitrary URLs with narrower ones, run operations in the individual user's context, require human approval for significant actions, and enforce authorization in the downstream system rather than trusting the LLM's decision.",
+    "quote": "\"Restrict extensions to minimum necessary functionality ... Replace open-ended tools (shell commands, arbitrary URLs) with granular alternatives ... Execute operations within individual user contexts ... Implement human approval workflows for significant actions ... Enforce authorization checks at downstream systems, not relying on LLM decisions\" (the fetch tool's summary of the page, not verbatim)",
+    "importance": "central"
+   },
+   {
+    "claim": "OWASP LLM01:2025 (Prompt Injection) defines indirect prompt injection as instructions hidden in content that comes from external sources. For this server, that means Langfuse trace, prompt and dataset payloads it returns are untrusted input. OWASP's mitigations are to separate and clearly mark untrusted content and to require human-in-the-loop controls for privileged operations.",
+    "quote": "\"Indirect prompt injections occur when an LLM accepts input from external sources, such as websites or files.\" ... \"Implement human-in-the-loop controls for privileged operations to prevent unauthorized actions.\" ... \"Separate and clearly denote untrusted content to limit its influence on user prompts.\"",
+    "importance": "central"
+   },
+   {
+    "claim": "OWASP advises that privileged functionality use the application's own API tokens and be handled in code, not handed to the model. For this server, that supports keeping the Langfuse keys in server-side configuration and never exposing them in tool inputs or outputs.",
+    "quote": "\"Provide the application with its own API tokens for extensible functionality, and handle these functions in code rather than providing them to the model.\"",
+    "importance": "supporting"
+   },
+   {
+    "claim": "The 2025 list also includes LLM02 Sensitive Information Disclosure, LLM03 Supply Chain, LLM05 Improper Output Handling and LLM10 Unbounded Consumption. These are the categories relevant to secret redaction, pinned or signed dependencies, output validation, and output-size or rate limits. For Excessive Agency, OWASP also recommends monitoring and rate limiting to limit damage.",
+    "quote": "\"LLM02:2025 Sensitive Information Disclosure ... LLM03:2025 Supply Chain ... LLM05:2025 Improper Output Handling ... LLM10:2025 Unbounded Consumption\"; Excessive Agency page: \"monitoring activity and implementing rate-limiting can contain harm if vulnerabilities are exploited\" (the rate-limiting wording is the fetch tool's summary, not verbatim)",
+    "importance": "supporting"
+   }
+  ]
+ },
+ {
+  "sourceQuality": "primary",
+  "claims": [
+   {
+    "claim": "Rules in .claude/rules/ can be path-scoped with YAML `paths` glob frontmatter; scoped rules load only when Claude reads matching files, while rules without `paths` load unconditionally at launch \u2014 the mechanism for progressive disclosure of language/MCP rules.",
+    "quote": "Rules without a `paths` field are loaded unconditionally and apply to all files. Path-scoped rules trigger when Claude reads files matching the pattern, not on every tool use.",
+    "importance": "central"
+   },
+   {
+    "claim": "The .claude/rules/ directory is discovered recursively, with one topic per file recommended, so rules can be grouped into subdirectories.",
+    "quote": "Each file should cover one topic, with a descriptive filename like `testing.md` or `api-design.md`. All `.md` files are discovered recursively, so you can organize rules into subdirectories like `frontend/` or `backend/`",
+    "importance": "central"
+   },
+   {
+    "claim": "CLAUDE.md files should be kept under 200 lines. @imports do not save context because imported files still load at launch, so path-scoped rules are the way to reduce always-loaded context.",
+    "quote": "**Size**: target under 200 lines per CLAUDE.md file. Longer files consume more context and reduce adherence. If your instructions are growing large, use [path-scoped rules](#path-specific-rules) so instructions load only when Claude works with matching files. You can also split content into [imports](#import-additional-files) for organization, though imported files still load and enter the context window at launch.",
+    "importance": "central"
+   },
+   {
+    "claim": "CLAUDE.md and rules are advisory context, not hard enforcement. A rule such as 'no done without updated docs' needs a hook, such as PreToolUse, to be guaranteed.",
+    "quote": "Claude treats them as context, not enforced configuration. To block an action regardless of what Claude decides, use a [PreToolUse hook](/docs/en/hooks-guide) instead. The more specific and concise your instructions, the more consistently Claude follows them.",
+    "importance": "central"
+   },
+   {
+    "claim": "@path imports can recurse at most four hops, and multi-step procedures belong in skills rather than CLAUDE.md.",
+    "quote": "Imported files can recursively import other files, with a maximum depth of four hops.",
+    "importance": "supporting"
+   }
+  ]
+ },
+ {
+  "claims": [
+   {
+    "claim": "For wrapping a large API surface (dozens to hundreds of endpoints, e.g. 50+), Anthropic's build-mcp-server skill tells builders to expose a search + execute tool pair, optionally promoting the 3-5 most-used actions to dedicated tools, instead of one tool per endpoint, because full tool lists flood the context window. This applies directly to the Langfuse API's 117 operations.",
+    "quote": "When wrapping a large API (dozens to hundreds of endpoints), listing every operation as a tool floods the context window and degrades model performance. Instead, expose **two** tools: ... search_actions ... execute_action ... **Hybrid:** Promote the 3\u20135 most-used actions to dedicated tools, keep the long tail behind search/execute.",
+    "importance": "central"
+   },
+   {
+    "claim": "The skill recommends only two frameworks: the official TypeScript SDK as the default, because it has the best spec coverage and gets new features first, and FastMCP 3.x for Python. It does not recommend Go, Rust, Java or C# SDKs, though it says other frameworks exist.",
+    "quote": "Recommend one of these two. Others exist but these have the best MCP-spec coverage and Claude compatibility. | **Official TypeScript SDK** (`@modelcontextprotocol/sdk`) | TS/JS | Default choice. Best spec coverage, first to get new features. |",
+    "importance": "central"
+   },
+   {
+    "claim": "The default recommended deployment for a server that wraps a cloud API is a remote Streamable HTTP server. Local stdio launched via npx/uvx is 'not recommended for distribution', and MCPB, a local server bundled with its runtime, is the sanctioned way to ship a server that must run on the user's machine.",
+    "quote": "Local stdio (npx / uvx) \u2014 *not recommended for distribution* ... Painful to distribute: users need the right runtime, you can't push updates ... MCPB (bundled local server) A local MCP server **packaged with its runtime** so users don't need Node/Python installed. The sanctioned way to ship local servers.",
+    "importance": "central"
+   },
+   {
+    "claim": "Before submitting a connector to the Anthropic Directory, Claude's pre-submission review criteria require a split between read and write tools, required tool annotations, limits on tool names, and prompt-injection rules.",
+    "quote": "**Run the pre-submission checklist** \u2014 read/write tool split, required annotations, name limits, prompt-injection rules. \u2192 https://claude.com/docs/connectors/building/review-criteria",
+    "importance": "supporting"
+   },
+   {
+    "claim": "Elicitation (a mid-tool user confirmation) is supported in Claude Code from v2.1.76, but servers must check clientCapabilities.elicitation first and have a fallback, because the SDK throws if the client does not advertise the capability. This matters for gating write operations behind an explicit confirmation.",
+    "quote": "Host support is new (Claude Code shipped it in v2.1.76; Desktop unconfirmed). The SDK throws if the client doesn't advertise the capability. Always check `clientCapabilities.elicitation` first and have a fallback",
+    "importance": "supporting"
+   }
+  ],
+  "sourceQuality": "primary"
+ }
+]
