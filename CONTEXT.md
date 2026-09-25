@@ -20,6 +20,9 @@ _Avoid_: admin mode, unsafe mode
 
 **Workflow tool**: a dedicated read tool for a high-traffic agent workflow (e.g. trace investigation), as opposed to the generic `execute_*` tools.
 
+**Tool error**: a tool result with `isError: true` carrying a stable error code, message, hint and retryability (ADR-0008).
+_Avoid_: exception, failure response
+
 ## Langfuse connection
 
 **Host**: the base URL of a Langfuse deployment (`LANGFUSE_BASE_URL`, alias `LANGFUSE_HOST`); the API lives under `<host>/api/public`.

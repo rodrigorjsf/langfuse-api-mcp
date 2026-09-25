@@ -195,6 +195,9 @@ Releases will ship with checksums, an SBOM, cosign keyless signatures and GitHub
 
 ## Troubleshooting **(Planned)**
 
+Every failure reaches the agent as a structured error with a stable `code` (e.g. `langfuse_unauthorized`, `langfuse_rate_limited`, `tls_untrusted_certificate`), a `hint` and a `retryable` flag. The server never crashes the connection or returns secrets ([ADR-0008](docs/adr/0008-structured-tool-errors.md)).
+
+
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | `x509: certificate signed by unknown authority` | Corporate CA not in the trust pool | Set `LANGFUSE_CA_CERT`, then check the startup log for "CA sources loaded" |

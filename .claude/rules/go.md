@@ -4,15 +4,44 @@ paths:
   - "go.mod"
   - "go.sum"
 ---
-# Go conventions
+# Go conventions — safe, lean, fast end to end
 
-- Target the Go version in `go.mod`; `gofmt`/`goimports` clean; `golangci-lint run` and `go vet ./...` pass; `govulncheck ./...` clean before release.
-- Standard library first (`net/http`, `crypto/tls`, `crypto/x509`, `encoding/json`, `log/slog`). New dependency only with a one-line justification in the PR; pin via `go.sum`.
-- Packages under `internal/`; `cmd/` only wires. No package named `util`/`common`/`helpers`.
-- Accept interfaces at the seam, return concrete types; define an interface in the consumer, and only when there is a second implementation or a test seam.
-- `context.Context` is the first parameter of every I/O function; honor cancellation; set timeouts on every HTTP call.
-- Errors: wrap with `fmt.Errorf("…: %w", err)`; sentinel/typed errors for cases callers branch on; never `panic` on input.
-- Logging: `log/slog` to **stderr** only (stdout is the stdio transport); redact secrets and Authorization headers.
-- TLS: build `tls.Config.RootCAs` in code (ADR-0006); never set `InsecureSkipVerify`; `MinVersion: tls.VersionTLS12`.
-- Tests (details in `testing.md`): table-driven, `t.Parallel()` where safe, `httptest.Server` for Langfuse, no network in unit tests; `go test -race ./...` in CI on linux, macOS, windows.
-- Cross-platform: `filepath` not `path` for files; no shell-outs; no OS-specific code outside `_windows.go`/`_unix.go` files.
+Measure before optimizing; never trade a security control for speed. Error handling has its own rule: `errors.md`.
+
+## Baseline
+- Target the Go version in `go.mod` (≥ 1.27, see ADR-0006); `gofmt`/`goimports` clean; `go vet ./...`, `golangci-lint run` (with `gosec`, `staticcheck`, `errcheck`, `bodyclose`, `noctx`, `contextcheck`) and `govulncheck ./...` pass.
+- Standard library first (`net/http`, `crypto/*`, `encoding/json`, `log/slog`, `context`). Allowed extras: `golang.org/x/sync` (errgroup), `golang.org/x/time/rate`, `golang.org/x/crypto/x509roots/fallback`, test-only `go.uber.org/goleak`. Anything else needs a justification in the PR.
+- Packages under `internal/`; `cmd/` only wires. No `util`/`common`/`helpers` packages. No package-level mutable state; config and catalog are built once at startup and shared **read-only** (no locks needed).
+- Accept interfaces at a seam, return concrete types; declare an interface in the consumer only when two adapters exist.
+
+## Security
+- No `unsafe`, no cgo (`CGO_ENABLED=0`), no `os/exec`, no `reflect` on untrusted input, no `text/template`/`html/template` over payloads.
+- Randomness for secrets: `crypto/rand` only. Token comparison: `crypto/subtle.ConstantTimeCompare`.
+- TLS: `tls.Config{MinVersion: tls.VersionTLS12, RootCAs: pool}`; `InsecureSkipVerify` must never appear in the codebase (lint rule).
+- Validate every tool input before use: enums, bounds, formats, max lengths; reject unknown fields. Guard integer conversions (`limit`, page) against overflow and negative values.
+- Secrets live in a type whose `String()`/`LogValue()` return `[REDACTED]` so they cannot leak through `%v` or `slog`.
+- Fuzz (`go test -fuzz`) every parser of untrusted input: config parsing, operation-param validation, output sanitizer, error-body parsing.
+
+## Memory and I/O
+- One shared `*http.Client` with a tuned `*http.Transport` (connection reuse, `MaxIdleConnsPerHost`, `TLSHandshakeTimeout`, `ResponseHeaderTimeout`, `IdleConnTimeout`, `ForceAttemptHTTP2`); never `http.DefaultClient`, never a client per request.
+- Every response body: read through `io.LimitReader(body, maxBytes+1)` (detect overflow), decode by streaming with `json.NewDecoder`, then drain and `Close()` in a `defer`. No unbounded `io.ReadAll`.
+- Keep upstream JSON as `json.RawMessage` when the server only forwards it; unmarshal into typed structs only for fields it acts on.
+- Preallocate slices/maps when size is known; `strings.Builder`/`bytes.Buffer` for assembly; `sync.Pool` only with a benchmark proving it helps.
+- Builds: `-trimpath -ldflags="-s -w"`, static binary. Respect `GOMEMLIMIT` in containers (document it in README).
+- Performance claims need `go test -bench . -benchmem` numbers or a `pprof` profile in the PR.
+
+## Concurrency
+- Goroutines only where they buy latency (e.g. a workflow tool fetching observations and scores in parallel). Always bounded: `errgroup.WithContext` + `SetLimit`, fed by the request `context.Context`.
+- Every goroutine has an owner and an exit path through `ctx.Done()`; no fire-and-forget. Tests use `goleak.VerifyNone`.
+- Outbound calls share one `rate.Limiter` and a concurrency cap (security.md); cancellation of the MCP request cancels every in-flight Langfuse call.
+- Prefer immutable data over mutexes; if a mutex is needed, keep it unexported next to the data it guards. `go test -race ./...` on linux, macOS and windows.
+- `context.Context` is the first parameter of every I/O function; every HTTP call has a deadline.
+
+## Logging
+- `log/slog` JSON handler to **stderr** only (stdout is the stdio transport). Metadata only: tool, operationId, status, latency, bytes. Never payloads, never secrets.
+
+## Cross-platform
+- `filepath` for file paths, `os.ReadFile`/`os.ReadDir` for CA sources; OS-specific code only in `_windows.go`/`_unix.go` files; path-list variables split with `filepath.SplitList`.
+
+## Tests
+- Details in `testing.md`: table-driven, `t.Parallel()` where safe, `httptest.Server` for Langfuse, no network in unit tests.
