@@ -8,7 +8,7 @@
 
 ## Module layout
 
-Binding tree, placement table and dependency direction: `project-structure.md` (ADR-0009). Seams under test: `config.Load(env, args)` (pure), `trust` pool builder (temp CA files), `langfuse` client (`httptest.Server`), `catalog` (pure data), `server` (go-sdk in-memory client), `transport` (loopback `httptest`).
+Binding tree, placement table and dependency direction: `project-structure.md` (ADR-0009). Seams under test: `config.Load(env, file)` (pure; `config.ReadFile` does the I/O), `trust` pool builder (temp CA files), `langfuse` client (`httptest.Server`), `catalog` (pure data), `server` (go-sdk in-memory client), `transport` (loopback `httptest`).
 
 ## Executor
 

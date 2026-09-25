@@ -186,6 +186,7 @@ How the file is read:
 | Rule | Example |
 |---|---|
 | One `KEY=VALUE` per line; spaces around the key and the value are trimmed | `LANGFUSE_CA_CERT = /etc/corp/root.pem` |
+| A leading `export ` (dotenv style) is ignored | `export LANGFUSE_CA_CERT=/etc/corp/root.pem` |
 | Blank lines and lines starting with `#` are ignored | `# corporate CA` |
 | Values are taken literally: no quotes, no `${VAR}` expansion | write `C:\corp\root.pem`, not `"C:\corp\root.pem"` |
 | A variable set (non-empty) in the environment wins over the file; an empty one does not | `LANGFUSE_CA_CERT=` in the environment still uses the file's value |
@@ -213,9 +214,9 @@ Designed against the OWASP Top 10 for LLM Applications (2025 and 2026), the OWAS
 |---|---|
 | **Read-only unless you opt in** | Langfuse API keys cannot be made read-only, so the server enforces it. Without `LANGFUSE_MCP_ALLOW_WRITES=true` the write tool is not registered at all. |
 | **No data kept** | Stateless. No cache or database, no files written. |
-| **Your keys stay with the server** | Read only from your configuration. Never accepted from the agent, never logged, never included in results. |
+| **Your keys stay with the server** | Read only from the server's environment; a config file holding a key stops startup. Never accepted from the agent, never logged, never included in results. |
 | **No arbitrary requests** | The agent picks operations from a fixed catalog. It cannot pass URLs or hosts. Redirects to another host are refused. |
-| **No local system access** | No shell commands, no file access beyond reading the CA files you configured. |
+| **No local system access** | No shell commands, no file access beyond reading the CA files you configured and the optional [config file](#config-file-non-secret-settings). |
 | **Verified TLS only** | OS store + your CAs, TLS 1.2+, no skip-verify option. |
 | **Untrusted data is labelled** | Trace and prompt content returned to the agent is marked as untrusted data and cleaned of hidden Unicode characters. |
 | **Bounded** | Timeouts, rate and concurrency limits, response size caps. Langfuse's `Retry-After` is honored. |

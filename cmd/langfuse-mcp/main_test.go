@@ -262,20 +262,28 @@ func loggedSources(t *testing.T, stderr []byte) any {
 	return nil
 }
 
-func TestStartupLoadsACAFileNamedInTheConfigFileAsAnExplicitSource(t *testing.T) {
+func TestStartupLoadsCASourcesNamedInTheConfigFileAsExplicitSources(t *testing.T) {
 	t.Parallel()
 	path := writeCA(t, 2)
+	dir := filepath.Dir(writeCA(t, 1))
 
-	stderr, err := runExecutableWithConfigFile(t, "LANGFUSE_CA_CERT="+path+"\n",
+	stderr, err := runExecutableWithConfigFile(t,
+		"LANGFUSE_CA_CERT="+path+"\nLANGFUSE_CA_CERTS_PATH="+dir+"\n",
 		"LANGFUSE_CA_CERT=", "LANGFUSE_CA_CERTS_PATH=")
 	if err != nil {
 		t.Fatalf("executable did not exit 0: %v\nstderr:\n%s", err, stderr)
 	}
 
-	want := []any{map[string]any{
-		"variable": "LANGFUSE_CA_CERT", "path": path, "kind": "explicit", "origin": "config-file",
-		"certificates": float64(2),
-	}}
+	want := []any{
+		map[string]any{
+			"variable": "LANGFUSE_CA_CERT", "path": path, "kind": "explicit", "origin": "config-file",
+			"certificates": float64(2),
+		},
+		map[string]any{
+			"variable": "LANGFUSE_CA_CERTS_PATH", "path": dir, "kind": "explicit", "origin": "config-file",
+			"certificates": float64(1),
+		},
+	}
 	if got := loggedSources(t, stderr); !reflect.DeepEqual(got, want) {
 		t.Fatalf("logged sources = %v, want %v", got, want)
 	}

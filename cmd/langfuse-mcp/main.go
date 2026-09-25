@@ -1,8 +1,8 @@
 // Command langfuse-mcp is the MCP server for the Langfuse public API.
 //
 // This package only wires modules together (ADR-0009): load config (environment,
-// then the optional config file), build the
-// trust pool, then (in later milestones) the Langfuse client and a transport.
+// then the optional config file), build the trust pool, then (in later
+// milestones) the Langfuse client and a transport.
 // For now the executable builds the trust pool, logs its CA sources and exits.
 package main
 

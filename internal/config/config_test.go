@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -130,18 +131,20 @@ func TestLoadIgnoresCommentsAndBlankLinesInTheConfigFile(t *testing.T) {
 func TestLoadRefusesLangfuseKeysInTheConfigFile(t *testing.T) {
 	t.Parallel()
 
-	tests := map[string]struct{ variable, value string }{
-		"public key": {"LANGFUSE_PUBLIC_KEY", "pk-lf-1234"},
-		"secret key": {"LANGFUSE_SECRET_KEY", "sk-lf-5678"},
+	tests := map[string]struct{ line, variable, value string }{
+		"public key":           {"LANGFUSE_PUBLIC_KEY=pk-lf-1234", "LANGFUSE_PUBLIC_KEY", "pk-lf-1234"},
+		"secret key":           {"LANGFUSE_SECRET_KEY=sk-lf-5678", "LANGFUSE_SECRET_KEY", "sk-lf-5678"},
+		"dotenv export prefix": {"export LANGFUSE_SECRET_KEY=sk-lf-5678", "LANGFUSE_SECRET_KEY", "sk-lf-5678"},
+		"lower case":           {"langfuse_secret_key=sk-lf-5678", "LANGFUSE_SECRET_KEY", "sk-lf-5678"},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := config.Load(map[string]string{}, configFile(tc.variable+"="+tc.value+"\n"))
+			_, err := config.Load(map[string]string{}, configFile(tc.line+"\n"))
 
 			if err == nil {
-				t.Fatalf("Load() accepted %s in the config file", tc.variable)
+				t.Fatalf("Load() accepted %q in the config file", tc.line)
 			}
 			msg := err.Error()
 			if !strings.Contains(msg, tc.variable) || !strings.Contains(msg, "environment") {
@@ -168,24 +171,21 @@ func TestLoadReadsAConfigFileSavedByAWindowsEditor(t *testing.T) {
 }
 
 // FuzzLoadConfigFile checks that any config file content either loads or fails
-// with an error that names the file and never quotes the content.
+// with one of the two fixed error shapes, which name the file, the line number
+// and at most a key variable, so the content (possibly a secret) is never quoted.
 func FuzzLoadConfigFile(f *testing.F) {
 	f.Add("LANGFUSE_CA_CERT=/etc/corp/root.pem\n# comment\n\n")
 	f.Add("\uFEFFLANGFUSE_CA_CERTS_PATH=C:\\corp\\certs\r\n")
-	f.Add("LANGFUSE_SECRET_KEY=sk-lf-secret\n")
+	f.Add("export LANGFUSE_SECRET_KEY=sk-lf-secret\n")
 	f.Add("=value\nno equals sign")
+	path := regexp.QuoteMeta(configFile("").Path)
+	shape := regexp.MustCompile(`^config file ` + path + ` line [0-9]+: (expected KEY=VALUE|` +
+		`LANGFUSE_(PUBLIC|SECRET)_KEY is not allowed in the config file; ` +
+		`set it in the environment or in your MCP client's env block)$`)
 	f.Fuzz(func(t *testing.T, content string) {
-		file := configFile(content)
-		_, err := config.Load(map[string]string{}, file)
-		if err == nil {
-			return
-		}
-		msg := err.Error()
-		if !strings.HasPrefix(msg, "config file "+file.Path+" line ") {
-			t.Fatalf("error %q does not name the config file and a line", msg)
-		}
-		if strings.Contains(content, "sk-lf-secret") && strings.Contains(msg, "sk-lf-secret") {
-			t.Fatalf("error %q quotes a secret from the config file", msg)
+		_, err := config.Load(map[string]string{}, configFile(content))
+		if err != nil && !shape.MatchString(err.Error()) {
+			t.Fatalf("error %q is not one of the fixed shapes", err)
 		}
 	})
 }

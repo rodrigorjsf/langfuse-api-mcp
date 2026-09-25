@@ -122,10 +122,13 @@ func parseFile(file File) (map[string]string, error) {
 		if !ok || strings.TrimSpace(k) == "" {
 			return nil, fmt.Errorf("config file %s line %d: expected KEY=VALUE", file.Path, n)
 		}
-		k = strings.TrimSpace(k)
-		if k == EnvPublicKey || k == EnvSecretKey {
-			return nil, fmt.Errorf("config file %s line %d: %s is not allowed in the config file; "+
-				"set it in the environment or in your MCP client's env block", file.Path, n, k)
+		// Accept the dotenv "export KEY=VALUE" form, so it cannot hide a key either.
+		k = strings.TrimSpace(strings.TrimPrefix(k, "export "))
+		for _, secret := range []string{EnvPublicKey, EnvSecretKey} {
+			if strings.EqualFold(k, secret) { // any spelling: a key must never sit in the file
+				return nil, fmt.Errorf("config file %s line %d: %s is not allowed in the config file; "+
+					"set it in the environment or in your MCP client's env block", file.Path, n, secret)
+			}
 		}
 		settings[k] = strings.TrimSpace(v)
 	}
