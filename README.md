@@ -104,7 +104,7 @@ Trusted roots = **your operating system's certificate store + every CA from the 
 | You were given a folder of certificates | `LANGFUSE_CA_CERTS_PATH=/path/to/certs/` |
 | `NODE_EXTRA_CA_CERTS` or `REQUESTS_CA_BUNDLE` is already set on your machine for other tools | Nothing. They are picked up automatically. |
 | You are behind an HTTP proxy | Set `HTTPS_PROXY` (and `NO_PROXY` for internal hosts) |
-| Docker | Mount the file and point the variable at it (see below) |
+| Docker | Mount the file and point the variable at it (see below). The image is **Planned** (M5); the mounted-CA proof is tracked in [#28](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/28) |
 
 Get your company's root CA in PEM format:
 
