@@ -1,0 +1,18 @@
+# Dependabot: Go module requirements and GitHub Actions (pinned by SHA).
+# Dependabot does not bump the go.mod `toolchain` directive
+# (https://github.com/dependabot/dependabot-core/issues/13520, open as of 2026-09-25);
+# .github/workflows/go-toolchain.yml covers it.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "build(deps)"
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci(deps)"

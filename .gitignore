@@ -5,3 +5,8 @@
 *.key
 .codegraph/
 docs/architecture/*.visual-check.*
+
+# Go build output (`go build ./...` at the root writes the binary here)
+/langfuse-mcp
+/langfuse-mcp.exe
+/dist/

@@ -1,0 +1,147 @@
+# golangci-lint v2 configuration.
+# Encodes .claude/rules/go.md (security, body-close, context checks, no disabled TLS verification)
+# and the package dependency direction of .claude/rules/project-structure.md (ADR-0009):
+#
+#   cmd -> transport -> server -> workflows -> langfuse -> trust
+#                              \-> catalog      \-> sanitize
+#   config is imported only by cmd; only server and transport import the MCP SDK.
+#
+# Requires a golangci-lint binary built with Go >= 1.27 (the module's go version).
+version: "2"
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose # every HTTP response body is closed
+    - contextcheck # functions receive the caller's context
+    - noctx # no HTTP request or exec without a context
+    - gosec # security checks (G402 flags InsecureSkipVerify / weak TLS versions)
+    - forbidigo # explicit bans below
+    - depguard # dependency direction below
+  settings:
+    forbidigo:
+      forbid:
+        - pattern: ^InsecureSkipVerify$
+          msg: "TLS verification must never be disabled (.claude/rules/security.md, ADR-0006)"
+        - pattern: ^http\.DefaultClient$
+          msg: "use the one shared, tuned *http.Client (.claude/rules/go.md)"
+    depguard:
+      rules:
+        # Production code never shells out and never uses unsafe (.claude/rules/go.md).
+        # Tests may re-execute the test binary as a child process (spec #7, seam S2).
+        no-exec-or-unsafe:
+          files:
+            - "$all"
+            - "!$test"
+          deny:
+            - pkg: os/exec
+              desc: "no os/exec in production code (.claude/rules/go.md)"
+            - pkg: unsafe
+              desc: "no unsafe (.claude/rules/go.md)"
+        # Leaves: trust, sanitize and catalog import nothing internal (catalog may import its own spec/).
+        trust-is-a-leaf:
+          files:
+            - "**/internal/trust/**"
+          deny:
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/
+              desc: "trust is the lowest module and imports nothing internal (ADR-0009)"
+            - pkg: github.com/modelcontextprotocol/go-sdk
+              desc: "only server and transport import the MCP SDK (ADR-0009)"
+        sanitize-is-a-leaf:
+          files:
+            - "**/internal/sanitize/**"
+          deny:
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/
+              desc: "sanitize holds pure functions and imports nothing internal (ADR-0009)"
+            - pkg: github.com/modelcontextprotocol/go-sdk
+              desc: "only server and transport import the MCP SDK (ADR-0009)"
+        catalog-is-a-leaf:
+          files:
+            - "**/internal/catalog/**"
+          deny:
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/config
+              desc: "config is imported only by cmd (ADR-0009)"
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/trust
+              desc: "catalog imports nothing internal (ADR-0009)"
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse
+              desc: "catalog is pure data and imports nothing internal (ADR-0009)"
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/sanitize
+              desc: "catalog imports nothing internal (ADR-0009)"
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/workflows
+              desc: "catalog imports nothing internal (ADR-0009)"
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/server
+              desc: "catalog imports nothing internal (ADR-0009)"
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/transport
+              desc: "catalog imports nothing internal (ADR-0009)"
+            - pkg: github.com/modelcontextprotocol/go-sdk
+              desc: "only server and transport import the MCP SDK (ADR-0009)"
+        # langfuse -> trust only; it knows HTTP, not MCP.
+        langfuse-imports-only-trust:
+          files:
+            - "**/internal/langfuse/**"
+          deny:
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/config
+              desc: "config is imported only by cmd (ADR-0009)"
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog
+              desc: "langfuse must not depend on catalog (ADR-0009)"
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/sanitize
+              desc: "langfuse must not depend on sanitize (ADR-0009)"
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/workflows
+              desc: "lower modules never import higher ones (ADR-0009)"
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/server
+              desc: "lower modules never import higher ones (ADR-0009)"
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/transport
+              desc: "lower modules never import higher ones (ADR-0009)"
+            - pkg: github.com/modelcontextprotocol/go-sdk
+              desc: "langfuse knows HTTP, not MCP (ADR-0009)"
+        # workflows -> langfuse, sanitize; knows nothing about MCP registration.
+        workflows-below-server:
+          files:
+            - "**/internal/workflows/**"
+          deny:
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/config
+              desc: "config is imported only by cmd (ADR-0009)"
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog
+              desc: "workflows must not depend on catalog (ADR-0009)"
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/server
+              desc: "lower modules never import higher ones (ADR-0009)"
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/transport
+              desc: "lower modules never import higher ones (ADR-0009)"
+            - pkg: github.com/modelcontextprotocol/go-sdk
+              desc: "workflows know nothing about MCP registration (ADR-0009)"
+        # server -> workflows, catalog (and langfuse for its error types).
+        server-below-transport:
+          files:
+            - "**/internal/server/**"
+          deny:
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/config
+              desc: "config is imported only by cmd (ADR-0009)"
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/transport
+              desc: "lower modules never import higher ones (ADR-0009)"
+        transport-below-cmd:
+          files:
+            - "**/internal/transport/**"
+          deny:
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/config
+              desc: "config is imported only by cmd (ADR-0009)"
+        # config only carries values; it never reads certificates or builds modules.
+        config-imports-nothing-internal:
+          files:
+            - "**/internal/config/**"
+          deny:
+            - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/
+              desc: "config only parses values; cmd wires them into modules (ADR-0009)"
+            - pkg: github.com/modelcontextprotocol/go-sdk
+              desc: "only server and transport import the MCP SDK (ADR-0009)"
+        # cmd only wires; the MCP SDK stays behind server and transport.
+        cmd-wires-without-sdk:
+          files:
+            - "**/cmd/**"
+          deny:
+            - pkg: github.com/modelcontextprotocol/go-sdk
+              desc: "only server and transport import the MCP SDK (ADR-0009)"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
