@@ -4,8 +4,8 @@ Access date for every source below: **2026-09-25**. Primary sources only (go.dev
 pkg.go.dev, proxy.golang.org, Go source on github.com/golang/go at tag `go1.27.1`,
 golang.org/x/crypto source, modelcontextprotocol/go-sdk). Labels: `[sourced]` = quoted
 from the cited primary source; `[sourced — unverified]` = inference or a point the
-source does not state explicitly. Nothing in this document was executed as a Go
-program; no claim is `[verified]`.
+source does not state explicitly. §1–§6 were not executed; §7 records what a
+prototype executed on 2026-09-25 (`[verified]`).
 
 ## 1. Go 1.27 release status and SSL_CERT_* release-note text
 
@@ -347,3 +347,24 @@ crypto/tls behavior but was not re-read from crypto/tls source here.
 
 As a dependency, its `go 1.25.0` line only sets a minimum toolchain; it does not affect
 GODEBUG defaults of the consuming binary (only the work module's go.mod does, §2.3).
+
+## 7. Executed evidence (prototype, 2026-09-25) `[verified]`
+
+Branch `prototype/tls-trust-pool`, `internal/trust/prototype_tlsproof/` (code, verbatim output, `RESULTS.md`).
+Go **go1.27.1**, `go 1.27` in go.mod, `CGO_ENABLED=0`. Linux in containers (debian trixie, alpine 3.22,
+fedora 43) with a throwaway CA installed in the **container** store; Windows 11 build 26200 natively (via WSL
+interop), with `https://cloud.langfuse.com` as the OS-store target. macOS not run (covered by #13 CI).
+
+| Case | Linux (all 3 distros) | Windows 11 |
+|---|---|---|
+| `SSL_CERT_FILE` **or** `SSL_CERT_DIR` exported, no unset | OS roots still trusted | **platform verifier off**: public host fails `x509: certificate signed by unknown authority` |
+| **both** exported, no unset | **OS roots lost** (installed CA and public host fail) | platform verifier off |
+| capture + `os.Unsetenv` first in `main`, then `SystemCertPool()` + `AppendCertsFromPEM` | OS roots + ambient CA trusted | platform verifier + ambient CA trusted |
+| `SystemCertPool()` called once **before** the unset | same as "no unset" (roots are cached) | same as "no unset" |
+
+- On Linux each variable replaces only its own list (§3); distros ship individual certs or the bundle inside
+  the default directories, so one variable alone does not drop OS trust.
+- On Windows, `SystemCertPool()` + `AppendCertsFromPEM` keeps the platform verifier and adds the appended roots (§5).
+- Blank-importing `net/http`, `crypto/tls` and `github.com/modelcontextprotocol/go-sdk/mcp` did not load roots
+  before `main`.
+

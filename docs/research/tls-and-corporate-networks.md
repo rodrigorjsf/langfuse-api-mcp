@@ -19,7 +19,7 @@ An MCP host that launches a Node-based server without those variables fails behi
 
 ## Go details that shape the design
 
-- `SSL_CERT_FILE` / `SSL_CERT_DIR` override default locations; **since Go 1.27, setting either on macOS/Windows disables platform verification** (OS store no longer consulted) unless `GODEBUG=x509sslcertoverrideplatform=0`. `SSL_CERT_DIR` replaces, not extends. `[verified 3-0]` https://pkg.go.dev/crypto/x509 → never ask users to set them; load CAs in code.
+- `SSL_CERT_FILE` / `SSL_CERT_DIR` override default locations; **since Go 1.27, setting either on macOS/Windows disables platform verification** (OS store no longer consulted) unless `GODEBUG=x509sslcertoverrideplatform=0`. `SSL_CERT_DIR` replaces, not extends. `[verified 3-0]` https://pkg.go.dev/crypto/x509 On Linux each variable replaces only its own list, so OS trust is lost only when both are exported; on Windows (Go 1.27) either one disables the platform verifier — executed 2026-09-25, `go-tls-facts.md` §7 `[verified]`. → never ask users to set them; load CAs in code.
 - `SystemCertPool()` returns an in-memory copy; appending does not touch the host. `[sourced]`
 - `AppendCertsFromPEM` reports whether any cert parsed → fail loudly on an empty/invalid CA file. `[sourced]`
 - `SetFallbackRoots` (e.g. `golang.org/x/crypto/x509roots/fallback`) supplies roots only when no system pool exists (scratch/distroless). Callable once. `[sourced]`

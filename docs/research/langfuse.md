@@ -121,8 +121,37 @@ Sources: `[sourced]` `/docs/api-and-data-platform/features/public-api#field-grou
   - The official **MCP** `listObservations` tool is stricter: "Requests that project or filter input, output, or
     metadata must include traceId, an id filter, or a date range of at most **14 days**. Date-scoped input/output
     projections support a maximum limit of **50**." `[sourced]` `mcp.reference.langfuse.com` (raw HTML)
-  - This suggests the REST backend enforces the same guard on `io` and `metadata` projections.
-    `[sourced — unverified]`
+  - **Self-hosted 4.46.0 REST does not enforce it** (2026-09-25): io and metadata projections with no window,
+    14 d + 1 s, 15 d or 30 d windows returned 200 with rows, and `limit=51`/`1000` returned 51/all rows. `limit`
+    max is 1000 (`1001` → 400 zod `too_big`). **Langfuse Cloud is still unprobed** (#15). `[verified]` §1.7
+- **Unknown `fields` values are silently ignored** (200, default groups). `[verified]` §1.7
+
+### 1.7 Observed behavior on self-hosted v4 (prototype, 2026-09-25) `[verified]`
+
+Branch `prototype/langfuse-io-window`, `internal/workflows/prototype_iowindow/` (`RESULTS.md`, verbatim probe
+output). Upstream `docker-compose.yml` at commit `fd5c9ee18e07`, images `:4` = **4.46.0**, headless init.
+
+- **Seeding.** OTLP/HTTP JSON to `/api/public/otel/v1/traces` accepts back-dated spans (40 days) and keeps their
+  start times. Rows are queryable about 10 s after the 200.
+- **Stack cost.** Cold start to `/api/public/ready` 54 s (images cached); about 2.8 GiB RAM in total.
+- **Stale images.** A cached `:4` image was 4.16.0 and lacked `/v2/evaluators` and `/v2/evaluation-rules`. Pin
+  the image digest.
+- **`events_only` mode.** A fresh v4 deployment runs in this mode. All 12 `deprecated: true` GETs in the spec
+  return 404 `{"message":"This endpoint is not available on deployments running in Langfuse v4 events_only mode.
+  ..."}`. This matches the ADR-0004 exclusion.
+- **Version skew.** An operation the deployment does not have returns **404 with an HTML body**, like any unknown
+  route. Cloud (4.46.0) answers 401 JSON for the same routes without auth.
+- **Error body shapes vary**:
+  - `{"message","error":"<Name>Error"}`
+  - `{"message","code":"resource_not_found"}`
+  - `{"message":"Invalid request data","error":[zod issues]}`
+  - `{"error":"..."}` (organization routes)
+  - SCIM `{"schemas":[...],"detail":...}`
+- **Auth errors.**
+  - 401 bodies: `No authorization header`, and `Invalid credentials. Confirm that you've configured the correct
+    host.`
+  - A project key on org-scoped routes gets 403 `Organization-scoped API key required for this operation.`
+  - `experiments_list` and `experiment-items` return 400 without `fromStartTime`.
 
 ---
 
