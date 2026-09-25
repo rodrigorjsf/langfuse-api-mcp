@@ -181,7 +181,8 @@ func FuzzLoadConfigFile(f *testing.F) {
 	path := regexp.QuoteMeta(configFile("").Path)
 	shape := regexp.MustCompile(`^config file ` + path + ` line [0-9]+: (expected KEY=VALUE|` +
 		`LANGFUSE_(PUBLIC|SECRET)_KEY is not allowed in the config file; ` +
-		`set it in the environment or in your MCP client's env block)$`)
+		`set it in the environment or in your MCP client's env block)$|` +
+		`^config file ` + path + `: LANGFUSE_MCP_IGNORE_AMBIENT_CA: want true or false$`)
 	f.Fuzz(func(t *testing.T, content string) {
 		_, err := config.Load(map[string]string{}, configFile(content))
 		if err != nil && !shape.MatchString(err.Error()) {
@@ -211,6 +212,46 @@ func TestLoadFailsNamingTheVariableOfAnInvalidIgnoreAmbientCAFlag(t *testing.T) 
 
 	if err == nil || !strings.Contains(err.Error(), "LANGFUSE_MCP_IGNORE_AMBIENT_CA") {
 		t.Fatalf("Load error = %v, want an error naming LANGFUSE_MCP_IGNORE_AMBIENT_CA", err)
+	}
+}
+
+func TestLoadReadsTheIgnoreAmbientCAFlagFromTheConfigFile(t *testing.T) {
+	t.Parallel()
+
+	cfg := mustLoad(t, map[string]string{}, configFile("LANGFUSE_MCP_IGNORE_AMBIENT_CA=true\n"))
+
+	if !cfg.IgnoreAmbientCA {
+		t.Fatal("IgnoreAmbientCA = false, want true from the config file")
+	}
+}
+
+func TestLoadLetsTheEnvironmentIgnoreAmbientCAFlagOverrideTheConfigFile(t *testing.T) {
+	t.Parallel()
+
+	cfg := mustLoad(t,
+		map[string]string{"LANGFUSE_MCP_IGNORE_AMBIENT_CA": "false"},
+		configFile("LANGFUSE_MCP_IGNORE_AMBIENT_CA=true\n"))
+
+	if cfg.IgnoreAmbientCA {
+		t.Fatal("IgnoreAmbientCA = true, want false from the environment")
+	}
+}
+
+func TestLoadFailsNamingTheFileAndVariableOfAnInvalidIgnoreAmbientCAFlagInTheConfigFile(t *testing.T) {
+	t.Parallel()
+	file := configFile("LANGFUSE_MCP_IGNORE_AMBIENT_CA=sk-lf-typo\n")
+
+	_, err := config.Load(map[string]string{}, file)
+
+	if err == nil {
+		t.Fatal("Load() succeeded on an invalid flag in the config file")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, file.Path) || !strings.Contains(msg, "LANGFUSE_MCP_IGNORE_AMBIENT_CA") {
+		t.Fatalf("error %q does not name %s and the variable", msg, file.Path)
+	}
+	if strings.Contains(msg, "sk-lf-typo") {
+		t.Fatalf("error %q quotes the config file value", msg)
 	}
 }
 

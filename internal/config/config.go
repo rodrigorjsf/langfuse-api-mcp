@@ -110,12 +110,14 @@ func Load(env map[string]string, file File) (Config, error) {
 		CACert:      setting(EnvCACert),
 		CACertsPath: setting(EnvCACertsPath),
 	}
-	// The ignore flag is read from the environment only: a config-file value
-	// would be quoted in the parse error, and file errors never quote content.
-	if v := env[EnvIgnoreAmbientCA]; v != "" {
-		ignore, err := strconv.ParseBool(v)
+	if flag := setting(EnvIgnoreAmbientCA); flag.Value != "" {
+		ignore, err := strconv.ParseBool(flag.Value)
+		if err != nil && flag.Origin == OriginConfigFile {
+			// File errors never quote content: the file may hold a secret by mistake.
+			return Config{}, fmt.Errorf("config file %s: %s: want true or false", file.Path, EnvIgnoreAmbientCA)
+		}
 		if err != nil {
-			return Config{}, fmt.Errorf("%s=%q: want true or false", EnvIgnoreAmbientCA, v)
+			return Config{}, fmt.Errorf("%s=%q: want true or false", EnvIgnoreAmbientCA, flag.Value)
 		}
 		cfg.IgnoreAmbientCA = ignore
 	}
