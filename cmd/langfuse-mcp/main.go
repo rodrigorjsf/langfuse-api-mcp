@@ -58,7 +58,7 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (trus
 		return trust.Pool{}, err
 	}
 
-	pool, report, err := trust.Build(trustSources(cfg, slices.Concat(ambient, ambientInFile(cfg, ambient))))
+	pool, report, err := trust.Build(trustSources(cfg, ambient))
 	if err != nil {
 		return trust.Pool{}, err
 	}
@@ -82,10 +82,10 @@ func envMap(environ []string) map[string]string {
 	return env
 }
 
-// ambientInFile returns the ambient CA sources set in the config file, except
-// those whose variable the environment already set (captured): the environment
-// wins, per variable. They stay ambient sources (warn and skip, ignorable);
-// whether they should count as explicit is open in #29.
+// ambientInFile returns the CA sources named by the ambient variables set in
+// the config file, except those whose variable the environment already set
+// (captured): the environment wins, per variable. The caller makes them
+// explicit sources: spec #7 counts every config-file CA path as explicit (#29).
 //
 // This precedence would belong in config, but config.Load never sees the
 // environment's ambient values: start must capture and unset
@@ -101,9 +101,11 @@ func ambientInFile(cfg config.Config, captured []trust.Source) []trust.Source {
 	}, string(config.OriginConfigFile))
 }
 
-// trustSources maps the configured and ambient CA paths to the trust module's
-// sources. Paths from the config file are explicit sources, like those from the
-// environment.
+// trustSources maps the configured CA paths and the ambient sources captured
+// from the environment to the trust module's sources. Every path from the
+// config file is an explicit source, ambient variable names included (#29):
+// the operator wrote it there on purpose, so a broken one stops startup and
+// the ignore flag does not drop it.
 func trustSources(cfg config.Config, ambient []trust.Source) trust.Sources {
 	src := trust.Sources{Ambient: ambient, IgnoreAmbient: cfg.IgnoreAmbientCA}
 	for _, e := range []struct {
@@ -120,5 +122,6 @@ func trustSources(cfg config.Config, ambient []trust.Source) trust.Sources {
 			})
 		}
 	}
+	src.Explicit = append(src.Explicit, ambientInFile(cfg, ambient)...)
 	return src
 }

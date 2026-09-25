@@ -47,7 +47,9 @@ func TestStartupLoadsEachAmbientVariableAsAnAmbientSource(t *testing.T) {
 	}
 }
 
-func TestStartupLoadsEachAmbientVariableSetInTheConfigFileAsAnAmbientSource(t *testing.T) {
+// Spec #7 failure policy: "Config-file-provided CA paths count as explicit"
+// (#29), including the five ambient variables.
+func TestStartupLoadsEachAmbientVariableSetInTheConfigFileAsAnExplicitSource(t *testing.T) {
 	t.Parallel()
 	for _, variable := range []string{"SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"} {
 		t.Run(variable, func(t *testing.T) {
@@ -63,7 +65,7 @@ func TestStartupLoadsEachAmbientVariableSetInTheConfigFileAsAnAmbientSource(t *t
 			}
 
 			want := []any{map[string]any{
-				"variable": variable, "path": path, "kind": "ambient", "origin": "config-file",
+				"variable": variable, "path": path, "kind": "explicit", "origin": "config-file",
 				"certificates": float64(1),
 			}}
 			if got := loggedSources(t, stderr); !reflect.DeepEqual(got, want) {
@@ -96,7 +98,7 @@ func TestStartupLetsAnAmbientVariableInTheEnvironmentOverrideTheConfigFile(t *te
 	}
 }
 
-func TestStartupIgnoresAmbientVariablesInTheConfigFileWhenTheIgnoreFlagIsSet(t *testing.T) {
+func TestStartupKeepsAmbientVariablesInTheConfigFileWhenTheIgnoreFlagIsSet(t *testing.T) {
 	t.Parallel()
 	path := writeCA(t, 1)
 
@@ -106,11 +108,25 @@ func TestStartupIgnoresAmbientVariablesInTheConfigFileWhenTheIgnoreFlagIsSet(t *
 	}
 
 	want := []any{map[string]any{
-		"variable": "NODE_EXTRA_CA_CERTS", "path": path, "kind": "ambient", "origin": "config-file",
-		"certificates": float64(0), "ignored": true,
+		"variable": "NODE_EXTRA_CA_CERTS", "path": path, "kind": "explicit", "origin": "config-file",
+		"certificates": float64(1),
 	}}
 	if got := loggedSources(t, stderr); !reflect.DeepEqual(got, want) {
 		t.Fatalf("logged sources = %v, want %v", got, want)
+	}
+}
+
+func TestStartupFailsNamingAMissingAmbientFileSetInTheConfigFile(t *testing.T) {
+	t.Parallel()
+	missing := filepath.Join(t.TempDir(), "deleted.pem")
+
+	stderr, err := runExecutableWithConfigFile(t, "REQUESTS_CA_BUNDLE="+missing+"\n")
+
+	if err == nil {
+		t.Fatalf("executable exited 0 with a missing CA file in the config file; stderr:\n%s", stderr)
+	}
+	if !strings.Contains(string(stderr), "REQUESTS_CA_BUNDLE="+missing) {
+		t.Fatalf("startup error does not name REQUESTS_CA_BUNDLE and %s:\n%s", missing, stderr)
 	}
 }
 
