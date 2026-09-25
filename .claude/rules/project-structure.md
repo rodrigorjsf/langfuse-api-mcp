@@ -25,7 +25,7 @@ Packages are organized **by domain concept** (terms from `CONTEXT.md`), never by
 ├── packaging/               Dockerfile, .goreleaser.yaml inputs, mcpb/manifest.json
 ├── scripts/                 repeatable maintainer procedures (WHAT/WHY/WHEN/HOW header), e.g. setup-ci-langfuse-cloud.sh
 ├── docs/                    adr/, architecture/, research/, agents/ — no code
-└── .claude/                 rules/, hooks/, settings.json
+└── .claude/                 rules/, hooks/, handoffs/ (session handoff notes), settings.json
 ```
 
 Go tooling files that must sit at the root stay there: `go.mod`, `go.sum`, `.golangci.yml`, `.gitattributes`, `.gitignore`, `LICENSE`, `README.md`, `CONTEXT.md`, `ROADMAP.md`, `CLAUDE.md`.
