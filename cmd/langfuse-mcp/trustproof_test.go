@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -19,7 +18,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -44,6 +42,13 @@ const (
 	// (ca.pem, ca-key.pem) that CI installed into the runner's system trust
 	// store before the tests (scripts/gen-os-test-ca). Never set locally.
 	osCADirEnv = "LANGFUSE_MCP_TEST_OS_CA_DIR"
+)
+
+// Names of the probe targets: local TLS servers signed by the OS-store CA and
+// by the ambient (SSL_CERT_FILE) CA.
+const (
+	osStoreTarget = "os-store-ca"
+	ambientTarget = "ambient-ca"
 )
 
 // probeResult is what a probe child observed after startup.
@@ -118,26 +123,6 @@ func probeExecutable(t *testing.T, targets map[string]string, env ...string) pro
 		t.Fatalf("decode probe result %q: %v\nstderr:\n%s", stdout, err, stderr)
 	}
 	return result
-}
-
-// runChildOutput runs this test binary as a child with the extra environment
-// entries (later entries win) and returns its stdout, stderr and exit error.
-func runChildOutput(t *testing.T, env []string) (stdout, stderr []byte, err error) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	exe, err := os.Executable()
-	if err != nil {
-		t.Fatalf("locate test binary: %v", err)
-	}
-	cmd := exec.CommandContext(ctx, exe, "-test.run=^$") //nolint:gosec // G204: exe is this test binary, not external input
-	cmd.Env = append(append(os.Environ(), runMainEnv+"=1"), hermeticEnv...)
-	cmd.Env = append(cmd.Env, env...)
-	var out, errOut bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errOut
-	err = cmd.Run()
-	return out.Bytes(), errOut.Bytes(), err
 }
 
 // certAuthority is a CA whose key can sign server certificates.
@@ -278,14 +263,15 @@ func installedOSCA(t *testing.T) certAuthority {
 // be lost for good (on Linux only when both are exported; on macOS/Windows
 // either one alone switches the platform verifier off). The control case does
 // exactly that on purpose and must lose the OS store; it proves the guard can
-// fail on this runner.
+// fail on this runner. The probe enters through start, so the guard covers
+// start and every package init; main itself only calls start.
 func TestExecutableTrustsTheOSStoreAndAmbientCAsAtOnce(t *testing.T) {
 	t.Parallel()
 	osCA := installedOSCA(t)
 	osServer := serveTLS(t, osCA)
 	ambientCA, ambientFile := newCertAuthority(t, "ambient test CA")
 	ambientServer := serveTLS(t, ambientCA)
-	targets := map[string]string{"os-store-ca": osServer, "ambient-ca": ambientServer}
+	targets := map[string]string{osStoreTarget: osServer, ambientTarget: ambientServer}
 	both := []string{trust.EnvSSLCertFile + "=" + ambientFile, trust.EnvSSLCertDir + "=" + filepath.Dir(ambientFile)}
 
 	tests := map[string]struct {
@@ -311,11 +297,11 @@ func TestExecutableTrustsTheOSStoreAndAmbientCAsAtOnce(t *testing.T) {
 
 			got := probeExecutable(t, targets, tc.env...).Handshakes
 
-			if got["ambient-ca"] != "ok" {
-				t.Errorf("handshake with the ambient-CA server: %s, want ok", got["ambient-ca"])
+			if got[ambientTarget] != "ok" {
+				t.Errorf("handshake with the ambient-CA server: %s, want ok", got[ambientTarget])
 			}
-			if trusted := got["os-store-ca"] == "ok"; trusted != tc.wantOSCA {
-				t.Errorf("handshake with the OS-store-CA server: %s; want trusted=%v", got["os-store-ca"], tc.wantOSCA)
+			if trusted := got[osStoreTarget] == "ok"; trusted != tc.wantOSCA {
+				t.Errorf("handshake with the OS-store-CA server: %s; want trusted=%v", got[osStoreTarget], tc.wantOSCA)
 			}
 		})
 	}
