@@ -45,7 +45,7 @@ flowchart LR
 | Where it runs | Remote, inside Langfuse | Locally (binary or Docker) |
 | Custom CA / corporate proxy | Depends on your MCP client's runtime; no documented options | Explicit settings, plus automatic pickup of CA variables that are already set on your system |
 | Writes | Enabled by default; to restrict them you configure a client-side allowlist | **Off by default**. The write tool does not exist until you enable it. |
-| API coverage | Curated tool set | Every current, non-deprecated operation of the public API, except organization admin changes (creating/deleting projects, API keys, users) |
+| API coverage | Curated tool set | Every current, non-deprecated operation of the public API, except organization admin changes (creating/deleting projects, API keys, users). On self-hosted Langfuse v3, the legacy read operations (traces, observations, sessions, scores, metrics) are included instead, because v3 lacks their replacements **(Planned)** |
 
 ## How it works
 
@@ -56,7 +56,7 @@ The Langfuse API has about 100 in-scope operations. One tool per operation would
 | `search_operations` | Finds the right Langfuse operation for an intent and returns its ID, parameters and docs link | read-only | always |
 | `execute_read` | Runs a **read** operation (HTTP GET) by its ID | read-only | always |
 | `execute_write` | Runs a **write** operation (POST/PUT/PATCH/DELETE) by its ID. The description says it is intended only for changes the user explicitly requested. Deletes ask for confirmation when your client supports it. | destructive | only when writes are enabled |
-| Workflow tools, e.g. trace investigation | Ready-made read flows for the most common tasks (trace tree, errors, latency and cost spikes) | read-only | always |
+| Workflow tools, e.g. trace investigation | Ready-made read flows for the most common tasks (trace tree, errors, latency and cost spikes) | read-only | Langfuse v4 and Cloud (not on self-hosted v3) |
 
 The server keeps nothing between calls (it is stateless). It never takes a URL, host or credential from the agent. It only runs operations from its built-in catalog, against the host you configured.
 

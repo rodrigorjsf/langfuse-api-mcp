@@ -32,6 +32,11 @@ _Avoid_: endpoint, server URL
 
 **Self-hosted instance**: a Langfuse deployment run by the user's organization at its own host.
 
+**Legacy deployment**: a self-hosted instance whose Langfuse major version is below 4; it lacks the current read APIs for traces, observations, scores and metrics.
+_Avoid_: old instance, v3 mode
+
+**Legacy read operation**: a deprecated read operation that is in the catalog only when the host is a Legacy deployment.
+
 **Project key**: a public/secret key pair (`pk-lf-…`/`sk-lf-…`) scoped to one Langfuse project; it has full access to that project.
 
 **Organization key**: a key pair scoped to a Langfuse organization; required by organization operations (projects admin, memberships, SCIM).

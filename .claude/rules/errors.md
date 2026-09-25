@@ -30,6 +30,7 @@ Protocol-level JSON-RPC errors are reserved for malformed requests and unknown t
 | 401 | `langfuse_unauthorized` | check key pair and that `LANGFUSE_BASE_URL` is the key's region | no |
 | 403 | `langfuse_forbidden` | key lacks access (org key required? Enterprise feature?) | no |
 | 404 | `langfuse_not_found` | verify the id/name; use search/list operations | no |
+| 404 with HTML body (route absent on this deployment) | `operation_unavailable` | name the detected Langfuse version; never echo the body (ADR-0012) | no |
 | 409/422 | `langfuse_conflict` / `langfuse_unprocessable` | state conflict; re-read before changing | no |
 | 413 / body > cap | `response_too_large` | narrow the query: fields, time window, limit | no |
 | 429 | `langfuse_rate_limited` | wait `retryAfterSeconds`; metrics budget is small | server retries once if `Retry-After` fits the request deadline, else returns |
