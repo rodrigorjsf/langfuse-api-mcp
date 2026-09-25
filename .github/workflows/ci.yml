@@ -47,6 +47,7 @@ jobs:
       # Cross-OS trust proof (spec #7, ADR-0006): install a throwaway "OS" test CA into this
       # ephemeral runner's system trust store, so cmd/langfuse-mcp's trust test can prove the
       # executable trusts it together with an SSL_CERT_FILE CA. Never done on developer machines.
+      # macOS/Windows install steps are unverified until the first CI run (see #27).
       - name: Generate the OS test CA
         shell: bash
         run: go run ./scripts/gen-os-test-ca "$RUNNER_TEMP/os-test-ca"
