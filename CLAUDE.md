@@ -48,3 +48,5 @@ When something fails repeatedly, when User has to re-explain, or when a workarou
 - archify showcase: landscape viewBox ~1100x530; wider fails readability, taller overflows viewport.
 - Wizard `template.sh` ships CRLF; `sed -i 's/\r$//'` before `bash -n`.
 - Vertical archify edge labels overlap nodes by default; set `labelAt` at segment midpoint.
+- Langfuse compose: `docker compose pull` first; cached `:4` image silently stale.
+- Windows Go test from WSL: `GOOS=windows` build, run `.exe` directly; WSL env not inherited.
