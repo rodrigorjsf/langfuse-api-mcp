@@ -114,7 +114,7 @@
       "id": "catalog",
       "type": "database",
       "label": "internal/catalog",
-      "sublabel": "embedded spec \u2212 ADR-0004",
+      "sublabel": "spec \u2212 ADR-0004\u00b70012",
       "pos": [
         330,
         430
@@ -240,7 +240,7 @@
       "dot": "cyan",
       "title": "Decisions",
       "items": [
-        "ADR-0001 Go, 0002 tools, 0003 read-only, 0004 scope",
+        "ADR-0001 Go, 0002 tools, 0003 read-only, 0004+0012 scope",
         "ADR-0006 TLS, 0008 tool errors, 0009 package layout"
       ]
     }
