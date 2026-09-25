@@ -45,7 +45,7 @@ flowchart LR
 | Where it runs | Remote, inside Langfuse | Locally (binary or Docker) |
 | Custom CA / corporate proxy | Depends on your MCP client's runtime; no documented options | Explicit settings, plus automatic pickup of CA variables that are already set on your system |
 | Writes | Enabled by default; to restrict them you configure a client-side allowlist | **Off by default**. The write tool does not exist until you enable it. |
-| API coverage | Curated tool set | Every current, non-deprecated operation of the public API |
+| API coverage | Curated tool set | Every current, non-deprecated operation of the public API, except organization admin changes (creating/deleting projects, API keys, users) |
 
 ## How it works
 

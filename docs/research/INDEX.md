@@ -13,7 +13,6 @@ Evidence behind the ADRs. Labels: `[verified 3-0]` passed 3-vote adversarial che
 
 ## Open questions
 
-- Org-key admin operations (projects, API keys, SCIM): expose or exclude? — ADR-0004.
 - Does the REST API itself enforce the 14-day window on io/metadata projections? — `langfuse.md` §1.6.
 - Which MCP hosts pass the user's environment to stdio servers? — `tls-and-corporate-networks.md`.
 - Official Langfuse MCP/CLI TLS failure root cause (Node default trust is an unreproduced inference).
