@@ -6,17 +6,9 @@
 - Current diagram: `docs/architecture/target-architecture.json` (source) → `.html` (rendered with `archify deliver … --quality showcase`). Edit the JSON, re-validate, re-deliver; never hand-edit the HTML.
 - Accepted decisions so far: [ADR index](../../docs/adr/). Read the ADRs touching an area before changing it.
 
-## Target module shape (proposal — confirm with `archify` at the tracer-bullet slice)
+## Module layout
 
-Deep modules with small interfaces; each boundary below is a **seam** tested through its interface:
-
-| Module | Owns | Seam for tests |
-|---|---|---|
-| `cmd/langfuse-mcp` | wiring only: flags → config → server | none (thin) |
-| `internal/config` | env/flag parsing + validation (keys, host, CA, writes flag) | pure `Load(env, args)` |
-| `internal/langfuse` | HTTP client: auth, TLS pool, proxy, timeouts, retries/429, response caps | `http.RoundTripper` / `httptest.Server` |
-| `internal/catalog` | operations from `docs/langfuse-openapi.json`, scope exclusions (ADR-0004), search | pure data + functions |
-| `internal/server` | MCP tool registration, annotations, read/write split (ADR-0002/0003) | in-memory MCP client from go-sdk |
+Binding tree, placement table and dependency direction: `project-structure.md` (ADR-0009). Seams under test: `config.Load(env, args)` (pure), `trust` pool builder (temp CA files), `langfuse` client (`httptest.Server`), `catalog` (pure data), `server` (go-sdk in-memory client), `transport` (loopback `httptest`).
 
 ## Known tension to resolve at M1
 

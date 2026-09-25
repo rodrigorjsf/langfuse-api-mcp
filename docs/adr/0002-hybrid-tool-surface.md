@@ -7,6 +7,6 @@ The Langfuse public API has ~100 in-scope operations; one tool per operation wou
 
 ## Consequences
 
-- Every operation stays reachable; the catalog is generated from `docs/langfuse-openapi.json`, so "implements all endpoints" is a testable property (catalog ⊇ in-scope operations, see ADR-0004).
+- Every operation stays reachable; the catalog is generated from `internal/catalog/spec/langfuse-openapi.json`, so "implements all endpoints" is a testable property (catalog ⊇ in-scope operations, see ADR-0004).
 - Satisfies the Anthropic connector review criterion that read and write live in separate tools.
 - `execute_*` accepts operation IDs from the catalog only — never a free-form URL or path.

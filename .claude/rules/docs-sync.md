@@ -10,6 +10,7 @@ A change is **not done** until every doc it affects matches the code in the same
 | a hard-to-reverse, surprising, trade-off decision | new/superseding ADR in `docs/adr/` (format: `/domain-modeling`) |
 | scope, milestones, or a finished slice | `ROADMAP.md` |
 | a security control | `README.md` "Security model" + `.claude/rules/security.md` |
+| a new package or top-level directory | ADR + `project-structure.md` + `archify` diagram |
 | agent workflow or rule | the matching `.claude/rules/*.md` / `CLAUDE.md` |
 
 A Stop hook (`.claude/hooks/docs-sync-check.sh`) blocks ending a turn when code files changed and no doc did; satisfy it by updating docs, or state explicitly why no doc is affected.

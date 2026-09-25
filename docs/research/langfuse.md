@@ -3,7 +3,7 @@
 Research date: 2026-09-25. Primary source: the `langfuse-docs` MCP (`getLangfuseDocsPage`, `searchLangfuseDocs`,
 `getLangfuseOverview`), which serves the langfuse.com Markdown pages. Secondary sources: the raw MCP reference at
 `https://mcp.reference.langfuse.com`, fetched and grepped as HTML; two GitHub threads surfaced by docs search; and the
-local OpenAPI spec `docs/langfuse-openapi.json`, inspected with Python.
+local OpenAPI spec `internal/catalog/spec/langfuse-openapi.json`, inspected with Python.
 
 **Labels.** `[sourced]` means the claim is stated on the cited page. `[sourced — unverified]` means it is inferred,
 paraphrased from a summary, or is an absence claim. Nothing here was executed against a live Langfuse, so no claim is
@@ -375,7 +375,7 @@ server should close with explicit `ca-file`/`proxy` config. `[sourced — unveri
 
 ---
 
-## 6. OpenAPI spec (`docs/langfuse-openapi.json`) compared with the docs
+## 6. OpenAPI spec (`internal/catalog/spec/langfuse-openapi.json`) compared with the docs
 
 | # | Mismatch | Evidence |
 |---|---|---|

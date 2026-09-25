@@ -62,7 +62,7 @@ The Langfuse Public API authenticates with HTTP Basic Auth: the project public k
 
 **Evidence:** The OpenAPI spec declares only BasicAuth, with the description 'username: Langfuse Public Key - password: Langfuse Secret Key'. The public-api page lists the four regional /api/public URLs, and the data-regions table lists the same four hosts. Organization-level keys use the same Basic scheme for the org, SCIM and project admin endpoints. Votes 3-0.
 
-**Sources:** https://langfuse.com/docs/api-and-data-platform/features/public-api, https://langfuse.com/security/data-regions, docs/langfuse-openapi.json (local, components.securitySchemes.BasicAuth)
+**Sources:** https://langfuse.com/docs/api-and-data-platform/features/public-api, https://langfuse.com/security/data-regions, internal/catalog/spec/langfuse-openapi.json (local, components.securitySchemes.BasicAuth)
 
 ### F8 — confidence: high
 

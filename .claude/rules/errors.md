@@ -42,6 +42,6 @@ Writes are never retried automatically (not idempotent).
 
 ## Go mechanics
 - Internal errors: wrap with `fmt.Errorf("op %s: %w", id, err)`; one typed `*langfuse.APIError{Status, Code, Message, RetryAfter}` and sentinels for branchable cases; branch with `errors.Is/As`, never on strings.
-- Translate to the tool error shape in exactly one place (the server module); lower layers never build MCP results.
+- Translate to the tool error shape in exactly one place (`internal/server`); lower layers never build MCP results.
 - Every error path is tested: one test per row of the mapping table through the tool interface against `httptest`.
 - Never swallow an error; if intentionally ignored, `_ =` plus a `// why` comment.

@@ -3,11 +3,12 @@ paths:
   - "internal/langfuse/**"
   - "internal/catalog/**"
   - "internal/server/**"
+  - "internal/workflows/**"
   - "skills/**"
 ---
 # Langfuse API facts that bite
 
-Source of truth for API facts: `docs/research/langfuse.md` (cited). Verify anything new with the `langfuse-docs` MCP (`searchLangfuseDocs`, `getLangfuseDocsPage`) before coding it; the OpenAPI spec `docs/langfuse-openapi.json` wins over prose docs when they disagree, and record the mismatch in `docs/research/langfuse.md` §6.
+Source of truth for API facts: `docs/research/langfuse.md` (cited). Verify anything new with the `langfuse-docs` MCP (`searchLangfuseDocs`, `getLangfuseDocsPage`) before coding it; the OpenAPI spec `internal/catalog/spec/langfuse-openapi.json` wins over prose docs when they disagree, and record the mismatch in `docs/research/langfuse.md` §6.
 
 - **Auth**: Basic `pk-lf-…:sk-lf-…`. Base URL `<host>/api/public`. Config name `LANGFUSE_BASE_URL` (docs' current name), `LANGFUSE_HOST` accepted as alias. Region presets: EU `cloud.langfuse.com`, US `us.cloud.langfuse.com`, JP `jp.cloud.langfuse.com`, HIPAA `hipaa.cloud.langfuse.com`; keys only work in their own region.
 - **Org keys**: ~25 routes (projects admin, apiKeys, memberships, SCIM, blob-storage) need an organization key and are Enterprise features. Reads exposed with an org key; admin mutations (projects, API keys, memberships, SCIM users) never exposed — ADR-0004.

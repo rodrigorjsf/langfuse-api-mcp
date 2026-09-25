@@ -2,6 +2,7 @@
 paths:
   - "internal/server/**"
   - "internal/catalog/**"
+  - "internal/workflows/**"
 ---
 # MCP tool design (checklist per tool)
 

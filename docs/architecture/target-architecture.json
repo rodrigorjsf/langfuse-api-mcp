@@ -14,7 +14,7 @@
       "id": "agent",
       "type": "external",
       "label": "MCP host / agent",
-      "sublabel": "Claude Code, Cursor, \u2026",
+      "sublabel": "via internal/transport",
       "pos": [
         40,
         240
@@ -28,7 +28,7 @@
       "id": "server",
       "type": "backend",
       "label": "internal/server",
-      "sublabel": "MCP tools",
+      "sublabel": "MCP tools + workflows",
       "pos": [
         330,
         240
@@ -99,7 +99,7 @@
     {
       "id": "trust",
       "type": "security",
-      "label": "Trust pool",
+      "label": "internal/trust",
       "sublabel": "OS + explicit + ambient CA",
       "pos": [
         620,
@@ -114,7 +114,7 @@
       "id": "catalog",
       "type": "database",
       "label": "internal/catalog",
-      "sublabel": "OpenAPI minus ADR-0004",
+      "sublabel": "embedded spec \u2212 ADR-0004",
       "pos": [
         330,
         430
@@ -240,8 +240,8 @@
       "dot": "cyan",
       "title": "Decisions",
       "items": [
-        "ADR-0001 Go, 0002 tool surface, 0003 read-only",
-        "ADR-0005 local-first, 0006 TLS trust in code"
+        "ADR-0001 Go, 0002 tools, 0003 read-only, 0004 scope",
+        "ADR-0006 TLS, 0008 tool errors, 0009 package layout"
       ]
     }
   ]

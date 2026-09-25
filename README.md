@@ -190,7 +190,7 @@ Releases will ship with checksums, an SBOM, cosign keyless signatures and GitHub
 |---|---|---|
 | Language | Go | Single static binary for every OS, small memory footprint, full control of TLS trust ([ADR-0001](docs/adr/0001-go-with-official-go-sdk.md)) |
 | MCP SDK | [`modelcontextprotocol/go-sdk`](https://github.com/modelcontextprotocol/go-sdk) (official, Tier 1) | Supports MCP spec 2026-07-28 |
-| API source of truth | Langfuse OpenAPI spec ([docs/langfuse-openapi.json](docs/langfuse-openapi.json)) | The catalog is generated from it |
+| API source of truth | Langfuse OpenAPI spec ([internal/catalog/spec/langfuse-openapi.json](internal/catalog/spec/langfuse-openapi.json)) | The catalog is generated from it |
 | Container | minimal distroless/static image, pinned by digest | No shell, non-root |
 
 ## Troubleshooting **(Planned)**
