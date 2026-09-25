@@ -60,11 +60,11 @@ The Langfuse API has about 100 in-scope operations. One tool per operation would
 
 The server keeps nothing between calls (it is stateless). It never takes a URL, host or credential from the agent. It only runs operations from its built-in catalog, against the host you configured.
 
-## Configuration **(Planned)**
+## Configuration
 
 Settings come from environment variables, then from an optional [config file](#config-file-non-secret-settings) for non-secret settings. Values set **system-wide** reach the server only if your MCP client passes its environment through; several clients do not (see [Where do environment variables come from?](#where-do-environment-variables-come-from)).
 
-### Connection
+### Connection **(Planned)**
 
 | Variable | Required | Default | Meaning |
 |---|---|---|---|
@@ -88,7 +88,7 @@ Cloud regions: EU `https://cloud.langfuse.com` · US `https://us.cloud.langfuse.
 
 Trusted roots = **your operating system's certificate store + every CA from the sources above**. Nothing replaces the OS store: Go normally lets `SSL_CERT_FILE`/`SSL_CERT_DIR` *replace* it, so the server reads them as extra CA sources and removes them from its own environment before building the trust pool ([ADR-0006](docs/adr/0006-tls-trust-in-code.md)). If the OS offers no certificates at all (for example a minimal container image without a CA bundle), the server starts from the public roots bundled into the binary instead, then adds your CAs. TLS 1.2 is the minimum version. **There is no option to disable certificate verification.** This is deliberate.
 
-### Behavior
+### Behavior **(Planned)**
 
 | Variable | Default | Meaning |
 |---|---|---|
