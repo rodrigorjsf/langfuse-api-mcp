@@ -48,11 +48,11 @@ _Avoid_: dotenv, settings file
 
 ## Trust
 
-**Explicit CA source**: a CA file or directory named through this server's own variables (`LANGFUSE_CA_CERT`, `LANGFUSE_CA_CERTS_PATH`); failing to load it stops startup.
+**Explicit CA source**: a CA file or directory named through this server's own variables (`LANGFUSE_CA_CERT`, `LANGFUSE_CA_CERTS_PATH`) in the environment or the config file, or through any CA variable set in the config file; failing to load it stops startup.
 
 **Ambient CA source**: a CA file or directory named through a widely used variable already present in the environment (`SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`); failing to load it is logged and skipped.
 
-**Trust pool**: the OS certificate store plus every explicit and ambient CA source; the only roots the server trusts.
+**Trust pool**: the OS certificate store (or, when the OS offers none, the fallback roots bundled into the binary) plus every explicit and ambient CA source; the only roots the server trusts.
 _Avoid_: truststore (Java/Python term), CA bundle (when you mean the whole pool)
 
 ## Langfuse domain (as used by the API)

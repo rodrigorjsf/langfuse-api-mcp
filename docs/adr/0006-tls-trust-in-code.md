@@ -3,7 +3,7 @@ status: accepted
 ---
 # TLS trust built in code: system pool + explicit and ambient CA sources; no insecure mode
 
-The HTTP client's root pool is `x509.SystemCertPool()` plus every certificate found in these sources, appended in code with `AppendCertsFromPEM` (union — every source that is set contributes):
+The HTTP client's root pool is `x509.SystemCertPool()` plus every certificate found in these sources, parsed and appended in code (union — every source that is set contributes):
 
 | Priority | Variable | Kind | Why |
 |---|---|---|---|
@@ -13,7 +13,7 @@ The HTTP client's root pool is `x509.SystemCertPool()` plus every certificate fo
 | ambient | `NODE_EXTRA_CA_CERTS` | file | often already set for Node tooling in corporate setups |
 | ambient | `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE` | file | Python / curl conventions |
 
-All variables are read from the process environment, so a value exported system-wide (shell profile, Windows user/system env, container env) is used without being declared in the MCP host's JSON `env` block; the JSON block is only needed when the host does not pass the variable through. An **explicit** source that yields zero certificates or cannot be read is a startup error; an **ambient** source that fails is logged (stderr, path only) and skipped, so a stale unrelated variable never blocks startup. `LANGFUSE_MCP_IGNORE_AMBIENT_CA=true` disables the ambient sources. There is no "skip TLS verification" option — not even an opt-in flag. Proxies come from `HTTPS_PROXY`/`HTTP_PROXY`/`NO_PROXY` via `http.ProxyFromEnvironment`.
+All variables are read from the process environment, so a value exported system-wide (shell profile, Windows user/system env, container env) is used without being declared in the MCP host's JSON `env` block; the JSON block is only needed when the host does not pass the variable through. (Amended 2026-09-25, spec #7 review: the ambient variables may also be set in the config file of ADR-0011, for hosts that pass nothing through; set there, they count as explicit sources, as spec #7's failure policy says for every config-file CA path (decided in #29), and the environment wins per variable.) An **explicit** source that yields zero certificates or cannot be read is a startup error; an **ambient** source that fails is logged (stderr, path only) and skipped, so a stale unrelated variable never blocks startup. `LANGFUSE_MCP_IGNORE_AMBIENT_CA=true` disables the ambient sources. When the OS offers no roots at all — no system pool, or an empty one as in a minimal container image — the base roots are the public roots bundled into the binary (`golang.org/x/crypto/x509roots/fallback/bundle`, used directly rather than through the `fallback` package's `init`, so the startup log can say which base roots are in use), and the sources are appended to those. There is no "skip TLS verification" option — not even an opt-in flag. Proxies come from `HTTPS_PROXY`/`HTTP_PROXY`/`NO_PROXY` via `http.ProxyFromEnvironment`.
 
 ## Why the server removes `SSL_CERT_FILE`/`SSL_CERT_DIR` from its own environment
 

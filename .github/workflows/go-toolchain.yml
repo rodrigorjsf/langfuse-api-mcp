@@ -1,0 +1,64 @@
+# Keeps the go.mod `toolchain` directive on the latest Go 1.27.x patch release.
+# Dependabot does not bump that directive (dependabot/dependabot-core#13520), so this
+# workflow is the equivalent: weekly, it opens a pull request when a newer 1.27.x exists.
+# It never changes the `go` directive (the minor version is a deliberate decision).
+#
+# Needs the repository setting "Allow GitHub Actions to create and approve pull requests".
+# A pull request opened with GITHUB_TOKEN does not trigger CI on its own; close and reopen it
+# (or push to its branch) to run CI before merging. See #24.
+name: Go toolchain
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Find the latest go1.27.x release
+        id: latest
+        run: |
+          set -euo pipefail
+          latest=$(curl -fsSL 'https://go.dev/dl/?mode=json&include=all' \
+            | jq -r '[.[] | select(.stable) | .version | select(test("^go1\\.27\\.[0-9]+$"))] | first')
+          current=$(go mod edit -json | jq -r '.Toolchain')
+          echo "latest=$latest current=$current"
+          if [ -z "$latest" ] || [ "$latest" = "null" ]; then
+            echo "::error::no stable go1.27.x release found"; exit 1
+          fi
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+      - name: Open a pull request
+        if: steps.latest.outputs.latest != steps.latest.outputs.current
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LATEST: ${{ steps.latest.outputs.latest }}
+          CURRENT: ${{ steps.latest.outputs.current }}
+        run: |
+          set -euo pipefail
+          branch="deps/toolchain-$LATEST"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            echo "branch $branch already exists"; exit 0
+          fi
+          go mod edit -toolchain="$LATEST"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -am "build(deps): bump Go toolchain from $CURRENT to $LATEST"
+          git push origin "$branch"
+          gh pr create --head "$branch" \
+            --title "build(deps): bump Go toolchain from $CURRENT to $LATEST" \
+            --body "Automated by .github/workflows/go-toolchain.yml: the go.mod toolchain directive moves to the latest Go 1.27.x patch release."

@@ -29,6 +29,7 @@ Packages are organized **by domain concept** (terms from `CONTEXT.md`), never by
 ```
 
 Go tooling files that must sit at the root stay there: `go.mod`, `go.sum`, `.golangci.yml`, `.gitattributes`, `.gitignore`, `LICENSE`, `README.md`, `CONTEXT.md`, `ROADMAP.md`, `CLAUDE.md`.
+Platform-mandated locations are not design choices and need no ADR: `.github/` holds `workflows/` (CI, toolchain bump) and `dependabot.yml`.
 
 ## Placement table — "the logic is about…"
 
@@ -49,12 +50,13 @@ Go tooling files that must sit at the root stay there: `go.mod`, `go.sum`, `.gol
 | integration tests against a real Langfuse (`//go:build integration`) | `<package>/*_integration_test.go` | separate test tree |
 | a user skill | `skills/<name>/` | `docs/` |
 
-## Dependency direction (no cycles, enforced by `depguard` in `.golangci.yml` from M1)
+## Dependency direction (no cycles, enforced by `depguard` in `.golangci.yml`)
 
 ```text
 cmd → transport → server → workflows → langfuse → trust
                          ↘ catalog     ↘ sanitize
 config is imported only by cmd; every other package receives plain values/structs (accept dependencies, don't create them).
+server also imports langfuse (its error types, errors.md) and sanitize (wraps executor results).
 ```
 
 - Lower packages never import higher ones (`langfuse` never imports `server`; `catalog` imports nothing internal).

@@ -9,13 +9,13 @@ paths:
 Measure before optimizing; never trade a security control for speed. Error handling has its own rule: `errors.md`.
 
 ## Baseline
-- `go.mod`: `go 1.27` + `toolchain go1.27.1` (Dependabot bumps the toolchain); CI builds releases with the latest 1.27.x; `gofmt`/`goimports` clean; `go vet ./...`, `golangci-lint run` (with `gosec`, `staticcheck`, `errcheck`, `bodyclose`, `noctx`, `contextcheck`) and `govulncheck ./...` pass.
+- `go.mod`: `go 1.27` + `toolchain go1.27.1` (`.github/workflows/go-toolchain.yml` bumps it to the latest 1.27.x; Dependabot cannot); CI builds releases with the latest 1.27.x; `gofmt`/`goimports` clean; `go vet ./...`, `golangci-lint run` (with `gosec`, `staticcheck`, `errcheck`, `bodyclose`, `noctx`, `contextcheck`) and `govulncheck ./...` pass.
 - Standard library first (`net/http`, `crypto/*`, `encoding/json`, `log/slog`, `context`). Allowed extras: `golang.org/x/sync` (errgroup), `golang.org/x/time/rate`, `golang.org/x/crypto/x509roots/fallback`, test-only `go.uber.org/goleak`. Anything else needs a justification in the PR.
 - Packages under `internal/`; `cmd/` only wires. No `util`/`common`/`helpers` packages. No package-level mutable state; config and catalog are built once at startup and shared **read-only** (no locks needed).
 - Accept interfaces at a seam, return concrete types; declare an interface in the consumer only when two adapters exist.
 
 ## Security
-- No `unsafe`, no cgo (`CGO_ENABLED=0`), no `os/exec`, no `reflect` on untrusted input, no `text/template`/`html/template` over payloads.
+- No `unsafe`, no cgo (`CGO_ENABLED=0` builds; only `go test -race` needs cgo, because the race detector does), no `os/exec` in production code (tests may re-execute the test binary as a child process, spec #7 seam S2; depguard enforces both), no `reflect` on untrusted input, no `text/template`/`html/template` over payloads.
 - Randomness for secrets: `crypto/rand` only. Token comparison: `crypto/subtle.ConstantTimeCompare`.
 - TLS: `tls.Config{MinVersion: tls.VersionTLS12, RootCAs: pool}`; `InsecureSkipVerify` must never appear in the codebase (lint rule).
 - Validate every tool input before use: enums, bounds, formats, max lengths; reject unknown fields. Guard integer conversions (`limit`, page) against overflow and negative values.
