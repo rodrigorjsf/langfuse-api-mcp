@@ -10,6 +10,6 @@
 
 Binding tree, placement table and dependency direction: `project-structure.md` (ADR-0009). Seams under test: `config.Load(env, args)` (pure), `trust` pool builder (temp CA files), `langfuse` client (`httptest.Server`), `catalog` (pure data), `server` (go-sdk in-memory client), `transport` (loopback `httptest`).
 
-## Known tension to resolve at M1
+## Executor
 
-`/tdd` (mocking.md) prefers an SDK-style client — one function per external operation, no generic `Do(endpoint)`. The catalog-driven `execute_read`/`execute_write` (ADR-0002) is inherently generic. Proposed resolution: generic executor for the catalog (tested against `httptest`, no mocks), typed per-operation functions only for the dedicated workflow tools. Decide with `archify` + `/codebase-design` before the first `internal/langfuse` code.
+Catalog operations run through one generic executor; typed functions exist only for workflow tools (ADR-0010).

@@ -15,18 +15,13 @@ The HTTP client's root pool is `x509.SystemCertPool()` plus every certificate fo
 
 All variables are read from the process environment, so a value exported system-wide (shell profile, Windows user/system env, container env) is used without being declared in the MCP host's JSON `env` block; the JSON block is only needed when the host does not pass the variable through. An **explicit** source that yields zero certificates or cannot be read is a startup error; an **ambient** source that fails is logged (stderr, path only) and skipped, so a stale unrelated variable never blocks startup. `LANGFUSE_MCP_IGNORE_AMBIENT_CA=true` disables the ambient sources. There is no "skip TLS verification" option — not even an opt-in flag. Proxies come from `HTTPS_PROXY`/`HTTP_PROXY`/`NO_PROXY` via `http.ProxyFromEnvironment`.
 
-## Why not just let Go read `SSL_CERT_FILE`/`SSL_CERT_DIR`
+## Why the server removes `SSL_CERT_FILE`/`SSL_CERT_DIR` from its own environment
 
-Since Go 1.27, when either is set on macOS/Windows Go stops using the platform verifier and *replaces* the OS store with that file — a corporate user with `SSL_CERT_FILE` exported would silently lose every other OS-trusted root. The main package therefore sets `//go:debug x509sslcertoverrideplatform=0` (keep the platform verifier) and the server appends those files itself.
-
-## Linux caveat (open, issue #4)
-
-On every platform Go's `SystemCertPool()` treats `SSL_CERT_FILE`/`SSL_CERT_DIR` as an **override** of the default locations. On Linux that means a user with `SSL_CERT_FILE` exported gets only that file, not the distro bundle plus that file. The M2 slice must also load the distro default bundle paths explicitly (or build the pool before those variables are consulted) so that "OS store + CA sources" holds on Linux as well.
+Go treats both variables as an **override** of its default locations on every OS (they are independent: each replaces only its own list). On Linux an exported `SSL_CERT_FILE` replaces the distro bundle; since Go 1.27 on macOS/Windows it also disables the platform verifier. So the first thing `main` does — before any code touches `crypto/x509` — is read both variables as ambient CA sources and then `os.Unsetenv` them for this process only. Go then builds its normal system pool (distro bundle / platform verifier) and the server appends the ambient and explicit CAs. This works on every Go version and does not depend on the temporary `x509sslcertoverrideplatform` GODEBUG key (added in 1.27, planned removal in 1.31). Facts: `docs/research/go-tls-facts.md`.
 
 ## Consequences
 
-- Requires Go ≥ 1.27 in `go.mod` (the `//go:debug` key must exist in the toolchain) — `[sourced — unverified]`, confirm in the TLS slice.
+- A test must prove no code path touches `crypto/x509` before the unset, and CI proves on linux/macOS/windows that OS roots **and** appended CAs are both trusted when `SSL_CERT_FILE` was exported.
 - Whether a host passes the user's environment to a stdio server differs per harness (e.g. GUI apps on macOS do not see shell-profile exports). README documents per-harness behavior; the JSON `env` block remains the portable fallback.
 - Docker: ambient variables must be passed with `-e`, and the file mounted (`-v`).
 - The startup log lists which CA sources were loaded (paths and counts, never contents).
-- Behavior of `SystemCertPool()` + appended roots under the macOS/Windows platform verifier is covered by a CI matrix on all three OSes.

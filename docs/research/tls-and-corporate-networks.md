@@ -33,5 +33,5 @@ An MCP host that launches a Node-based server without those variables fails behi
 ## Open questions
 
 - Does `SystemCertPool()` + appended roots behave identically under the macOS/Windows platform verifier on Go 1.27? → CI matrix on all three OSes with a test CA.
-- Resolved in ADR-0006: keep the platform verifier via `//go:debug x509sslcertoverrideplatform=0` and append `SSL_CERT_FILE`/`SSL_CERT_DIR` (plus `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`) as *ambient* CA sources. Confirm the `//go:debug` key exists in the pinned toolchain.
+- Resolved in ADR-0006 (revised 2026-09-25): read then `os.Unsetenv` `SSL_CERT_FILE`/`SSL_CERT_DIR` at the top of `main` and append `SSL_CERT_FILE`/`SSL_CERT_DIR` (plus `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`) as *ambient* CA sources. Facts in [go-tls-facts.md](go-tls-facts.md).
 - Which MCP hosts pass the user's environment to stdio servers (Claude Code, Claude Desktop, Cursor, VS Code, Codex; macOS GUI launch vs terminal launch)? Needed for the README per-harness table. `[open]`

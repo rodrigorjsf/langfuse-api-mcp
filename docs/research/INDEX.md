@@ -9,11 +9,12 @@ Evidence behind the ADRs. Labels: `[verified 3-0]` passed 3-vote adversarial che
 | [langfuse.md](langfuse.md) | auth, regions, org vs project keys, rate limits, pagination, deprecations, glossary, workflows, official MCP limits, spec-vs-docs mismatches | ADR-0004, `CONTEXT.md`, M6 skills |
 | [security.md](security.md) | OWASP LLM 2025/2026, Agentic 2026, MCP Top 10 2025, MCP spec security, Anthropic review criteria, supply chain → control mapping | ADR-0003, `.claude/rules/security.md` |
 | [engineering-process.md](engineering-process.md) | Matt Pocock skill vocabulary, workflow, doc rules | `.claude/rules/engineering-process.md`, `testing.md` |
+| [go-tls-facts.md](go-tls-facts.md) | Go 1.27 status, `SSL_CERT_*` override semantics per OS, Linux default cert paths, fallback roots, go-sdk min Go | ADR-0006 |
+| [mcp-hosts-env.md](mcp-hosts-env.md) | how each MCP host (Claude Code/Desktop, Cursor, VS Code, Codex, Gemini, Windsurf, Docker) passes env to a stdio server; which filter it | install docs, config guidance |
 | [2026-09-25-deep-research-run1.md](2026-09-25-deep-research-run1.md) | raw verified findings + all extracted claims of the first deep-research run | all of the above |
 
 ## Open questions
 
 - Does the REST API itself enforce the 14-day window on io/metadata projections? — `langfuse.md` §1.6.
-- Which MCP hosts pass the user's environment to stdio servers? — `tls-and-corporate-networks.md`.
+- Which MCP hosts pass the user's environment to stdio servers? — partly answered in `mcp-hosts-env.md`; Claude Code, Cursor, Windsurf still undocumented.
 - Official Langfuse MCP/CLI TLS failure root cause (Node default trust is an unreproduced inference).
-- Anthropic Directory "API ownership" rule vs a third-party Langfuse wrapper — `security.md`.

@@ -26,7 +26,7 @@ flowchart LR
 | **M4 Gated writes** | `execute_write` registered only with `LANGFUSE_MCP_ALLOW_WRITES=true`; elicitation for DELETE | tests prove absence when disabled; annotations per op | planned |
 | **M5 Distribution & supply chain** | goreleaser binaries (5 targets), minimal Docker image, MCPB bundle, SBOM, signatures, provenance, `govulncheck` gate | a fresh machine installs via each channel following only the README | planned |
 | **M6 User skills** | installable skills (authored with `/writing-great-skills`) that teach agents to use this MCP well | see below | planned |
-| **M7 1.0** | security review against OWASP mapping, README complete, public repo | `docs/research/security.md` mapping all green | planned |
+| **M7 1.0** | security review against OWASP mapping, README complete, public repo; reassess Anthropic Directory listing (issue #6) | `docs/research/security.md` mapping all green | planned |
 
 ## M6 — user-facing skills (draft)
 

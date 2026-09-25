@@ -16,6 +16,7 @@ Source of truth for API facts: `docs/research/langfuse.md` (cited). Verify anyth
 - **Rate limits** (Cloud, per org, fixed windows): honor `Retry-After` on 429, never blind-retry. Metrics v2 is 100/**day** on Hobby → budget and cache metric calls. General API 30/min on Hobby → frugal tree walks. 5 MB request/response cap. Self-hosted: no limits.
 - **Pagination**: cursor (`meta.cursor`) for `v2/observations`, `v3/scores`, experiments, experiment-items, v2 evaluators/rules; page/limit elsewhere; metrics v2 uses `config.row_limit` (≤1000). Scores v3 `limit` > 100 → 400.
 - **Observations v2**: sorted by `startTime` desc, no `orderBy`; no get-by-id (filter on `id`); `filter` JSON overrides fixed params; `fields` groups default `core,basic` — unrequested fields are **absent**; prices are strings; io/metadata projections likely need traceId/id or ≤14-day window (≤50 rows).
+- **Time windows (decided)**: workflow tools default to the last 24h and cap at 14 days when requesting `io`/`metadata` without `traceId`/id filter; `execute_read` passes queries through unchanged and maps any upstream rejection to a tool error with a hint. Whether REST enforces 14 days itself: issue #2.
 - **Units**: Metrics v2 latency in **ms**; Observations v2 latency fields/filters in **seconds**.
 - **Scores v3**: `traceId`/`sessionId`/`experimentId` mutually exclusive; `observationId` requires `traceId`; no `userId` filter.
 - **Prompts**: fetch by label *or* version, not both (400); missing label → 404 (no fallback); promote = PATCH `newLabels`; protected labels may refuse.

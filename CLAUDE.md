@@ -7,7 +7,7 @@ Stateless Go MCP server exposing the Langfuse public API (Cloud + self-hosted) w
 | Need | Go to |
 |---|---|
 | domain terms (use them verbatim) | `CONTEXT.md` |
-| why things are the way they are | `docs/adr/` (0001 Go · 0002 tool surface · 0003 read-only default · 0004 scope · 0005 local-first · 0006 TLS · 0007 license · 0008 tool errors · 0009 package layout) |
+| why things are the way they are | `docs/adr/` (0001 Go · 0002 tool surface · 0003 read-only default · 0004 scope · 0005 local-first · 0006 TLS · 0007 license · 0008 tool errors · 0009 package layout · 0010 generic executor) |
 | architecture diagram (archify) | `docs/architecture/target-architecture.html` |
 | evidence behind decisions | `docs/research/INDEX.md` |
 | milestones | `ROADMAP.md` |
