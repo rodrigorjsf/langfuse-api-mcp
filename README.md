@@ -235,9 +235,13 @@ Start with [CLAUDE.md](CLAUDE.md) (agent and contributor index), [CONTEXT.md](CO
 
 ## References
 
-- Langfuse docs: https://langfuse.com/docs · API reference: https://api.reference.langfuse.com · Data regions: https://langfuse.com/security/data-regions
-- MCP specification: https://modelcontextprotocol.io · Go SDK: https://github.com/modelcontextprotocol/go-sdk
-- OWASP GenAI Security Project: https://genai.owasp.org · OWASP MCP Top 10: https://github.com/OWASP/www-project-mcp-top-10
+- Langfuse docs: https://langfuse.com/docs
+- API reference: https://api.reference.langfuse.com
+- Data regions: https://langfuse.com/security/data-regions
+- MCP specification: https://modelcontextprotocol.io
+- Go SDK: https://github.com/modelcontextprotocol/go-sdk
+- OWASP GenAI Security Project: https://genai.owasp.org
+- OWASP MCP Top 10: https://github.com/OWASP/www-project-mcp-top-10
 - Node.js enterprise network configuration (why Node-based tools fail on corporate CAs): https://nodejs.org/learn/http/enterprise-network-configuration
 
 ## License
