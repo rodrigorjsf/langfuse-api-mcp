@@ -24,6 +24,9 @@ type Source struct {
 	// Directory is true when Path is a directory: every regular file directly
 	// inside it (not in subdirectories) that holds PEM certificates is loaded.
 	Directory bool
+	// Origin says where the setting was read, e.g. "environment" or
+	// "config-file"; it is only reported, never interpreted.
+	Origin string
 }
 
 // Sources describes every CA source to add to the OS certificate store.
@@ -76,6 +79,7 @@ type SourceReport struct {
 	Variable     string `json:"variable"`
 	Path         string `json:"path"`
 	Kind         Kind   `json:"kind"`
+	Origin       string `json:"origin"`
 	Certificates int    `json:"certificates"`
 }
 
@@ -96,7 +100,7 @@ func Build(src Sources) (Pool, Report, error) {
 			roots.AddCert(c)
 		}
 		report.Sources = append(report.Sources, SourceReport{
-			Variable: s.Variable, Path: s.Path, Kind: KindExplicit, Certificates: len(certs),
+			Variable: s.Variable, Path: s.Path, Kind: KindExplicit, Origin: s.Origin, Certificates: len(certs),
 		})
 	}
 	return Pool{roots: roots}, report, nil

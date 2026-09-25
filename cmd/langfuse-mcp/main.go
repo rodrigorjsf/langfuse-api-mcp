@@ -1,6 +1,7 @@
 // Command langfuse-mcp is the MCP server for the Langfuse public API.
 //
-// This package only wires modules together (ADR-0009): load config, build the
+// This package only wires modules together (ADR-0009): load config (environment,
+// then the optional config file), build the
 // trust pool, then (in later milestones) the Langfuse client and a transport.
 // For now the executable builds the trust pool, logs its CA sources and exits.
 package main
@@ -26,7 +27,16 @@ func main() {
 // whether startup succeeded; on failure it has logged one error line.
 func run(environ []string, stderr io.Writer) bool {
 	log := slog.New(slog.NewJSONHandler(stderr, nil))
-	cfg := config.Load(envMap(environ))
+	file, err := config.ReadFile()
+	if err != nil {
+		log.Error("startup failed", "error", err.Error())
+		return false
+	}
+	cfg, err := config.Load(envMap(environ), file)
+	if err != nil {
+		log.Error("startup failed", "error", err.Error())
+		return false
+	}
 
 	_, report, err := trust.Build(trustSources(cfg))
 	if err != nil {
@@ -49,14 +59,18 @@ func envMap(environ []string) map[string]string {
 }
 
 // trustSources maps the configured CA paths to the trust module's sources.
+// Paths from the config file are explicit sources, like those from the environment.
 func trustSources(cfg config.Config) trust.Sources {
 	var src trust.Sources
-	if cfg.CACert != "" {
-		src.Explicit = append(src.Explicit, trust.Source{Variable: config.EnvCACert, Path: cfg.CACert})
-	}
-	if cfg.CACertsPath != "" {
+	if cfg.CACert.Value != "" {
 		src.Explicit = append(src.Explicit, trust.Source{
-			Variable: config.EnvCACertsPath, Path: cfg.CACertsPath, Directory: true,
+			Variable: config.EnvCACert, Path: cfg.CACert.Value, Origin: string(cfg.CACert.Origin),
+		})
+	}
+	if cfg.CACertsPath.Value != "" {
+		src.Explicit = append(src.Explicit, trust.Source{
+			Variable: config.EnvCACertsPath, Path: cfg.CACertsPath.Value, Directory: true,
+			Origin: string(cfg.CACertsPath.Origin),
 		})
 	}
 	return src

@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -36,8 +37,50 @@ func TestMain(m *testing.M) {
 }
 
 // runExecutable runs the real main() in a child process with the extra
-// environment entries and returns its stderr and exit error.
+// environment entries and returns its stderr and exit error. The child's OS
+// user config location is an empty temp directory, so no config file exists
+// and the developer's own config file never leaks into a test.
 func runExecutable(t *testing.T, env ...string) ([]byte, error) {
+	t.Helper()
+	configEnv, _ := userConfigLocation(t)
+	return runChild(t, append(configEnv, env...))
+}
+
+// runExecutableWithConfigFile is runExecutable with a config file holding
+// content at the documented location for the running OS.
+func runExecutableWithConfigFile(t *testing.T, content string, env ...string) ([]byte, error) {
+	t.Helper()
+	configEnv, path := userConfigLocation(t)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("create config directory: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write config file: %v", err)
+	}
+	return runChild(t, append(configEnv, env...))
+}
+
+// userConfigLocation points the child's OS user config location at a fresh
+// temp directory. It returns the environment entries doing so and the path
+// where README documents the config file for the running OS.
+func userConfigLocation(t *testing.T) (env []string, configFile string) {
+	t.Helper()
+	home := t.TempDir()
+	switch runtime.GOOS {
+	case "windows": // %AppData%\langfuse-mcp\config.env
+		appData := filepath.Join(home, "AppData", "Roaming")
+		return []string{"AppData=" + appData}, filepath.Join(appData, "langfuse-mcp", "config.env")
+	case "darwin": // ~/Library/Application Support/langfuse-mcp/config.env
+		return []string{"HOME=" + home}, filepath.Join(home, "Library", "Application Support", "langfuse-mcp", "config.env")
+	default: // $XDG_CONFIG_HOME/langfuse-mcp/config.env
+		xdg := filepath.Join(home, "xdg-config")
+		return []string{"HOME=" + home, "XDG_CONFIG_HOME=" + xdg}, filepath.Join(xdg, "langfuse-mcp", "config.env")
+	}
+}
+
+// runChild runs the real main() in a child process with the extra environment
+// entries and returns its stderr and exit error.
+func runChild(t *testing.T, env []string) ([]byte, error) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -110,20 +153,72 @@ func TestExecutableStartsAndExitsCleanly(t *testing.T) {
 
 func TestStartupFailsNamingTheVariableAndPathOfAMissingExplicitCAFile(t *testing.T) {
 	t.Parallel()
-	missing := filepath.Join(t.TempDir(), "missing.pem")
 
-	stderr, err := runExecutable(t, "LANGFUSE_CA_CERT="+missing, "LANGFUSE_CA_CERTS_PATH=")
-
-	if err == nil {
-		t.Fatalf("executable exited 0 with a missing explicit CA file; stderr:\n%s", stderr)
+	// A CA path from the config file is an explicit source, exactly like the variable.
+	tests := map[string]func(t *testing.T, missing string) ([]byte, error){
+		"environment": func(t *testing.T, missing string) ([]byte, error) {
+			return runExecutable(t, "LANGFUSE_CA_CERT="+missing, "LANGFUSE_CA_CERTS_PATH=")
+		},
+		"config file": func(t *testing.T, missing string) ([]byte, error) {
+			return runExecutableWithConfigFile(t, "LANGFUSE_CA_CERT="+missing+"\n",
+				"LANGFUSE_CA_CERT=", "LANGFUSE_CA_CERTS_PATH=")
+		},
 	}
+	for name, run := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			missing := filepath.Join(t.TempDir(), "missing.pem")
+
+			stderr, err := run(t, missing)
+
+			if err == nil {
+				t.Fatalf("executable exited 0 with a missing explicit CA file; stderr:\n%s", stderr)
+			}
+			msg := startupError(t, stderr)
+			if !strings.Contains(msg, "LANGFUSE_CA_CERT") || !strings.Contains(msg, missing) {
+				t.Fatalf("startup error %q does not name LANGFUSE_CA_CERT and %s", msg, missing)
+			}
+		})
+	}
+}
+
+// startupError returns the error of the single log line a failed startup writes.
+func startupError(t *testing.T, stderr []byte) string {
+	t.Helper()
 	lines := logLines(t, stderr)
 	if len(lines) != 1 {
 		t.Fatalf("want exactly one startup error line, got %d:\n%s", len(lines), stderr)
 	}
 	msg, _ := lines[0]["error"].(string)
-	if !strings.Contains(msg, "LANGFUSE_CA_CERT") || !strings.Contains(msg, missing) {
-		t.Fatalf("startup error %q does not name LANGFUSE_CA_CERT and %s", msg, missing)
+	return msg
+}
+
+func TestStartupRefusesAConfigFileHoldingALangfuseKey(t *testing.T) {
+	t.Parallel()
+
+	stderr, err := runExecutableWithConfigFile(t, "LANGFUSE_SECRET_KEY=sk-lf-do-not-log\n")
+
+	if err == nil {
+		t.Fatalf("executable exited 0 with a key in the config file; stderr:\n%s", stderr)
+	}
+	if bytes.Contains(stderr, []byte("sk-lf-do-not-log")) {
+		t.Fatalf("startup log leaks the key value:\n%s", stderr)
+	}
+	if msg := startupError(t, stderr); !strings.Contains(msg, "LANGFUSE_SECRET_KEY") {
+		t.Fatalf("startup error %q does not name LANGFUSE_SECRET_KEY", msg)
+	}
+}
+
+func TestStartupFailsNamingTheLineNumberOfAMalformedConfigFileLine(t *testing.T) {
+	t.Parallel()
+
+	stderr, err := runExecutableWithConfigFile(t, "# corporate settings\nnot a setting\n")
+
+	if err == nil {
+		t.Fatalf("executable exited 0 with a malformed config file; stderr:\n%s", stderr)
+	}
+	if msg := startupError(t, stderr); !strings.Contains(msg, "config.env line 2") {
+		t.Fatalf("startup error %q does not name config.env line 2", msg)
 	}
 }
 
@@ -144,7 +239,8 @@ func TestStartupLogListsTheCASourcesWithTheirCertificateCounts(t *testing.T) {
 			continue
 		}
 		want := []any{map[string]any{
-			"variable": "LANGFUSE_CA_CERT", "path": path, "kind": "explicit", "certificates": float64(2),
+			"variable": "LANGFUSE_CA_CERT", "path": path, "kind": "explicit", "origin": "environment",
+			"certificates": float64(2),
 		}}
 		if !reflect.DeepEqual(line["sources"], want) {
 			t.Fatalf("logged sources = %v, want %v", line["sources"], want)
@@ -152,4 +248,35 @@ func TestStartupLogListsTheCASourcesWithTheirCertificateCounts(t *testing.T) {
 		return
 	}
 	t.Fatalf("no \"CA sources loaded\" line in the startup log:\n%s", stderr)
+}
+
+// loggedSources returns the "sources" of the "CA sources loaded" log line.
+func loggedSources(t *testing.T, stderr []byte) any {
+	t.Helper()
+	for _, line := range logLines(t, stderr) {
+		if line["msg"] == "CA sources loaded" {
+			return line["sources"]
+		}
+	}
+	t.Fatalf("no \"CA sources loaded\" line in the startup log:\n%s", stderr)
+	return nil
+}
+
+func TestStartupLoadsACAFileNamedInTheConfigFileAsAnExplicitSource(t *testing.T) {
+	t.Parallel()
+	path := writeCA(t, 2)
+
+	stderr, err := runExecutableWithConfigFile(t, "LANGFUSE_CA_CERT="+path+"\n",
+		"LANGFUSE_CA_CERT=", "LANGFUSE_CA_CERTS_PATH=")
+	if err != nil {
+		t.Fatalf("executable did not exit 0: %v\nstderr:\n%s", err, stderr)
+	}
+
+	want := []any{map[string]any{
+		"variable": "LANGFUSE_CA_CERT", "path": path, "kind": "explicit", "origin": "config-file",
+		"certificates": float64(2),
+	}}
+	if got := loggedSources(t, stderr); !reflect.DeepEqual(got, want) {
+		t.Fatalf("logged sources = %v, want %v", got, want)
+	}
 }

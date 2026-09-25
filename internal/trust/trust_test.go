@@ -135,7 +135,7 @@ func TestBuildFailsNamingTheVariableAndPathOfABrokenExplicitSource(t *testing.T)
 	}
 }
 
-func TestReportListsEachExplicitSourceWithItsCertificateCount(t *testing.T) {
+func TestReportListsEachExplicitSourceWithItsOriginAndCertificateCount(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	first, second, third := newTestCA(t, "first"), newTestCA(t, "second"), newTestCA(t, "third")
@@ -147,16 +147,16 @@ func TestReportListsEachExplicitSourceWithItsCertificateCount(t *testing.T) {
 	writeFile(t, certsDir, "third.pem", third.pem)
 
 	_, report, err := trust.Build(trust.Sources{Explicit: []trust.Source{
-		{Variable: "LANGFUSE_CA_CERT", Path: bundle},
-		{Variable: "LANGFUSE_CA_CERTS_PATH", Path: certsDir, Directory: true},
+		{Variable: "LANGFUSE_CA_CERT", Path: bundle, Origin: "config-file"},
+		{Variable: "LANGFUSE_CA_CERTS_PATH", Path: certsDir, Directory: true, Origin: "environment"},
 	}})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 
 	want := []trust.SourceReport{
-		{Variable: "LANGFUSE_CA_CERT", Path: bundle, Kind: trust.KindExplicit, Certificates: 2},
-		{Variable: "LANGFUSE_CA_CERTS_PATH", Path: certsDir, Kind: trust.KindExplicit, Certificates: 1},
+		{Variable: "LANGFUSE_CA_CERT", Path: bundle, Kind: trust.KindExplicit, Origin: "config-file", Certificates: 2},
+		{Variable: "LANGFUSE_CA_CERTS_PATH", Path: certsDir, Kind: trust.KindExplicit, Origin: "environment", Certificates: 1},
 	}
 	if !slices.Equal(report.Sources, want) {
 		t.Fatalf("report sources = %+v, want %+v", report.Sources, want)
