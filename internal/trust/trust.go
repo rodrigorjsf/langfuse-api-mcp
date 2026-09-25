@@ -104,7 +104,7 @@ func Build(src Sources) (Pool, Report, error) {
 	roots, origin := baseRoots()
 	ambient := src.Ambient
 	if src.IgnoreAmbient {
-		ambient = nil
+		ambient = nil // ignored sources are not reported yet; see #25
 	}
 	report := Report{Roots: origin, Sources: make([]SourceReport, 0, len(src.Explicit)+len(ambient))}
 	for _, s := range src.Explicit {
