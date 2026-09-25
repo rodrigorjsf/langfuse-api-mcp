@@ -22,8 +22,9 @@ const (
 	EnvCurlCABundle = "CURL_CA_BUNDLE"
 )
 
-// originEnvironment is the Origin of every ambient source: they are always
-// read from the process environment.
+// originEnvironment is the Origin of the ambient sources CaptureAmbient reads
+// from the process environment; callers name other origins through
+// AmbientSources.
 const originEnvironment = "environment"
 
 // CaptureAmbient reads the ambient CA source variables from the process
