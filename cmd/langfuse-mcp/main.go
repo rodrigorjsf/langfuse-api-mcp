@@ -85,6 +85,12 @@ func envMap(environ []string) map[string]string {
 // ambientInFile returns the ambient CA sources set in the config file, except
 // those whose variable the environment already set (captured): the environment
 // wins, per variable.
+//
+// This precedence would belong in config, but config.Load never sees the
+// environment's ambient values: start must capture and unset
+// SSL_CERT_FILE/SSL_CERT_DIR before config loads (ADR-0006), so only the
+// captured sources know which variables the environment set. It is the one
+// piece of settings logic cmd owns.
 func ambientInFile(cfg config.Config, captured []trust.Source) []trust.Source {
 	return trust.AmbientSources(func(variable string) string {
 		if slices.ContainsFunc(captured, func(s trust.Source) bool { return s.Variable == variable }) {
