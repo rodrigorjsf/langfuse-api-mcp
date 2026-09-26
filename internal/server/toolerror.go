@@ -9,6 +9,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/sanitize"
 )
@@ -112,13 +113,16 @@ func secondsRoundedUp(d time.Duration) int {
 	return int((d + time.Second - 1) / time.Second)
 }
 
-// unavailableHint names, per unavailable flavour, the family the operation
-// is in or the version the deployment lacks, and where the replacement is;
-// then the detected deployment profile: the version and the families on and
-// off (ADR-0012 §7). The Langfuse body is never part of it. An HTML 404
-// names the families off, not the operation's own family: the catalog carries
-// no family per operation yet (see #78).
-func unavailableHint(why langfuse.Unavailability, profile langfuse.DeploymentProfile) string {
+// unavailableHint names the called operation's family from the catalog, if
+// it has one; then, per unavailable flavour, why the deployment does not
+// serve it and where the replacement is; then the detected deployment
+// profile: the version and the families on and off (ADR-0012 §7). The
+// Langfuse body is never part of it.
+func unavailableHint(why langfuse.Unavailability, op catalog.Operation, profile langfuse.DeploymentProfile) string {
+	var family string
+	if op.Family != "" { // the catalog's own fixed family names
+		family = op.ID + " is in the " + string(op.Family) + " family; "
+	}
 	var flavour string
 	switch why {
 	case langfuse.EventsOnly:
@@ -133,7 +137,7 @@ func unavailableHint(why langfuse.Unavailability, profile langfuse.DeploymentPro
 			"that predates the operation, or the operation is in a family listed as off below; use the older operation it replaces " +
 			"(see https://langfuse.com/faq/all/deprecated-api-migration)"
 	}
-	return flavour + "; " + profileSummary(profile)
+	return family + flavour + "; " + profileSummary(profile)
 }
 
 // profileSummary names the detected Langfuse version and the families on and
@@ -167,7 +171,8 @@ func listOrNone(names []string) string {
 // langfuseErrorFields translates a Langfuse error answer into the tool error
 // fields; ok is false when err is not a Langfuse answer. Langfuse's message is redacted by r before errorResult cuts it
 // to length: a secret cut short would no longer match.
-func langfuseErrorFields(err error, operationID string, r sanitize.Redactor, profile langfuse.DeploymentProfile) (toolErrorFields, bool) {
+func langfuseErrorFields(err error, op catalog.Operation, r sanitize.Redactor, profile langfuse.DeploymentProfile) (toolErrorFields, bool) {
+	operationID := op.ID
 	var apiErr *langfuse.APIError
 	if !errors.As(err, &apiErr) {
 		return toolErrorFields{}, false
@@ -176,7 +181,7 @@ func langfuseErrorFields(err error, operationID string, r sanitize.Redactor, pro
 	if errors.Is(apiErr, langfuse.ErrOperationUnavailable) {
 		f.Code = errorUnavailableOperation
 		f.Message = "operation " + operationID + " is not served by the connected Langfuse deployment (HTTP 404)"
-		f.Hint = unavailableHint(apiErr.Unavailable, profile)
+		f.Hint = unavailableHint(apiErr.Unavailable, op, profile)
 		return f, true
 	}
 	se := statusErrorFor(apiErr.Status)

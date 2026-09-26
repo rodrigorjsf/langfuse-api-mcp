@@ -168,7 +168,8 @@ func TestStartupIgnoresAmbientSourcesWhenTheIgnoreFlagIsSet(t *testing.T) {
 	if got := loggedSources(t, stderr); !reflect.DeepEqual(got, want) {
 		t.Fatalf("logged sources = %v, want %v", got, want)
 	}
-	if bytes.Contains(stderr, []byte(`"level":"WARN"`)) {
+	// The deployment profile warnings are expected: nothing listens on the Langfuse host.
+	if bytes.Contains(stderr, []byte(`"msg":"CA source not fully loaded"`)) {
 		t.Fatalf("an ignored source is logged as a warning:\n%s", stderr)
 	}
 }

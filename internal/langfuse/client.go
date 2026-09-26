@@ -231,7 +231,7 @@ func (c *Client) Do(ctx context.Context, method, escapedPath string, query url.V
 	var r retries
 	var last error // the failure that caused the current retry
 	for {
-		resp, err := c.attempt(ctx, method, escapedPath, query)
+		resp, err := c.attempt(ctx, method, escapedPath, query, true)
 		if last != nil && errors.Is(err, ErrThrottled) {
 			// The retry never left: Langfuse's own answer is the useful error.
 			return Response{}, last
@@ -244,18 +244,22 @@ func (c *Client) Do(ctx context.Context, method, escapedPath string, query url.V
 	}
 }
 
-// attempt makes one attempt of Do, within the client's limits.
-func (c *Client) attempt(ctx context.Context, method, escapedPath string, query url.Values) (Response, error) {
+// attempt makes one attempt of Do, within the client's limits; the request
+// carries the key pair only when authenticated is true.
+func (c *Client) attempt(ctx context.Context, method, escapedPath string, query url.Values, authenticated bool) (Response, error) {
 	release, err := c.acquire(ctx)
 	if err != nil {
 		return Response{}, err
 	}
 	defer release()
-	return c.send(ctx, method, escapedPath, query)
+	return c.send(ctx, method, escapedPath, query, authenticated)
 }
 
+// errNotJSON marks a 2xx answer whose body is not JSON.
+var errNotJSON = errors.New("response is not JSON")
+
 // send sends one request and reads its answer.
-func (c *Client) send(ctx context.Context, method, escapedPath string, query url.Values) (Response, error) {
+func (c *Client) send(ctx context.Context, method, escapedPath string, query url.Values, authenticated bool) (Response, error) {
 	u := *c.host
 	u.RawPath = strings.TrimSuffix(c.host.EscapedPath(), "/") + escapedPath
 	path, err := url.PathUnescape(u.RawPath)
@@ -269,7 +273,9 @@ func (c *Client) send(ctx context.Context, method, escapedPath string, query url
 	if err != nil {
 		return Response{}, fmt.Errorf("build request: %w", err)
 	}
-	req.SetBasicAuth(c.keys.reveal())
+	if authenticated {
+		req.SetBasicAuth(c.keys.reveal())
+	}
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.httpClient.Do(req)
@@ -295,7 +301,7 @@ func (c *Client) send(ctx context.Context, method, escapedPath string, query url
 		return Response{Status: resp.StatusCode}, ErrResponseTooLarge // the status tells what Langfuse answered
 	}
 	if !json.Valid(body) {
-		return Response{}, errors.New("response is not JSON")
+		return Response{}, errNotJSON
 	}
 	return Response{Status: resp.StatusCode, Body: body}, nil
 }

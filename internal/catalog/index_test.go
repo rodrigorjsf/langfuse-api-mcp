@@ -2,7 +2,6 @@ package catalog_test
 
 import (
 	"slices"
-	"strings"
 	"testing"
 	"unicode"
 
@@ -103,17 +102,50 @@ func TestSearchWithoutTermsReturnsEveryOperationGroupedByTag(t *testing.T) {
 	if len(got) != 123 {
 		t.Fatalf("Search(\"\") returned %d operations, want all 123", len(got))
 	}
-	if first := got[:3]; !slices.Equal(ids(first), []string{
-		"annotationQueues_createQueue", "annotationQueues_createQueueAssignment", "annotationQueues_createQueueItem",
+	// The tags holding a v4-family operation come first; then, from
+	// AnnotationQueues on, the tags in alphabetical order.
+	if first := got[:5]; !slices.Equal(ids(first), []string{
+		"metrics_metrics", "metrics_daily", "observations_getMany",
+		"annotationQueues_createQueue", "annotationQueues_createQueueAssignment",
 	}) {
-		t.Errorf("first operations = %v, want the AnnotationQueues tag first, sorted by ID", ids(first))
+		t.Errorf("first operations = %v, want the v4-family tags (Metrics, Observations) first, then AnnotationQueues", ids(first))
 	}
-	if !slices.IsSortedFunc(got, func(a, b catalog.Operation) int {
-		if a.Tag != b.Tag {
-			return strings.Compare(a.Tag, b.Tag)
+	var tags []string
+	for _, op := range got {
+		if n := len(tags); n == 0 || tags[n-1] != op.Tag {
+			if slices.Contains(tags, op.Tag) {
+				t.Fatalf("tag %s appears in two groups: %v", op.Tag, ids(got))
+			}
+			tags = append(tags, op.Tag)
 		}
-		return strings.Compare(a.ID, b.ID)
-	}) {
-		t.Errorf("operations are not grouped by tag and sorted by ID: %v", ids(got))
+	}
+}
+
+// ADR-0012 §5, spec #68 story 7: when both families are on, every v4-family
+// operation is listed before every legacy-family operation, so that an agent
+// prefers the current API.
+func TestSearchRanksTheV4FamilyBeforeTheLegacyFamily(t *testing.T) {
+	t.Parallel()
+	cat := mustLoad(t).Resolve(catalog.Profile{Version: "4.46.0", Families: catalog.AllFamilies()})
+
+	for query, want := range map[string][]string{
+		// Tag order alone would list the legacy operations first; the
+		// sessions and trace operations match on their description lines.
+		"observations get": {
+			"observations_getMany", "legacy_observationsV1_get", "legacy_observationsV1_getMany",
+			"sessions_get", "sessions_list", "trace_get", "trace_list",
+		},
+		"metrics": {"metrics_metrics", "legacy_metricsV1_metrics"},
+	} {
+		if got := ids(cat.Search(query)); !slices.Equal(got, want) {
+			t.Errorf("Search(%q) = %v, want %v", query, got, want)
+		}
+	}
+	all := cat.Search("")
+	lastV4 := slices.IndexFunc(all, func(op catalog.Operation) bool { return op.ID == "observations_getMany" })
+	firstLegacy := slices.IndexFunc(all, func(op catalog.Operation) bool { return op.Family == catalog.LegacyFamily })
+	if lastV4 < 0 || firstLegacy < 0 || firstLegacy < lastV4 ||
+		slices.ContainsFunc(all[firstLegacy:], func(op catalog.Operation) bool { return op.Family == catalog.V4ReadFamily }) {
+		t.Errorf("Search(\"\") = %v, want every v4-family operation before the first legacy-family one", ids(all))
 	}
 }

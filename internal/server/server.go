@@ -280,7 +280,7 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 	resp, err := ex.client.Do(ctx, request.Method, request.Path, request.Query)
 	a.status, a.bytes = resp.Status, len(resp.Body)
 	if err != nil {
-		if f, ok := langfuseErrorFields(err, op.ID, ex.redact, ex.profile); ok {
+		if f, ok := langfuseErrorFields(err, op, ex.redact, ex.profile); ok {
 			a.status = f.HTTPStatus
 			if request.FolderName && (f.HTTPStatus == http.StatusNotFound || f.HTTPStatus == http.StatusBadRequest) {
 				f.Hint = folderNameHintFor(f)

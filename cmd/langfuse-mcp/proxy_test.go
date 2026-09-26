@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -28,7 +29,8 @@ import (
 const tunnelHost = "langfuse.test"
 
 // tunnelLangfuse starts a TLS fake Langfuse whose certificate names
-// tunnelHost, signed by ca; it answers every request with a trace.
+// tunnelHost, signed by ca; it answers health with version 4.46.0 and every
+// other request, the deployment profile's sentinels included, with a trace.
 func tunnelLangfuse(t *testing.T, ca certAuthority) *httptest.Server {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -44,8 +46,12 @@ func tunnelLangfuse(t *testing.T, ca certAuthority) *httptest.Server {
 	if err != nil {
 		t.Fatalf("create server certificate: %v", err)
 	}
-	fake := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	fake := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api/public/health" {
+			_, _ = io.WriteString(w, `{"status":"OK","version":"4.46.0"}`) // a failed write leaves the version unknown
+			return
+		}
 		_, _ = io.WriteString(w, `{"id":"trace-1","name":"checkout"}`) // a failed write fails the call
 	}))
 	fake.Config.ErrorLog = log.New(io.Discard, "", 0)
@@ -148,11 +154,10 @@ func TestExecutableReachesLangfuseThroughTheProxyInItsEnvironment(t *testing.T) 
 		t.Fatalf("execute_read through the proxy failed: %+v\nstderr:\n%s", call.StructuredContent, s.stderr)
 	}
 	connects, auths := proxy.seen()
-	if len(connects) != 1 || connects[0] != tunnelHost+":443" {
-		t.Errorf("the proxy saw CONNECT %v, want exactly one to %s:443", connects, tunnelHost)
-	}
-	if want := "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+password)); len(auths) != 1 || auths[0] != want {
-		t.Errorf("the proxy received Proxy-Authorization %q, want %q", auths, want)
+	assertTunnelledOnly(t, connects)
+	want := "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+password))
+	if slices.ContainsFunc(auths, func(a string) bool { return a != want }) {
+		t.Errorf("the proxy received Proxy-Authorization %q, want %q on every CONNECT", auths, want)
 	}
 	got := proxyLogLine(t, s.stderr.Bytes())
 	if got["endpoint"] != "http://"+proxy.url.Host || got["variable"] != "HTTPS_PROXY" ||
@@ -236,8 +241,17 @@ func throughTheProxy(t *testing.T, s *stdioSession, proxy *connectProxy) {
 	if call.IsError {
 		t.Fatalf("execute_read through the proxy failed: %+v\nstderr:\n%s", call.StructuredContent, s.stderr)
 	}
-	if connects, _ := proxy.seen(); len(connects) != 1 || connects[0] != tunnelHost+":443" {
-		t.Errorf("the proxy saw CONNECT %v, want exactly one to %s:443", connects, tunnelHost)
+	connects, _ := proxy.seen()
+	assertTunnelledOnly(t, connects)
+}
+
+// assertTunnelledOnly checks that the proxy saw at least one CONNECT, and
+// only to tunnelHost:443. Startup's deployment profile detection sends its
+// probes in parallel, so there may be several connections.
+func assertTunnelledOnly(t *testing.T, connects []string) {
+	t.Helper()
+	if len(connects) == 0 || slices.ContainsFunc(connects, func(c string) bool { return c != tunnelHost+":443" }) {
+		t.Errorf("the proxy saw CONNECT %v, want at least one, each to %s:443", connects, tunnelHost)
 	}
 }
 

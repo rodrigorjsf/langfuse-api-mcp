@@ -135,8 +135,11 @@ func TestSearchOperationsWithoutQueryListsEveryReadOperationGroupedByTag(t *test
 	if idx.Count != 68 || len(idx.listed()) != 68 {
 		t.Fatalf("index lists %d operations (count %d), want the 68 read operations", len(idx.listed()), idx.Count)
 	}
-	if idx.Groups[0].Tag != "AnnotationQueues" || idx.Groups[0].Operations[0].OperationID != "annotationQueues_getQueue" {
-		t.Errorf("first group = %+v, want AnnotationQueues starting with annotationQueues_getQueue", idx.Groups[0])
+	// The tags holding a v4-family operation come first (ADR-0012 §5).
+	if idx.Groups[0].Tag != "Metrics" || idx.Groups[0].Operations[0].OperationID != "metrics_metrics" ||
+		idx.Groups[2].Tag != "AnnotationQueues" || idx.Groups[2].Operations[0].OperationID != "annotationQueues_getQueue" {
+		t.Errorf("groups = %+v, want Metrics starting with metrics_metrics, Observations, then AnnotationQueues starting with annotationQueues_getQueue",
+			idx.Groups[:3])
 	}
 	text := resultText(t, res)
 	for _, want := range []string{
@@ -149,6 +152,20 @@ func TestSearchOperationsWithoutQueryListsEveryReadOperationGroupedByTag(t *test
 	}
 	if strings.Contains(text, "prompts_create") || strings.Contains(text, "execute_write") {
 		t.Errorf("text lists a write operation or the write tool while write mode is off:\n%s", text)
+	}
+}
+
+// ADR-0012 §5, spec #68 story 7: the v4 family ranks before the legacy family.
+func TestSearchOperationsRanksTheV4FamilyBeforeTheLegacyFamily(t *testing.T) {
+	t.Parallel()
+	cs := connectOffline(t)
+
+	idx := operationIndexOf(t, callTool(t, cs, "search_operations", map[string]any{"query": "metrics"}))
+
+	got := idx.listed()
+	want := []string{"Metrics/metrics_metrics@execute_read", "Metrics/metrics_daily@execute_read", "LegacyMetricsV1/legacy_metricsV1_metrics@execute_read"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("index = %v, want %v", got, want)
 	}
 }
 

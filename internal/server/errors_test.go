@@ -268,6 +268,21 @@ func TestAnUnavailableOperationHintNamesTheDetectedVersionAndTheMissingFamily(t 
 	}
 }
 
+// #34, #78: an HTML 404 does not say which family is off; the hint names the
+// called operation's own family from the catalog, next to the detected version.
+func TestAnUnavailableOperationHintNamesTheCalledOperationsFamily(t *testing.T) {
+	t.Parallel()
+	fake, _ := scriptedLangfuse(t, htmlNotFound)
+	cs := connectProfile(t, fake, langfuse.DeploymentProfile{Version: "3.80.0", Families: []langfuse.Family{langfuse.LegacyFamily}})
+
+	got := toolErrorOf(t, callExecuteRead(t, cs, map[string]any{"operationId": "observations_getMany"})).Error
+
+	if got.Code != "operation_unavailable" || !strings.Contains(got.Hint, "Langfuse 3.80.0") ||
+		!strings.Contains(got.Hint, "observations_getMany is in the v4 read family") {
+		t.Fatalf("tool error = %+v, want operation_unavailable with a hint naming Langfuse 3.80.0 and the operation's family (v4 read)", got)
+	}
+}
+
 func TestAnUnavailableOperationHintSaysTheVersionIsUnknownWhenNoneWasDetectedOrItIsNotAPlainVersion(t *testing.T) {
 	t.Parallel()
 	tests := map[string]struct {
