@@ -3,17 +3,14 @@
 package server_test
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"io"
 	"maps"
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -84,35 +81,11 @@ func randomHex(t *testing.T, n int) string {
 }
 
 // langfuseDirect sends one request straight to the live Langfuse with the
-// test key pair, for the setup steps execute_read cannot do. It trusts the
-// system roots only: a self-hosted test Langfuse behind a private CA would
-// fail here, at seeding, before any probe runs.
+// test key pair, for the setup steps execute_read cannot do (liveTarget.send).
 func langfuseDirect(ctx context.Context, t *testing.T, method, path string, body any) (int, string) {
 	t.Helper()
-	payload, err := json.Marshal(body)
-	if err != nil {
-		t.Fatalf("encode %s %s: %v", method, path, err)
-	}
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
-	defer cancel()
-	// G704: the URL is the operator's LANGFUSE_TEST_BASE_URL plus a constant path.
-	req, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(os.Getenv(envTestBaseURL), "/")+path, bytes.NewReader(payload)) //nolint:gosec // see above
-	if err != nil {
-		t.Fatalf("build %s %s: %v", method, path, err)
-	}
-	req.SetBasicAuth(os.Getenv(envTestPublicKey), os.Getenv(envTestSecretKey))
-	req.Header.Set("Content-Type", "application/json")
-	// Its own transport, closed afterwards: no idle connection outlives the
-	// call to trip TestMain's leak check.
-	transport := &http.Transport{Proxy: http.ProxyFromEnvironment}
-	defer transport.CloseIdleConnections()
-	resp, err := (&http.Client{Transport: transport}).Do(req) //nolint:gosec // G704: the test's own Langfuse, see above
-	if err != nil {
-		t.Fatalf("%s %s: %v", method, path, err)
-	}
-	defer func() { _ = resp.Body.Close() }()               // a read-only body: nothing to report on close
-	text, _ := io.ReadAll(io.LimitReader(resp.Body, 4096)) // best effort: the body only explains a failure
-	return resp.StatusCode, string(text)
+	target := liveTarget{baseURL: os.Getenv(envTestBaseURL), publicKey: os.Getenv(envTestPublicKey), secretKey: os.Getenv(envTestSecretKey)}
+	return target.send(ctx, t, method, path, body, sleepCtx)
 }
 
 // otlpSpan is one span of an OTLP/HTTP JSON export carrying Langfuse's
