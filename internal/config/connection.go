@@ -26,7 +26,8 @@ type Connection struct {
 
 // Secret holds a credential. It never prints its value: String, GoString,
 // LogValue and MarshalJSON all return [REDACTED]. Reveal returns the value
-// for the one place that must send it.
+// for the one place that must send it. Non-string fmt verbs such as %d
+// still print the value: see #46.
 type Secret struct {
 	value string
 }
