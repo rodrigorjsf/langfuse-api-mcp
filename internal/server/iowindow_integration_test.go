@@ -86,13 +86,13 @@ func randomHex(t *testing.T, n int) string {
 // test key pair, for the setup steps execute_read cannot do. It trusts the
 // system roots only: a self-hosted test Langfuse behind a private CA would
 // fail here, at seeding, before any probe runs.
-func langfuseDirect(t *testing.T, method, path string, body any) (int, string) {
+func langfuseDirect(ctx context.Context, t *testing.T, method, path string, body any) (int, string) {
 	t.Helper()
 	payload, err := json.Marshal(body)
 	if err != nil {
 		t.Fatalf("encode %s %s: %v", method, path, err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 	// G704: the URL is the operator's LANGFUSE_TEST_BASE_URL plus a constant path.
 	req, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(os.Getenv(envTestBaseURL), "/")+path, bytes.NewReader(payload)) //nolint:gosec // see above
@@ -152,7 +152,7 @@ func seedIOWindow(t *testing.T, cs *mcp.ClientSession) ioSeed {
 	}
 
 	t.Cleanup(func() { deleteSeededTraces(t, s) })
-	status, body := langfuseDirect(t, http.MethodPost, "/api/public/otel/v1/traces", map[string]any{
+	status, body := langfuseDirect(t.Context(), t, http.MethodPost, "/api/public/otel/v1/traces", map[string]any{
 		"resourceSpans": []any{map[string]any{
 			"resource":   map[string]any{"attributes": []any{map[string]any{"key": "service.name", "value": map[string]any{"stringValue": "langfuse-mcp-integration"}}}},
 			"scopeSpans": []any{map[string]any{"scope": map[string]any{"name": "iowindow-probe"}, "spans": spans}},
@@ -203,7 +203,8 @@ func deleteSeededTraces(t *testing.T, s ioSeed) {
 	for _, id := range s.traceIDs {
 		ids = append(ids, id)
 	}
-	status, body := langfuseDirect(t, http.MethodDelete, "/api/public/traces", map[string]any{"traceIds": ids})
+	// t.Context() is already cancelled when cleanups run.
+	status, body := langfuseDirect(context.WithoutCancel(t.Context()), t, http.MethodDelete, "/api/public/traces", map[string]any{"traceIds": ids})
 	t.Logf("cleanup: DELETE /api/public/traces (%d seeded traces) → %d %s", len(ids), status, body)
 }
 
