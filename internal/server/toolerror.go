@@ -137,20 +137,22 @@ func unavailableHint(why langfuse.Unavailability, family catalog.Family, profile
 
 // routeMissingFlavour explains an HTML 404: the route is missing, and the
 // called operation's family, when it has one, says whether the deployment
-// turns it off. Only names from the fixed family list are shown.
+// turns it off. A family outside the fixed list (none, or one the embedded
+// catalog should never hold) is not named, so only fixed names are shown.
 func routeMissingFlavour(family catalog.Family, profile langfuse.DeploymentProfile) string {
-	const replacement = "use the older operation it replaces (see https://langfuse.com/faq/all/deprecated-api-migration)"
+	const (
+		missing     = "this route does not exist on the deployment: "
+		replacement = "; use the older operation it replaces (see https://langfuse.com/faq/all/deprecated-api-migration)"
+	)
 	switch {
 	case !slices.Contains(catalog.AllFamilies(), family):
-		return "this route does not exist on the deployment: it runs an older Langfuse version " +
-			"that predates the operation, or the operation is in a family listed as off below; " + replacement
+		return missing + "it runs an older Langfuse version that predates the operation, " +
+			"or the operation is in a family listed as off below" + replacement
 	case !profile.On(family):
-		return "this route does not exist on the deployment: the operation is in the " + string(family) +
-			" family, which is off on this deployment; " + replacement
+		return missing + "the operation is in the " + string(family) + " family, which is off on this deployment" + replacement
 	default:
-		return "this route does not exist on the deployment: the operation is in the " + string(family) +
-			" family; the deployment runs an older Langfuse version that predates the operation, or turns that family off; " +
-			replacement
+		return missing + "the operation is in the " + string(family) + " family, which is not listed as off, " +
+			"so the deployment most likely runs an older Langfuse version that predates the operation" + replacement
 	}
 }
 
@@ -186,15 +188,14 @@ func listOrNone(names []string) string {
 // fields; ok is false when err is not a Langfuse answer. Langfuse's message is redacted by r before errorResult cuts it
 // to length: a secret cut short would no longer match.
 func langfuseErrorFields(err error, op catalog.Operation, r sanitize.Redactor, profile langfuse.DeploymentProfile) (toolErrorFields, bool) {
-	operationID := op.ID
 	var apiErr *langfuse.APIError
 	if !errors.As(err, &apiErr) {
 		return toolErrorFields{}, false
 	}
-	f := toolErrorFields{HTTPStatus: apiErr.Status, OperationID: operationID}
+	f := toolErrorFields{HTTPStatus: apiErr.Status, OperationID: op.ID}
 	if errors.Is(apiErr, langfuse.ErrOperationUnavailable) {
 		f.Code = errorUnavailableOperation
-		f.Message = "operation " + operationID + " is not served by the connected Langfuse deployment (HTTP 404)"
+		f.Message = "operation " + op.ID + " is not served by the connected Langfuse deployment (HTTP 404)"
 		f.Hint = unavailableHint(apiErr.Unavailable, op.Family, profile)
 		return f, true
 	}

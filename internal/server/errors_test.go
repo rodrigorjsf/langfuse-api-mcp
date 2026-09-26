@@ -289,7 +289,7 @@ func TestAnHTMLNotFoundHintNamesTheCalledOperationsFamily(t *testing.T) {
 		"a legacy operation on a deployment with the legacy family on": {
 			profile:   legacyOnly,
 			call:      traceList,
-			wantHint:  "the operation is in the legacy family;",
+			wantHint:  "the operation is in the legacy family, which is not listed as off",
 			forbidden: "which is off",
 		},
 		"an operation no family gates": {
