@@ -152,6 +152,29 @@ func TestSearchOperationsWithoutQueryListsEveryReadOperationGroupedByTag(t *test
 	}
 }
 
+// Spec #68 story 12, ADR-0002, #79: listing every read operation of the
+// unresolved union catalog (68) stays within 7 KiB of text (6,991 bytes,
+// ~1.8k tokens, when measured), and a legacy read's line says what it does
+// and names its replacement instead of carrying the whole deprecation notice
+// (which made it ~10 KB). A catalog regeneration that crosses the budget
+// updates ADR-0002 and spec #68 with the new figure.
+func TestSearchOperationsWithoutQueryListsTheReadIndexWithinItsBudget(t *testing.T) {
+	t.Parallel()
+	cs := connectOffline(t)
+
+	text := resultText(t, callTool(t, cs, "search_operations", map[string]any{}))
+
+	if len(text) > 7*1024 {
+		t.Errorf("read index text is %d bytes, want at most 7 KiB", len(text))
+	}
+	if want := "- trace_list — Get list of traces (legacy: prefer observations_getMany when it is available)\n"; !strings.Contains(text, want) {
+		t.Errorf("text does not contain %q:\n%s", want, text)
+	}
+	if strings.Contains(text, "Deprecated") || strings.Contains(text, "https://") {
+		t.Errorf("text carries a deprecation notice or a link:\n%s", text)
+	}
+}
+
 func TestSearchOperationsWithQueryKeepsOnlyTheOperationsMatchingEveryTerm(t *testing.T) {
 	t.Parallel()
 	cs := connectOffline(t)

@@ -22,7 +22,8 @@ import (
 // searchOperationsDescription is static text compiled into the binary; it is
 // never built from API data.
 const searchOperationsDescription = "Lists the Langfuse operations this server can run: the operation index, " +
-	"one line per operation (its operation ID and the first line of its description), grouped by tag " +
+	"one line per operation (its operation ID and the first line of its description; for a legacy operation, " +
+	"what it does and the operation to prefer), grouped by tag " +
 	"(the API area: Trace, Prompts, Datasets…).\n\n" +
 	"With query, keeps only the operations where every whitespace-separated keyword appears, ignoring case, " +
 	"in the operation ID, the tag or the description line. Without query, lists every operation.\n\n" +
@@ -79,7 +80,7 @@ func operationIndexSchema() map[string]any {
 								"required": []any{"operationId", "description", "tool"},
 								"properties": map[string]any{
 									"operationId": map[string]any{"type": "string"},
-									"description": map[string]any{"type": "string", "description": "First line of the operation's description."},
+									"description": map[string]any{"type": "string", "description": "First line of the operation's description; for a legacy operation, what it does and the operation to prefer."},
 									"tool":        map[string]any{"type": "string", "enum": []any{toolExecuteRead, toolExecuteWrite}},
 								},
 							},

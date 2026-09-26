@@ -1,6 +1,7 @@
 package catalog_test
 
 import (
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -48,6 +49,59 @@ func TestNoTagOrDescriptionLineOfTheEmbeddedCatalogHoldsAForbiddenCharacter(t *t
 			if i := slices.IndexFunc([]rune(s), forbidden); i >= 0 {
 				t.Errorf("%s: %q holds forbidden character U+%04X", op.ID, s, []rune(s)[i])
 			}
+		}
+	}
+}
+
+// ADR-0012 §5, #79: a legacy operation's index line says what it does and
+// names its replacement, instead of the whole deprecation notice.
+func TestALegacyOperationsLineSaysWhatItDoesAndNamesItsReplacement(t *testing.T) {
+	t.Parallel()
+	cat := mustLoad(t)
+
+	for id, want := range map[string]string{
+		"trace_list":                    "Get list of traces (legacy: prefer observations_getMany when it is available)",
+		"datasets_getRuns":              "Get dataset runs (legacy: prefer experiments_list when it is available)",
+		"datasetRunItems_list":          "List dataset run items (legacy: prefer experiments_listItems when it is available)",
+		"legacy_metricsV1_metrics":      "Get metrics from the Langfuse project using a query object. (legacy: prefer metrics_metrics when it is available)",
+		"scores_get-many":               "Get a list of scores (supports both trace and session scores) (legacy: prefer scoresV3_getManyV3 when it is available)",
+		"unstable_evaluators_get":       "Get one evaluator by `id`. (legacy: prefer evaluators_get when it is available)",
+		"datasetRunItems_create":        "Create a dataset run item (legacy: prefer opentelemetry_exportTraces when it is available)",
+		"datasets_deleteRun":            "Delete a dataset run and all its run items. This action is irreversible. (legacy)",
+		"unstable_evaluationRules_list": "List evaluation rules in the authenticated project. (legacy: prefer evaluationRules_list when it is available)",
+	} {
+		op, ok := cat.Lookup(id)
+		if !ok {
+			t.Fatalf("operation %s is not in the catalog", id)
+		}
+		if op.DescriptionLine != want {
+			t.Errorf("%s: description line\n %q\nwant\n %q", id, op.DescriptionLine, want)
+		}
+	}
+}
+
+// #79: every legacy read names an operation of the catalog as its
+// replacement, and no line of the embedded catalog carries a deprecation
+// notice or a Markdown link.
+func TestEveryLegacyReadNamesAReplacementAndNoLineCarriesANoticeOrALink(t *testing.T) {
+	t.Parallel()
+	cat := mustLoad(t)
+	legacy := regexp.MustCompile(`^\S.* \(legacy: prefer (\S+) when it is available\)$`)
+
+	for _, op := range cat.Operations() {
+		if strings.Contains(op.DescriptionLine, "Deprecated") || strings.Contains(op.DescriptionLine, "](") {
+			t.Errorf("%s: line %q carries a deprecation notice or a Markdown link", op.ID, op.DescriptionLine)
+		}
+		if op.Family != catalog.LegacyFamily || !op.IsRead() {
+			continue
+		}
+		m := legacy.FindStringSubmatch(op.DescriptionLine)
+		if m == nil {
+			t.Errorf("%s: line %q does not name its replacement", op.ID, op.DescriptionLine)
+			continue
+		}
+		if r, ok := cat.Lookup(m[1]); !ok || r.Family == catalog.LegacyFamily {
+			t.Errorf("%s: replacement %s is not a non-legacy operation of the catalog", op.ID, m[1])
 		}
 	}
 }
