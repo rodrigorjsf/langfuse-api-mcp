@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -156,7 +157,7 @@ func (s *stdioSession) stop(checks ...func()) {
 	}
 }
 
-func TestExecutableServesExecuteReadOverStdio(t *testing.T) {
+func TestExecutableServesTheDiscoveryToolsAndExecuteReadOverStdio(t *testing.T) {
 	t.Parallel()
 	gotAuth := make(chan string, 1)
 	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -178,8 +179,13 @@ func TestExecutableServesExecuteReadOverStdio(t *testing.T) {
 	if err := json.Unmarshal(s.send("tools/list", map[string]any{}, true), &list); err != nil {
 		t.Fatalf("decode tools/list: %v", err)
 	}
-	if len(list.Tools) != 1 || list.Tools[0].Name != "execute_read" {
-		t.Fatalf("tools = %+v, want exactly execute_read", list.Tools)
+	names := make([]string, 0, len(list.Tools))
+	for _, tool := range list.Tools {
+		names = append(names, tool.Name)
+	}
+	slices.Sort(names)
+	if want := []string{"describe_operation", "execute_read", "search_operations"}; !slices.Equal(names, want) {
+		t.Fatalf("tools = %v, want exactly %v", names, want)
 	}
 
 	call := s.callTraceGet()

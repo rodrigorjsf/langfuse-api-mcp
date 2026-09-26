@@ -26,6 +26,7 @@ Full risk→control mapping with sources: `docs/research/security.md`. Cite OWAS
 **Tool results** (LLM01:2025/2026, MCP06:2025)
 - Langfuse payloads are untrusted data: wrap them in a labelled envelope; strip invisible/bidi Unicode (U+E0000–E007F, zero-width, bidi overrides) and control chars; never render HTML/Markdown from them; never echo them unescaped into error text. A proxy's CONNECT answer (status reason, body) is untrusted too: it is dropped, never echoed into an error, hint or audit line (#32).
 - Tool names/descriptions are static strings compiled into the binary — never built from API data.
+- Discovery (`search_operations`, `describe_operation`, ADR-0002 amendment): operation tags and description lines are stripped of invisible/bidi and control characters when the catalog loads (tests prove it); `query` and `operationId` over 128 runes or holding a control or invisible character are refused with `invalid_argument`; the query is never echoed; an unknown, excluded or (write mode off) write `operationId` is `operation_not_found`, echoed only redacted and cut to 64 bytes.
 
 **Transport**
 - stdio: logs to stderr only. HTTP (opt-in): bind 127.0.0.1, require a random ≥256-bit bearer token compared in constant time, validate `Origin` (403 on invalid) and `Host` (loopback only), answer session GET/DELETE with 405.
