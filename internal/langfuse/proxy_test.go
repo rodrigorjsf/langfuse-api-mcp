@@ -41,6 +41,19 @@ func TestProxyFromSettingsPicksTheProxyAsGoWouldForTheSameVariables(t *testing.T
 	}
 }
 
+// config.Load shows a bare host:port as an http proxy; the client's proxy
+// function must use it the same way.
+func TestProxyFromSettingsReadsAHostAndPortWithoutASchemeAsAnHTTPProxy(t *testing.T) {
+	t.Parallel()
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://langfuse.test/", nil)
+
+	got, err := langfuse.ProxyFromSettings("proxy.internal:3128", "", "")(req)
+
+	if err != nil || got == nil || got.String() != "http://proxy.internal:3128" {
+		t.Errorf("proxy = %v, %v; want http://proxy.internal:3128", got, err)
+	}
+}
+
 func TestProxyFromSettingsWithNothingSetUsesNoProxy(t *testing.T) {
 	t.Parallel()
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://langfuse.test/", nil)

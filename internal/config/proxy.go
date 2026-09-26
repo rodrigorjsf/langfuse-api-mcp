@@ -131,6 +131,12 @@ func proxyEndpoint(value string) (string, error) {
 	if !printable(value) {
 		return "", errors.New("the value holds whitespace, control or invisible characters; want a proxy URL " + example)
 	}
+	// A bare host or host:port is an http proxy, as in Go's httpproxy and
+	// curl. Only that form: a value with "/" or "@" and no "://" (such as
+	// file:/etc/passwd or user:password@host) is not taken as a host.
+	if !strings.Contains(value, "://") && !strings.ContainsAny(value, "/@") {
+		value = "http://" + value
+	}
 	u, err := url.Parse(value)
 	if err != nil || u.Hostname() == "" {
 		return "", errors.New("want a proxy URL with a host, " + example)

@@ -44,6 +44,19 @@ func TestLoadShowsTheProxyAsSchemeHostAndPortWithItsSource(t *testing.T) {
 			env:  map[string]string{"HTTPS_PROXY": "http://[2001:db8::1]:3128"},
 			want: config.Proxy{Endpoint: "http://[2001:db8::1]:3128", Variable: "HTTPS_PROXY", Origin: config.OriginEnvironment},
 		},
+		// Go and curl read a value without a scheme as an http proxy.
+		"host and port without a scheme": {
+			env:  map[string]string{"HTTPS_PROXY": "proxy.example.com:3128"},
+			want: config.Proxy{Endpoint: "http://proxy.example.com:3128", Variable: "HTTPS_PROXY", Origin: config.OriginEnvironment},
+		},
+		"a host without a scheme or a port": {
+			env:  map[string]string{"HTTPS_PROXY": "proxy.example.com"},
+			want: config.Proxy{Endpoint: "http://proxy.example.com:80", Variable: "HTTPS_PROXY", Origin: config.OriginEnvironment},
+		},
+		"an IP address and port without a scheme": {
+			env:  map[string]string{"HTTPS_PROXY": "10.0.0.1:3128"},
+			want: config.Proxy{Endpoint: "http://10.0.0.1:3128", Variable: "HTTPS_PROXY", Origin: config.OriginEnvironment},
+		},
 		"credentials are left out": {
 			env:  map[string]string{"HTTPS_PROXY": "http://proxyuser:hunter2@proxy.example.com:3128"}, //nolint:gosec // G101: a fake proxy credential
 			want: config.Proxy{Endpoint: "http://proxy.example.com:3128", Variable: "HTTPS_PROXY", Origin: config.OriginEnvironment},
@@ -102,7 +115,8 @@ func TestLoadRefusesAnInvalidProxyValueWithoutEchoingIt(t *testing.T) {
 	values := map[string]string{
 		"malformed":                            "http://proxyuser:" + credential + "@proxy.example.com:port",
 		"no host":                              "http://proxyuser:" + credential + "@",
-		"no scheme":                            "proxyuser:" + credential + "@proxy.example.com:8080",
+		"credentials but no scheme":            "proxyuser:" + credential + "@proxy.example.com:8080",
+		"scheme file, opaque":                  "file:/" + credential + "/etc/passwd",
 		"scheme htps":                          "htps://proxyuser:" + credential + "@proxy.example.com:8080",
 		"scheme file":                          "file://proxyuser:" + credential + "@proxy.example.com/etc/passwd",
 		"scheme javascript":                    "javascript://proxyuser:" + credential + "@proxy.example.com/%0Aalert(1)",
