@@ -64,6 +64,26 @@ type Param struct {
 	// In is "path" or "query".
 	In       string
 	Required bool
+	// Schema is the type the parameter's value must have.
+	Schema Schema
+}
+
+// Schema is the part of a parameter's OpenAPI schema the catalog validates
+// against: the type, the allowed values and, for a repeated query parameter,
+// the type of each item.
+type Schema struct {
+	// Type is "string", "integer", "number", "boolean" or "array"; empty
+	// accepts any scalar.
+	Type string `json:"type"`
+	// Nullable parameters accept a JSON null, which omits them.
+	Nullable bool `json:"nullable"`
+	// Enum lists the allowed values of a string parameter; empty allows any.
+	Enum []string `json:"enum"`
+	// Items is the schema of each value of an array parameter.
+	Items *Schema `json:"items"`
+	// Ref names a component schema (#/components/schemas/<name>); Load
+	// resolves it into Type and Enum.
+	Ref string `json:"$ref"`
 }
 
 // IsRead reports whether the operation is a read operation (HTTP GET).
@@ -73,7 +93,10 @@ func (o Operation) IsRead() bool { return o.Method == http.MethodGet }
 // excluded operations.
 func Load() (Catalog, error) {
 	var doc struct {
-		Paths map[string]map[string]json.RawMessage `json:"paths"`
+		Paths      map[string]map[string]json.RawMessage `json:"paths"`
+		Components struct {
+			Schemas map[string]Schema `json:"schemas"`
+		} `json:"components"`
 	}
 	if err := json.Unmarshal(openAPISpec, &doc); err != nil {
 		return Catalog{}, fmt.Errorf("embedded OpenAPI spec: %w", err)
@@ -95,10 +118,38 @@ func Load() (Catalog, error) {
 			if op.OperationID == "" || slices.Contains(excluded, op.OperationID) {
 				continue
 			}
+			for i := range op.Parameters {
+				if err := resolve(&op.Parameters[i].Schema, doc.Components.Schemas); err != nil {
+					return Catalog{}, fmt.Errorf("embedded OpenAPI spec: %s parameter %s: %w",
+						op.OperationID, op.Parameters[i].Name, err)
+				}
+			}
 			cat.byID[op.OperationID] = Operation{ID: op.OperationID, Method: m, Path: path, Params: op.Parameters}
 		}
 	}
 	return cat, nil
+}
+
+// resolve replaces a component reference in s by the referenced schema's type
+// and allowed values, keeping s's own nullability; it resolves array items too.
+func resolve(s *Schema, components map[string]Schema) error {
+	if s.Items != nil {
+		if err := resolve(s.Items, components); err != nil {
+			return err
+		}
+	}
+	if s.Ref == "" {
+		return nil
+	}
+	name, ok := strings.CutPrefix(s.Ref, "#/components/schemas/")
+	target, found := components[name]
+	if !ok || !found || target.Ref != "" || target.Items != nil {
+		// Only scalar components (enums) are parameter types in the spec; any
+		// other shape fails loudly rather than validating half of it.
+		return fmt.Errorf("unresolvable schema reference %q", s.Ref)
+	}
+	s.Type, s.Enum, s.Nullable, s.Ref = target.Type, target.Enum, s.Nullable || target.Nullable, ""
+	return nil
 }
 
 // Lookup returns the in-scope operation with the given ID.
@@ -106,6 +157,10 @@ func (c Catalog) Lookup(id string) (Operation, bool) {
 	op, ok := c.byID[id]
 	return op, ok
 }
+
+// IsExcluded reports whether id is an operation of the Langfuse API that the
+// catalog deliberately leaves out (ADR-0004).
+func IsExcluded(id string) bool { return slices.Contains(excluded, id) }
 
 // Operations returns every in-scope operation, sorted by ID.
 func (c Catalog) Operations() []Operation {

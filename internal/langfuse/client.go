@@ -88,8 +88,44 @@ func New(opts Options) *Client {
 		host:       opts.Host,
 		publicKey:  opts.PublicKey,
 		secretKey:  opts.SecretKey,
-		httpClient: &http.Client{Transport: transport, Timeout: 60 * time.Second},
+		httpClient: &http.Client{Transport: transport, Timeout: 60 * time.Second, CheckRedirect: sameOrigin},
 	}
+}
+
+// ErrRedirectRefused marks a request Langfuse redirected to another scheme,
+// host or port: the client never follows it, so the key pair is never sent
+// anywhere but the configured host.
+var ErrRedirectRefused = errors.New("redirect to another scheme, host or port refused")
+
+// maxRedirects is how many same-origin redirects one request follows, as Go's
+// default policy does.
+const maxRedirects = 10
+
+// sameOrigin is the client's redirect policy. Go forwards Authorization on a
+// redirect to the same host name, even on another port or scheme, and to its
+// subdomains, so every redirect that changes scheme, host or port is refused
+// before it is sent.
+func sameOrigin(req *http.Request, via []*http.Request) error {
+	if len(via) >= maxRedirects {
+		return fmt.Errorf("stopped after %d redirects", maxRedirects)
+	}
+	from, to := via[0].URL, req.URL
+	if !strings.EqualFold(from.Scheme, to.Scheme) || !strings.EqualFold(from.Hostname(), to.Hostname()) ||
+		effectivePort(from) != effectivePort(to) {
+		return ErrRedirectRefused
+	}
+	return nil
+}
+
+// effectivePort is the URL's port, or its scheme's default port.
+func effectivePort(u *url.URL) string {
+	if p := u.Port(); p != "" {
+		return p
+	}
+	if strings.EqualFold(u.Scheme, "http") {
+		return "80"
+	}
+	return "443"
 }
 
 // maxResponseBytes caps how much of a response body the client reads: Langfuse

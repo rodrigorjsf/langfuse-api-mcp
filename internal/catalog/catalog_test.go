@@ -6,7 +6,7 @@ import (
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 )
 
-func mustLoad(t *testing.T) catalog.Catalog {
+func mustLoad(t testing.TB) catalog.Catalog {
 	t.Helper()
 	cat, err := catalog.Load()
 	if err != nil {

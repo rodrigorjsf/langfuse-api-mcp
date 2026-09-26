@@ -6,8 +6,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -91,17 +94,63 @@ type executeReadInput struct {
 	Parameters  map[string]any `json:"parameters"`
 }
 
-func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+// decodeExecuteReadInput decodes the execute_read arguments, naming the
+// offending argument when one is missing, unknown or of the wrong type. The
+// SDK's low-level AddTool does not validate arguments against the input
+// schema, so this is the validation.
+func decodeExecuteReadInput(raw json.RawMessage) (executeReadInput, error) {
 	var in executeReadInput
-	dec := json.NewDecoder(bytes.NewReader(req.Params.Arguments))
-	dec.UseNumber() // keep integers exact: 10 stays "10", never "1e+01"
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&in); err != nil {
-		return toolError(errorInvalidArgument, "arguments: "+err.Error(), "", in.OperationID)
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return in, errors.New("arguments: want a JSON object with operationId and parameters")
+	}
+	for name := range fields {
+		if name != "operationId" && name != "parameters" {
+			return in, fmt.Errorf("argument %s: unknown argument; execute_read takes operationId and parameters only",
+				strconv.Quote(truncate(name)))
+		}
+	}
+	id, ok := fields["operationId"]
+	if !ok {
+		return in, errors.New("argument operationId: required argument is missing")
+	}
+	if err := json.Unmarshal(id, &in.OperationID); err != nil || in.OperationID == "" {
+		return executeReadInput{}, errors.New("argument operationId: want a non-empty string, e.g. trace_list")
+	}
+	if params, ok := fields["parameters"]; ok && string(params) != "null" {
+		dec := json.NewDecoder(bytes.NewReader(params))
+		dec.UseNumber() // keep integers exact: 10 stays "10", never "1e+01"
+		if err := dec.Decode(&in.Parameters); err != nil {
+			return in, errors.New("argument parameters: want an object of parameter name to value")
+		}
+	}
+	return in, nil
+}
+
+// maxEchoed bounds how much of a caller-supplied name an error repeats.
+const maxEchoed = 64
+
+// truncate bounds a caller-supplied string repeated in an error message.
+func truncate(s string) string {
+	if len(s) <= maxEchoed {
+		return s
+	}
+	return strings.ToValidUTF8(s[:maxEchoed], "") + "…"
+}
+
+func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	in, err := decodeExecuteReadInput(req.Params.Arguments)
+	if err != nil {
+		return toolError(errorInvalidArgument, err.Error(), "", in.OperationID)
 	}
 	op, ok := ex.catalog.Lookup(in.OperationID)
+	if !ok && catalog.IsExcluded(in.OperationID) {
+		return toolError(errorOperationNotFound, "operation "+in.OperationID+" is not exposed by this server: "+
+			"trace ingestion and organization admin changes are out of its scope",
+			"read the data with a read operation instead, e.g. trace_list or trace_get", in.OperationID)
+	}
 	if !ok {
-		return toolError(errorOperationNotFound, "unknown operation ID "+strconv.Quote(in.OperationID),
+		return toolError(errorOperationNotFound, "unknown operation ID "+strconv.Quote(truncate(in.OperationID)),
 			"use an operation ID of the Langfuse API reference: https://api.reference.langfuse.com", in.OperationID)
 	}
 	if !op.IsRead() {
@@ -113,6 +162,12 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest) (*
 		return toolError(errorInvalidArgument, err.Error(), "", op.ID)
 	}
 	resp, err := ex.client.Do(ctx, r.Method, r.Path, r.Query)
+	if errors.Is(err, langfuse.ErrRedirectRefused) {
+		return toolError(errorRedirectRefused, "Langfuse answered with a redirect to another scheme, host or port; "+
+			"it was not followed, so the key pair was not sent there",
+			"retrying will not help: the user sets LANGFUSE_BASE_URL to the URL the Langfuse host redirects to "+
+				"(for example https instead of http) and restarts the server", op.ID)
+	}
 	if err != nil {
 		// The error codes of #20/#21 replace this catch-all; until then the
 		// cause goes to stderr, never to the agent.

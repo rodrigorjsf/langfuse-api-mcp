@@ -36,6 +36,7 @@ Protocol-level JSON-RPC errors are reserved for malformed requests and unknown t
 | 429 | `langfuse_rate_limited` | wait `retryAfterSeconds`; metrics budget is small | server retries once if `Retry-After` fits the request deadline, else returns |
 | 5xx | `langfuse_unavailable` | transient | server retries **GET only**, exponential backoff + jitter, max 2, within deadline |
 | TLS unknown authority | `tls_untrusted_certificate` | set `LANGFUSE_CA_CERT`/`LANGFUSE_CA_CERTS_PATH`; check startup log of CA sources | no |
+| redirect to another scheme, host or port | `redirect_refused` | the user points `LANGFUSE_BASE_URL` at the redirect target and restarts; never followed, so the keys stay on the configured host | no |
 | DNS/connect/proxy | `network_error` | check host, `HTTPS_PROXY`/`NO_PROXY` | GET only |
 | timeout / canceled | `timeout` / `canceled` | narrow the query | no |
 

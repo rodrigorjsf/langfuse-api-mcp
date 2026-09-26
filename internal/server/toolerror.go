@@ -12,6 +12,7 @@ const (
 	errorInvalidArgument   = "invalid_argument"
 	errorOperationNotFound = "operation_not_found"
 	errorInternal          = "internal_error"
+	errorRedirectRefused   = "redirect_refused"
 )
 
 // toolErrorBody is the ADR-0008 tool error shape.
@@ -32,7 +33,7 @@ type toolErrorFields struct {
 // toolError returns a tool result with isError set and the ADR-0008 shape.
 func toolError(code, message, hint, operationID string) (*mcp.CallToolResult, error) {
 	return jsonResult(toolErrorBody{Error: toolErrorFields{
-		Code: code, Message: message, Hint: hint, OperationID: operationID,
+		Code: code, Message: message, Hint: hint, OperationID: truncate(operationID), // the ID may be the caller's raw input
 	}}, true)
 }
 
