@@ -52,6 +52,8 @@ type Config struct {
 	IgnoreAmbientCA bool
 	// AmbientInFile holds the ambient CA variables set in the config file.
 	AmbientInFile Ambient
+	// Connection is the Langfuse host and key pair.
+	Connection Connection
 }
 
 // Ambient holds the values of the ambient CA source variables; "" when unset.
@@ -132,7 +134,8 @@ func ReadFile() (File, error) {
 // Load reads the settings from env, a variable-name-to-value map (the process
 // environment in production, a literal map in tests), then from file for every
 // setting env leaves unset. An empty value counts as unset. It fails, naming
-// the variable, on a value it cannot parse.
+// the variable, on a value it cannot parse and when the host or a key is
+// missing.
 func Load(env map[string]string, file File) (Config, error) {
 	fromFile, err := parseFile(file)
 	if err != nil {
@@ -168,6 +171,9 @@ func Load(env map[string]string, file File) (Config, error) {
 			return Config{}, fmt.Errorf("%s=%q: want true or false", EnvIgnoreAmbientCA, flag.Value)
 		}
 		cfg.IgnoreAmbientCA = ignore
+	}
+	if cfg.Connection, err = loadConnection(env, fromFile); err != nil {
+		return Config{}, err
 	}
 	return cfg, nil
 }

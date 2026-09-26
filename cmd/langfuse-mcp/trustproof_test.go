@@ -70,7 +70,7 @@ func probe(targetsJSON string) int {
 	if os.Getenv(loadRootsFirstEnv) == "1" {
 		_, _ = x509.SystemCertPool() // deliberately before the capture: the roots are cached now
 	}
-	pool, ok := start()
+	started, ok := start()
 	if !ok {
 		return 1
 	}
@@ -80,7 +80,7 @@ func probe(targetsJSON string) int {
 		result.Environment[v] = set
 	}
 	for name, addr := range targets {
-		result.Handshakes[name] = handshake(pool, addr)
+		result.Handshakes[name] = handshake(started.pool, addr)
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
 		log.Printf("encode probe result: %v", err)

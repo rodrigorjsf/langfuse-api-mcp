@@ -102,7 +102,7 @@ func runChildOutput(t *testing.T, env []string) (stdout, stderr []byte, err erro
 		t.Fatalf("locate test binary: %v", err)
 	}
 	cmd := exec.CommandContext(ctx, exe, "-test.run=^$") //nolint:gosec // G204: exe is this test binary, not external input
-	cmd.Env = append(append(os.Environ(), runMainEnv+"=1"), hermeticEnv...)
+	cmd.Env = append(append(append(os.Environ(), runMainEnv+"=1"), hermeticEnv...), connectionEnv...)
 	cmd.Env = append(cmd.Env, env...)
 	var out, errOut bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errOut
@@ -115,6 +115,14 @@ func runChildOutput(t *testing.T, env []string) (stdout, stderr []byte, err erro
 var hermeticEnv = []string{
 	"LANGFUSE_CA_CERT=", "LANGFUSE_CA_CERTS_PATH=", "LANGFUSE_MCP_IGNORE_AMBIENT_CA=",
 	"SSL_CERT_FILE=", "SSL_CERT_DIR=", "NODE_EXTRA_CA_CERTS=", "REQUESTS_CA_BUNDLE=", "CURL_CA_BUNDLE=",
+}
+
+// connectionEnv is a valid Langfuse connection, so every child starts unless a
+// test overrides it. Nothing listens on the discard port: tests that call
+// Langfuse point LANGFUSE_BASE_URL at their own httptest server.
+var connectionEnv = []string{
+	"LANGFUSE_BASE_URL=http://127.0.0.1:9", "LANGFUSE_HOST=",
+	"LANGFUSE_PUBLIC_KEY=" + stdioPublicKey, "LANGFUSE_SECRET_KEY=" + stdioSecretKey,
 }
 
 // logLines decodes the JSON log lines the executable wrote to stderr.

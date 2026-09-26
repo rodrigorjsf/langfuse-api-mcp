@@ -42,14 +42,22 @@ func TestLoadLeavesExplicitCASourcesUnsetWhenTheVariablesAreAbsentOrEmpty(t *tes
 	}
 }
 
-// mustLoad calls config.Load and fails the test on an error.
+// mustLoad calls load and fails the test on an error. It returns the
+// settings without the connection, which connection_test.go covers.
 func mustLoad(t *testing.T, env map[string]string, file config.File) config.Config {
 	t.Helper()
-	cfg, err := config.Load(env, file)
+	cfg, err := load(env, file)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
+	cfg.Connection = config.Connection{}
 	return cfg
+}
+
+// load calls config.Load with a valid connection environment (host and key
+// pair) plus env, so each test sets only the settings it asserts on.
+func load(env map[string]string, file config.File) (config.Config, error) {
+	return config.Load(connectionEnv(env), file)
 }
 
 func fromEnv(value string) config.Setting {
@@ -119,7 +127,7 @@ func TestLoadFailsNamingTheConfigFileAndLineNumberOfAMalformedLine(t *testing.T)
 			t.Parallel()
 			file := configFile(content)
 
-			_, err := config.Load(map[string]string{}, file)
+			_, err := load(map[string]string{}, file)
 
 			if err == nil {
 				t.Fatal("Load() succeeded on a malformed config file")
@@ -160,7 +168,7 @@ func TestLoadRefusesLangfuseKeysInTheConfigFile(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := config.Load(map[string]string{}, configFile(tc.line+"\n"))
+			_, err := load(map[string]string{}, configFile(tc.line+"\n"))
 
 			if err == nil {
 				t.Fatalf("Load() accepted %q in the config file", tc.line)
@@ -203,7 +211,7 @@ func FuzzLoadConfigFile(f *testing.F) {
 		`set it in the environment or in your MCP client's env block)$|` +
 		`^config file ` + path + `: LANGFUSE_MCP_IGNORE_AMBIENT_CA: want true or false$`)
 	f.Fuzz(func(t *testing.T, content string) {
-		_, err := config.Load(map[string]string{}, configFile(content))
+		_, err := load(map[string]string{}, configFile(content))
 		if err != nil && !shape.MatchString(err.Error()) {
 			t.Fatalf("error %q is not one of the fixed shapes", err)
 		}
@@ -227,7 +235,7 @@ func TestLoadReadsTheIgnoreAmbientCAFlag(t *testing.T) {
 func TestLoadFailsNamingTheVariableOfAnInvalidIgnoreAmbientCAFlag(t *testing.T) {
 	t.Parallel()
 
-	_, err := config.Load(map[string]string{"LANGFUSE_MCP_IGNORE_AMBIENT_CA": "yes"}, config.File{})
+	_, err := load(map[string]string{"LANGFUSE_MCP_IGNORE_AMBIENT_CA": "yes"}, config.File{})
 
 	if err == nil || !strings.Contains(err.Error(), "LANGFUSE_MCP_IGNORE_AMBIENT_CA") {
 		t.Fatalf("Load error = %v, want an error naming LANGFUSE_MCP_IGNORE_AMBIENT_CA", err)
@@ -260,7 +268,7 @@ func TestLoadFailsNamingTheFileAndVariableOfAnInvalidIgnoreAmbientCAFlagInTheCon
 	t.Parallel()
 	file := configFile("LANGFUSE_MCP_IGNORE_AMBIENT_CA=sk-lf-typo\n")
 
-	_, err := config.Load(map[string]string{}, file)
+	_, err := load(map[string]string{}, file)
 
 	if err == nil {
 		t.Fatal("Load() succeeded on an invalid flag in the config file")
@@ -281,7 +289,7 @@ func FuzzLoad(f *testing.F) {
 		f.Add(seed)
 	}
 	f.Fuzz(func(t *testing.T, value string) {
-		cfg, err := config.Load(map[string]string{"LANGFUSE_MCP_IGNORE_AMBIENT_CA": value}, config.File{})
+		cfg, err := load(map[string]string{"LANGFUSE_MCP_IGNORE_AMBIENT_CA": value}, config.File{})
 		if err != nil && cfg != (config.Config{}) {
 			t.Fatalf("Load(%q) returned a config %+v together with error %v", value, cfg, err)
 		}
