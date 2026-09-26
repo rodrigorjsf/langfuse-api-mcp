@@ -15,7 +15,11 @@ import (
 const (
 	maxServerErrorRetries = 2
 	maxRateLimitRetries   = 1
-	// baseBackoff is the first 5xx backoff; each further retry doubles it.
+	// maxNetworkRetries bounds the retries of a read that failed on the
+	// network (DNS, connection or proxy failure).
+	maxNetworkRetries = 2
+	// baseBackoff is the first backoff after a 5xx or a network failure; each
+	// further retry doubles it.
 	baseBackoff = 250 * time.Millisecond
 	// maxRetryAfterSeconds bounds a Retry-After value: a day is longer than
 	// any Langfuse rate-limit window.
@@ -24,13 +28,25 @@ const (
 
 // retries counts the retries one Do call has made.
 type retries struct {
-	serverErrors, rateLimits int
+	serverErrors, rateLimits, networkErrors int
 }
 
 // next reports whether the failed attempt err is retried, and after how long.
+// Only a GET is retried: other methods may not be idempotent.
 func (r *retries) next(method string, err error) (time.Duration, bool) {
+	if method != http.MethodGet || err == nil {
+		return 0, false
+	}
+	if errors.Is(err, ErrNetwork) {
+		if r.networkErrors >= maxNetworkRetries {
+			return 0, false
+		}
+		backoff := baseBackoff << r.networkErrors
+		r.networkErrors++
+		return jitter(backoff), true
+	}
 	var apiErr *APIError
-	if method != http.MethodGet || !errors.As(err, &apiErr) {
+	if !errors.As(err, &apiErr) {
 		return 0, false
 	}
 	switch {

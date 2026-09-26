@@ -153,7 +153,10 @@ func resettingListener(t *testing.T) (string, *atomic.Int32) {
 func TestAReadThatFailsOnTheNetworkIsRetriedTwiceBeforeTheNetworkErrorIsReported(t *testing.T) {
 	t.Parallel()
 	host, accepted := resettingListener(t)
-	cs := connectClient(t, langfuse.New(testOptions(t, host)), slog.New(slog.DiscardHandler))
+	var w fakeWait
+	opts := testOptions(t, host)
+	opts.Wait = w.wait
+	cs := connectClient(t, langfuse.New(opts), slog.New(slog.DiscardHandler))
 
 	got := toolErrorOf(t, callExecuteRead(t, cs, traceGet))
 
@@ -162,6 +165,14 @@ func TestAReadThatFailsOnTheNetworkIsRetriedTwiceBeforeTheNetworkErrorIsReported
 	}
 	if n := accepted.Load(); n != 3 {
 		t.Errorf("the host saw %d connections, want 3: the first attempt and two retries", n)
+	}
+	// The same backoff as a 5xx, through the same (fake) timer: 250ms then
+	// 500ms, each with jitter taking up to half of it off.
+	waits := w.recorded()
+	if len(waits) != 2 ||
+		waits[0] < 125*time.Millisecond || waits[0] > 250*time.Millisecond ||
+		waits[1] < 250*time.Millisecond || waits[1] > 500*time.Millisecond {
+		t.Errorf("waits %v, want two waits in [125ms,250ms] then [250ms,500ms]", waits)
 	}
 }
 

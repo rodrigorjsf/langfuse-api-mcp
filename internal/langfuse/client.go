@@ -172,8 +172,8 @@ type Response struct {
 // set, for a 2xx body above MaxResponseBytes. A request that got no answer returns an error wrapping
 // ErrUntrustedCertificate, ErrCertificateRejected, ErrNetwork, ErrTimeout or
 // ErrCanceled. A GET is retried within the deadline: twice with exponential
-// backoff and jitter on a 5xx, once after Retry-After on a 429, and twice on a
-// network failure (see send). Other methods are never retried: they are not
+// backoff and jitter on a 5xx or a network failure, once after Retry-After on
+// a 429 (see retries.next). Other methods are never retried: they are not
 // idempotent.
 func (c *Client) Do(ctx context.Context, method, escapedPath string, query url.Values) (Response, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
@@ -206,9 +206,9 @@ func (c *Client) attempt(ctx context.Context, method, escapedPath string, query 
 	req.SetBasicAuth(c.publicKey, c.secretKey)
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := c.send(ctx, req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return Response{}, fmt.Errorf("send request: %w", err)
+		return Response{}, fmt.Errorf("send request: %w", classify(err))
 	}
 	defer func() {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, MaxResponseBytes)) // drain so the connection is reused
