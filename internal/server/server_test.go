@@ -70,11 +70,26 @@ func connectClient(t *testing.T, client *langfuse.Client, log *slog.Logger) *mcp
 // session.
 func connectServer(t *testing.T, client *langfuse.Client, log *slog.Logger, secrets server.Secrets) *mcp.ClientSession {
 	t.Helper()
+	return startServer(t, client, log, secrets, langfuse.UnknownProfile())
+}
+
+// connectProfile starts the server against the fake Langfuse as if startup
+// had detected the given deployment profile.
+func connectProfile(t *testing.T, fake *httptest.Server, profile langfuse.DeploymentProfile) *mcp.ClientSession {
+	t.Helper()
+	return startServer(t, langfuse.New(testOptions(t, fake.URL)), slog.New(slog.DiscardHandler), server.Secrets{Keys: testKeys()}, profile)
+}
+
+// startServer starts the server with the real catalog and the given Langfuse
+// client, logger, key pair to redact and deployment profile, and returns a
+// connected MCP client session.
+func startServer(t *testing.T, client *langfuse.Client, log *slog.Logger, secrets server.Secrets, profile langfuse.DeploymentProfile) *mcp.ClientSession {
+	t.Helper()
 	cat, err := catalog.Load()
 	if err != nil {
 		t.Fatalf("load catalog: %v", err)
 	}
-	srv := server.New(cat, client, log, secrets)
+	srv := server.New(cat, client, log, secrets, profile)
 
 	ctx := context.Background()
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()

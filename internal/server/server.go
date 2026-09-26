@@ -78,11 +78,12 @@ func (s Secrets) redactor() sanitize.Redactor {
 // New returns the MCP server exposing execute_read over the catalog. The tool
 // set is fixed here, at startup, and is the same for every client. log
 // receives one audit line per tool call; it must write to stderr. secrets are
-// redacted from every result and log line.
-func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets Secrets) *mcp.Server {
+// redacted from every result and log line. profile is the deployment profile
+// detected at startup; operation_unavailable hints name it.
+func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets Secrets, profile langfuse.DeploymentProfile) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "langfuse-mcp", Version: "0.0.0-dev"}, nil)
 	redact := secrets.redactor()
-	ex := executor{catalog: cat, client: client, redact: redact}
+	ex := executor{catalog: cat, client: client, redact: redact, profile: profile}
 	s.AddTool(&mcp.Tool{
 		Name:        "execute_read",
 		Title:       executeReadTitle,
@@ -114,6 +115,7 @@ type executor struct {
 	catalog catalog.Catalog
 	client  *langfuse.Client
 	redact  sanitize.Redactor
+	profile langfuse.DeploymentProfile
 }
 
 // executeReadInput is the execute_read argument object (executeReadSchema).
@@ -236,7 +238,7 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 	resp, err := ex.client.Do(ctx, request.Method, request.Path, request.Query)
 	a.status, a.bytes = resp.Status, len(resp.Body)
 	if err != nil {
-		if f, ok := langfuseErrorFields(err, op.ID, ex.redact); ok {
+		if f, ok := langfuseErrorFields(err, op.ID, ex.redact, ex.profile); ok {
 			a.status = f.HTTPStatus
 			if request.FolderName && (f.HTTPStatus == http.StatusNotFound || f.HTTPStatus == http.StatusBadRequest) {
 				f.Hint = folderNameHintFor(f)

@@ -100,7 +100,7 @@ When Langfuse answers with an error, the agent receives a tool error (`isError: 
 | 401 | `langfuse_unauthorized` | nothing; the hint points at the key pair and the key's region |
 | 403 | `langfuse_forbidden` | nothing; the key needs an organization key or an Enterprise feature |
 | 404 JSON "not found" | `langfuse_not_found` | nothing |
-| 404 with an HTML body, or a JSON message saying "Langfuse v4 events_only mode" / "Langfuse v4 write mode" | `operation_unavailable` | nothing; the deployment does not serve this operation, the hint names the replacement family (naming the detected version is [#34](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/34)). The body is never shown |
+| 404 with an HTML body, or a JSON message saying "Langfuse v4 events_only mode" / "Langfuse v4 write mode" | `operation_unavailable` | nothing; the deployment does not serve this operation, the hint names the operation's family and the replacement, then the deployment: its Langfuse version (only a plain `major.minor.patch`; anything else reads "version unknown") and the families on and off. Until startup detection lands ([#72](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/72), Planned) the version reads "unknown" and every family on. The body is never shown |
 | 409 / 422 | `langfuse_conflict` / `langfuse_unprocessable` | nothing |
 | 429 | `langfuse_rate_limited` (`retryable`, with `retryAfterSeconds`) | a GET waits `Retry-After` and retries once, if the wait fits the 60 s request deadline |
 | 5xx | `langfuse_unavailable` (`retryable`) | a GET is retried at most twice, after 250 ms then 500 ms (minus random jitter), within the deadline |

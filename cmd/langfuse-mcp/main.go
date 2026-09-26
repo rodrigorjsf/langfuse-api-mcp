@@ -108,7 +108,9 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 		// environment and the config file; no tool argument reaches them.
 		Proxy: langfuse.ProxyFromSettings(cfg.ProxySettings.HTTPS.Reveal(), cfg.ProxySettings.HTTP.Reveal(), cfg.ProxySettings.NoProxy),
 	})
-	srv := server.New(cat, client, log, server.Secrets{Keys: keys})
+	// Deployment profile detection (ADR-0012 §3) is not wired yet (#72): the
+	// version stays unknown and every family stays on, so nothing is hidden.
+	srv := server.New(cat, client, log, server.Secrets{Keys: keys}, langfuse.UnknownProfile())
 	serve := func(ctx context.Context) error {
 		// On shutdown, close the keep-alive connections to Langfuse instead of
 		// leaving them to the process exit.
