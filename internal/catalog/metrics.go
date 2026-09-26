@@ -131,10 +131,11 @@ func metricsQuery(raw string) (string, error) {
 	rowLimit := DefaultRowLimit
 	if v, ok := config["row_limit"]; ok {
 		// Only an integer literal counts: a float such as 1000.0 or 1e3 is
-		// refused like 1.5, never rounded.
-		literal, _ := v.(json.Number)
+		// refused like 1.5, never rounded, and a non-number (a string, null,
+		// true) is refused outright.
+		literal, isNumber := v.(json.Number)
 		n, ok := intInRange(string(literal), MaxRowLimit)
-		if !ok {
+		if !isNumber || !ok {
 			return "", rangeError{ErrRowLimitOutOfRange,
 				invalidf("parameter query: config.row_limit: want an integer from 1 to %d, got %s", MaxRowLimit, kind(v))}
 		}
