@@ -14,8 +14,9 @@ import (
 // the default build so that its rate-limit behaviour is proven on every OS
 // against the fake Langfuse, without a live one.
 
-// healthRead is the execute_read call of Langfuse's health check.
-var healthRead = map[string]any{"operationId": "health_health"}
+// healthRead returns the execute_read call of Langfuse's health check, fresh
+// on every call: parallel tests share no mutable map.
+func healthRead() map[string]any { return map[string]any{"operationId": "health_health"} }
 
 // maxRetryAfterWait bounds the one wait readLive makes on a Retry-After: a
 // Langfuse Cloud rate-limit window is one minute on the Hobby plan.
@@ -52,7 +53,7 @@ func TestTheSuiteWaitsForRetryAfterWhenLangfuseStillRateLimitsAfterTheClientsRet
 	var clientWait, suiteWait fakeWait
 	cs := connectFakeTime(t, fake, &clientWait, 0)
 
-	res := readLive(t, cs, healthRead, suiteWait.wait)
+	res := readLive(t, cs, healthRead(), suiteWait.wait)
 
 	if res.IsError || calls.Load() != 3 {
 		t.Fatalf("after %d requests the suite got %s, want the 200 answer on the third request", calls.Load(), resultText(t, res))
@@ -68,7 +69,7 @@ func TestTheSuiteNeverRetriesA429ThatNamesNoWait(t *testing.T) {
 	var clientWait, suiteWait fakeWait
 	cs := connectFakeTime(t, fake, &clientWait, 0)
 
-	got := toolErrorOf(t, readLive(t, cs, healthRead, suiteWait.wait)).Error
+	got := toolErrorOf(t, readLive(t, cs, healthRead(), suiteWait.wait)).Error
 
 	if got.Code != "langfuse_rate_limited" || calls.Load() != 1 || len(suiteWait.recorded()) != 0 {
 		t.Fatalf("after %d requests and waits %v the suite got %+v, want langfuse_rate_limited after one request and no wait",

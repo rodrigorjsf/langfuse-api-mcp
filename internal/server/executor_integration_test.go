@@ -101,7 +101,7 @@ func TestLiveLangfuseAnswersTheHealthCheckThroughTheExecutor(t *testing.T) {
 		Status  string `json:"status"`
 		Version string `json:"version"`
 	}
-	liveData(t, readLive(t, cs, healthRead, waitRetryAfter), &health)
+	liveData(t, readLive(t, cs, healthRead(), waitRetryAfter), &health)
 
 	if health.Status != "OK" || health.Version == "" {
 		t.Fatalf("health = %+v, want status OK and a version", health)
