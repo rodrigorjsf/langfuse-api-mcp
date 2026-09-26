@@ -357,3 +357,53 @@ func TestStartupFailsNamingAnInvalidRequestLimit(t *testing.T) {
 		})
 	}
 }
+
+// Issue #47: the startup log states the effective rate limit and why it has
+// that value.
+func TestStartupLogStatesTheEffectiveRateLimitAndItsSource(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct {
+		env        []string
+		perMinute  float64
+		wantSource string
+	}{
+		"Cloud host":       {[]string{"LANGFUSE_BASE_URL=https://cloud.langfuse.com", "LANGFUSE_MCP_RATE_LIMIT="}, 30, "default-cloud"},
+		"self-hosted host": {[]string{"LANGFUSE_BASE_URL=https://langfuse.corp.example", "LANGFUSE_MCP_RATE_LIMIT="}, 1000, "default-self-hosted"},
+		"explicit value":   {[]string{"LANGFUSE_BASE_URL=https://cloud.langfuse.com", "LANGFUSE_MCP_RATE_LIMIT=250"}, 250, "explicit"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			stderr, err := runExecutable(t, tc.env...)
+			if err != nil {
+				t.Fatalf("executable did not exit 0: %v\nstderr:\n%s", err, stderr)
+			}
+
+			for _, line := range logLines(t, stderr) {
+				if line["msg"] != "rate limit" {
+					continue
+				}
+				if line["perMinute"] != tc.perMinute || line["source"] != tc.wantSource {
+					t.Fatalf("rate limit line = %v, want perMinute %v, source %q", line, tc.perMinute, tc.wantSource)
+				}
+				return
+			}
+			t.Fatalf("no \"rate limit\" line in the startup log:\n%s", stderr)
+		})
+	}
+}
+
+// The startup log, rate-limit line included, never holds the Langfuse keys.
+func TestStartupLogNeverHoldsTheLangfuseKeys(t *testing.T) {
+	t.Parallel()
+
+	stderr, err := runExecutable(t, "LANGFUSE_BASE_URL=https://cloud.langfuse.com")
+	if err != nil {
+		t.Fatalf("executable did not exit 0: %v\nstderr:\n%s", err, stderr)
+	}
+
+	if bytes.Contains(stderr, []byte(stdioSecretKey)) || bytes.Contains(stderr, []byte(stdioPublicKey)) {
+		t.Fatalf("startup log contains a Langfuse key:\n%s", stderr)
+	}
+}

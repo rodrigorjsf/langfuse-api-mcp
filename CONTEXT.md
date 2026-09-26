@@ -47,7 +47,7 @@ _Avoid_: missing endpoint, not found (that is a missing resource)
 
 **Organization key**: a key pair scoped to a Langfuse organization; required by organization operations (projects admin, memberships, SCIM).
 
-**Request limits**: the rate limit (Langfuse requests per minute) and concurrency cap (Langfuse requests in flight) one server process applies to all its Langfuse calls, set only by the operator (`LANGFUSE_MCP_RATE_LIMIT`, `LANGFUSE_MCP_MAX_CONCURRENCY`); a call they hold past its deadline is *throttled* and never sent.
+**Request limits**: the rate limit (Langfuse requests per minute) and concurrency cap (Langfuse requests in flight) one server process applies to all its Langfuse calls, set only by the operator (`LANGFUSE_MCP_RATE_LIMIT`, `LANGFUSE_MCP_MAX_CONCURRENCY`), never by a tool argument; left unset, the rate limit's default depends on whether the host is a Cloud host; a call they hold past its deadline is *throttled* and never sent.
 
 **Config file**: an optional per-user file at the OS config location holding non-secret settings; environment variables take precedence over it and it may never hold keys.
 _Avoid_: dotenv, settings file

@@ -2,9 +2,11 @@ package config
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strings"
 )
 
@@ -24,10 +26,9 @@ type Connection struct {
 	SecretKey Secret
 }
 
-// Secret holds a credential. It never prints its value: String, GoString,
-// LogValue and MarshalJSON all return [REDACTED]. Reveal returns the value
-// for the one place that must send it. Non-string fmt verbs such as %d
-// still print the value: see #46.
+// Secret holds a credential. It never prints its value: Format (every fmt
+// verb and flag), String, GoString, LogValue and MarshalJSON all render
+// [REDACTED]. Reveal returns the value for the one place that must send it.
 type Secret struct {
 	value string
 }
@@ -37,10 +38,18 @@ const redacted = "[REDACTED]"
 // Reveal returns the secret value.
 func (s Secret) Reveal() string { return s.value }
 
-// String returns [REDACTED], so %v and %s never print the value.
+// Format writes [REDACTED] for every fmt verb and flag. Without it fmt calls
+// String only for %v %s %x %X %q and prints the value field by reflection
+// for any other verb, such as %d or %t.
+func (Secret) Format(f fmt.State, _ rune) {
+	// Ignored: Format has no error return; fmt records its own write errors.
+	_, _ = io.WriteString(f, redacted)
+}
+
+// String returns [REDACTED], for callers that convert a Secret to a string.
 func (Secret) String() string { return redacted }
 
-// GoString returns [REDACTED], so %#v never prints the value.
+// GoString returns [REDACTED], for callers that ask for a Go-syntax rendering.
 func (Secret) GoString() string { return redacted }
 
 // LogValue returns [REDACTED], so slog never logs the value.
@@ -110,11 +119,38 @@ func loadConnection(env, fromFile map[string]string) (Connection, error) {
 
 // isLoopback reports whether host, a URL host name without port, is
 // "localhost" or a loopback IP address. Any other name, even one that
-// resolves to a loopback address, is not: resolution can change.
+// resolves to a loopback address, is not: resolution can change. Only ASCII
+// letters fold, as in isCloudHost: Unicode folding would match "localhoſt".
 func isLoopback(host string) bool {
-	if strings.EqualFold(host, "localhost") {
+	if asciiLower(host) == "localhost" {
 		return true
 	}
 	ip, err := netip.ParseAddr(host)
 	return err == nil && ip.IsLoopback()
+}
+
+// cloudHosts are the Cloud hosts (CONTEXT.md), the hosts of the region URLs
+// README "Cloud regions" lists: EU, US, JP, HIPAA.
+var cloudHosts = [...]string{"cloud.langfuse.com", "us.cloud.langfuse.com", "jp.cloud.langfuse.com", "hipaa.cloud.langfuse.com"}
+
+// isCloudHost reports whether u's host name, without port or userinfo, is
+// exactly one of cloudHosts, ignoring ASCII case. The match is exact, never by
+// suffix or substring, so cloud.langfuse.com.evil.example is not Cloud; a
+// trailing dot is not stripped either. Only ASCII letters fold: Unicode
+// folding (strings.EqualFold) would match "ſ" (U+017F) to "s".
+func isCloudHost(u *url.URL) bool {
+	name := asciiLower(u.Hostname())
+	return slices.Contains(cloudHosts[:], name)
+}
+
+// asciiLower returns s with the ASCII letters A-Z lowered and every other
+// byte unchanged.
+func asciiLower(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if 'A' <= c && c <= 'Z' {
+			b[i] = c + ('a' - 'A')
+		}
+	}
+	return string(b)
 }

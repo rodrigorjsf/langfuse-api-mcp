@@ -23,13 +23,13 @@ func TestLoadReadsTheRateLimitAndMaxConcurrencyFromTheEnvironment(t *testing.T) 
 	}
 }
 
-func TestLoadLeavesTheLimitsUnsetSoTheClientDefaultsApply(t *testing.T) {
+func TestLoadLeavesTheMaxConcurrencyUnsetSoTheClientDefaultApplies(t *testing.T) {
 	t.Parallel()
 
-	cfg := mustLoad(t, map[string]string{"LANGFUSE_MCP_RATE_LIMIT": "", "LANGFUSE_MCP_MAX_CONCURRENCY": ""}, config.File{})
+	cfg, err := load(map[string]string{"LANGFUSE_MCP_MAX_CONCURRENCY": ""}, config.File{})
 
-	if cfg.RateLimit != 0 || cfg.MaxConcurrency != 0 {
-		t.Fatalf("RateLimit, MaxConcurrency = %d, %d; want 0, 0 (unset)", cfg.RateLimit, cfg.MaxConcurrency)
+	if err != nil || cfg.MaxConcurrency != 0 {
+		t.Fatalf("MaxConcurrency, err = %d, %v; want 0 (unset), nil", cfg.MaxConcurrency, err)
 	}
 }
 
@@ -128,10 +128,12 @@ func FuzzLoadLimits(f *testing.F) {
 		f.Add(seed)
 	}
 	f.Fuzz(func(t *testing.T, value string) {
-		cfg, err := load(map[string]string{"LANGFUSE_MCP_RATE_LIMIT": value, "LANGFUSE_MCP_MAX_CONCURRENCY": value}, config.File{})
-		if value == "" {
-			if err != nil || cfg.RateLimit != 0 || cfg.MaxConcurrency != 0 {
-				t.Fatalf("Load(\"\") = %d, %d, %v; want both unset", cfg.RateLimit, cfg.MaxConcurrency, err)
+		cfg, err := load(map[string]string{
+			"LANGFUSE_BASE_URL": "https://cloud.langfuse.com", "LANGFUSE_MCP_RATE_LIMIT": value, "LANGFUSE_MCP_MAX_CONCURRENCY": value,
+		}, config.File{})
+		if value == "" { // unset: the Cloud host default and the client's concurrency default
+			if err != nil || cfg.RateLimit != 30 || cfg.MaxConcurrency != 0 {
+				t.Fatalf("Load(\"\") = %d, %d, %v; want 30 (Cloud default), 0 (unset)", cfg.RateLimit, cfg.MaxConcurrency, err)
 			}
 			return
 		}
@@ -144,4 +146,91 @@ func FuzzLoadLimits(f *testing.F) {
 			t.Fatalf("Load(%q) = %d, %d; want %d, %d", value, cfg.RateLimit, cfg.MaxConcurrency, n, n)
 		}
 	})
+}
+
+// Issue #47: with no explicit rate limit, the default follows the host: a
+// Cloud host keeps the Cloud Hobby limit, any other host gets a generous one.
+
+func TestLoadDefaultsTheRateLimitTo30OnEveryCloudHost(t *testing.T) {
+	t.Parallel()
+	for _, host := range []string{
+		"https://cloud.langfuse.com",
+		"https://us.cloud.langfuse.com",
+		"https://jp.cloud.langfuse.com",
+		"https://hipaa.cloud.langfuse.com",
+		"https://CLOUD.Langfuse.COM",       // host names are case-insensitive
+		"https://cloud.langfuse.com:443/",  // the port and path are ignored
+		"https://us.cloud.langfuse.com/eu", // a path naming another region changes nothing
+	} {
+		t.Run(host, func(t *testing.T) {
+			t.Parallel()
+
+			assertRateLimit(t, map[string]string{"LANGFUSE_BASE_URL": host}, config.File{}, 30, config.RateLimitDefaultCloud)
+		})
+	}
+}
+
+// assertRateLimit loads env and file and fails unless the effective rate limit
+// and its source are want and wantSource.
+func assertRateLimit(t *testing.T, env map[string]string, file config.File, want int, wantSource config.RateLimitSource) {
+	t.Helper()
+	cfg, err := load(env, file)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.RateLimit != want || cfg.RateLimitSource != wantSource {
+		t.Fatalf("RateLimit, source = %d, %q; want %d, %q", cfg.RateLimit, cfg.RateLimitSource, want, wantSource)
+	}
+}
+
+func TestLoadDefaultsTheRateLimitTo1000OnASelfHostedOrLoopbackHost(t *testing.T) {
+	t.Parallel()
+	for _, host := range []string{"https://langfuse.corp.example", "http://localhost:3000", "http://127.0.0.1:3000"} {
+		t.Run(host, func(t *testing.T) {
+			t.Parallel()
+			assertRateLimit(t, map[string]string{"LANGFUSE_BASE_URL": host}, config.File{}, 1000, config.RateLimitDefaultSelfHosted)
+		})
+	}
+}
+
+func TestLoadLetsAnExplicitRateLimitWinOnAnyHost(t *testing.T) {
+	t.Parallel()
+	for _, host := range []string{"https://cloud.langfuse.com", "https://langfuse.corp.example"} {
+		t.Run(host+"/environment", func(t *testing.T) {
+			t.Parallel()
+			env := map[string]string{"LANGFUSE_BASE_URL": host, "LANGFUSE_MCP_RATE_LIMIT": "250"}
+			assertRateLimit(t, env, configFile("LANGFUSE_MCP_RATE_LIMIT=90\n"), 250, config.RateLimitExplicit)
+		})
+		t.Run(host+"/config file", func(t *testing.T) {
+			t.Parallel()
+			env := map[string]string{"LANGFUSE_BASE_URL": host}
+			assertRateLimit(t, env, configFile("LANGFUSE_MCP_RATE_LIMIT=90\n"), 90, config.RateLimitExplicit)
+		})
+	}
+}
+
+// Dangerous parameters: the host is operator config, but a look-alike must
+// never pass for a Cloud host by suffix, substring, userinfo, path, trailing
+// dot or Unicode case folding.
+func TestLoadDoesNotTreatALookAlikeHostAsACloudHost(t *testing.T) {
+	t.Parallel()
+	for _, host := range []string{
+		"https://cloud.langfuse.com.evil.example",
+		"https://evilcloud.langfuse.com",
+		"https://evil.cloud.langfuse.com",
+		"https://cloud.langfuse.com@evil.example",
+		"https://user:pass@evil.example/cloud.langfuse.com",
+		"https://evil.example/https://cloud.langfuse.com",
+		"https://evil.example?host=cloud.langfuse.com",
+		"https://evil.example#cloud.langfuse.com",
+		"https://cloud.langfuse.com.",
+		"https://cloud.langfuſe.com", // LATIN SMALL LETTER LONG S folds to "s" under Unicode rules
+		"https://cloud-langfuse.com",
+		"https://langfuse.com",
+	} {
+		t.Run(host, func(t *testing.T) {
+			t.Parallel()
+			assertRateLimit(t, map[string]string{"LANGFUSE_BASE_URL": host}, config.File{}, 1000, config.RateLimitDefaultSelfHosted)
+		})
+	}
 }

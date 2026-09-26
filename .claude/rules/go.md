@@ -19,7 +19,7 @@ Measure before optimizing; never trade a security control for speed. Error handl
 - Randomness for secrets: `crypto/rand` only. Token comparison: `crypto/subtle.ConstantTimeCompare`.
 - TLS: `tls.Config{MinVersion: tls.VersionTLS12, RootCAs: pool}`; `InsecureSkipVerify` must never appear in the codebase (lint rule).
 - Validate every tool input before use: enums, bounds, formats, max lengths; reject unknown fields. Guard integer conversions (`limit`, page) against overflow and negative values.
-- Secrets live in a type whose `String()`/`LogValue()` return `[REDACTED]` so they cannot leak through `%v` or `slog`.
+- Secrets live in a type whose `Format()`/`String()`/`LogValue()`/`MarshalJSON()` render `[REDACTED]`, so no fmt verb (`%d` and `%t` included), `slog` or JSON leaks them.
 - Fuzz (`go test -fuzz`) every parser of untrusted input: config parsing, operation-param validation, output sanitizer, error-body parsing.
 
 ## Memory and I/O

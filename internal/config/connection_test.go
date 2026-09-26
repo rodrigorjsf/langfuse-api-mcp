@@ -154,6 +154,7 @@ func TestLoadRequiresHTTPSExceptForALoopbackHost(t *testing.T) {
 		"http://langfuse.internal.example.com":  false,
 		"http://10.0.0.5:3000":                  false,
 		"http://localhost.evil.example":         false,
+		"http://localho\u017ft:3000":            false,
 		"http://127.0.0.1.evil.example":         false,
 		"http://[::ffff:10.0.0.5]:3000":         false,
 	} {
@@ -188,6 +189,23 @@ func TestTheLangfuseKeysNeverPrintTheirValue(t *testing.T) {
 	for _, key := range []string{testPublicKey, testSecretKey} {
 		if strings.Contains(out.String(), key) {
 			t.Fatalf("printed config leaks %s:\n%s", key, out.String())
+		}
+	}
+}
+
+func TestASecretRendersRedactedForEveryFmtVerb(t *testing.T) {
+	t.Parallel()
+	cfg, _, err := config.Load(connectionEnv(nil), config.File{})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	secret := cfg.Connection.SecretKey
+	// String covers only %v %s %x %X %q: other verbs print the struct field by
+	// reflection unless Secret formats itself (#46).
+	for _, verb := range []string{"%d", "%t", "%v", "%+v", "%#v", "%s", "%q", "%x", "%X", "%10.3f"} {
+		format := verb // a variable format string: vet would reject the wrong-type verbs
+		if got := fmt.Sprintf(format, secret); got != "[REDACTED]" {
+			t.Errorf("Sprintf(%q, secret) = %q, want [REDACTED]", verb, got)
 		}
 	}
 }

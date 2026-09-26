@@ -46,7 +46,9 @@ func TestLoadLeavesExplicitCASourcesUnsetWhenTheVariablesAreAbsentOrEmpty(t *tes
 }
 
 // mustLoad calls load and fails the test on an error. It returns the
-// settings without the connection, which connection_test.go covers.
+// settings without the connection, which connection_test.go covers, and
+// without the host-based rate-limit default, which limits_test.go covers
+// through load; an explicit rate limit is kept.
 func mustLoad(t *testing.T, env map[string]string, file config.File) config.Config {
 	t.Helper()
 	cfg, err := load(env, file)
@@ -54,6 +56,9 @@ func mustLoad(t *testing.T, env map[string]string, file config.File) config.Conf
 		t.Fatalf("Load: %v", err)
 	}
 	cfg.Connection = config.Connection{}
+	if cfg.RateLimitSource != config.RateLimitExplicit {
+		cfg.RateLimit, cfg.RateLimitSource = 0, ""
+	}
 	return cfg
 }
 
