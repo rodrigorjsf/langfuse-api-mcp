@@ -185,21 +185,25 @@ func Load(env map[string]string, file File) (Config, []IgnoredKey, error) {
 type IgnoredKey struct {
 	// Line is the 1-based line number in the config file.
 	Line int
-	// Name is the key, with control, invisible and bidi characters escaped
-	// (Go string-literal escapes), so it cannot forge or hide text in a log.
+	// Name is the key, cut to 64 runes and with control, invisible and bidi
+	// characters escaped (Go string-literal escapes), so it cannot flood,
+	// forge or hide text in a log.
 	Name string
 }
 
-// knownFileKeys are the settings the config file may hold: those Load reads
-// today and those the README documents as Planned, so a documented setting
-// never draws a warning. The Langfuse keys are absent: parseFile refuses them.
-var knownFileKeys = map[string]bool{
-	EnvCACert: true, EnvCACertsPath: true, EnvIgnoreAmbientCA: true,
-	EnvSSLCertFile: true, EnvSSLCertDir: true, EnvNodeExtraCACerts: true, EnvRequestsCABundle: true, EnvCurlCABundle: true,
-	EnvBaseURL: true, EnvHost: true,
-	// Planned (README "Certificates and proxy" and "Behavior").
-	"HTTPS_PROXY": true, "HTTP_PROXY": true, "NO_PROXY": true,
-	"LANGFUSE_MCP_ALLOW_WRITES": true, "LANGFUSE_MCP_TRANSPORT": true,
+// isKnownFileKey reports whether key is a setting the config file may hold:
+// one Load reads today or one the README documents as Planned, so a documented
+// setting never draws a warning. The Langfuse keys are not: parseFile refuses them.
+func isKnownFileKey(key string) bool {
+	switch key {
+	case EnvCACert, EnvCACertsPath, EnvIgnoreAmbientCA,
+		EnvSSLCertFile, EnvSSLCertDir, EnvNodeExtraCACerts, EnvRequestsCABundle, EnvCurlCABundle,
+		EnvBaseURL, EnvHost,
+		// Planned (README "Certificates and proxy" and "Behavior"); no code reads them yet.
+		"HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "LANGFUSE_MCP_ALLOW_WRITES", "LANGFUSE_MCP_TRANSPORT":
+		return true
+	}
+	return false
 }
 
 // parseFile returns the KEY=VALUE settings of a config file and the lines whose
@@ -228,8 +232,8 @@ func parseFile(file File) (map[string]string, []IgnoredKey, error) {
 					"set it in the environment or in your MCP client's env block", file.Path, n, secret)
 			}
 		}
-		if !knownFileKeys[k] {
-			ignored = append(ignored, IgnoredKey{Line: n, Name: escape(k)})
+		if !isKnownFileKey(k) {
+			ignored = append(ignored, IgnoredKey{Line: n, Name: logSafeKeyName(k)})
 			continue
 		}
 		settings[k] = strings.TrimSpace(v)
@@ -237,9 +241,18 @@ func parseFile(file File) (map[string]string, []IgnoredKey, error) {
 	return settings, ignored, nil
 }
 
-// escape returns s with every non-printable rune (control, zero-width, bidi,
-// tag characters) and backslash written as a Go string-literal escape.
-func escape(s string) string {
-	quoted := strconv.Quote(s)
-	return quoted[1 : len(quoted)-1]
+// maxKeyNameRunes bounds the key name an IgnoredKey carries, so a huge line
+// cannot flood the log.
+const maxKeyNameRunes = 64
+
+// logSafeKeyName returns key cut to maxKeyNameRunes runes (marked with "..."),
+// with every non-printable rune (control, zero-width, bidi, tag characters)
+// and backslash written as a Go string-literal escape.
+func logSafeKeyName(key string) string {
+	cut := ""
+	if runes := []rune(key); len(runes) > maxKeyNameRunes {
+		key, cut = string(runes[:maxKeyNameRunes]), "..."
+	}
+	quoted := strconv.Quote(key)
+	return quoted[1:len(quoted)-1] + cut
 }

@@ -326,7 +326,7 @@ func TestLoadReportsAnUnknownConfigFileKeyWithItsLineNumber(t *testing.T) {
 	}
 }
 
-func TestLoadReportsNoKnownConfigFileKey(t *testing.T) {
+func TestLoadAcceptsEveryKnownConfigFileKeyWithoutReportingIt(t *testing.T) {
 	t.Parallel()
 	// Every setting the file accepts today, plus those the README documents as Planned.
 	known := []string{
@@ -391,5 +391,20 @@ func TestLoadEscapesControlAndBidiCharactersInAnUnknownConfigFileKey(t *testing.
 				t.Fatalf("ignored keys = %+v, want %+v", ignored, want)
 			}
 		})
+	}
+}
+
+func TestLoadShortensAnOversizedUnknownConfigFileKey(t *testing.T) {
+	t.Parallel()
+	key := strings.Repeat("K", 10000)
+
+	_, ignored, err := config.Load(connectionEnv(nil), configFile(key+"=v\n"))
+
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	want := []config.IgnoredKey{{Line: 1, Name: strings.Repeat("K", 64) + "..."}}
+	if !slices.Equal(ignored, want) {
+		t.Fatalf("ignored keys = %+v, want %+v", ignored, want)
 	}
 }
