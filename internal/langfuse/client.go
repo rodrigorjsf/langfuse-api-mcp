@@ -82,7 +82,7 @@ func hostString(u *url.URL) string {
 func New(opts Options) *Client {
 	transport := &http.Transport{
 		// No proxy until proxy settings exist (M2): nothing is sent through a
-		// proxy the operator did not configure for this server.
+		// proxy the operator did not configure for this server (see #32).
 		Proxy:                 nil,
 		TLSClientConfig:       opts.TLS,
 		ForceAttemptHTTP2:     true,

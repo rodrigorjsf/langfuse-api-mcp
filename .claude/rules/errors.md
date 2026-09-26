@@ -35,7 +35,7 @@ Protocol-level JSON-RPC errors are reserved for malformed requests and unknown t
 | 413 / body > cap | `response_too_large` | narrow the query: fields, time window, limit | no |
 | 429 | `langfuse_rate_limited` | wait `retryAfterSeconds`; metrics budget is small | server retries once if `Retry-After` fits the request deadline, else returns |
 | 5xx | `langfuse_unavailable` | transient | server retries **GET only**, exponential backoff + jitter, max 2, within deadline |
-| TLS unknown authority | `tls_untrusted_certificate` | set `LANGFUSE_CA_CERT`/`LANGFUSE_CA_CERTS_PATH`; check startup log of CA sources | no |
+| TLS unknown authority, or another certificate verification failure (host name, validity, usage) | `tls_untrusted_certificate` | set `LANGFUSE_CA_CERT`/`LANGFUSE_CA_CERTS_PATH`; check startup log of CA sources; for a verification failure also check that `LANGFUSE_BASE_URL` names the certificate's host | no |
 | DNS/connect/proxy | `network_error` | check host, `HTTPS_PROXY`/`NO_PROXY` | GET only |
 | timeout / canceled | `timeout` / `canceled` | narrow the query | no |
 

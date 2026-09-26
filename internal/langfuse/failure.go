@@ -39,17 +39,23 @@ func classify(err error) error {
 		netErr           net.Error
 	)
 	switch {
-	// Before the network errors: a dial or read that timed out is one too.
 	case errors.Is(err, context.Canceled):
 		return fmt.Errorf("%w: %w", ErrCanceled, err)
-	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &netErr) && netErr.Timeout():
+	case errors.Is(err, context.DeadlineExceeded):
+		return fmt.Errorf("%w: %w", ErrTimeout, err)
+	// Before the generic timeout: a DNS lookup that timed out is a
+	// connectivity fault, not a slow query.
+	case errors.As(err, &dnsErr):
+		return fmt.Errorf("%w: %w", ErrNetwork, err)
+	// Before the network errors: a read that timed out is one too.
+	case errors.As(err, &netErr) && netErr.Timeout():
 		return fmt.Errorf("%w: %w", ErrTimeout, err)
 	// Before the verification error, which wraps it.
 	case errors.As(err, &unknownAuthority):
 		return fmt.Errorf("%w: %w", ErrUntrustedCertificate, err)
 	case errors.As(err, &verification):
 		return fmt.Errorf("%w: %w", ErrCertificateRejected, err)
-	case errors.As(err, &dnsErr), errors.As(err, &opErr):
+	case errors.As(err, &opErr):
 		return fmt.Errorf("%w: %w", ErrNetwork, err)
 	default:
 		return err
