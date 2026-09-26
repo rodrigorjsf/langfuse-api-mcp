@@ -123,7 +123,40 @@ Sources: `[sourced]` `/docs/api-and-data-platform/features/public-api#field-grou
     projections support a maximum limit of **50**." `[sourced]` `mcp.reference.langfuse.com` (raw HTML)
   - **Self-hosted 4.46.0 REST does not enforce it** (2026-09-25): io and metadata projections with no window,
     14 d + 1 s, 15 d or 30 d windows returned 200 with rows, and `limit=51`/`1000` returned 51/all rows. `limit`
-    max is 1000 (`1001` → 400 zod `too_big`). **Langfuse Cloud is still unprobed** (#15). `[verified]` §1.7
+    max is 1000 (`1001` → 400 zod `too_big`). `[verified]` §1.7
+  - **Neither Langfuse Cloud nor self-hosted REST enforces it** (2026-09-26, both Langfuse **4.46.0**; Cloud = the
+    US-region Hobby test project; issue #2 answered by #15). The integration test
+    `TestLiveLangfuseServesIOAndMetadataBeyondFourteenDaysAndFiftyRows` (`internal/server/iowindow_integration_test.go`,
+    through `execute_read`) seeds back-dated spans over OTLP, probes, and deletes them. Every probe answered **HTTP 200**,
+    no error body; rows returned, identical on both deployments:
+
+    | Probe (`GET /v2/observations`) | Rows | Field group served |
+    |---|---|---|
+    | `fields=core,io`, 13-day window | 1 of 1 | `input` |
+    | `fields=core,io`, 14-day window | 1 of 1 | `input` |
+    | `fields=core,io`, 15-day window (row 14.5 days old) | 1 of 1 | `input` |
+    | `fields=core,io`, 30-day window (row 20 days old) | 1 of 1 | `output` |
+    | `fields=core,io`, no window (row 20 days old) | 1 of 1 | `input` |
+    | `fields=core,metadata`, 30-day window | 1 of 1 | `metadata` |
+    | `fields=core,io`, `traceId`, no window | 1 of 1 | `input` |
+    | `fields=core,io`, `filter` on `id`, no window | 1 of 1 | `input` |
+    | `fields=core,io`, 13-day window, no other filter, `limit=50` | 50 | `input` on all 50 |
+    | `fields=core,io`, 13-day window, no other filter, `limit=51` | **51** | `input` on all 51 |
+
+    The row-limit probes use exactly the combination the official MCP caps at 50: a date window, the `io` group, and
+    no `traceId` or `id` filter. Verbatim output: `raw/2026-09-26-iowindow-probe-cloud.txt`,
+    `raw/2026-09-26-iowindow-probe-selfhosted.txt`. `[verified]`
+  - **Verdict: the 14-day / 50-row rule is the official MCP tool's own guard, not a REST limit.** Our workflow tools
+    keep a guard of their own anyway (`.claude/rules/langfuse-api.md`, "Time windows"), for budget reasons. The probe
+    stays as a weekly Cloud regression (`.github/workflows/integration.yml`), so a guard added upstream fails the suite.
+  - **Seeding limitation on Cloud.** Cloud accepts (200) an OTLP export of a span **40 days** old but never serves it
+    (the 1- and 20-day spans of the same export were queryable within 45 s); self-hosted serves it. The probe therefore
+    seeds nothing older than 20 days. Verbatim: `raw/2026-09-26-cloud-backdated-40d.txt`. `[verified]` Likely the Hobby
+    plan's 30-day data access window. `[sourced — unverified]`
+  - On Cloud, rows requested with `fields=core` came back without `name` (verbatim file above); the probe requests
+    `core,basic` when it needs names. `[verified]`
+  - `DELETE /api/public/traces` with `{"traceIds":[...]}` answers 200 `{"message":"Traces deleted successfully"}` on
+    both deployments; the probe uses it for cleanup. `[verified]`
 - **Unknown `fields` values are silently ignored** (200, default groups). `[verified]` §1.7
 
 ### 1.7 Observed behavior on self-hosted v4 (prototype, 2026-09-25) `[verified]`

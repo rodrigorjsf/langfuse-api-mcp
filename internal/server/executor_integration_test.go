@@ -35,7 +35,7 @@ const (
 	envTestSecretKey = "LANGFUSE_TEST_SECRET_KEY" //nolint:gosec // G101: the variable's name, not a key
 )
 
-// liveLeakOptions lets TestMain tolerate the idle keep-alive connections the
+// liveLeakOptions lets TestMain tolerate the idle keep-alive connections (HTTP/1.1 and HTTP/2) the
 // live Langfuse client holds open after the tests, as it does in production;
 // the client has no way to close them. Only when a live Langfuse is configured:
 // without one, the integration build checks for leaks like the default build.
@@ -47,6 +47,8 @@ func liveLeakOptions() []goleak.Option {
 	return []goleak.Option{
 		goleak.IgnoreAnyFunction("net/http.(*persistConn).readLoop"),
 		goleak.IgnoreAnyFunction("net/http.(*persistConn).writeLoop"),
+		// Langfuse Cloud answers over HTTP/2, whose idle connection keeps a read loop.
+		goleak.IgnoreAnyFunction("net/http/internal/http2.(*ClientConn).readLoop"),
 	}
 }
 
