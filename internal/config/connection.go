@@ -48,6 +48,13 @@ func (Secret) LogValue() slog.Value { return slog.StringValue(redacted) }
 // MarshalJSON returns "[REDACTED]", so JSON output never holds the value.
 func (Secret) MarshalJSON() ([]byte, error) { return []byte(`"` + redacted + `"`), nil }
 
+// Every Langfuse project key pair has these prefixes (Langfuse public API
+// docs: Basic auth with pk-lf-… as user and sk-lf-… as password).
+const (
+	publicKeyPrefix = "pk-lf-"
+	secretKeyPrefix = "sk-lf-"
+)
+
 // loadConnection reads the connection settings. The host comes from
 // LANGFUSE_BASE_URL, then its alias LANGFUSE_HOST, in the environment first,
 // then in the config file; the keys come only from the environment (the config
@@ -77,12 +84,24 @@ func loadConnection(env, fromFile map[string]string) (Connection, error) {
 			"(localhost, 127.0.0.0/8, ::1)", hostVar)
 	}
 	conn := Connection{Host: u, PublicKey: Secret{env[EnvPublicKey]}, SecretKey: Secret{env[EnvSecretKey]}}
-	for _, key := range []struct {
-		name   string
-		secret Secret
-	}{{EnvPublicKey, conn.PublicKey}, {EnvSecretKey, conn.SecretKey}} {
+	keys := []struct {
+		name, prefix string
+		secret       Secret
+	}{{EnvPublicKey, publicKeyPrefix, conn.PublicKey}, {EnvSecretKey, secretKeyPrefix, conn.SecretKey}}
+	for _, key := range keys {
 		if key.secret.value == "" {
 			return Connection{}, fmt.Errorf("%s is not set: set it in the environment or in your MCP client's env block", key.name)
+		}
+	}
+	// The key values are never echoed: they are credentials.
+	if strings.HasPrefix(conn.PublicKey.value, secretKeyPrefix) && strings.HasPrefix(conn.SecretKey.value, publicKeyPrefix) {
+		return Connection{}, fmt.Errorf("%s and %s look swapped: the public key starts with %s, the secret key with %s",
+			EnvPublicKey, EnvSecretKey, publicKeyPrefix, secretKeyPrefix)
+	}
+	for _, key := range keys {
+		if !strings.HasPrefix(key.secret.value, key.prefix) {
+			return Connection{}, fmt.Errorf("%s: want a Langfuse key starting with %s; copy it from the project's API keys settings",
+				key.name, key.prefix)
 		}
 	}
 	return conn, nil

@@ -95,6 +95,40 @@ func TestLoadFailsNamingTheMissingConnectionVariable(t *testing.T) {
 	}
 }
 
+func TestLoadFailsNamingTheVariableOfAKeyWithoutItsLangfusePrefix(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct {
+		env      map[string]string
+		want     string
+		wantHint string
+	}{
+		"public key without pk-lf-": {
+			env: map[string]string{"LANGFUSE_PUBLIC_KEY": "1111-public"}, want: "LANGFUSE_PUBLIC_KEY", wantHint: "pk-lf-",
+		},
+		"secret key without sk-lf-": {
+			env: map[string]string{"LANGFUSE_SECRET_KEY": "2222-secret"}, want: "LANGFUSE_SECRET_KEY", wantHint: "sk-lf-",
+		},
+		"swapped pair": {
+			env:  map[string]string{"LANGFUSE_PUBLIC_KEY": testSecretKey, "LANGFUSE_SECRET_KEY": testPublicKey},
+			want: "LANGFUSE_PUBLIC_KEY", wantHint: "swapped",
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			_, err := config.Load(connectionEnv(tc.env), config.File{})
+			if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), tc.wantHint) {
+				t.Fatalf("Load() error = %v, want one naming %s and saying %q", err, tc.want, tc.wantHint)
+			}
+			for _, v := range tc.env {
+				if strings.Contains(err.Error(), v) {
+					t.Errorf("Load() error %q echoes the key value", err)
+				}
+			}
+		})
+	}
+}
+
 func TestLoadFailsNamingTheVariableOfAHostThatIsNotAnHTTPURL(t *testing.T) {
 	t.Parallel()
 	for _, host := range []string{"cloud.langfuse.com", "ftp://cloud.langfuse.com", "https://"} {
