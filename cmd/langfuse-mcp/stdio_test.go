@@ -241,3 +241,37 @@ func TestStartupFailsNamingTheMissingOrInvalidConnectionVariable(t *testing.T) {
 		})
 	}
 }
+
+// ADR-0012: with no deployment profile detected, the wired server resolves the
+// union catalog with every range and family kept, so an operation that only
+// older release specs list (v1 GET /scores, removed from the spec in 3.53.0)
+// is reachable.
+func TestExecutableReachesAnOperationOnlyAnOlderReleaseSpecLists(t *testing.T) {
+	t.Parallel()
+	gotRequest := make(chan string, 1)
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRequest <- r.Method + " " + r.URL.RequestURI()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"data":[],"meta":{"page":1}}`) // a failed write fails the call below
+	}))
+	t.Cleanup(fake.Close)
+	s := startStdio(t, "LANGFUSE_BASE_URL="+fake.URL)
+	s.initialize()
+
+	var call toolCall
+	if err := json.Unmarshal(s.send("tools/call", map[string]any{
+		"name": "execute_read", "arguments": map[string]any{
+			"operationId": "score_get", "parameters": map[string]any{"name": "accuracy"},
+		},
+	}, true), &call); err != nil {
+		t.Fatalf("decode tools/call: %v", err)
+	}
+
+	if call.IsError || call.StructuredContent["operationId"] != "score_get" {
+		t.Fatalf("tools/call result = %+v, want the enveloped scores", call)
+	}
+	if got, want := <-gotRequest, "GET /api/public/scores?limit=50&name=accuracy"; got != want {
+		t.Fatalf("Langfuse received %q, want %q", got, want)
+	}
+	s.stop()
+}

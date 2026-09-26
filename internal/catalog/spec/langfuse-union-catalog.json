@@ -1,0 +1,4183 @@
+{
+ "paths": {
+  "/api/public/annotation-queues": {
+   "get": {
+    "description": "Get all annotation queues",
+    "operationId": "annotationQueues_listQueues",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     }
+    ],
+    "tags": [
+     "AnnotationQueues"
+    ],
+    "x-introduced": "3.42.0"
+   },
+   "post": {
+    "description": "Create an annotation queue",
+    "operationId": "annotationQueues_createQueue",
+    "parameters": [],
+    "tags": [
+     "AnnotationQueues"
+    ],
+    "x-introduced": "3.97.3"
+   }
+  },
+  "/api/public/annotation-queues/{queueId}": {
+   "get": {
+    "description": "Get an annotation queue by ID",
+    "operationId": "annotationQueues_getQueue",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "queueId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "AnnotationQueues"
+    ],
+    "x-introduced": "3.42.0"
+   }
+  },
+  "/api/public/annotation-queues/{queueId}/assignments": {
+   "delete": {
+    "description": "Delete an assignment for a user to an annotation queue",
+    "operationId": "annotationQueues_deleteQueueAssignment",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "queueId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "AnnotationQueues"
+    ],
+    "x-introduced": "3.95.0"
+   },
+   "post": {
+    "description": "Create an assignment for a user to an annotation queue",
+    "operationId": "annotationQueues_createQueueAssignment",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "queueId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "AnnotationQueues"
+    ],
+    "x-introduced": "3.95.0"
+   }
+  },
+  "/api/public/annotation-queues/{queueId}/items": {
+   "get": {
+    "description": "Get items for a specific annotation queue",
+    "operationId": "annotationQueues_listQueueItems",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "queueId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "status",
+      "required": false,
+      "schema": {
+       "enum": [
+        "PENDING",
+        "COMPLETED"
+       ],
+       "nullable": true,
+       "title": "AnnotationQueueStatus",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     }
+    ],
+    "tags": [
+     "AnnotationQueues"
+    ],
+    "x-introduced": "3.42.0"
+   },
+   "post": {
+    "description": "Add an item to an annotation queue",
+    "operationId": "annotationQueues_createQueueItem",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "queueId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "AnnotationQueues"
+    ],
+    "x-introduced": "3.42.0"
+   }
+  },
+  "/api/public/annotation-queues/{queueId}/items/{itemId}": {
+   "delete": {
+    "description": "Remove an item from an annotation queue",
+    "operationId": "annotationQueues_deleteQueueItem",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "queueId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "itemId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "AnnotationQueues"
+    ],
+    "x-introduced": "3.42.0"
+   },
+   "get": {
+    "description": "Get a specific item from an annotation queue",
+    "operationId": "annotationQueues_getQueueItem",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "queueId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "itemId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "AnnotationQueues"
+    ],
+    "x-introduced": "3.42.0"
+   },
+   "patch": {
+    "description": "Update an annotation queue item",
+    "operationId": "annotationQueues_updateQueueItem",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "queueId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "itemId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "AnnotationQueues"
+    ],
+    "x-introduced": "3.42.0"
+   }
+  },
+  "/api/public/comments": {
+   "get": {
+    "description": "Get all comments",
+    "operationId": "comments_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "objectType",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "objectId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "authorUserId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Comments"
+    ],
+    "x-introduced": "3.0.0"
+   },
+   "post": {
+    "description": "Create a comment. Comments may be attached to different object types (trace, observation, session, prompt).",
+    "operationId": "comments_create",
+    "parameters": [],
+    "tags": [
+     "Comments"
+    ],
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/comments/{commentId}": {
+   "get": {
+    "description": "Get a comment by id",
+    "operationId": "comments_get-by-id",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "commentId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Comments"
+    ],
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/dataset-items": {
+   "get": {
+    "description": "Get dataset items. Optionally specify a version to get the items as they existed at that point in time.\nNote: If version parameter is provided, datasetName must also be provided.",
+    "operationId": "datasetItems_list",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "datasetName",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "sourceTraceId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "sourceObservationId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "version",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     }
+    ],
+    "tags": [
+     "DatasetItems"
+    ],
+    "x-introduced": "3.0.0"
+   },
+   "post": {
+    "description": "Create a dataset item",
+    "operationId": "datasetItems_create",
+    "parameters": [],
+    "tags": [
+     "DatasetItems"
+    ],
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/dataset-items/{id}": {
+   "delete": {
+    "description": "Delete a dataset item and all its run items. This action is irreversible.",
+    "operationId": "datasetItems_delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "id",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "DatasetItems"
+    ],
+    "x-introduced": "3.35.0"
+   },
+   "get": {
+    "description": "Get a dataset item",
+    "operationId": "datasetItems_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "id",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "DatasetItems"
+    ],
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/dataset-run-items": {
+   "get": {
+    "description": "**Deprecated:** On Langfuse Cloud, Langfuse v3 is deprecated and this endpoint will be removed on November 16, 2026. In Langfuse v4, dataset run items are replaced by experiment items; use `GET /api/public/experiment-items?fromStartTime=<from>&toStartTime=<to>` instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nList dataset run items",
+    "operationId": "datasetRunItems_list",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "datasetId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "runName",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     }
+    ],
+    "tags": [
+     "DatasetRunItems"
+    ],
+    "x-family": "legacy",
+    "x-introduced": "3.57.1"
+   },
+   "post": {
+    "description": "**Deprecated:** On Langfuse Cloud, Langfuse v3 is deprecated and this endpoint will be removed on November 16, 2026. In Langfuse v4, create experiment data via the SDK experiment runner or the OpenTelemetry endpoint at POST /api/public/otel/v1/traces. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nCreate a dataset run item",
+    "operationId": "datasetRunItems_create",
+    "parameters": [],
+    "tags": [
+     "DatasetRunItems"
+    ],
+    "x-family": "legacy",
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/datasets/{datasetName}/runs": {
+   "get": {
+    "description": "**Deprecated:** On Langfuse Cloud, Langfuse v3 is deprecated and this endpoint will be removed on November 16, 2026. In Langfuse v4, dataset runs are replaced by experiments; use GET /api/public/experiments instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nGet dataset runs",
+    "operationId": "datasets_getRuns",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "datasetName",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     }
+    ],
+    "tags": [
+     "Datasets"
+    ],
+    "x-family": "legacy",
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/datasets/{datasetName}/runs/{runName}": {
+   "delete": {
+    "description": "**Deprecated:** On Langfuse Cloud, Langfuse v3 is deprecated and this endpoint will be removed on November 16, 2026. In Langfuse v4, dataset runs are replaced by experiments. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nDelete a dataset run and all its run items. This action is irreversible.",
+    "operationId": "datasets_deleteRun",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "datasetName",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "runName",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Datasets"
+    ],
+    "x-family": "legacy",
+    "x-introduced": "3.35.1"
+   },
+   "get": {
+    "description": "**Deprecated:** On Langfuse Cloud, Langfuse v3 is deprecated and this endpoint will be removed on November 16, 2026. In Langfuse v4, dataset runs are replaced by experiments; use GET /api/public/experiments instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nGet a dataset run and its items",
+    "operationId": "datasets_getRun",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "datasetName",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "runName",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Datasets"
+    ],
+    "x-family": "legacy",
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/experiment-items": {
+   "get": {
+    "description": "List experiment items with cursor-based pagination. Use this endpoint\nto export experiment item inputs, outputs, expected outputs, metadata,\nand optionally item/trace scores. Results are ordered by time\ndescending.",
+    "operationId": "experiments_listItems",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "fields",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "scoreLimit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "cursor",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "fromStartTime",
+      "required": true,
+      "schema": {
+       "format": "date-time",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "toStartTime",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "experimentId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "experimentName",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "experimentItemId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "datasetId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "filter",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Experiments"
+    ],
+    "x-family": "experiments",
+    "x-introduced": "3.206.0"
+   }
+  },
+  "/api/public/experiments": {
+   "get": {
+    "description": "List experiments with cursor-based pagination. Results are ordered by\nlatest experiment activity descending.",
+    "operationId": "experiments_list",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "fields",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "scoreLimit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "cursor",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "fromStartTime",
+      "required": true,
+      "schema": {
+       "format": "date-time",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "toStartTime",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "id",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "name",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "datasetId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "filter",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Experiments"
+    ],
+    "x-family": "experiments",
+    "x-introduced": "3.206.0"
+   }
+  },
+  "/api/public/feedback": {
+   "post": {
+    "description": "Submit explicit user-approved feedback about Langfuse skills, MCP tools, CLI, docs, or public API. Do not include secrets, credentials, customer data, trace payloads, or unrelated use-case details.\n\nNot available in the HIPAA cloud region.",
+    "operationId": "feedback_submit",
+    "parameters": [],
+    "tags": [
+     "Feedback"
+    ],
+    "x-introduced": "4.0.0"
+   }
+  },
+  "/api/public/health": {
+   "get": {
+    "description": "Check health of API and database",
+    "operationId": "health_health",
+    "parameters": [],
+    "tags": [
+     "Health"
+    ],
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/ingestion": {
+   "post": {
+    "description": "**Deprecated:** On Langfuse Cloud, this is the deprecated Langfuse v3 ingestion API and it is shut down on November 16, 2026, except for score events: from that date it accepts only `score-create` events and rejects all other event types. To write scores, prefer `POST /api/public/scores`; see the [Scores API docs](https://langfuse.com/docs/api-and-data-platform/features/scores-api). To write traces and observations, always prefer upgrading to the current Python and JS SDKs; if you use custom auto-instrumentation, send them to the OpenTelemetry endpoint at `POST /api/public/otel/v1/traces` (for example with curl); see the [OpenTelemetry integration docs](https://langfuse.com/integrations/native/opentelemetry). To read data back, use the v4 read APIs; see the [Observations API docs](https://langfuse.com/docs/api-and-data-platform/features/observations-api) and the [Metrics API docs](https://langfuse.com/docs/metrics/features/metrics-api). The only path to live data is OpenTelemetry ingestion combined with `GET /api/public/v2/observations` and `GET /api/public/v2/metrics`; all other public APIs may have data delays of several minutes. Self-hosted deployments are unaffected by the November 16 date; this behavior begins only when they enable v4-only write mode. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\n**Legacy endpoint for batch ingestion for Langfuse Observability.**\n\nThis is the deprecated Langfuse v3 ingestion API. It is shut down on November 16, 2026, except for score events: from that date it accepts only `score-create` events and rejects all other event types.\n\nTo write scores, prefer `POST /api/public/scores`: https://langfuse.com/docs/api-and-data-platform/features/scores-api\n\nTo write traces and observations, always prefer upgrading to the current Python and JS SDKs. If you use custom auto-instrumentation, send them to the OpenTelemetry endpoint (`POST /api/public/otel/v1/traces`), for example with curl: https://langfuse.com/integrations/native/opentelemetry\n\nTo read data back, use the v4 read APIs: https://langfuse.com/docs/api-and-data-platform/features/observations-api and https://langfuse.com/docs/metrics/features/metrics-api\n\nThe only path to live data is OpenTelemetry ingestion combined with `GET /api/public/v2/observations` and `GET /api/public/v2/metrics`. All other public APIs may have data delays of several minutes.\n\nWithin each batch, there can be multiple events.\nEach event has a type, an id, a timestamp, metadata and a body.\nInternally, we refer to this as the \"event envelope\" as it tells us something about the event but not the trace.\nWe use the event id within this envelope to deduplicate messages to avoid processing the same event twice, i.e. the event id should be unique per request.\nThe event.body.id is the ID of the actual trace and will be used for updates and will be visible within the Langfuse App.\nI.e. if you want to update a trace, you'd use the same body id, but separate event IDs.\n\nNotes:\n- Introduction to data model: https://langfuse.com/docs/observability/data-model\n- Batch sizes are limited to 3.5 MB in total. You need to adjust the number of events per batch accordingly.\n- The API does not return a 4xx status code for input errors. Instead, it responds with a 207 status code, which includes a list of the encountered errors.",
+    "operationId": "ingestion_batch",
+    "parameters": [],
+    "tags": [
+     "Ingestion"
+    ],
+    "x-family": "legacy",
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/integrations/blob-storage": {
+   "get": {
+    "description": "Get all blob storage integrations for the organization (requires organization-scoped API key)",
+    "operationId": "blobStorageIntegrations_getBlobStorageIntegrations",
+    "parameters": [],
+    "tags": [
+     "BlobStorageIntegrations"
+    ],
+    "x-introduced": "3.110.0"
+   },
+   "put": {
+    "description": "Create or update a blob storage integration for a specific project (requires organization-scoped API key). The configuration is validated by performing a test upload to the bucket.",
+    "operationId": "blobStorageIntegrations_upsertBlobStorageIntegration",
+    "parameters": [],
+    "tags": [
+     "BlobStorageIntegrations"
+    ],
+    "x-introduced": "3.110.0"
+   }
+  },
+  "/api/public/integrations/blob-storage/{id}": {
+   "delete": {
+    "description": "Delete a blob storage integration by ID (requires organization-scoped API key)",
+    "operationId": "blobStorageIntegrations_deleteBlobStorageIntegration",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "id",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "BlobStorageIntegrations"
+    ],
+    "x-introduced": "3.110.0"
+   },
+   "get": {
+    "description": "Get the sync status of a blob storage integration by integration ID (requires organization-scoped API key)",
+    "operationId": "blobStorageIntegrations_getBlobStorageIntegrationStatus",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "id",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "BlobStorageIntegrations"
+    ],
+    "x-introduced": "3.158.0"
+   }
+  },
+  "/api/public/llm-connections": {
+   "get": {
+    "description": "Get all LLM connections in a project",
+    "operationId": "llmConnections_list",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     }
+    ],
+    "tags": [
+     "LlmConnections"
+    ],
+    "x-introduced": "3.92.0"
+   },
+   "put": {
+    "description": "Create or update an LLM connection. The connection is upserted on provider.",
+    "operationId": "llmConnections_upsert",
+    "parameters": [],
+    "tags": [
+     "LlmConnections"
+    ],
+    "x-introduced": "3.92.0"
+   }
+  },
+  "/api/public/llm-connections/{id}": {
+   "delete": {
+    "description": "Delete an LLM connection by id. Evaluators that depend on the deleted connection are automatically paused.",
+    "operationId": "llmConnections_delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "id",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "LlmConnections"
+    ],
+    "x-introduced": "3.170.0"
+   }
+  },
+  "/api/public/media": {
+   "post": {
+    "description": "Get a presigned upload URL for a media record",
+    "operationId": "media_getUploadUrl",
+    "parameters": [],
+    "tags": [
+     "Media"
+    ],
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/media/{mediaId}": {
+   "get": {
+    "description": "Get a media record",
+    "operationId": "media_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "mediaId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Media"
+    ],
+    "x-introduced": "3.0.0"
+   },
+   "patch": {
+    "description": "Patch a media record",
+    "operationId": "media_patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "mediaId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Media"
+    ],
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/metrics": {
+   "get": {
+    "description": "**Deprecated:** On Langfuse Cloud, Langfuse v3 is deprecated and this endpoint will be removed on November 16, 2026. Use `GET /api/public/v2/metrics?query=<urlencoded json query>` instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nGet metrics from the Langfuse project using a query object.\n\nConsider using the [v2 metrics endpoint](/api-reference#tag/metricsv2/GET/api/public/v2/metrics) for better performance.\n\nFor more details, see the [Metrics API documentation](https://langfuse.com/docs/metrics/features/metrics-api).",
+    "operationId": "legacy_metricsV1_metrics",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "LegacyMetricsV1"
+    ],
+    "x-family": "legacy",
+    "x-introduced": "3.57.0"
+   }
+  },
+  "/api/public/metrics/daily": {
+   "get": {
+    "description": "Get daily metrics of the Langfuse project",
+    "operationId": "metrics_daily",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "traceName",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "userId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "tags",
+      "required": false,
+      "schema": {
+       "items": {
+        "nullable": true,
+        "type": "string"
+       },
+       "type": "array"
+      }
+     },
+     {
+      "in": "query",
+      "name": "environment",
+      "required": false,
+      "schema": {
+       "items": {
+        "nullable": true,
+        "type": "string"
+       },
+       "type": "array"
+      }
+     },
+     {
+      "in": "query",
+      "name": "fromTimestamp",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "toTimestamp",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Metrics"
+    ],
+    "x-introduced": "3.0.0",
+    "x-removed": "3.62.0"
+   }
+  },
+  "/api/public/models": {
+   "get": {
+    "description": "Get all models",
+    "operationId": "models_list",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     }
+    ],
+    "tags": [
+     "Models"
+    ],
+    "x-introduced": "3.0.0"
+   },
+   "post": {
+    "description": "Create a model",
+    "operationId": "models_create",
+    "parameters": [],
+    "tags": [
+     "Models"
+    ],
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/models/{id}": {
+   "delete": {
+    "description": "Delete a model. Cannot delete models managed by Langfuse. You can create your own definition with the same modelName to override the definition though.",
+    "operationId": "models_delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "id",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Models"
+    ],
+    "x-introduced": "3.0.0"
+   },
+   "get": {
+    "description": "Get a model",
+    "operationId": "models_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "id",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Models"
+    ],
+    "x-introduced": "3.0.0"
+   },
+   "put": {
+    "description": "Create or replace a project-owned model using its id. Built-in models cannot be modified.",
+    "operationId": "models_upsert",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "id",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Models"
+    ],
+    "x-introduced": "4.19.0"
+   }
+  },
+  "/api/public/observations": {
+   "get": {
+    "description": "**Deprecated:** On Langfuse Cloud, Langfuse v3 is deprecated and this endpoint will be removed on November 16, 2026. Use `GET /api/public/v2/observations?fromStartTime=<from>&toStartTime=<to>` instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nGet a list of observations.\n\nConsider using the [v2 observations endpoint](/api-reference#tag/observationsv2/GET/api/public/v2/observations) for cursor-based pagination and field selection.",
+    "operationId": "legacy_observationsV1_getMany",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "name",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "userId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "type",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "traceId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "level",
+      "required": false,
+      "schema": {
+       "enum": [
+        "DEBUG",
+        "DEFAULT",
+        "WARNING",
+        "ERROR"
+       ],
+       "nullable": true,
+       "title": "ObservationLevel",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "parentObservationId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "environment",
+      "required": false,
+      "schema": {
+       "items": {
+        "nullable": true,
+        "type": "string"
+       },
+       "type": "array"
+      }
+     },
+     {
+      "in": "query",
+      "name": "fromStartTime",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "toStartTime",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "version",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "filter",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "LegacyObservationsV1"
+    ],
+    "x-family": "legacy",
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/observations/{observationId}": {
+   "get": {
+    "description": "**Deprecated:** On Langfuse Cloud, Langfuse v3 is deprecated and this endpoint will be removed on November 16, 2026. Use `GET /api/public/v2/observations?fromStartTime=<from>&toStartTime=<to>` instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nGet a observation",
+    "operationId": "legacy_observationsV1_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "observationId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "startTime",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "LegacyObservationsV1"
+    ],
+    "x-family": "legacy",
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/organizations/apiKeys": {
+   "get": {
+    "description": "Get all API keys for the organization associated with the API key (requires organization-scoped API key)",
+    "operationId": "organizations_getOrganizationApiKeys",
+    "parameters": [],
+    "tags": [
+     "Organizations"
+    ],
+    "x-introduced": "3.124.0"
+   }
+  },
+  "/api/public/organizations/memberships": {
+   "delete": {
+    "description": "Delete a membership from the organization associated with the API key (requires organization-scoped API key)",
+    "operationId": "organizations_deleteOrganizationMembership",
+    "parameters": [],
+    "tags": [
+     "Organizations"
+    ],
+    "x-introduced": "3.99.0"
+   },
+   "get": {
+    "description": "Get all memberships for the organization associated with the API key (requires organization-scoped API key)",
+    "operationId": "organizations_getOrganizationMemberships",
+    "parameters": [],
+    "tags": [
+     "Organizations"
+    ],
+    "x-introduced": "3.50.0"
+   },
+   "put": {
+    "description": "Create or update a membership for the organization associated with the API key (requires organization-scoped API key)",
+    "operationId": "organizations_updateOrganizationMembership",
+    "parameters": [],
+    "tags": [
+     "Organizations"
+    ],
+    "x-introduced": "3.50.0"
+   }
+  },
+  "/api/public/organizations/projects": {
+   "get": {
+    "description": "Get all projects for the organization associated with the API key (requires organization-scoped API key)",
+    "operationId": "organizations_getOrganizationProjects",
+    "parameters": [],
+    "tags": [
+     "Organizations"
+    ],
+    "x-introduced": "3.63.0"
+   }
+  },
+  "/api/public/otel/v1/traces": {
+   "post": {
+    "description": "**OpenTelemetry Traces Ingestion Endpoint**\n\nThis endpoint implements the OTLP/HTTP specification for trace ingestion, providing native OpenTelemetry integration for Langfuse Observability.\n\nTogether with Observations API v2 and Metrics API v2, this is the only real-time write path. Other public API endpoints can delay data by about 10 minutes. Direct exporters must send `x-langfuse-ingestion-version: 4`; current Python and JS SDKs already do.\n\n**Supported Formats:**\n- Binary Protobuf: `Content-Type: application/x-protobuf`\n- JSON Protobuf: `Content-Type: application/json`\n- Supports gzip compression via `Content-Encoding: gzip` header\n\n**Specification Compliance:**\n- Conforms to [OTLP/HTTP Trace Export](https://opentelemetry.io/docs/specs/otlp/#otlphttp)\n- Implements `ExportTraceServiceRequest` message format\n\n**Documentation:**\n- Integration guide: https://langfuse.com/integrations/native/opentelemetry\n- Data model: https://langfuse.com/docs/observability/data-model",
+    "operationId": "opentelemetry_exportTraces",
+    "parameters": [],
+    "tags": [
+     "Opentelemetry"
+    ],
+    "x-introduced": "3.22.0"
+   }
+  },
+  "/api/public/projects": {
+   "get": {
+    "description": "Get Project associated with API key (requires project-scoped API key). You can use GET /api/public/organizations/projects to get all projects with an organization-scoped key.",
+    "operationId": "projects_get",
+    "parameters": [],
+    "tags": [
+     "Projects"
+    ],
+    "x-introduced": "3.0.0"
+   },
+   "post": {
+    "description": "Create a new project (requires organization-scoped API key)",
+    "operationId": "projects_create",
+    "parameters": [],
+    "tags": [
+     "Projects"
+    ],
+    "x-introduced": "3.50.0"
+   }
+  },
+  "/api/public/projects/{projectId}": {
+   "delete": {
+    "description": "Delete a project by ID (requires organization-scoped API key). Project deletion is processed asynchronously.",
+    "operationId": "projects_delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "projectId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Projects"
+    ],
+    "x-introduced": "3.50.0"
+   },
+   "put": {
+    "description": "Update a project by ID (requires organization-scoped API key).",
+    "operationId": "projects_update",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "projectId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Projects"
+    ],
+    "x-introduced": "3.50.0"
+   }
+  },
+  "/api/public/projects/{projectId}/apiKeys": {
+   "get": {
+    "description": "Get all API keys for a project (requires organization-scoped API key)",
+    "operationId": "projects_getApiKeys",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "projectId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Projects"
+    ],
+    "x-introduced": "3.50.0"
+   },
+   "post": {
+    "description": "Create a new API key for a project (requires organization-scoped API key)",
+    "operationId": "projects_createApiKey",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "projectId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Projects"
+    ],
+    "x-introduced": "3.50.0"
+   }
+  },
+  "/api/public/projects/{projectId}/apiKeys/{apiKeyId}": {
+   "delete": {
+    "description": "Delete an API key for a project (requires organization-scoped API key)",
+    "operationId": "projects_deleteApiKey",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "projectId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "apiKeyId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Projects"
+    ],
+    "x-introduced": "3.50.0"
+   }
+  },
+  "/api/public/projects/{projectId}/memberships": {
+   "delete": {
+    "description": "Delete a membership from a specific project (requires organization-scoped API key). The user must be a member of the organization.",
+    "operationId": "organizations_deleteProjectMembership",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "projectId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Organizations"
+    ],
+    "x-introduced": "3.99.0"
+   },
+   "get": {
+    "description": "Get all memberships for a specific project (requires organization-scoped API key)",
+    "operationId": "organizations_getProjectMemberships",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "projectId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Organizations"
+    ],
+    "x-introduced": "3.50.0"
+   },
+   "put": {
+    "description": "Create or update a membership for a specific project (requires organization-scoped API key). The user must already be a member of the organization.",
+    "operationId": "organizations_updateProjectMembership",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "projectId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Organizations"
+    ],
+    "x-introduced": "3.50.0"
+   }
+  },
+  "/api/public/scim/ResourceTypes": {
+   "get": {
+    "description": "Get SCIM Resource Types (requires organization-scoped API key)",
+    "operationId": "scim_getResourceTypes",
+    "parameters": [],
+    "tags": [
+     "Scim"
+    ],
+    "x-introduced": "3.50.0"
+   }
+  },
+  "/api/public/scim/Schemas": {
+   "get": {
+    "description": "Get SCIM Schemas (requires organization-scoped API key)",
+    "operationId": "scim_getSchemas",
+    "parameters": [],
+    "tags": [
+     "Scim"
+    ],
+    "x-introduced": "3.50.0"
+   }
+  },
+  "/api/public/scim/ServiceProviderConfig": {
+   "get": {
+    "description": "Get SCIM Service Provider Configuration (requires organization-scoped API key)",
+    "operationId": "scim_getServiceProviderConfig",
+    "parameters": [],
+    "tags": [
+     "Scim"
+    ],
+    "x-introduced": "3.50.0"
+   }
+  },
+  "/api/public/scim/Users": {
+   "get": {
+    "description": "List users in the organization (requires organization-scoped API key)",
+    "operationId": "scim_listUsers",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "filter",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "startIndex",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "count",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     }
+    ],
+    "tags": [
+     "Scim"
+    ],
+    "x-introduced": "3.50.0"
+   },
+   "post": {
+    "description": "Create a new user in the organization (requires organization-scoped API key)",
+    "operationId": "scim_createUser",
+    "parameters": [],
+    "tags": [
+     "Scim"
+    ],
+    "x-introduced": "3.50.0"
+   }
+  },
+  "/api/public/scim/Users/{userId}": {
+   "delete": {
+    "description": "Remove a user from the organization (requires organization-scoped API key). Note that this only removes the user from the organization but does not delete the user entity itself.",
+    "operationId": "scim_deleteUser",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "userId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Scim"
+    ],
+    "x-introduced": "3.50.0"
+   },
+   "get": {
+    "description": "Get a specific user by ID (requires organization-scoped API key)",
+    "operationId": "scim_getUser",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "userId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Scim"
+    ],
+    "x-introduced": "3.50.0"
+   }
+  },
+  "/api/public/score-configs": {
+   "get": {
+    "description": "Get all score configs",
+    "operationId": "scoreConfigs_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     }
+    ],
+    "tags": [
+     "ScoreConfigs"
+    ],
+    "x-introduced": "3.0.0"
+   },
+   "post": {
+    "description": "Create a score configuration (config). Score configs are used to define the structure of scores",
+    "operationId": "scoreConfigs_create",
+    "parameters": [],
+    "tags": [
+     "ScoreConfigs"
+    ],
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/score-configs/{configId}": {
+   "get": {
+    "description": "Get a score config",
+    "operationId": "scoreConfigs_get-by-id",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "configId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "ScoreConfigs"
+    ],
+    "x-introduced": "3.0.0"
+   },
+   "patch": {
+    "description": "Update a score config",
+    "operationId": "scoreConfigs_update",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "configId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "ScoreConfigs"
+    ],
+    "x-introduced": "3.113.0"
+   }
+  },
+  "/api/public/scores": {
+   "get": {
+    "description": "Get a list of scores",
+    "operationId": "score_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "userId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "name",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "fromTimestamp",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "toTimestamp",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "environment",
+      "required": false,
+      "schema": {
+       "items": {
+        "nullable": true,
+        "type": "string"
+       },
+       "type": "array"
+      }
+     },
+     {
+      "in": "query",
+      "name": "source",
+      "required": false,
+      "schema": {
+       "enum": [
+        "ANNOTATION",
+        "API",
+        "EVAL"
+       ],
+       "nullable": true,
+       "title": "ScoreSource",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "operator",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "value",
+      "required": false,
+      "schema": {
+       "format": "double",
+       "nullable": true,
+       "type": "number"
+      }
+     },
+     {
+      "in": "query",
+      "name": "scoreIds",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "configId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "queueId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "dataType",
+      "required": false,
+      "schema": {
+       "enum": [
+        "NUMERIC",
+        "BOOLEAN",
+        "CATEGORICAL"
+       ],
+       "nullable": true,
+       "title": "ScoreDataType",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "traceTags",
+      "required": false,
+      "schema": {
+       "items": {
+        "nullable": true,
+        "type": "string"
+       },
+       "type": "array"
+      }
+     }
+    ],
+    "tags": [
+     "Score"
+    ],
+    "x-introduced": "3.0.0",
+    "x-removed": "3.53.0"
+   },
+   "post": {
+    "description": "Create a score (supports trace, observation, session, and dataset run scores)",
+    "operationId": "scores_create",
+    "parameters": [],
+    "tags": [
+     "Scores"
+    ],
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/scores/{scoreId}": {
+   "delete": {
+    "description": "Delete a score (supports both trace and session scores)",
+    "operationId": "legacy_scoreV1_delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "scoreId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "LegacyScoreV1"
+    ],
+    "x-introduced": "3.0.0"
+   },
+   "get": {
+    "description": "Get a score",
+    "operationId": "score_get-by-id",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "scoreId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Score"
+    ],
+    "x-introduced": "3.0.0",
+    "x-removed": "3.53.0"
+   }
+  },
+  "/api/public/sessions": {
+   "get": {
+    "description": "**Deprecated:** On Langfuse Cloud, Langfuse v3 is deprecated and this endpoint will be removed on November 16, 2026. In Langfuse v4, read session data via `GET /api/public/v2/observations?filter=<urlencoded sessionId filter>&fromStartTime=<from>&toStartTime=<to>`. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nGet sessions.\n\nThis legacy endpoint is not recommended for new data extraction workflows.\nUse the v2 observations endpoint with a bounded time range and group rows by\n`sessionId` instead:\n`GET /api/public/v2/observations?fromStartTime=<from>&toStartTime=<to>`.",
+    "operationId": "sessions_list",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "fromTimestamp",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "toTimestamp",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "environment",
+      "required": false,
+      "schema": {
+       "items": {
+        "nullable": true,
+        "type": "string"
+       },
+       "type": "array"
+      }
+     }
+    ],
+    "tags": [
+     "Sessions"
+    ],
+    "x-family": "legacy",
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/sessions/{sessionId}": {
+   "get": {
+    "description": "**Deprecated:** On Langfuse Cloud, Langfuse v3 is deprecated and this endpoint will be removed on November 16, 2026. In Langfuse v4, read session data via `GET /api/public/v2/observations?filter=<urlencoded sessionId filter>&fromStartTime=<from>&toStartTime=<to>`. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nGet a session.\n\nPlease note that `traces` on this endpoint are not paginated. For large\nsessions or new data extraction workflows, use the v2 observations endpoint\nwith a URL-encoded `sessionId` filter and a bounded time range:\n`GET /api/public/v2/observations?filter=<sessionId filter>&fromStartTime=<from>&toStartTime=<to>`.",
+    "operationId": "sessions_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "sessionId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Sessions"
+    ],
+    "x-family": "legacy",
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/traces": {
+   "delete": {
+    "description": "Delete multiple traces",
+    "operationId": "trace_deleteMultiple",
+    "parameters": [],
+    "tags": [
+     "Trace"
+    ],
+    "x-introduced": "3.39.0"
+   },
+   "get": {
+    "description": "**Deprecated:** On Langfuse Cloud, Langfuse v3 is deprecated and this endpoint will be removed on November 16, 2026. In Langfuse v4, read span and trace data via `GET /api/public/v2/observations?fromStartTime=<from>&toStartTime=<to>`. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nGet list of traces",
+    "operationId": "trace_list",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "userId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "name",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "sessionId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "fromTimestamp",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "toTimestamp",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "orderBy",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "tags",
+      "required": false,
+      "schema": {
+       "items": {
+        "nullable": true,
+        "type": "string"
+       },
+       "type": "array"
+      }
+     },
+     {
+      "in": "query",
+      "name": "version",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "release",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "environment",
+      "required": false,
+      "schema": {
+       "items": {
+        "nullable": true,
+        "type": "string"
+       },
+       "type": "array"
+      }
+     },
+     {
+      "in": "query",
+      "name": "fields",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "filter",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Trace"
+    ],
+    "x-family": "legacy",
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/traces/{traceId}": {
+   "delete": {
+    "description": "Delete a specific trace",
+    "operationId": "trace_delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "traceId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Trace"
+    ],
+    "x-introduced": "3.39.0"
+   },
+   "get": {
+    "description": "**Deprecated:** On Langfuse Cloud, Langfuse v3 is deprecated and this endpoint will be removed on November 16, 2026. In Langfuse v4, read span and trace data via `GET /api/public/v2/observations?fromStartTime=<from>&toStartTime=<to>`. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nGet a specific trace",
+    "operationId": "trace_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "traceId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "fields",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Trace"
+    ],
+    "x-family": "legacy",
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/unstable/dashboard-widgets": {
+   "get": {
+    "description": "List dashboard widgets in the project, ordered by most recently\nupdated first.\n\nResponses may include legacy `traces` widgets created before this\nAPI existed. New widgets cannot be created with `view: traces`.",
+    "operationId": "unstable_dashboardWidgets_list",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableDashboardWidgets"
+    ],
+    "x-introduced": "3.216.0"
+   },
+   "post": {
+    "description": "Create a dashboard widget (a standalone chart definition you place on\nany dashboard).\n\nThis endpoint creates the widget only; place it on a dashboard via\n`POST /dashboards/{dashboardId}/placements`.\n\nSupported views are `observations`, `scores-numeric`, `scores-boolean`, and `scores-categorical`.\nThe legacy `traces` view is not supported by this unstable API.\nWidgets are created as v2 internally.\n\n`chartConfig` is optional and defaults to the plain config for\n`chartType`; when `chartConfig.type` is given it must match\n`chartType`.\n\nUnstable API note:\n- This surface may evolve while dashboard/widget APIs are being finalized.",
+    "operationId": "unstable_dashboardWidgets_create",
+    "parameters": [],
+    "tags": [
+     "UnstableDashboardWidgets"
+    ],
+    "x-introduced": "3.205.0"
+   }
+  },
+  "/api/public/unstable/dashboard-widgets/{widgetId}": {
+   "delete": {
+    "description": "Delete a dashboard widget.\n\nThe API returns `409` while the widget is still placed on a dashboard.\nRemove those placements first.",
+    "operationId": "unstable_dashboardWidgets_delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "widgetId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableDashboardWidgets"
+    ],
+    "x-introduced": "3.216.0"
+   },
+   "get": {
+    "description": "Get a dashboard widget by id.\n\nThe response may use `view: traces` for legacy widgets.",
+    "operationId": "unstable_dashboardWidgets_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "widgetId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableDashboardWidgets"
+    ],
+    "x-introduced": "3.216.0"
+   },
+   "patch": {
+    "description": "Update a dashboard widget.\n\nAll fields are optional; at least one field is required.\nChanging `chartType` without sending `chartConfig` resets the config\nto the new chart type's defaults. When `chartConfig.type` is given\nit must match the widget's (possibly updated) `chartType`.\n\n`view` cannot be changed to the legacy `traces` value. Existing\n`traces` widgets may be updated on other fields.",
+    "operationId": "unstable_dashboardWidgets_update",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "widgetId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableDashboardWidgets"
+    ],
+    "x-introduced": "3.216.0"
+   }
+  },
+  "/api/public/unstable/dashboards": {
+   "get": {
+    "description": "List dashboards in the project, ordered by most recently updated\nfirst.",
+    "operationId": "unstable_dashboards_list",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableDashboards"
+    ],
+    "x-introduced": "3.216.0"
+   },
+   "post": {
+    "description": "Create a dashboard.",
+    "operationId": "unstable_dashboards_create",
+    "parameters": [],
+    "tags": [
+     "UnstableDashboards"
+    ],
+    "x-introduced": "3.216.0"
+   }
+  },
+  "/api/public/unstable/dashboards/{dashboardId}": {
+   "delete": {
+    "description": "Delete a dashboard.",
+    "operationId": "unstable_dashboards_delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "dashboardId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableDashboards"
+    ],
+    "x-introduced": "3.216.0"
+   },
+   "get": {
+    "description": "Get a dashboard by id.",
+    "operationId": "unstable_dashboards_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "dashboardId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableDashboards"
+    ],
+    "x-introduced": "3.216.0"
+   },
+   "patch": {
+    "description": "Update a dashboard's name, description, definition, or filters.",
+    "operationId": "unstable_dashboards_update",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "dashboardId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableDashboards"
+    ],
+    "x-introduced": "3.216.0"
+   }
+  },
+  "/api/public/unstable/dashboards/{dashboardId}/placements": {
+   "post": {
+    "description": "Add a placement to a dashboard grid (see `DashboardPlacement` for\ngrid semantics).\n\n`id` and the position fields are optional: when omitted, the\nplacement gets a server-generated id and is appended below all\nexisting tiles as a 6x6 tile. Returns the created placement.\n\nThe referenced widget must exist in the same project or be a\nLangfuse-managed widget. The API returns `409` if a placement with\nthe same `id` already exists on the dashboard.",
+    "operationId": "unstable_dashboards_addPlacement",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "dashboardId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableDashboards"
+    ],
+    "x-introduced": "3.216.0"
+   }
+  },
+  "/api/public/unstable/dashboards/{dashboardId}/placements/{placementId}": {
+   "delete": {
+    "description": "Remove a placement from a dashboard grid without deleting the referenced widget.",
+    "operationId": "unstable_dashboards_deletePlacement",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "dashboardId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "placementId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableDashboards"
+    ],
+    "x-introduced": "3.216.0"
+   },
+   "patch": {
+    "description": "Move or resize a placement. All fields are optional; at least one is\nrequired. Omitted fields keep their current value. The placement's\ncontent (widget/preset reference) and id cannot change — delete and\nre-add the placement to swap content. Returns the updated placement.",
+    "operationId": "unstable_dashboards_updatePlacement",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "dashboardId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "placementId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableDashboards"
+    ],
+    "x-introduced": "3.216.0"
+   }
+  },
+  "/api/public/unstable/evaluation-rules": {
+   "get": {
+    "description": "**Deprecated:** On Langfuse Cloud, this unstable endpoint is deprecated and will be removed on September 4, 2026. Use the stable `/api/public/v2/evaluation-rules` API instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nList evaluation rules in the authenticated project.\n\nThis includes legacy `trace` and `dataset` rules so they can be inspected and migrated to v4 rules. Legacy rules are read-only through this API; create, update, and delete continue to support only `observation` and `experiment` rules.",
+    "operationId": "unstable_evaluationRules_list",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableEvaluationRules"
+    ],
+    "x-introduced": "3.170.0",
+    "x-removed": "4.31.0"
+   },
+   "post": {
+    "description": "**Deprecated:** On Langfuse Cloud, this unstable endpoint is deprecated and will be removed on September 4, 2026. Use the stable `/api/public/v2/evaluation-rules` API instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nCreate an evaluation rule.\n\nAn evaluation rule defines **what** incoming data should be evaluated and **how prompt variables should be populated** from that data.\n\nUse this resource after choosing an evaluator from the evaluator endpoints.\n\nKey rules:\n- `name` must be unique within the project for public evaluation rules\n- `target` must be `observation` or `experiment`\n- provide either the compatibility `evaluator` field or the new `evaluators` array, never both\n- each evaluator `name` + `type` must identify an existing evaluator family returned by the evaluator endpoints\n- Langfuse resolves that family to its latest version before saving the evaluation rule\n- for `target=experiment`, use dataset `id` values from `GET /api/public/v2/datasets` when filtering by `datasetId`\n- an omitted LLM-as-judge assignment mapping inherits the evaluator version's default mapping\n- the effective mapping must map every evaluator prompt variable exactly once\n- for `code` evaluators, Langfuse uses the fixed code runtime mapping; omit `mapping` in create and update requests\n- for user-provided `llm_as_judge` mappings, `expected_output` and `experiment_item_metadata` are only valid for `target=experiment`\n- if `enabled=true`, Langfuse validates that the referenced evaluator can currently run\n- at most 500 evaluation rules can be effectively active in one project at the same time (enforced identically by the API, the MCP tools, and the app)\n\nIf an evaluation rule with the same `name` already exists in the project, the API returns `409`.\nIn that case, update the existing resource with `PATCH /api/public/unstable/evaluation-rules/{evaluationRuleId}` instead of creating a second one.\n\nIf enabling this resource would exceed the 500-active limit, the API also returns `409`.\nIn that case, disable or pause another active evaluation rule before enabling a new one.\n\nCurrent scope:\n- evaluation rules are live-ingestion rules only\n- they do not trigger historical backfills\n\nRecovery guidance:\n- `400 invalid_filter_value`: fix the filter `column` or `value` using `details.column`, `details.invalidValues`, and `details.allowedValues`\n- `400 invalid_filter_value` with `details.column=datasetId`: call `GET /api/public/v2/datasets`, then retry with dataset `id` values from that response\n- `400 missing_variable_mapping`: for `llm_as_judge` evaluators, fetch the evaluator again and make sure every variable in `variables` appears exactly once in `mapping`\n- `400 duplicate_variable_mapping`: remove repeated mappings for the same variable\n- `400 invalid_variable_mapping`: for `llm_as_judge`, switch to a valid `source` for the selected `target`, or fix the variable name\n- `400 invalid_json_path`: remove or correct the `jsonPath`\n- `422 evaluator_preflight_failed`: the selected evaluator cannot run with the resolved model configuration. Fix the evaluator/default model setup, then retry the create request.",
+    "operationId": "unstable_evaluationRules_create",
+    "parameters": [],
+    "tags": [
+     "UnstableEvaluationRules"
+    ],
+    "x-introduced": "3.170.0",
+    "x-removed": "4.31.0"
+   }
+  },
+  "/api/public/unstable/evaluation-rules/{evaluationRuleId}": {
+   "delete": {
+    "description": "**Deprecated:** On Langfuse Cloud, this unstable endpoint is deprecated and will be removed on September 4, 2026. Use the stable `/api/public/v2/evaluation-rules` API instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nDelete an evaluation rule.\n\nThis removes the live-ingestion rule only. It does not delete the referenced evaluator.",
+    "operationId": "unstable_evaluationRules_delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "evaluationRuleId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableEvaluationRules"
+    ],
+    "x-introduced": "3.170.0",
+    "x-removed": "4.31.0"
+   },
+   "get": {
+    "description": "**Deprecated:** On Langfuse Cloud, this unstable endpoint is deprecated and will be removed on September 4, 2026. Use the stable `/api/public/v2/evaluation-rules` API instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nGet one evaluation rule by its identifier.\n\nUse this endpoint to inspect the current evaluator, target, mapping, filters, execution timing, and effective runtime status. Legacy `trace` and `dataset` rules are returned for migration and are read-only through this API.",
+    "operationId": "unstable_evaluationRules_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "evaluationRuleId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableEvaluationRules"
+    ],
+    "x-introduced": "3.170.0",
+    "x-removed": "4.31.0"
+   },
+   "patch": {
+    "description": "**Deprecated:** On Langfuse Cloud, this unstable endpoint is deprecated and will be removed on September 4, 2026. Use the stable `/api/public/v2/evaluation-rules` API instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nUpdate an evaluation rule.\n\nTypical uses:\n- enable or disable live execution\n- switch to another evaluator\n- adjust sampling\n- change filters\n- update LLM-as-judge variable mappings\n\nImportant behavior:\n- provide only the fields you want to change\n- if you provide `evaluator`, Langfuse resolves that evaluator family to its latest version before saving\n- changing `target`, `filter`, or an LLM-as-judge `mapping` must still produce a valid target-specific configuration\n- if you change `target` for an LLM-as-judge rule, also send a compatible `filter` and `mapping` in the same request unless the existing ones are still valid for the new target\n- for `code` evaluator rules, omit `mapping`; Langfuse stores the fixed code runtime mapping automatically\n- if the resulting config is enabled, Langfuse re-validates that the selected evaluator can run\n- if the update would move a non-active evaluation rule into the active state and the project already has 500 active evaluation rules, the API returns `409`\n\nRecovery guidance:\n- if an LLM-as-judge update fails with `missing_variable_mapping` or `invalid_variable_mapping` after changing `evaluator` or `target`, resend the request with a complete new `mapping`\n- if the update fails with `invalid_filter_value` after changing `target`, resend the request with a target-compatible `filter`",
+    "operationId": "unstable_evaluationRules_update",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "evaluationRuleId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableEvaluationRules"
+    ],
+    "x-introduced": "3.170.0",
+    "x-removed": "4.31.0"
+   }
+  },
+  "/api/public/unstable/evaluators": {
+   "get": {
+    "description": "**Deprecated:** On Langfuse Cloud, this unstable endpoint is deprecated and will be removed on September 4, 2026. Use the stable `/api/public/v2/evaluators` API instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nList the evaluators available to the authenticated project.\n\nImportant behavior:\n- This endpoint returns the latest version of each available evaluator.\n- Every evaluator is owned by the authenticated project.",
+    "operationId": "unstable_evaluators_list",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableEvaluators"
+    ],
+    "x-introduced": "3.170.0",
+    "x-removed": "4.31.0"
+   },
+   "post": {
+    "description": "**Deprecated:** On Langfuse Cloud, this unstable endpoint is deprecated and will be removed on September 4, 2026. Use the stable `/api/public/v2/evaluators` API instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nCreate an evaluator in the authenticated project.\n\nUse evaluators to define **how** Langfuse should score data.\nLLM-as-a-judge evaluators define a prompt, expected structured output, and optional model configuration.\nCode evaluators define source code and a runtime language.\n\nNaming behavior:\n- If this is a new evaluator name in your project, Langfuse creates version `1`.\n- If the name already exists in your project, Langfuse creates the next version and returns it.\n- The evaluator `id` remains stable across versions.\n- Existing evaluation rules automatically use the latest evaluator version; no rule update is required.\n\nRecommended workflow:\n1. Create the evaluator.\n2. Read the returned `variables` array.\n3. Read the returned `outputDefinition.dataType` so the client knows whether future scores will be numeric, boolean, or categorical.\n4. Create one or more evaluation rules that reference the returned evaluator family using `name` and `type`.\n\nCode evaluator validation:\n- At creation, Langfuse only validates the request shape\n- The `sourceCode` itself is not executed here. It is first run (preflight-tested against a sample observation) when you link the evaluator to an evaluation rule, so runtime errors in the code surface at evaluation-rule creation, not at evaluator creation.\n\nRecovery guidance:\n- `422` with `code=evaluator_preflight_failed`: the evaluator cannot run with the resolved model configuration. Add a valid explicit `modelConfig`, or configure the project's default evaluation model, then retry the same request.\n- `400` with `code=invalid_body`: the request shape is malformed. Use the structured `details.issues` array to fix the specific fields and retry.\n- `400` with `code=invalid_body` on `outputDefinition`: for `type=llm_as_judge`, send `dataType`, `reasoning.description`, and `score.description`. Do not send `version`; it is not part of the public request shape.\n- If `type` is omitted, Langfuse treats the request as `type=llm_as_judge` for backwards compatibility. New clients should send `type` explicitly.\n\nUnstable API note:\n- This surface may evolve while the underlying evaluation data model is being redesigned.",
+    "operationId": "unstable_evaluators_create",
+    "parameters": [],
+    "tags": [
+     "UnstableEvaluators"
+    ],
+    "x-introduced": "3.170.0",
+    "x-removed": "4.31.0"
+   }
+  },
+  "/api/public/unstable/evaluators/{evaluatorId}": {
+   "delete": {
+    "description": "**Deprecated:** On Langfuse Cloud, this unstable endpoint is deprecated and will be removed on September 4, 2026. Use the stable `/api/public/v2/evaluators` API instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nDelete an evaluator.\n\nImportant behavior:\n- This deletes the evaluator including all of its stored versions.\n- Evaluation rule assignments referencing the evaluator are also deleted.\n- Scores already produced by the evaluator are not deleted.",
+    "operationId": "unstable_evaluators_delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "evaluatorId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableEvaluators"
+    ],
+    "x-introduced": "3.187.0",
+    "x-removed": "4.31.0"
+   },
+   "get": {
+    "description": "**Deprecated:** On Langfuse Cloud, this unstable endpoint is deprecated and will be removed on September 4, 2026. Use the stable `/api/public/v2/evaluators` API instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nGet one evaluator by `id`.\n\nThis endpoint always returns the evaluator's latest version. Use it when you want the current prompt, output definition, model configuration, and derived variables for the evaluator you plan to use in an evaluation rule.",
+    "operationId": "unstable_evaluators_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "evaluatorId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableEvaluators"
+    ],
+    "x-introduced": "3.170.0",
+    "x-removed": "4.31.0"
+   }
+  },
+  "/api/public/unstable/skills": {
+   "get": {
+    "description": "List skills with metadata and timestamps from their latest version, shared tags, and the version assigned to production when present.",
+    "operationId": "unstable_skills_list",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "name",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "search",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "tag",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "fromUpdatedAt",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "toUpdatedAt",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableSkills"
+    ],
+    "x-introduced": "4.46.0"
+   },
+   "post": {
+    "description": "Create skill version",
+    "operationId": "unstable_skills_createVersion",
+    "parameters": [],
+    "tags": [
+     "UnstableSkills"
+    ],
+    "x-introduced": "4.46.0"
+   }
+  },
+  "/api/public/unstable/skills/files/{fileId}/content": {
+   "get": {
+    "description": "Read one text file from a persisted skill version using its file id, not its blob id. Returns JSON containing the text content with Cache-Control no-store.",
+    "operationId": "unstable_skills_getFileContent",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "fileId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableSkills"
+    ],
+    "x-introduced": "4.46.0"
+   }
+  },
+  "/api/public/unstable/skills/{skillName}": {
+   "get": {
+    "description": "Resolve a skill's metadata and file manifest by version or label. Defaults to the production label. Use each file's id with getFileContent to read its text content.",
+    "operationId": "unstable_skills_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "skillName",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "version",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "label",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableSkills"
+    ],
+    "x-introduced": "4.46.0"
+   },
+   "patch": {
+    "description": "Replace the shared tags across all versions of a skill. An empty tags list clears all tags. Returns the latest skill version with the updated tags.",
+    "operationId": "unstable_skills_update",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "skillName",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableSkills"
+    ],
+    "x-introduced": "4.46.0"
+   }
+  },
+  "/api/public/unstable/skills/{skillName}/versions/{skillVersion}": {
+   "delete": {
+    "description": "Delete one immutable skill version. Unreferenced blobs are retained for asynchronous cleanup.",
+    "operationId": "unstable_skills_deleteVersion",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "skillName",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "skillVersion",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableSkills"
+    ],
+    "x-introduced": "4.46.0"
+   },
+   "patch": {
+    "description": "Replace the labels on a skill version and atomically move them from other versions.",
+    "operationId": "unstable_skills_setLabels",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "skillName",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "skillVersion",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableSkills"
+    ],
+    "x-introduced": "4.46.0"
+   }
+  },
+  "/api/public/v2/datasets": {
+   "get": {
+    "description": "Get all datasets",
+    "operationId": "datasets_list",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     }
+    ],
+    "tags": [
+     "Datasets"
+    ],
+    "x-introduced": "3.0.0"
+   },
+   "post": {
+    "description": "Create a dataset",
+    "operationId": "datasets_create",
+    "parameters": [],
+    "tags": [
+     "Datasets"
+    ],
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/v2/datasets/{datasetName}": {
+   "get": {
+    "description": "Get a dataset",
+    "operationId": "datasets_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "datasetName",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Datasets"
+    ],
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/v2/evaluation-rules": {
+   "get": {
+    "description": "List evaluation rules in newest-first creation order.\n\nThis includes legacy trace and dataset rules so they can be inspected and migrated. Treat the cursor as opaque and return it unchanged.",
+    "operationId": "evaluationRules_list",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "cursor",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "EvaluationRules"
+    ],
+    "x-introduced": "4.23.0"
+   },
+   "post": {
+    "description": "Create an evaluation rule using stable evaluator identifiers.\n\nAn evaluation rule defines **which** incoming observations should be evaluated and how prompt variables should be populated.\n\nKey behavior:\n- rule names are not identifiers and do not need to be unique\n- rules always use the latest version of each associated evaluator\n- an enabled rule requires at least one evaluator assignment\n- omit `sampling` to evaluate every matching observation\n- omit `filter` to match every incoming observation\n- `datasetId` is the public filter name for selecting experiment datasets",
+    "operationId": "evaluationRules_create",
+    "parameters": [],
+    "tags": [
+     "EvaluationRules"
+    ],
+    "x-introduced": "4.23.0"
+   }
+  },
+  "/api/public/v2/evaluation-rules/{evaluationRuleId}": {
+   "delete": {
+    "description": "Delete an evaluation rule.\n\nThis removes the live-ingestion rule only. It does not delete associated evaluators or scores already produced by them.\n\nLegacy trace and dataset rules can also be deleted. Their evaluators and previously produced scores are preserved.",
+    "operationId": "evaluationRules_delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "evaluationRuleId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "EvaluationRules"
+    ],
+    "x-introduced": "4.23.0"
+   },
+   "get": {
+    "description": "Get one evaluation rule, including a legacy trace or dataset rule, by its stable identifier.",
+    "operationId": "evaluationRules_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "evaluationRuleId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "EvaluationRules"
+    ],
+    "x-introduced": "4.23.0"
+   },
+   "patch": {
+    "description": "Update an evaluation rule by its stable identifier.\n\nProvide only the fields to change. Providing `evaluatorAssignments` replaces the complete assignment list. Replacing the list with an empty array disables the rule. Setting `enabled=true` is rejected when the resulting assignment list is empty, including when both fields are sent in the same request.\n\nLegacy trace and dataset rules follow the existing lifecycle restrictions: they can be deactivated with `enabled=false`, but their name, filters, sampling, and evaluator assignments cannot be changed.",
+    "operationId": "evaluationRules_update",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "evaluationRuleId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "EvaluationRules"
+    ],
+    "x-introduced": "4.23.0"
+   }
+  },
+  "/api/public/v2/evaluators": {
+   "get": {
+    "description": "List evaluators in newest-first creation order.\n\nEvery evaluator includes its latest definition and version metadata flattened into the evaluator object, plus associated evaluation rules. Treat the cursor as opaque and return it unchanged.",
+    "operationId": "evaluators_list",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "cursor",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Evaluators"
+    ],
+    "x-introduced": "4.23.0"
+   },
+   "post": {
+    "description": "Create an evaluator in the authenticated project.\n\nAn evaluator defines **how** Langfuse should score data. LLM-as-a-judge evaluators define a prompt, expected structured output, and optional model configuration. Code evaluators define source code and a runtime language.\n\nThis always creates a new evaluator with version `1`. Names are not identifiers and do not need to be unique.",
+    "operationId": "evaluators_create",
+    "parameters": [],
+    "tags": [
+     "Evaluators"
+    ],
+    "x-introduced": "4.23.0"
+   }
+  },
+  "/api/public/v2/evaluators/{evaluatorId}": {
+   "delete": {
+    "description": "Delete an evaluator and all of its stored versions.\n\nAssociated evaluation-rule assignments are also removed. Scores already produced by the evaluator are preserved.",
+    "operationId": "evaluators_delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "evaluatorId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Evaluators"
+    ],
+    "x-introduced": "4.23.0"
+   },
+   "get": {
+    "description": "Get one evaluator by its stable identifier.\n\nThe response includes the evaluator's latest definition and version metadata flattened into the evaluator object, plus associated evaluation rules. Use the version-history endpoint when older definitions are needed.",
+    "operationId": "evaluators_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "evaluatorId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Evaluators"
+    ],
+    "x-introduced": "4.23.0"
+   },
+   "patch": {
+    "description": "Update an evaluator by its stable identifier.\n\nProvide only the top-level fields to change. Metadata-only changes do not create a version. Evaluator type cannot change.\n\nDefinition fields are flattened into the request. To replace a definition, include `type` and every definition field for that type. Definition fields are replaced as a complete unit rather than merged. For LLM-as-a-judge evaluators, omitting or setting `modelConfig` to `null` selects the project's default evaluation model.\n\nReplacing a definition automatically returns an evaluator paused by an invalid or missing model configuration to `active`, while preserving its id and evaluation-rule assignments. Pauses caused by provider authentication, billing, connectivity, account state, or an unknown legacy reason remain paused until the explicit reactivation check succeeds.",
+    "operationId": "evaluators_update",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "evaluatorId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Evaluators"
+    ],
+    "x-introduced": "4.23.0"
+   }
+  },
+  "/api/public/v2/evaluators/{evaluatorId}/versions": {
+   "get": {
+    "description": "List an evaluator's version history in newest-first order.\n\nThis endpoint is intended for history and audit use cases. Ordinary clients can use the flattened `version` and definition fields on the evaluator response.",
+    "operationId": "evaluators_listVersions",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "evaluatorId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "cursor",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Evaluators"
+    ],
+    "x-introduced": "4.23.0"
+   }
+  },
+  "/api/public/v2/metrics": {
+   "get": {
+    "description": "Get metrics from the Langfuse project using a query object. V2 endpoint with optimized performance.\n\nTogether with OpenTelemetry ingestion and Observations API v2, this is the only real-time read path. Other public API endpoints can delay data by about 10 minutes.\n\n## V2 Differences\n- Supports `observations`, `scores-numeric`, `scores-boolean`, and `scores-categorical` views only (traces view not supported)\n- Direct access to tags and release fields on observations\n- Semantic-root filtering and grouping through the v2-only `isRootObservation` dimension\n- Backwards-compatible: traceName, traceRelease, traceVersion dimensions are still available on observations view\n- High cardinality dimensions are not supported and will return a 400 error (see below)\n\nFor more details, see the [Metrics API documentation](https://langfuse.com/docs/metrics/features/metrics-api).\n\n## Available Views\n\n### observations\nQuery observation-level data (spans, generations, events).\n\n**Dimensions:**\n- `environment` - Deployment environment (e.g., production, staging)\n- `type` - Type of observation (SPAN, GENERATION, EVENT)\n- `name` - Name of the observation\n- `level` - Logging level of the observation\n- `version` - Version of the observation\n- `tags` - User-defined tags\n- `release` - Release version\n- `traceName` - Name of the parent trace (backwards-compatible)\n- `traceRelease` - Release version of the parent trace (backwards-compatible, maps to release)\n- `traceVersion` - Version of the parent trace (backwards-compatible, maps to version)\n- `providedModelName` - Name of the model used\n- `promptName` - Name of the prompt used\n- `promptVersion` - Version of the prompt used\n- `isRootObservation` - Boolean semantic-root status. `true` includes physical roots and app roots whose SDK parent is external (so `parentObservationId` may be non-null).\n- `startTimeMonth` - Month of start_time in YYYY-MM format\n\n**Measures:**\n- `count` - Total number of observations\n- `latency` - Observation latency (milliseconds)\n- `streamingLatency` - Generation latency from completion start to end (milliseconds)\n- `inputTokens` - Sum of input tokens consumed\n- `outputTokens` - Sum of output tokens produced\n- `totalTokens` - Sum of all tokens consumed\n- `outputTokensPerSecond` - Output tokens per second\n- `tokensPerSecond` - Total tokens per second\n- `inputCost` - Input cost (USD)\n- `outputCost` - Output cost (USD)\n- `totalCost` - Total cost (USD)\n- `timeToFirstToken` - Time to first token (milliseconds)\n- `countScores` - Number of scores attached to the observation\n\n### scores-numeric\nQuery numeric and boolean score data.\n\n**Dimensions:**\n- `environment` - Deployment environment\n- `name` - Name of the score (e.g., accuracy, toxicity)\n- `source` - Origin of the score (API, ANNOTATION, EVAL)\n- `dataType` - Data type (NUMERIC, BOOLEAN)\n- `configId` - Identifier of the score config\n- `timestampMonth` - Month in YYYY-MM format\n- `timestampDay` - Day in YYYY-MM-DD format\n- `value` - Numeric value of the score\n- `traceName` - Name of the parent trace\n- `tags` - Tags\n- `traceRelease` - Release version\n- `traceVersion` - Version\n- `observationName` - Name of the associated observation\n- `observationModelName` - Model name of the associated observation\n- `observationPromptName` - Prompt name of the associated observation\n- `observationPromptVersion` - Prompt version of the associated observation\n\n**Measures:**\n- `count` - Total number of scores\n- `value` - Score value (for aggregations)\n\n### scores-boolean\nQuery boolean score data. It has the same score and parent trace/observation dimensions as scores-numeric, plus:\n\n**Dimensions:**\n- `booleanValue` - Boolean value for true/false grouping and filtering\n\n**Measures:**\n- `count` - Total number of boolean scores\n- `value` - Numeric 0/1 score value; `avg` returns the true-rate\n\n### scores-categorical\nQuery categorical score data. Same dimensions as scores-numeric except uses `stringValue` instead of `value`.\n\n**Measures:**\n- `count` - Total number of scores\n\n## High Cardinality Dimensions\nThe following dimensions cannot be used as grouping dimensions in v2 metrics API as they can cause performance issues.\nUse them in filters instead.\n\n**observations view:**\n- `id` - Use traceId filter to narrow down results\n- `traceId` - Use traceId filter instead\n- `userId` - Use userId filter instead\n- `sessionId` - Use sessionId filter instead\n- `parentObservationId` - Use parentObservationId filter instead\n\n**scores-numeric / scores-boolean / scores-categorical views:**\n- `id` - Use specific filters to narrow down results\n- `traceId` - Use traceId filter instead\n- `userId` - Use userId filter instead\n- `sessionId` - Use sessionId filter instead\n- `observationId` - Use observationId filter instead\n\n## Aggregations\nAvailable aggregation functions: `sum`, `avg`, `count`, `max`, `min`, `p50`, `p75`, `p90`, `p95`, `p99`, `histogram`\n\n## Time Granularities\nAvailable granularities for timeDimension: `auto`, `minute`, `hour`, `day`, `week`, `month`\n- `auto` bins the data into approximately 50 buckets based on the time range",
+    "operationId": "metrics_metrics",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Metrics"
+    ],
+    "x-family": "v4 read",
+    "x-introduced": "3.141.0"
+   }
+  },
+  "/api/public/v2/observations": {
+   "get": {
+    "description": "Get a list of observations with cursor-based pagination and flexible field selection.\n\nTogether with OpenTelemetry ingestion and Metrics API v2, this is the only real-time read path. Other public API endpoints can delay data by about 10 minutes.\n\n## Cursor-based Pagination\nThis endpoint uses cursor-based pagination for efficient traversal of large datasets.\nThe cursor is returned in the response metadata and should be passed in subsequent requests\nto retrieve the next page of results.\n\n## Field Selection\nUse the `fields` parameter to control which observation fields are returned:\n- `core` - Always included: id, traceId, startTime, endTime, projectId, parentObservationId, type\n- `basic` - name, level, statusMessage, version, environment, bookmarked, public, userId, sessionId, isRootObservation\n- `time` - completionStartTime, createdAt, updatedAt\n- `io` - input, output\n- `metadata` - metadata (truncated to 200 chars by default, use `expandMetadata` to get full values)\n- `model` - model, internalModelId, modelParameters\n- `usage` - usageDetails, costDetails, totalCost, usagePricingTierName\n- `prompt` - promptId, promptName, promptVersion\n- `metrics` - latency, timeToFirstToken\n- `trace_context` - tags, release, traceName\n\nIf not specified, `core` and `basic` field groups are returned.\n\n## Filters\nMultiple filtering options are available via query parameters or the structured `filter` parameter.\nWhen using the `filter` parameter, it takes precedence over individual query parameter filters.",
+    "operationId": "observations_getMany",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "fields",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "expandMetadata",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "cursor",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "parseIoAsJson",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "boolean"
+      }
+     },
+     {
+      "in": "query",
+      "name": "name",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "userId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "sessionId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "type",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "traceId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "level",
+      "required": false,
+      "schema": {
+       "enum": [
+        "DEBUG",
+        "DEFAULT",
+        "WARNING",
+        "ERROR"
+       ],
+       "nullable": true,
+       "title": "ObservationLevel",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "parentObservationId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "isRootObservation",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "boolean"
+      }
+     },
+     {
+      "in": "query",
+      "name": "environment",
+      "required": false,
+      "schema": {
+       "items": {
+        "nullable": true,
+        "type": "string"
+       },
+       "type": "array"
+      }
+     },
+     {
+      "in": "query",
+      "name": "fromStartTime",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "toStartTime",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "version",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "filter",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Observations"
+    ],
+    "x-family": "v4 read",
+    "x-introduced": "3.141.0"
+   }
+  },
+  "/api/public/v2/prompts": {
+   "get": {
+    "description": "Get a list of prompt names with versions and labels",
+    "operationId": "prompts_list",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "name",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "label",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "tag",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "fromUpdatedAt",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "toUpdatedAt",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "filter",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Prompts"
+    ],
+    "x-introduced": "3.0.0"
+   },
+   "post": {
+    "description": "Create a new version for the prompt with the given `name`",
+    "operationId": "prompts_create",
+    "parameters": [],
+    "tags": [
+     "Prompts"
+    ],
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/v2/prompts/{name}/versions/{version}": {
+   "patch": {
+    "description": "Update labels for a specific prompt version",
+    "operationId": "promptVersion_update",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "name",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "version",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      }
+     }
+    ],
+    "tags": [
+     "PromptVersion"
+    ],
+    "x-introduced": "3.18.0"
+   }
+  },
+  "/api/public/v2/prompts/{promptName}": {
+   "delete": {
+    "description": "Delete prompt versions. If neither version nor label is specified, all versions of the prompt are deleted.",
+    "operationId": "prompts_delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "promptName",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "label",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "version",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     }
+    ],
+    "tags": [
+     "Prompts"
+    ],
+    "x-introduced": "3.138.0"
+   },
+   "get": {
+    "description": "Get a prompt",
+    "operationId": "prompts_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "promptName",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "version",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "label",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "resolve",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "boolean"
+      }
+     }
+    ],
+    "tags": [
+     "Prompts"
+    ],
+    "x-introduced": "3.0.0"
+   }
+  },
+  "/api/public/v2/prompts/{promptName}/version/{version}": {
+   "patch": {
+    "description": "Update labels for a specific prompt version",
+    "operationId": "promptVersion_update",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "promptName",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "version",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      }
+     }
+    ],
+    "tags": [
+     "PromptVersion"
+    ],
+    "x-introduced": "3.15.0",
+    "x-removed": "3.18.0"
+   }
+  },
+  "/api/public/v2/scores": {
+   "get": {
+    "description": "**Deprecated:** On Langfuse Cloud, Langfuse v3 is deprecated and this endpoint will be removed on November 16, 2026. Use `GET /api/public/v3/scores` instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nGet a list of scores (supports both trace and session scores)",
+    "operationId": "scores_get-many",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "userId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "name",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "fromTimestamp",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "toTimestamp",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "environment",
+      "required": false,
+      "schema": {
+       "items": {
+        "nullable": true,
+        "type": "string"
+       },
+       "type": "array"
+      }
+     },
+     {
+      "in": "query",
+      "name": "source",
+      "required": false,
+      "schema": {
+       "enum": [
+        "ANNOTATION",
+        "API",
+        "EVAL"
+       ],
+       "nullable": true,
+       "title": "ScoreSource",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "operator",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "value",
+      "required": false,
+      "schema": {
+       "format": "double",
+       "nullable": true,
+       "type": "number"
+      }
+     },
+     {
+      "in": "query",
+      "name": "scoreIds",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "configId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "sessionId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "datasetRunId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "traceId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "observationId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "queueId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "dataType",
+      "required": false,
+      "schema": {
+       "enum": [
+        "NUMERIC",
+        "BOOLEAN",
+        "CATEGORICAL",
+        "CORRECTION",
+        "TEXT"
+       ],
+       "nullable": true,
+       "title": "ScoreDataType",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "traceTags",
+      "required": false,
+      "schema": {
+       "items": {
+        "nullable": true,
+        "type": "string"
+       },
+       "type": "array"
+      }
+     },
+     {
+      "in": "query",
+      "name": "fields",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "filter",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Scores"
+    ],
+    "x-family": "legacy",
+    "x-introduced": "3.53.0"
+   }
+  },
+  "/api/public/v2/scores/{scoreId}": {
+   "get": {
+    "description": "**Deprecated:** On Langfuse Cloud, Langfuse v3 is deprecated and this endpoint will be removed on November 16, 2026. Use `GET /api/public/v3/scores` with the `id` filter instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nGet a score (supports both trace and session scores)",
+    "operationId": "scores_get-by-id",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "scoreId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "Scores"
+    ],
+    "x-family": "legacy",
+    "x-introduced": "3.53.0"
+   }
+  },
+  "/api/public/v3/scores": {
+   "get": {
+    "description": "Get a list of scores with a polymorphic `value` field (v3).\n\nThe `value` field type depends on `dataType`:\n- `NUMERIC` → number\n- `BOOLEAN` → boolean\n- `CATEGORICAL`, `TEXT`, `CORRECTION` → string\n\nThe response always includes the core fields: id, projectId, name,\nvalue, dataType, source, timestamp, environment, createdAt, updatedAt.\n\nAdditional field groups can be requested via the `fields` parameter:\n- `details` — adds comment, configId, metadata\n- `subject` — adds the subject object describing the entity the score\n  is attached to: kind (trace, observation, session, or experiment),\n  id, and traceId for observation-level scores\n- `annotation` — adds authorUserId, queueId\n\nUnknown group names return HTTP 400.",
+    "operationId": "scoresV3_getManyV3",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "cursor",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "fields",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "id",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "name",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "source",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "dataType",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "environment",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "configId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "queueId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "authorUserId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "value",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "valueMin",
+      "required": false,
+      "schema": {
+       "format": "double",
+       "nullable": true,
+       "type": "number"
+      }
+     },
+     {
+      "in": "query",
+      "name": "valueMax",
+      "required": false,
+      "schema": {
+       "format": "double",
+       "nullable": true,
+       "type": "number"
+      }
+     },
+     {
+      "in": "query",
+      "name": "traceId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "sessionId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "observationId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "experimentId",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "fromTimestamp",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "toTimestamp",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "ScoresV3"
+    ],
+    "x-introduced": "3.179.0"
+   }
+  }
+ },
+ "x-distinct-specs": 116,
+ "x-generated-by": "scripts/gen-union-catalog.py",
+ "x-newest-version": "4.46.0",
+ "x-oldest-version": "3.0.0",
+ "x-releases": 399
+}
