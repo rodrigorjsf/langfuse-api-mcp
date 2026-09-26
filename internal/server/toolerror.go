@@ -129,15 +129,13 @@ func unavailableHint(why langfuse.Unavailability) string {
 }
 
 // langfuseErrorFields translates a Langfuse error answer into the tool error
-// fields; ok is false when err is not a Langfuse answer. It records the
-// status in a. Langfuse's message is redacted by r before errorResult cuts it
+// fields; ok is false when err is not a Langfuse answer. Langfuse's message is redacted by r before errorResult cuts it
 // to length: a secret cut short would no longer match.
-func langfuseErrorFields(err error, operationID string, a *audit, r sanitize.Redactor) (toolErrorFields, bool) {
+func langfuseErrorFields(err error, operationID string, r sanitize.Redactor) (toolErrorFields, bool) {
 	var apiErr *langfuse.APIError
 	if !errors.As(err, &apiErr) {
 		return toolErrorFields{}, false
 	}
-	a.status = apiErr.Status
 	f := toolErrorFields{HTTPStatus: apiErr.Status, OperationID: operationID}
 	if errors.Is(apiErr, langfuse.ErrOperationUnavailable) {
 		f.Code = errorUnavailableOperation

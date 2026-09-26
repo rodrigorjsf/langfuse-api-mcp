@@ -28,12 +28,11 @@ const caHint = "set LANGFUSE_CA_CERT " +
 
 // failure is the tool error for a Langfuse request that got no usable answer
 // (a transport failure, a refused redirect or an oversized body); a Langfuse
-// error answer goes through langfuseErrorFields instead. The cause goes to the
-// audit line a (stderr), never to the agent.
-func failure(operationID string, err error, a *audit) (*mcp.CallToolResult, error) {
+// error answer goes through langfuseErrorFields instead. err itself never
+// reaches the agent; the caller records it on the audit line (stderr).
+func failure(operationID string, err error) (*mcp.CallToolResult, error) {
 	fields := failureFields(err)
 	fields.OperationID = truncate(operationID)
-	a.cause = err.Error()
 	return errorResult(fields)
 }
 

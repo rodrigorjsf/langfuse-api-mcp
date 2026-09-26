@@ -230,14 +230,17 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 	resp, err := ex.client.Do(ctx, request.Method, request.Path, request.Query)
 	a.status, a.bytes = resp.Status, len(resp.Body)
 	if err != nil {
-		if f, ok := langfuseErrorFields(err, op.ID, a, ex.redact); ok {
+		if f, ok := langfuseErrorFields(err, op.ID, ex.redact); ok {
+			a.status = f.HTTPStatus
 			return errorResult(f)
 		}
-		return failure(op.ID, err, a)
+		a.cause = err.Error()
+		return failure(op.ID, err)
 	}
 	payload, err := sanitize.Payload(resp.Body, ex.redact)
 	if err != nil {
-		return failure(op.ID, err, a) // unreachable: the client returns valid JSON only
+		a.cause = err.Error()
+		return failure(op.ID, err) // unreachable: the client returns valid JSON only
 	}
 	return jsonResult(sanitize.Wrap(op.ID, payload), false)
 }
