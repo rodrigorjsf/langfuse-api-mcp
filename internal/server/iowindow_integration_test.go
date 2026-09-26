@@ -31,17 +31,17 @@ import (
 const probeDay = 24 * time.Hour
 
 // seededAges returns the start-time ages of the single-span traces by label:
-// d12_5, d13_5, d14_5 and d20 each sit just inside one probed window (13, 14,
-// 15 and 30 days); d1 is a recent row. None is older than 20 days: Langfuse
+// insideNd sits just inside the probed window of N days (12.5, 13.5, 14.5 and
+// 20 days old); recent is one day old. None is older than 20 days: Langfuse
 // Cloud accepted a 40-day-old span's export but did not serve it
 // (docs/research/langfuse.md §1.6).
 func seededAges() map[string]time.Duration {
 	return map[string]time.Duration{
-		"d1":    1 * probeDay,
-		"d12_5": 12*probeDay + 12*time.Hour,
-		"d13_5": 13*probeDay + 12*time.Hour,
-		"d14_5": 14*probeDay + 12*time.Hour,
-		"d20":   20 * probeDay,
+		"recent":    1 * probeDay,
+		"inside13d": 12*probeDay + 12*time.Hour,
+		"inside14d": 13*probeDay + 12*time.Hour,
+		"inside15d": 14*probeDay + 12*time.Hour,
+		"inside30d": 20 * probeDay,
 	}
 }
 
@@ -241,19 +241,19 @@ func TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows(t *testi
 		wantRows int
 		field    string // present on every row: the field group was served
 	}{
-		{"io, 13-day window", probe("io", byName("d12_5"), 13), 1, "input"},
-		{"io, 14-day window", probe("io", byName("d13_5"), 14), 1, "input"},
-		{"io, 15-day window", probe("io", byName("d14_5"), 15), 1, "input"},
-		{"io, 30-day window", probe("io", byName("d20"), 30), 1, "output"},
-		{"io, no window", probe("io", byName("d20"), 0), 1, "input"},
-		{"metadata, 13-day window", probe("metadata", byName("d12_5"), 13), 1, "metadata"},
-		{"metadata, 14-day window", probe("metadata", byName("d13_5"), 14), 1, "metadata"},
-		{"metadata, 15-day window", probe("metadata", byName("d14_5"), 15), 1, "metadata"},
-		{"metadata, 30-day window", probe("metadata", byName("d20"), 30), 1, "metadata"},
-		{"io, trace id, no window", probe("io", map[string]any{"traceId": s.spans["d20"].traceID}, 0), 1, "input"},
-		{"io, trace id, 15-day window", probe("io", map[string]any{"traceId": s.spans["d14_5"].traceID}, 15), 1, "input"},
-		{"io, id filter, no window", probe("io", map[string]any{"filter": idFilter("d20")}, 0), 1, "input"},
-		{"io, id filter, 15-day window", probe("io", map[string]any{"filter": idFilter("d14_5")}, 15), 1, "input"},
+		{"io, 13-day window", probe("io", byName("inside13d"), 13), 1, "input"},
+		{"io, 14-day window", probe("io", byName("inside14d"), 14), 1, "input"},
+		{"io, 15-day window", probe("io", byName("inside15d"), 15), 1, "input"},
+		{"io, 30-day window", probe("io", byName("inside30d"), 30), 1, "output"},
+		{"io, no window", probe("io", byName("inside30d"), 0), 1, "input"},
+		{"metadata, 13-day window", probe("metadata", byName("inside13d"), 13), 1, "metadata"},
+		{"metadata, 14-day window", probe("metadata", byName("inside14d"), 14), 1, "metadata"},
+		{"metadata, 15-day window", probe("metadata", byName("inside15d"), 15), 1, "metadata"},
+		{"metadata, 30-day window", probe("metadata", byName("inside30d"), 30), 1, "metadata"},
+		{"io, trace id, no window", probe("io", map[string]any{"traceId": s.spans["inside30d"].traceID}, 0), 1, "input"},
+		{"io, trace id, 15-day window", probe("io", map[string]any{"traceId": s.spans["inside15d"].traceID}, 15), 1, "input"},
+		{"io, id filter, no window", probe("io", map[string]any{"filter": idFilter("inside30d")}, 0), 1, "input"},
+		{"io, id filter, 15-day window", probe("io", map[string]any{"filter": idFilter("inside15d")}, 15), 1, "input"},
 		// The combination the official MCP caps at 50 rows: a date window, the io
 		// group, and no trace id or id filter (nor any other filter).
 		{"io, 13-day window, limit 50", probe("io", map[string]any{"limit": 50}, 13), 50, "input"},
