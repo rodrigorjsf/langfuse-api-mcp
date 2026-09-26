@@ -189,7 +189,7 @@ func waitSeeded(t *testing.T, cs *mcp.ClientSession, s ioSeed, want int) {
 			t.Fatalf("after 3 minutes %d of %d seeded observations are queryable; single-span traces missing: %v",
 				len(rows), want, missing)
 		}
-		if err := waitRetryAfter(t.Context(), 6*time.Second); err != nil {
+		if err := sleepCtx(t.Context(), 6*time.Second); err != nil {
 			t.Fatalf("waiting for ingestion: %v", err)
 		}
 	}
@@ -215,7 +215,7 @@ func probeRows(t *testing.T, cs *mcp.ClientSession, params map[string]any) []map
 	var page struct {
 		Data []map[string]any `json:"data"`
 	}
-	liveData(t, readLive(t, cs, map[string]any{"operationId": "observations_getMany", "parameters": params}, waitRetryAfter), &page)
+	liveData(t, readLive(t, cs, map[string]any{"operationId": "observations_getMany", "parameters": params}, sleepCtx), &page)
 	return page.Data
 }
 

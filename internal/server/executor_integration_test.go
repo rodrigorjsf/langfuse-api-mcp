@@ -101,7 +101,7 @@ func TestLiveLangfuseAnswersTheHealthCheckThroughTheExecutor(t *testing.T) {
 		Status  string `json:"status"`
 		Version string `json:"version"`
 	}
-	liveData(t, readLive(t, cs, healthRead(), waitRetryAfter), &health)
+	liveData(t, readLive(t, cs, healthRead(), sleepCtx), &health)
 
 	if health.Status != "OK" || health.Version == "" {
 		t.Fatalf("health = %+v, want status OK and a version", health)
@@ -118,16 +118,16 @@ func TestLiveLangfuseAnswersAnAuthenticatedReadWithTheKeysProject(t *testing.T) 
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	liveData(t, readLive(t, cs, map[string]any{"operationId": "projects_get"}, waitRetryAfter), &projects)
+	liveData(t, readLive(t, cs, map[string]any{"operationId": "projects_get"}, sleepCtx), &projects)
 
 	if len(projects.Data) != 1 || projects.Data[0].ID == "" {
 		t.Fatalf("projects = %+v, want exactly the one project of the key pair", projects.Data)
 	}
 }
 
-// waitRetryAfter waits d or until ctx is done: readLive's wait against a
-// live Langfuse.
-func waitRetryAfter(ctx context.Context, d time.Duration) error {
+// sleepCtx waits d or until ctx is done: readLive's Retry-After wait and the
+// seeding poll's interval against a live Langfuse.
+func sleepCtx(ctx context.Context, d time.Duration) error {
 	timer := time.NewTimer(d)
 	defer timer.Stop()
 	select {
