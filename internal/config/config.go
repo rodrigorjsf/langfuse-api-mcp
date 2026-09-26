@@ -54,9 +54,11 @@ type Config struct {
 	AmbientInFile Ambient
 	// Connection is the Langfuse host and key pair.
 	Connection Connection
-	// RateLimit is the most Langfuse requests per minute; 0 when unset, so
-	// the Langfuse client's default applies.
+	// RateLimit is the effective most Langfuse requests per minute: the
+	// explicit value, else the default for the host (#47). Never 0 after Load.
 	RateLimit int
+	// RateLimitSource says why RateLimit has its value.
+	RateLimitSource RateLimitSource
 	// MaxConcurrency is the most Langfuse requests in flight at once; 0 when
 	// unset, so the Langfuse client's default applies.
 	MaxConcurrency int
@@ -190,6 +192,7 @@ func Load(env map[string]string, file File) (Config, []IgnoredKey, error) {
 	if cfg.Connection, err = loadConnection(env, fromFile); err != nil {
 		return Config{}, nil, err
 	}
+	cfg.RateLimit, cfg.RateLimitSource = resolveRateLimit(cfg.RateLimit, cfg.Connection.Host)
 	return cfg, ignored, nil
 }
 

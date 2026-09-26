@@ -93,12 +93,15 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 	if err != nil {
 		return app{}, err
 	}
+	// Logged once no startup step can fail: a failed startup logs one line only.
+	log.Info("rate limit", "perMinute", cfg.RateLimit, "source", cfg.RateLimitSource)
 	// The key pair leaves config.Secret straight into a langfuse.KeyPair,
 	// which redacts itself as config.Secret does.
 	keys := langfuse.NewKeyPair(cfg.Connection.PublicKey.Reveal(), cfg.Connection.SecretKey.Reveal())
 	client := langfuse.New(langfuse.Options{
 		Host: cfg.Connection.Host, Keys: keys, TLS: pool.TLSConfig(),
-		// Operator settings only (zero keeps the client's defaults); no tool argument reaches them.
+		// Operator settings only (config resolves the rate limit's host-based
+		// default; zero concurrency keeps the client's); no tool argument reaches them.
 		RateLimit: cfg.RateLimit, MaxConcurrency: cfg.MaxConcurrency,
 	})
 	srv := server.New(cat, client, log, server.Secrets{Keys: keys})

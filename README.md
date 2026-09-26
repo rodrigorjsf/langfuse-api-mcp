@@ -200,10 +200,18 @@ Trusted roots = **your operating system's certificate store + every CA from the 
 
 | Variable | Default | Allowed values | Meaning |
 |---|---|---|---|
-| `LANGFUSE_MCP_RATE_LIMIT` | `30` | whole number, 1 to 60000 | The most Langfuse requests the server sends per minute, retries included. The default is the Langfuse Cloud Hobby General API limit, the lowest plan's; raise it for a higher plan or a self-hosted Langfuse, which has no rate limits (default under review: [#47](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/47)). |
+| `LANGFUSE_MCP_RATE_LIMIT` | `30` on a Langfuse Cloud host, `1000` on any other host | whole number, 1 to 60000 | The most Langfuse requests the server sends per minute, retries included. A value you set always wins, on any host. |
 | `LANGFUSE_MCP_MAX_CONCURRENCY` | `4` | whole number, 1 to 64 | The most Langfuse requests in flight at once. Up to this many requests may also leave at once before the rate limit starts pacing them. |
 
-Both apply to the whole server process, shared by every tool call; no tool argument can change them. May also be set in the config file; the environment wins. A zero, negative, non-numeric or out-of-range value stops startup with an error naming the variable (from the config file, without quoting the value). A call that cannot get through the limits before its deadline is not sent: the agent gets the tool error `timeout` with `retryable: true` and a hint to call again later.
+**Rate-limit default by host.** When you do not set `LANGFUSE_MCP_RATE_LIMIT`, the server picks the default from the host of `LANGFUSE_BASE_URL`. A Cloud host (exactly `cloud.langfuse.com`, `us.cloud.langfuse.com`, `jp.cloud.langfuse.com` or `hipaa.cloud.langfuse.com`; case and port do not matter) gets `30`, the Langfuse Cloud Hobby General API limit, the lowest plan's, so a Hobby project does not hit Langfuse's 429s under load. Any other host is self-hosted, which Langfuse does not rate-limit, and gets `1000`: generous, yet still a brake on an agent loop hammering your own instance. **On a paid Cloud plan, raise the value yourself** (for example to your plan's General API limit): the host does not reveal the plan. The host must match exactly; a look-alike such as `cloud.langfuse.com.example.org` counts as self-hosted. The startup log states the effective value and why it applies, as one JSON line on stderr:
+
+```json
+{"time":"…","level":"INFO","msg":"rate limit","perMinute":30,"source":"default-cloud"}
+```
+
+`source` is `default-cloud`, `default-self-hosted` or `explicit` (you set the variable, in the environment or the config file).
+
+Both limits apply to the whole server process, shared by every tool call; no tool argument can change them. May also be set in the config file; the environment wins. A zero, negative, non-numeric or out-of-range value stops startup with an error naming the variable (from the config file, without quoting the value). A call that cannot get through the limits before its deadline is not sent: the agent gets the tool error `timeout` with `retryable: true` and a hint to call again later.
 
 ### Behavior **(Planned)**
 
