@@ -90,21 +90,23 @@ func langfuseDirect(ctx context.Context, t *testing.T, method, path string, body
 	return target.send(ctx, t, method, path, body, sleepCtx)
 }
 
-// otlpSpan is one span of an OTLP/HTTP JSON export carrying Langfuse's
-// input, output, metadata and environment attributes.
-func otlpSpan(traceID, spanID, name, env string, start time.Time) map[string]any {
+// otlpSpan is one seeded span of an OTLP/HTTP JSON export, named after its
+// label, carrying Langfuse's input, output, metadata and environment
+// attributes.
+func (s ioSeed) otlpSpan(ids seededSpan, label string, start time.Time) map[string]any {
+	name := s.name(label)
 	attr := func(k, v string) map[string]any {
 		return map[string]any{"key": k, "value": map[string]any{"stringValue": v}}
 	}
 	return map[string]any{
-		"traceId": traceID, "spanId": spanID, "name": name, "kind": 1,
+		"traceId": ids.traceID, "spanId": ids.spanID, "name": name, "kind": 1,
 		"startTimeUnixNano": strconv.FormatInt(start.UnixNano(), 10),
 		"endTimeUnixNano":   strconv.FormatInt(start.Add(500*time.Millisecond).UnixNano(), 10),
 		"attributes": []any{
 			attr("langfuse.observation.input", `{"q":"`+name+`"}`),
 			attr("langfuse.observation.output", `{"a":"out-`+name+`"}`),
 			attr("langfuse.observation.metadata.probe", name),
-			attr("langfuse.environment", env),
+			attr("langfuse.environment", s.environment),
 		},
 	}
 }
@@ -120,12 +122,12 @@ func seedIOWindow(t *testing.T, cs *mcp.ClientSession) ioSeed {
 	for label, age := range seededAges() {
 		span := seededSpan{traceID: randomHex(t, 16), spanID: randomHex(t, 8)}
 		s.spans[label] = span
-		spans = append(spans, otlpSpan(span.traceID, span.spanID, s.name(label), s.environment, s.now.Add(-age)))
+		spans = append(spans, s.otlpSpan(span, label, s.now.Add(-age)))
 	}
 	s.bulkTraceID = randomHex(t, 16)
 	for i := range bulkSpans {
-		spans = append(spans, otlpSpan(s.bulkTraceID, randomHex(t, 8), s.name("bulk"), s.environment,
-			s.now.Add(-2*probeDay+time.Duration(i)*time.Second)))
+		bulk := seededSpan{traceID: s.bulkTraceID, spanID: randomHex(t, 8)}
+		spans = append(spans, s.otlpSpan(bulk, "bulk", s.now.Add(-2*probeDay+time.Duration(i)*time.Second)))
 	}
 
 	t.Cleanup(func() { deleteSeededTraces(t, s) })
