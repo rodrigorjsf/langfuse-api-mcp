@@ -45,31 +45,62 @@ func (o Operation) isMetricsQuery(p Param) bool {
 }
 
 // A metrics query JSON is bounded before it is decoded: at most
-// maxMetricsQueryBytes long and nested at most maxMetricsQueryDepth objects
+// maxMetricsQueryBytes long (the first query-JSON size cap; the M3 workflow
+// payload-query guard, #42, is to reuse it) and nested at most maxMetricsQueryDepth objects
 // and lists deep (the query object itself is depth 1).
 const (
 	maxMetricsQueryBytes = 16 << 10
 	maxMetricsQueryDepth = 10
 )
 
-// metricsQueryKeys are the top-level keys of a metrics query and the JSON
-// type each value must have ("object?" and "list?" also accept null).
-var metricsQueryKeys = []struct{ name, kind string }{
-	{"view", "string"},
-	{"dimensions", "list"},
-	{"metrics", "list"},
-	{"filters", "list"},
-	{"timeDimension", "object?"},
-	{"fromTimestamp", "string"},
-	{"toTimestamp", "string"},
-	{"orderBy", "list?"},
-	{"config", "object?"},
+// jsonType is the JSON type a top-level value of a metrics query must have.
+type jsonType struct {
+	// name is "a string", "a list" or "an object", as error messages say it.
+	name string
+	// nullable also accepts JSON null.
+	nullable bool
+}
+
+// has reports whether a decoded value has the type.
+func (t jsonType) has(v any) bool {
+	if v == nil {
+		return t.nullable
+	}
+	return kind(v) == t.name
+}
+
+func (t jsonType) String() string {
+	if t.nullable {
+		return t.name + " or null"
+	}
+	return t.name
+}
+
+var (
+	jsonString = jsonType{name: "a string"}
+	jsonList   = jsonType{name: "a list"}
+)
+
+// metricsQueryKeys are the top-level keys of a metrics query, sorted, and
+// the JSON type of each value.
+var metricsQueryKeys = map[string]jsonType{
+	"config":        {name: "an object", nullable: true},
+	"dimensions":    jsonList,
+	"filters":       jsonList,
+	"fromTimestamp": jsonString,
+	"metrics":       jsonList,
+	"orderBy":       {name: "a list", nullable: true},
+	"timeDimension": {name: "an object", nullable: true},
+	"toTimestamp":   jsonString,
+	"view":          jsonString,
 }
 
 // metricsQuery checks a metrics query JSON and returns it re-encoded, with
 // config.row_limit defaulted. The query must be one JSON object within the
 // size and depth bounds, with only the keys of metricsQueryKeys, each of its
-// type. Error messages name the key and the reason, never the caller's text.
+// type. Error messages name the key (a known one) and the reason, never the
+// caller's text. Re-encoding sorts the keys and keeps only the last of a
+// duplicated key, the one that was checked.
 // Langfuse checks the rest (required keys, allowed views and measures).
 func metricsQuery(raw string) (string, error) {
 	if len(raw) > maxMetricsQueryBytes {
@@ -81,6 +112,8 @@ func metricsQuery(raw string) (string, error) {
 	dec := json.NewDecoder(strings.NewReader(raw))
 	dec.UseNumber()
 	var q map[string]any
+	// The decode error is dropped on purpose: its text quotes the caller's
+	// input, which an error message never repeats.
 	if err := dec.Decode(&q); err != nil || q == nil {
 		return "", invalidf("parameter query: want a JSON object")
 	}
@@ -89,13 +122,13 @@ func metricsQuery(raw string) (string, error) {
 	}
 	for _, name := range slices.Sorted(maps.Keys(q)) {
 		v := q[name]
-		i := slices.IndexFunc(metricsQueryKeys, func(k struct{ name, kind string }) bool { return k.name == name })
-		if i < 0 {
+		want, known := metricsQueryKeys[name]
+		if !known {
 			return "", invalidf("parameter query: unknown top-level key; the keys of a metrics query are: %s",
 				metricsQueryKeyNames())
 		}
-		if want := metricsQueryKeys[i].kind; !hasJSONKind(v, want) {
-			return "", invalidf("parameter query: %s: want %s, got %s", name, describeKind(want), kind(v))
+		if !want.has(v) {
+			return "", invalidf("parameter query: %s: want %s, got %s", name, want, kind(v))
 		}
 	}
 	config, _ := q["config"].(map[string]any)
@@ -147,40 +180,7 @@ func checkDepth(raw string) error {
 	}
 }
 
-// hasJSONKind reports whether a decoded value has the JSON type kind names.
-func hasJSONKind(v any, want string) bool {
-	nullable := strings.HasSuffix(want, "?")
-	if v == nil {
-		return nullable
-	}
-	switch strings.TrimSuffix(want, "?") {
-	case "string":
-		_, ok := v.(string)
-		return ok
-	case "list":
-		_, ok := v.([]any)
-		return ok
-	case "object":
-		_, ok := v.(map[string]any)
-		return ok
-	}
-	return false
-}
-
-// describeKind names a metricsQueryKeys kind for an error message.
-func describeKind(want string) string {
-	name := map[string]string{"string": "a string", "list": "a list", "object": "an object"}[strings.TrimSuffix(want, "?")]
-	if strings.HasSuffix(want, "?") {
-		return name + " or null"
-	}
-	return name
-}
-
 // metricsQueryKeyNames lists the top-level keys of a metrics query.
 func metricsQueryKeyNames() string {
-	names := make([]string, 0, len(metricsQueryKeys))
-	for _, k := range metricsQueryKeys {
-		names = append(names, k.name)
-	}
-	return strings.Join(names, ", ")
+	return strings.Join(slices.Sorted(maps.Keys(metricsQueryKeys)), ", ")
 }
