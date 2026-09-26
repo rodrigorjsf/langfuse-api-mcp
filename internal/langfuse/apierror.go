@@ -23,10 +23,10 @@ const (
 	// RouteMissing: a 404 with an HTML body; the route does not exist in the
 	// deployment's Langfuse version.
 	RouteMissing Unavailability = "route_missing"
-	// EventsOnly: a 404 JSON naming events_only; a Langfuse v4 deployment in
+	// EventsOnly: a 404 JSON saying "Langfuse v4 events_only mode"; a Langfuse v4 deployment in
 	// events_only mode has the legacy family off.
 	EventsOnly Unavailability = "events_only"
-	// V4WriteModeOff: a 404 JSON naming "v4 write mode"; the v4 read family is
+	// V4WriteModeOff: a 404 JSON saying "Langfuse v4 write mode"; the v4 read family is
 	// off (Langfuse v3, or v4 in legacy mode).
 	V4WriteModeOff Unavailability = "v4_write_mode_off"
 )
@@ -62,7 +62,7 @@ func newAPIError(status int, header http.Header, body []byte) *APIError {
 	eb := parseErrorBody(body)
 	e := &APIError{Status: status, Code: eb.code(), Message: eb.message(), RetryAfter: retryAfter(header, time.Now())}
 	if status == http.StatusNotFound {
-		e.Unavailable = unavailability(header, body)
+		e.Unavailable = unavailability(header, body, eb)
 	}
 	if e.Unavailable != "" {
 		e.Message = "" // the body of an unavailable answer is never echoed
@@ -72,17 +72,23 @@ func newAPIError(status int, header http.Header, body []byte) *APIError {
 
 // unavailability tells the three 404 flavours that mean "not served here"
 // (docs/research/langfuse-api-versions.md §2) from a plain not-found.
-func unavailability(header http.Header, body []byte) Unavailability {
+func unavailability(header http.Header, body []byte, eb errorBody) Unavailability {
 	mediaType, _, _ := mime.ParseMediaType(header.Get("Content-Type")) // an unparsable type falls back to the body check
 	if mediaType == "text/html" || bytes.HasPrefix(bytes.TrimSpace(body), []byte("<")) {
 		return RouteMissing
 	}
-	// The phrases may sit in "message" or "error": look at the whole body.
-	switch {
-	case bytes.Contains(body, []byte("events_only")):
-		return EventsOnly
-	case bytes.Contains(body, []byte("v4 write mode")):
-		return V4WriteModeOff
+	// The phrases may sit in "message" or "error". Only Langfuse's full
+	// phrases count, so a plain not-found repeating a caller-chosen name such
+	// as "Prompt events_only not found" stays a not-found.
+	var errText string
+	_ = json.Unmarshal(eb.Error, &errText) // "error" may be an issue list; then it holds no phrase
+	for _, text := range []string{eb.Message, errText} {
+		switch {
+		case strings.Contains(text, "Langfuse v4 events_only mode"):
+			return EventsOnly
+		case strings.Contains(text, "Langfuse v4 write mode"):
+			return V4WriteModeOff
+		}
 	}
 	return ""
 }

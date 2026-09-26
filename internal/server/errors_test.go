@@ -145,6 +145,16 @@ func TestALangfuseClientErrorStatusMapsToItsToolErrorCode(t *testing.T) {
 			wantCode:    "langfuse_not_found",
 			wantMessage: "Langfuse answered HTTP 404: Dataset not found",
 		},
+		"404 JSON not found for a resource named after a mode": {
+			answer:      answer{status: 404, body: `{"message":"Prompt events_only not found","error":"LangfuseNotFoundError"}`},
+			wantCode:    "langfuse_not_found",
+			wantMessage: "Langfuse answered HTTP 404: Prompt events_only not found",
+		},
+		"404 JSON not found for a resource named after the write mode": {
+			answer:      answer{status: 404, body: `{"message":"Dataset v4 write mode not found","error":"LangfuseNotFoundError"}`},
+			wantCode:    "langfuse_not_found",
+			wantMessage: "Langfuse answered HTTP 404: Dataset v4 write mode not found",
+		},
 		"404 JSON resource_not_found": {
 			answer:      answer{status: 404, body: `{"message":"Dashboard proto-nonexistent not found","code":"resource_not_found"}`},
 			wantCode:    "langfuse_not_found",
