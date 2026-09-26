@@ -24,6 +24,7 @@ Users on old and on new deployments must both get every operation their deployme
    - Each operation keeps the schema from the last spec that contained it.
    - Each operation carries its version range: `introduced`, and `removed` if it left the spec.
    - Each operation may carry a gated **operation family**.
+   - An operation whose description opens with a deprecation notice carries `x-summary`, its operation index line: what it does plus "legacy: prefer <replacement> when it is available", the replacement being the operation at the path the notice names, or "(legacy)" alone when the notice names none (#79).
    - Where the docs state an earlier floor than the spec (OTLP 3.22.0, `/v3/scores` 3.179.0), the earlier floor wins.
    - CI fails if the committed catalog is stale against the script's output.
 2. **Families gated by write mode.** Each family has one sentinel probe:

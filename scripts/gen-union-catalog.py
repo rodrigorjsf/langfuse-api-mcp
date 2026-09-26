@@ -6,7 +6,10 @@
 #       Each operation (method + path) keeps its definition from the last spec
 #       that contained it, and carries its version range (x-introduced, plus
 #       x-removed when it left the spec) and its operation family (x-family:
-#       legacy, v4 read or experiments) where a write mode gates it.
+#       legacy, v4 read or experiments) where a write mode gates it. An
+#       operation whose description opens with a deprecation notice also gets
+#       x-summary, its operation index line: what it does and the operation to
+#       prefer (ADR-0012 §5, #79).
 # WHY:  ADR-0012 — a deployment gets every operation its version serves, so the
 #       catalog must know operations older releases had and newer ones dropped.
 #       The file is committed so that builds and pull-request CI stay offline.
@@ -214,6 +217,7 @@ def build(repo):
         method, path = key.split(" ", 1)
         paths.setdefault(path, {})[method.lower()] = op
     check_ids(paths)
+    summarize(paths)
     for g in gaps:
         print(f"note: {g} (the range ignores the gap)", file=sys.stderr)
     return {
@@ -224,6 +228,43 @@ def build(repo):
         "x-distinct-specs": len(cache),
         "paths": paths,
     }
+
+
+NOTICE = "**Deprecated:**"
+NAMED_PATH = re.compile(r"(?:\b(GET|POST|PUT|PATCH|DELETE) )?(/api/public/[A-Za-z0-9_./{}-]*[A-Za-z0-9_}])")
+
+
+def summarize(paths):
+    """Give each operation whose description opens with a deprecation notice an
+    x-summary: its operation index line (ADR-0012 §5, #79).
+
+    The notice is a whole paragraph (about 500 characters, with a Markdown
+    link) and the line saying what the operation does comes after it. The
+    summary keeps that line and names the replacement the notice points to:
+    "Get list of traces (legacy: prefer observations_getMany when it is
+    available)". The replacement is the operation the newest spec lists with
+    the same method at the named path (at its by-ID child when the legacy
+    operation is by ID), else the path as the notice writes it.
+    """
+    live = {(m.upper(), p): op["operationId"]
+            for p, item in paths.items() for m, op in item.items() if "x-removed" not in op}
+    for path, item in paths.items():
+        for method, op in item.items():
+            notice, _, rest = op["description"].partition("\n")
+            if not notice.startswith(NOTICE):
+                continue
+            what = next((line.strip() for line in rest.splitlines() if line.strip()), "")
+            named = NAMED_PATH.search(notice)
+            if named is None:
+                op["x-summary"] = f"{what} (legacy)"
+                continue
+            verb, target = named.group(1), named.group(2)
+            children = [p for (m, p) in live if m == method.upper() and re.fullmatch(re.escape(target) + r"/\{[^/]+\}", p)]
+            if path.endswith("}") and len(children) == 1:
+                target = children[0]
+            written = f"{verb} {named.group(2)}" if verb else named.group(2)
+            replacement = live.get((method.upper(), target)) or written
+            op["x-summary"] = f"{what} (legacy: prefer {replacement} when it is available)"
 
 
 def check_ids(paths):

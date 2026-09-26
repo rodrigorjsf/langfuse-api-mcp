@@ -491,7 +491,8 @@
      "DatasetRunItems"
     ],
     "x-family": "legacy",
-    "x-introduced": "3.57.1"
+    "x-introduced": "3.57.1",
+    "x-summary": "List dataset run items (legacy: prefer experiments_listItems when it is available)"
    },
    "post": {
     "description": "**Deprecated:** On Langfuse Cloud, Langfuse v3 is deprecated and this endpoint will be removed on November 16, 2026. In Langfuse v4, create experiment data via the SDK experiment runner or the OpenTelemetry endpoint at POST /api/public/otel/v1/traces. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nCreate a dataset run item",
@@ -501,7 +502,8 @@
      "DatasetRunItems"
     ],
     "x-family": "legacy",
-    "x-introduced": "3.0.0"
+    "x-introduced": "3.0.0",
+    "x-summary": "Create a dataset run item (legacy: prefer opentelemetry_exportTraces when it is available)"
    }
   },
   "/api/public/datasets/{datasetName}/runs": {
@@ -540,7 +542,8 @@
      "Datasets"
     ],
     "x-family": "legacy",
-    "x-introduced": "3.0.0"
+    "x-introduced": "3.0.0",
+    "x-summary": "Get dataset runs (legacy: prefer experiments_list when it is available)"
    }
   },
   "/api/public/datasets/{datasetName}/runs/{runName}": {
@@ -569,7 +572,8 @@
      "Datasets"
     ],
     "x-family": "legacy",
-    "x-introduced": "3.35.1"
+    "x-introduced": "3.35.1",
+    "x-summary": "Delete a dataset run and all its run items. This action is irreversible. (legacy)"
    },
    "get": {
     "description": "**Deprecated:** On Langfuse Cloud, Langfuse v3 is deprecated and this endpoint will be removed on November 16, 2026. In Langfuse v4, dataset runs are replaced by experiments; use GET /api/public/experiments instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nGet a dataset run and its items",
@@ -596,7 +600,8 @@
      "Datasets"
     ],
     "x-family": "legacy",
-    "x-introduced": "3.0.0"
+    "x-introduced": "3.0.0",
+    "x-summary": "Get a dataset run and its items (legacy: prefer experiments_list when it is available)"
    }
   },
   "/api/public/experiment-items": {
@@ -847,7 +852,8 @@
      "Ingestion"
     ],
     "x-family": "legacy",
-    "x-introduced": "3.0.0"
+    "x-introduced": "3.0.0",
+    "x-summary": "**Legacy endpoint for batch ingestion for Langfuse Observability.** (legacy: prefer scores_create when it is available)"
    }
   },
   "/api/public/integrations/blob-storage": {
@@ -1034,7 +1040,8 @@
      "LegacyMetricsV1"
     ],
     "x-family": "legacy",
-    "x-introduced": "3.57.0"
+    "x-introduced": "3.57.0",
+    "x-summary": "Get metrics from the Langfuse project using a query object. (legacy: prefer metrics_metrics when it is available)"
    }
   },
   "/api/public/metrics/daily": {
@@ -1364,7 +1371,8 @@
      "LegacyObservationsV1"
     ],
     "x-family": "legacy",
-    "x-introduced": "3.0.0"
+    "x-introduced": "3.0.0",
+    "x-summary": "Get a list of observations. (legacy: prefer observations_getMany when it is available)"
    }
   },
   "/api/public/observations/{observationId}": {
@@ -1395,7 +1403,8 @@
      "LegacyObservationsV1"
     ],
     "x-family": "legacy",
-    "x-introduced": "3.0.0"
+    "x-introduced": "3.0.0",
+    "x-summary": "Get a observation (legacy: prefer observations_getMany when it is available)"
    }
   },
   "/api/public/organizations/apiKeys": {
@@ -2113,7 +2122,8 @@
      "Sessions"
     ],
     "x-family": "legacy",
-    "x-introduced": "3.0.0"
+    "x-introduced": "3.0.0",
+    "x-summary": "Get sessions. (legacy: prefer observations_getMany when it is available)"
    }
   },
   "/api/public/sessions/{sessionId}": {
@@ -2134,7 +2144,8 @@
      "Sessions"
     ],
     "x-family": "legacy",
-    "x-introduced": "3.0.0"
+    "x-introduced": "3.0.0",
+    "x-summary": "Get a session. (legacy: prefer observations_getMany when it is available)"
    }
   },
   "/api/public/traces": {
@@ -2290,7 +2301,8 @@
      "Trace"
     ],
     "x-family": "legacy",
-    "x-introduced": "3.0.0"
+    "x-introduced": "3.0.0",
+    "x-summary": "Get list of traces (legacy: prefer observations_getMany when it is available)"
    }
   },
   "/api/public/traces/{traceId}": {
@@ -2338,7 +2350,8 @@
      "Trace"
     ],
     "x-family": "legacy",
-    "x-introduced": "3.0.0"
+    "x-introduced": "3.0.0",
+    "x-summary": "Get a specific trace (legacy: prefer observations_getMany when it is available)"
    }
   },
   "/api/public/unstable/dashboard-widgets": {
@@ -2633,7 +2646,8 @@
      "UnstableEvaluationRules"
     ],
     "x-introduced": "3.170.0",
-    "x-removed": "4.31.0"
+    "x-removed": "4.31.0",
+    "x-summary": "List evaluation rules in the authenticated project. (legacy: prefer evaluationRules_list when it is available)"
    },
    "post": {
     "description": "**Deprecated:** On Langfuse Cloud, this unstable endpoint is deprecated and will be removed on September 4, 2026. Use the stable `/api/public/v2/evaluation-rules` API instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nCreate an evaluation rule.\n\nAn evaluation rule defines **what** incoming data should be evaluated and **how prompt variables should be populated** from that data.\n\nUse this resource after choosing an evaluator from the evaluator endpoints.\n\nKey rules:\n- `name` must be unique within the project for public evaluation rules\n- `target` must be `observation` or `experiment`\n- provide either the compatibility `evaluator` field or the new `evaluators` array, never both\n- each evaluator `name` + `type` must identify an existing evaluator family returned by the evaluator endpoints\n- Langfuse resolves that family to its latest version before saving the evaluation rule\n- for `target=experiment`, use dataset `id` values from `GET /api/public/v2/datasets` when filtering by `datasetId`\n- an omitted LLM-as-judge assignment mapping inherits the evaluator version's default mapping\n- the effective mapping must map every evaluator prompt variable exactly once\n- for `code` evaluators, Langfuse uses the fixed code runtime mapping; omit `mapping` in create and update requests\n- for user-provided `llm_as_judge` mappings, `expected_output` and `experiment_item_metadata` are only valid for `target=experiment`\n- if `enabled=true`, Langfuse validates that the referenced evaluator can currently run\n- at most 500 evaluation rules can be effectively active in one project at the same time (enforced identically by the API, the MCP tools, and the app)\n\nIf an evaluation rule with the same `name` already exists in the project, the API returns `409`.\nIn that case, update the existing resource with `PATCH /api/public/unstable/evaluation-rules/{evaluationRuleId}` instead of creating a second one.\n\nIf enabling this resource would exceed the 500-active limit, the API also returns `409`.\nIn that case, disable or pause another active evaluation rule before enabling a new one.\n\nCurrent scope:\n- evaluation rules are live-ingestion rules only\n- they do not trigger historical backfills\n\nRecovery guidance:\n- `400 invalid_filter_value`: fix the filter `column` or `value` using `details.column`, `details.invalidValues`, and `details.allowedValues`\n- `400 invalid_filter_value` with `details.column=datasetId`: call `GET /api/public/v2/datasets`, then retry with dataset `id` values from that response\n- `400 missing_variable_mapping`: for `llm_as_judge` evaluators, fetch the evaluator again and make sure every variable in `variables` appears exactly once in `mapping`\n- `400 duplicate_variable_mapping`: remove repeated mappings for the same variable\n- `400 invalid_variable_mapping`: for `llm_as_judge`, switch to a valid `source` for the selected `target`, or fix the variable name\n- `400 invalid_json_path`: remove or correct the `jsonPath`\n- `422 evaluator_preflight_failed`: the selected evaluator cannot run with the resolved model configuration. Fix the evaluator/default model setup, then retry the create request.",
@@ -2643,7 +2657,8 @@
      "UnstableEvaluationRules"
     ],
     "x-introduced": "3.170.0",
-    "x-removed": "4.31.0"
+    "x-removed": "4.31.0",
+    "x-summary": "Create an evaluation rule. (legacy: prefer evaluationRules_create when it is available)"
    }
   },
   "/api/public/unstable/evaluation-rules/{evaluationRuleId}": {
@@ -2664,7 +2679,8 @@
      "UnstableEvaluationRules"
     ],
     "x-introduced": "3.170.0",
-    "x-removed": "4.31.0"
+    "x-removed": "4.31.0",
+    "x-summary": "Delete an evaluation rule. (legacy: prefer evaluationRules_delete when it is available)"
    },
    "get": {
     "description": "**Deprecated:** On Langfuse Cloud, this unstable endpoint is deprecated and will be removed on September 4, 2026. Use the stable `/api/public/v2/evaluation-rules` API instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nGet one evaluation rule by its identifier.\n\nUse this endpoint to inspect the current evaluator, target, mapping, filters, execution timing, and effective runtime status. Legacy `trace` and `dataset` rules are returned for migration and are read-only through this API.",
@@ -2683,7 +2699,8 @@
      "UnstableEvaluationRules"
     ],
     "x-introduced": "3.170.0",
-    "x-removed": "4.31.0"
+    "x-removed": "4.31.0",
+    "x-summary": "Get one evaluation rule by its identifier. (legacy: prefer evaluationRules_get when it is available)"
    },
    "patch": {
     "description": "**Deprecated:** On Langfuse Cloud, this unstable endpoint is deprecated and will be removed on September 4, 2026. Use the stable `/api/public/v2/evaluation-rules` API instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nUpdate an evaluation rule.\n\nTypical uses:\n- enable or disable live execution\n- switch to another evaluator\n- adjust sampling\n- change filters\n- update LLM-as-judge variable mappings\n\nImportant behavior:\n- provide only the fields you want to change\n- if you provide `evaluator`, Langfuse resolves that evaluator family to its latest version before saving\n- changing `target`, `filter`, or an LLM-as-judge `mapping` must still produce a valid target-specific configuration\n- if you change `target` for an LLM-as-judge rule, also send a compatible `filter` and `mapping` in the same request unless the existing ones are still valid for the new target\n- for `code` evaluator rules, omit `mapping`; Langfuse stores the fixed code runtime mapping automatically\n- if the resulting config is enabled, Langfuse re-validates that the selected evaluator can run\n- if the update would move a non-active evaluation rule into the active state and the project already has 500 active evaluation rules, the API returns `409`\n\nRecovery guidance:\n- if an LLM-as-judge update fails with `missing_variable_mapping` or `invalid_variable_mapping` after changing `evaluator` or `target`, resend the request with a complete new `mapping`\n- if the update fails with `invalid_filter_value` after changing `target`, resend the request with a target-compatible `filter`",
@@ -2702,7 +2719,8 @@
      "UnstableEvaluationRules"
     ],
     "x-introduced": "3.170.0",
-    "x-removed": "4.31.0"
+    "x-removed": "4.31.0",
+    "x-summary": "Update an evaluation rule. (legacy: prefer evaluationRules_update when it is available)"
    }
   },
   "/api/public/unstable/evaluators": {
@@ -2733,7 +2751,8 @@
      "UnstableEvaluators"
     ],
     "x-introduced": "3.170.0",
-    "x-removed": "4.31.0"
+    "x-removed": "4.31.0",
+    "x-summary": "List the evaluators available to the authenticated project. (legacy: prefer evaluators_list when it is available)"
    },
    "post": {
     "description": "**Deprecated:** On Langfuse Cloud, this unstable endpoint is deprecated and will be removed on September 4, 2026. Use the stable `/api/public/v2/evaluators` API instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nCreate an evaluator in the authenticated project.\n\nUse evaluators to define **how** Langfuse should score data.\nLLM-as-a-judge evaluators define a prompt, expected structured output, and optional model configuration.\nCode evaluators define source code and a runtime language.\n\nNaming behavior:\n- If this is a new evaluator name in your project, Langfuse creates version `1`.\n- If the name already exists in your project, Langfuse creates the next version and returns it.\n- The evaluator `id` remains stable across versions.\n- Existing evaluation rules automatically use the latest evaluator version; no rule update is required.\n\nRecommended workflow:\n1. Create the evaluator.\n2. Read the returned `variables` array.\n3. Read the returned `outputDefinition.dataType` so the client knows whether future scores will be numeric, boolean, or categorical.\n4. Create one or more evaluation rules that reference the returned evaluator family using `name` and `type`.\n\nCode evaluator validation:\n- At creation, Langfuse only validates the request shape\n- The `sourceCode` itself is not executed here. It is first run (preflight-tested against a sample observation) when you link the evaluator to an evaluation rule, so runtime errors in the code surface at evaluation-rule creation, not at evaluator creation.\n\nRecovery guidance:\n- `422` with `code=evaluator_preflight_failed`: the evaluator cannot run with the resolved model configuration. Add a valid explicit `modelConfig`, or configure the project's default evaluation model, then retry the same request.\n- `400` with `code=invalid_body`: the request shape is malformed. Use the structured `details.issues` array to fix the specific fields and retry.\n- `400` with `code=invalid_body` on `outputDefinition`: for `type=llm_as_judge`, send `dataType`, `reasoning.description`, and `score.description`. Do not send `version`; it is not part of the public request shape.\n- If `type` is omitted, Langfuse treats the request as `type=llm_as_judge` for backwards compatibility. New clients should send `type` explicitly.\n\nUnstable API note:\n- This surface may evolve while the underlying evaluation data model is being redesigned.",
@@ -2743,7 +2762,8 @@
      "UnstableEvaluators"
     ],
     "x-introduced": "3.170.0",
-    "x-removed": "4.31.0"
+    "x-removed": "4.31.0",
+    "x-summary": "Create an evaluator in the authenticated project. (legacy: prefer evaluators_create when it is available)"
    }
   },
   "/api/public/unstable/evaluators/{evaluatorId}": {
@@ -2764,7 +2784,8 @@
      "UnstableEvaluators"
     ],
     "x-introduced": "3.187.0",
-    "x-removed": "4.31.0"
+    "x-removed": "4.31.0",
+    "x-summary": "Delete an evaluator. (legacy: prefer evaluators_delete when it is available)"
    },
    "get": {
     "description": "**Deprecated:** On Langfuse Cloud, this unstable endpoint is deprecated and will be removed on September 4, 2026. Use the stable `/api/public/v2/evaluators` API instead. Self-hosted deployments are unaffected by this date; the endpoint becomes unavailable when they upgrade to Langfuse v4. See the [Langfuse v3 to v4 upgrade guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4).\n\nGet one evaluator by `id`.\n\nThis endpoint always returns the evaluator's latest version. Use it when you want the current prompt, output definition, model configuration, and derived variables for the evaluator you plan to use in an evaluation rule.",
@@ -2783,7 +2804,8 @@
      "UnstableEvaluators"
     ],
     "x-introduced": "3.170.0",
-    "x-removed": "4.31.0"
+    "x-removed": "4.31.0",
+    "x-summary": "Get one evaluator by `id`. (legacy: prefer evaluators_get when it is available)"
    }
   },
   "/api/public/unstable/skills": {
@@ -3954,7 +3976,8 @@
      "Scores"
     ],
     "x-family": "legacy",
-    "x-introduced": "3.53.0"
+    "x-introduced": "3.53.0",
+    "x-summary": "Get a list of scores (supports both trace and session scores) (legacy: prefer scoresV3_getManyV3 when it is available)"
    }
   },
   "/api/public/v2/scores/{scoreId}": {
@@ -3975,7 +3998,8 @@
      "Scores"
     ],
     "x-family": "legacy",
-    "x-introduced": "3.53.0"
+    "x-introduced": "3.53.0",
+    "x-summary": "Get a score (supports both trace and session scores) (legacy: prefer scoresV3_getManyV3 when it is available)"
    }
   },
   "/api/public/v3/scores": {

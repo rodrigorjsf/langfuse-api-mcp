@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"slices"
 	"strings"
 	"unicode"
@@ -62,9 +63,10 @@ type Operation struct {
 	// Tag is the operation's OpenAPI tag, the area it belongs to (Trace,
 	// Prompts, Datasets…); the operation index groups by it.
 	Tag string
-	// DescriptionLine is the first line of the operation's OpenAPI
-	// description, with invisible, bidirectional formatting and control
-	// characters removed: the spec is third-party text.
+	// DescriptionLine is the operation's line in the operation index: the
+	// union catalog's x-summary of a deprecated operation (what it does and
+	// the operation to prefer), else the first line of its OpenAPI
+	// description. The spec is third-party text, so indexLine cleans it.
 	DescriptionLine string
 	// Params are the operation's path and query parameters.
 	Params []Param
@@ -161,6 +163,7 @@ func load(spec []byte) (Catalog, error) {
 				OperationID string   `json:"operationId"`
 				Tags        []string `json:"tags"`
 				Description string   `json:"description"`
+				Summary     string   `json:"x-summary"`
 				Parameters  []Param  `json:"parameters"`
 				Introduced  string   `json:"x-introduced"`
 				Removed     string   `json:"x-removed"`
@@ -189,8 +192,7 @@ func load(spec []byte) (Catalog, error) {
 			if len(op.Tags) > 0 {
 				o.Tag = visible(op.Tags[0])
 			}
-			line, _, _ := strings.Cut(strings.TrimSpace(op.Description), "\n")
-			o.DescriptionLine = strings.TrimSpace(visible(line))
+			o.DescriptionLine = indexLine(op.Summary, op.Description)
 			for i, p := range o.Params {
 				if o.isListLimit(p) {
 					// The catalog bounds the page size itself (Request).
@@ -202,6 +204,30 @@ func load(spec []byte) (Catalog, error) {
 		}
 	}
 	return Catalog{union: u}.Resolve(Profile{Families: AllFamilies()}), nil
+}
+
+// maxIndexLineRunes bounds an operation's line in the operation index.
+const maxIndexLineRunes = 200
+
+// markdownLink matches a Markdown link or image; its text is kept.
+var markdownLink = regexp.MustCompile(`!?\[([^\]]*)\]\([^)]*\)`)
+
+// indexLine returns an operation's line in the operation index: the summary
+// the union catalog gives a deprecated operation (x-summary: what it does
+// and its replacement, #79), else the first line of its description. Either
+// is third-party text: hidden characters are removed, a Markdown link keeps
+// only its text, and a line over maxIndexLineRunes is cut with an ellipsis.
+// Instruction-like text shorter than that passes through (see #82).
+func indexLine(summary, description string) string {
+	line := summary
+	if strings.TrimSpace(line) == "" {
+		line, _, _ = strings.Cut(strings.TrimSpace(description), "\n")
+	}
+	line = strings.TrimSpace(markdownLink.ReplaceAllString(visible(line), "$1"))
+	if r := []rune(line); len(r) > maxIndexLineRunes {
+		line = string(r[:maxIndexLineRunes-1]) + "…"
+	}
+	return line
 }
 
 // resolve replaces a component reference in s by the referenced schema's type
