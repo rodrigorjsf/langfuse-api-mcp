@@ -129,6 +129,8 @@ func logProxy(log *slog.Logger, p config.Proxy) {
 }
 
 // envMap turns "KEY=value" entries into a map; the last entry for a key wins.
+// Keys keep their stored spelling, also on Windows, where names are
+// case-insensitive: see #62.
 func envMap(environ []string) map[string]string {
 	env := make(map[string]string, len(environ))
 	for _, kv := range environ {
