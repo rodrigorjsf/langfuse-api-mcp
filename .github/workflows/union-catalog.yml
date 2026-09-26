@@ -1,5 +1,6 @@
 # Keeps the embedded union catalog (ADR-0012) current with new Langfuse releases.
-# Weekly, it runs scripts/gen-union-catalog.py, which rebuilds
+# Weekly, it tests the generator offline (scripts/test_gen_union_catalog.py), then runs
+# scripts/gen-union-catalog.py, which rebuilds
 # internal/catalog/spec/langfuse-union-catalog.json from the OpenAPI spec of every
 # Langfuse release tag since v3.0.0, and opens a pull request when the output changed.
 # When nothing changed, it does nothing. Pull-request CI never runs the generator: it
@@ -37,6 +38,10 @@ jobs:
           set -euo pipefail
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install --quiet pyyaml==6.0.3
+      - name: Test the generator
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/venv/bin/python" scripts/test_gen_union_catalog.py
       - name: Regenerate the union catalog
         run: |
           set -euo pipefail
