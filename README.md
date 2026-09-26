@@ -178,7 +178,7 @@ Settings come from environment variables, then from an optional [config file](#c
 | `LANGFUSE_SECRET_KEY` | yes | — | Project secret key (`sk-lf-…`). Environment only; never logged and never returned to the agent. |
 | `LANGFUSE_BASE_URL` | yes | — | Langfuse host, an absolute `https` URL. Plain `http` is accepted only for a loopback host (`localhost`, `127.0.0.0/8`, `::1`), because the keys travel in every request; any other `http` host stops startup. `LANGFUSE_HOST` is accepted as an alias (`LANGFUSE_BASE_URL` wins when both are set). May also be set in the config file; the environment wins. |
 
-A missing host or key, a key without its Langfuse prefix (`pk-lf-` for the public key, `sk-lf-` for the secret key) or a swapped pair stops startup with one error naming the variable, without echoing the key. The host has no default on purpose: a default would send the keys of an operator who forgot the host (typically self-hosted) to a Cloud region ([#31](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/31)). Region presets (choosing a Cloud region by name) are **Planned** (M2).
+A missing host or key, a key without its Langfuse prefix (`pk-lf-` for the public key, `sk-lf-` for the secret key) or a swapped pair stops startup with one error naming the variable, without echoing the key. The host has no default on purpose: a default would send the keys of an operator who forgot the host (typically self-hosted) to a Cloud region ([#31](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/31)). Cloud regions are chosen by URL; there is no region-name shortcut.
 
 Cloud regions: EU `https://cloud.langfuse.com` · US `https://us.cloud.langfuse.com` · JP `https://jp.cloud.langfuse.com` · HIPAA `https://hipaa.cloud.langfuse.com`. Keys only work in the region where they were created.
 
@@ -212,7 +212,7 @@ Both apply to the whole server process, shared by every tool call; no tool argum
 | `LANGFUSE_MCP_ALLOW_WRITES` | `false` | `true` registers `execute_write`. Leave it off unless you want the agent to change Langfuse data. |
 | `LANGFUSE_MCP_TRANSPORT` | `stdio` | `http` starts Streamable HTTP on `127.0.0.1` only, protected by a bearer token |
 
-## Certificate scenarios **(Planned)**
+## Certificate scenarios
 
 | Your situation | What to do |
 |---|---|
@@ -220,7 +220,7 @@ Both apply to the whole server process, shared by every tool call; no tool argum
 | You were given a `.pem` / `.crt` file | `LANGFUSE_CA_CERT=/path/to/corp-root.pem` |
 | You were given a folder of certificates | `LANGFUSE_CA_CERTS_PATH=/path/to/certs/` |
 | `NODE_EXTRA_CA_CERTS` or `REQUESTS_CA_BUNDLE` is already set on your machine for other tools | Nothing. They are picked up automatically. |
-| You are behind an HTTP proxy | Set `HTTPS_PROXY` (and `NO_PROXY` for internal hosts) |
+| You are behind an HTTP proxy | Set `HTTPS_PROXY` (and `NO_PROXY` for internal hosts) **(Planned, M2)** |
 | Docker | Mount the file and point the variable at it (see below). The image is **Planned** (M5); the mounted-CA proof is tracked in [#28](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/28) |
 
 Get your company's root CA in PEM format:
