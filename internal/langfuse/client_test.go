@@ -18,7 +18,7 @@ func TestTheClientAndItsOptionsNeverPrintTheKeyPair(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	opts := langfuse.Options{Host: host, PublicKey: public, SecretKey: secret}
+	opts := langfuse.Options{Host: host, Keys: langfuse.NewKeyPair(public, secret)}
 	client := langfuse.New(opts)
 
 	var out bytes.Buffer

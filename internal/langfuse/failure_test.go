@@ -38,7 +38,7 @@ func TestAWriteThatFailsOnTheNetworkIsNeverRetried(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	client := langfuse.New(langfuse.Options{Host: host, PublicKey: "pk-lf-test", SecretKey: "sk-lf-test"}) //nolint:gosec // G101: fake keys for a fake host
+	client := langfuse.New(langfuse.Options{Host: host, Keys: langfuse.NewKeyPair("pk-lf-test", "sk-lf-test")}) //nolint:gosec // G101: fake keys for a fake host
 
 	_, err = client.Do(context.Background(), http.MethodDelete, "/api/public/traces/trace-1", nil)
 

@@ -22,9 +22,8 @@ type Options struct {
 	// Host is the Langfuse base URL (LANGFUSE_BASE_URL); operation paths
 	// such as /api/public/traces are appended to it.
 	Host *url.URL
-	// PublicKey and SecretKey are the key pair sent as HTTP Basic auth.
-	PublicKey string
-	SecretKey string
+	// Keys is the key pair sent as HTTP Basic auth.
+	Keys KeyPair
 	// TLS is the client TLS configuration built from the trust pool; nil uses
 	// Go's defaults.
 	TLS *tls.Config
@@ -38,9 +37,6 @@ type Options struct {
 
 // DefaultRequestTimeout is the deadline of one Do call when Options leaves it zero.
 const DefaultRequestTimeout = 60 * time.Second
-
-// redacted replaces the key pair wherever Options or Client are printed.
-const redacted = "[REDACTED]"
 
 // String keeps the key pair out of %v and %s.
 func (o Options) String() string {
@@ -57,8 +53,7 @@ func (o Options) LogValue() slog.Value { return slog.StringValue(o.String()) }
 // Printing it never shows the key pair.
 type Client struct {
 	host       *url.URL
-	publicKey  string
-	secretKey  string
+	keys       KeyPair
 	httpClient *http.Client
 	timeout    time.Duration
 	wait       func(ctx context.Context, d time.Duration) error
@@ -96,9 +91,8 @@ func New(opts Options) *Client {
 		ResponseHeaderTimeout: 30 * time.Second,
 	}
 	c := &Client{
-		host:      opts.Host,
-		publicKey: opts.PublicKey,
-		secretKey: opts.SecretKey,
+		host: opts.Host,
+		keys: opts.Keys,
 		// The per-call deadline is a context deadline set in Do, so that it
 		// also bounds the retries and their waits.
 		httpClient: &http.Client{Transport: transport, CheckRedirect: sameOrigin},
@@ -203,7 +197,7 @@ func (c *Client) attempt(ctx context.Context, method, escapedPath string, query 
 	if err != nil {
 		return Response{}, fmt.Errorf("build request: %w", err)
 	}
-	req.SetBasicAuth(c.publicKey, c.secretKey)
+	req.SetBasicAuth(c.keys.reveal())
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.httpClient.Do(req)

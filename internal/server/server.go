@@ -5,7 +5,6 @@ package server
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -63,25 +62,16 @@ const executeReadTitle = "Run a Langfuse read operation"
 
 // Secrets are the credentials the server never lets reach a tool result, a
 // tool error or a log line: the Langfuse key pair, and so the Authorization
-// header built from it.
+// header built from it. Printing Secrets never shows them: the KeyPair
+// redacts itself.
 type Secrets struct {
-	PublicKey, SecretKey string
+	Keys langfuse.KeyPair
 }
-
-// String keeps the key pair out of %v and %s.
-func (Secrets) String() string { return "server.Secrets{" + sanitize.Redacted + "}" }
-
-// GoString keeps the key pair out of %#v.
-func (s Secrets) GoString() string { return s.String() }
-
-// LogValue keeps the key pair out of slog.
-func (s Secrets) LogValue() slog.Value { return slog.StringValue(s.String()) }
 
 // redactor returns the Redactor for the key pair, its Basic auth value and
 // the Authorization header; any other Langfuse key is redacted too.
 func (s Secrets) redactor() sanitize.Redactor {
-	basic := base64.StdEncoding.EncodeToString([]byte(s.PublicKey + ":" + s.SecretKey))
-	return sanitize.NewRedactor(s.PublicKey, s.SecretKey, basic, "Basic "+basic)
+	return sanitize.NewRedactor(s.Keys.RedactionValues()...)
 }
 
 // New returns the MCP server exposing execute_read over the catalog. The tool

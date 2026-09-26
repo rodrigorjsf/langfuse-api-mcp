@@ -93,15 +93,11 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 	if err != nil {
 		return app{}, err
 	}
-	// The key pair leaves config.Secret as plain strings here; see #38.
-	keys := server.Secrets{PublicKey: cfg.Connection.PublicKey.Reveal(), SecretKey: cfg.Connection.SecretKey.Reveal()}
-	client := langfuse.New(langfuse.Options{
-		Host:      cfg.Connection.Host,
-		PublicKey: keys.PublicKey,
-		SecretKey: keys.SecretKey,
-		TLS:       pool.TLSConfig(),
-	})
-	srv := server.New(cat, client, log, keys)
+	// The key pair leaves config.Secret straight into a langfuse.KeyPair,
+	// which redacts itself as config.Secret does.
+	keys := langfuse.NewKeyPair(cfg.Connection.PublicKey.Reveal(), cfg.Connection.SecretKey.Reveal())
+	client := langfuse.New(langfuse.Options{Host: cfg.Connection.Host, Keys: keys, TLS: pool.TLSConfig()})
+	srv := server.New(cat, client, log, server.Secrets{Keys: keys})
 	serve := func(ctx context.Context) error { return transport.Stdio(ctx, srv) }
 	return app{log: log, pool: pool, serve: serve}, nil
 }

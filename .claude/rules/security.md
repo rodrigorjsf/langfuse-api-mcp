@@ -7,6 +7,7 @@ Full risk→control mapping with sources: `docs/research/security.md`. Cite OWAS
 - The config file (ADR-0011) must never hold keys: reject `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` found there with a startup error; tests prove it.
 - An unknown config-file key only draws a startup warning naming file, line and key (escaped, cut to 64 runes), never its value (#26); tests prove it.
 - Redact `Authorization`, `sk-lf-…`, `pk-lf-…` and the HTTP bearer token from logs, errors and tool output.
+- After startup the key pair travels only as `langfuse.KeyPair`, which renders `[REDACTED]` in fmt, JSON and slog; never copy the keys into plain `string` fields.
 
 **Write gating** (ADR-0003)
 - `execute_read` accepts GET operation IDs only. `execute_write` is not registered unless `LANGFUSE_MCP_ALLOW_WRITES=true`. Tests must prove both.
