@@ -224,9 +224,16 @@ func TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows(t *testi
 		return string(f)
 	}
 
-	// payloadBy selects one seeded span by name and requests the field group.
-	payloadBy := func(group, label string) map[string]any {
-		return map[string]any{"fields": "core," + group, "name": s.name(label)}
+	// byName selects the seeded span, or the bulk spans, of label.
+	byName := func(label string) map[string]any { return map[string]any{"name": s.name(label)} }
+	// probe requests the field group for the rows selector names, within the
+	// last `days` days of the seed (0: no window).
+	probe := func(group string, selector map[string]any, days int) map[string]any {
+		params := mergedParams(map[string]any{"fields": "core," + group}, selector)
+		if days > 0 {
+			maps.Copy(params, s.window(days))
+		}
+		return params
 	}
 	probes := []struct {
 		name     string
@@ -234,23 +241,23 @@ func TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows(t *testi
 		wantRows int
 		field    string // present on every row: the field group was served
 	}{
-		{"io, 13-day window", mergedParams(payloadBy("io", "d12_5"), s.window(13)), 1, "input"},
-		{"io, 14-day window", mergedParams(payloadBy("io", "d13_5"), s.window(14)), 1, "input"},
-		{"io, 15-day window", mergedParams(payloadBy("io", "d14_5"), s.window(15)), 1, "input"},
-		{"io, 30-day window", mergedParams(payloadBy("io", "d20"), s.window(30)), 1, "output"},
-		{"io, no window", payloadBy("io", "d20"), 1, "input"},
-		{"metadata, 13-day window", mergedParams(payloadBy("metadata", "d12_5"), s.window(13)), 1, "metadata"},
-		{"metadata, 14-day window", mergedParams(payloadBy("metadata", "d13_5"), s.window(14)), 1, "metadata"},
-		{"metadata, 15-day window", mergedParams(payloadBy("metadata", "d14_5"), s.window(15)), 1, "metadata"},
-		{"metadata, 30-day window", mergedParams(payloadBy("metadata", "d20"), s.window(30)), 1, "metadata"},
-		{"io, trace id, no window", map[string]any{"fields": "core,io", "traceId": s.spans["d20"].traceID}, 1, "input"},
-		{"io, trace id, 15-day window", mergedParams(map[string]any{"fields": "core,io", "traceId": s.spans["d14_5"].traceID}, s.window(15)), 1, "input"},
-		{"io, id filter, no window", map[string]any{"fields": "core,io", "filter": idFilter("d20")}, 1, "input"},
-		{"io, id filter, 15-day window", mergedParams(map[string]any{"fields": "core,io", "filter": idFilter("d14_5")}, s.window(15)), 1, "input"},
+		{"io, 13-day window", probe("io", byName("d12_5"), 13), 1, "input"},
+		{"io, 14-day window", probe("io", byName("d13_5"), 14), 1, "input"},
+		{"io, 15-day window", probe("io", byName("d14_5"), 15), 1, "input"},
+		{"io, 30-day window", probe("io", byName("d20"), 30), 1, "output"},
+		{"io, no window", probe("io", byName("d20"), 0), 1, "input"},
+		{"metadata, 13-day window", probe("metadata", byName("d12_5"), 13), 1, "metadata"},
+		{"metadata, 14-day window", probe("metadata", byName("d13_5"), 14), 1, "metadata"},
+		{"metadata, 15-day window", probe("metadata", byName("d14_5"), 15), 1, "metadata"},
+		{"metadata, 30-day window", probe("metadata", byName("d20"), 30), 1, "metadata"},
+		{"io, trace id, no window", probe("io", map[string]any{"traceId": s.spans["d20"].traceID}, 0), 1, "input"},
+		{"io, trace id, 15-day window", probe("io", map[string]any{"traceId": s.spans["d14_5"].traceID}, 15), 1, "input"},
+		{"io, id filter, no window", probe("io", map[string]any{"filter": idFilter("d20")}, 0), 1, "input"},
+		{"io, id filter, 15-day window", probe("io", map[string]any{"filter": idFilter("d14_5")}, 15), 1, "input"},
 		// The combination the official MCP caps at 50 rows: a date window, the io
 		// group, and no trace id or id filter (nor any other filter).
-		{"io, 13-day window, limit 50", mergedParams(map[string]any{"fields": "core,io", "limit": 50}, s.window(13)), 50, "input"},
-		{"io, 13-day window, limit 51", mergedParams(map[string]any{"fields": "core,io", "limit": 51}, s.window(13)), 51, "input"},
+		{"io, 13-day window, limit 50", probe("io", map[string]any{"limit": 50}, 13), 50, "input"},
+		{"io, 13-day window, limit 51", probe("io", map[string]any{"limit": 51}, 13), 51, "input"},
 	}
 	// Sequential subtests: parallel probes would burst the Cloud rate budget
 	// (Hobby: 30 req/min). The other live tests run alongside, but spend only
