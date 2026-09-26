@@ -40,7 +40,10 @@ func (s Secret) Reveal() string { return s.value }
 // Format writes [REDACTED] for every fmt verb and flag. Without it fmt calls
 // String only for %v %s %x %X %q and prints the value field by reflection
 // for any other verb, such as %d or %t.
-func (Secret) Format(f fmt.State, _ rune) { _, _ = io.WriteString(f, redacted) }
+func (Secret) Format(f fmt.State, _ rune) {
+	// Ignored: Format has no error return; fmt records its own write errors.
+	_, _ = io.WriteString(f, redacted)
+}
 
 // String returns [REDACTED], for callers that convert a Secret to a string.
 func (Secret) String() string { return redacted }
