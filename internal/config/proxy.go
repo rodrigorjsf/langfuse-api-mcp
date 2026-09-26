@@ -41,13 +41,13 @@ type Proxy struct {
 // without one.
 var defaultProxyPorts = map[string]string{"http": "80", "https": "443", "socks5": "1080", "socks5h": "1080"}
 
-// proxyVariables are the variables Go's http.ProxyFromEnvironment reads, one
-// pair per variable, each in Go's order: upper case, then lower case.
-var proxyVariables = [...][2]string{
-	{EnvHTTPSProxy, EnvHTTPSProxyLower},
-	{EnvHTTPProxy, EnvHTTPProxyLower},
-	{EnvNoProxy, EnvNoProxyLower},
-}
+// The proxy variables Go's http.ProxyFromEnvironment reads, each spelling
+// pair in Go's order: upper case, then lower case.
+var (
+	httpsProxyPair = [2]string{EnvHTTPSProxy, EnvHTTPSProxyLower}
+	httpProxyPair  = [2]string{EnvHTTPProxy, EnvHTTPProxyLower}
+	noProxyPair    = [2]string{EnvNoProxy, EnvNoProxyLower}
+)
 
 // ProxySettings are the proxy variables in effect, one value per variable,
 // resolved as Go's http.ProxyFromEnvironment resolves them (upper case over
@@ -72,22 +72,7 @@ type ProxySettings struct {
 // loopback, and Go never proxies loopback. An empty value counts as unset, as
 // in Go.
 func loadProxy(env, fromFile map[string]string, lines map[string]int, path string) (Proxy, ProxySettings, error) {
-	var effective [len(proxyVariables)]Setting
-	var names [len(proxyVariables)]string
-	for i, pair := range proxyVariables {
-		source, origin := fromFile, OriginConfigFile
-		if env[pair[0]] != "" || env[pair[1]] != "" {
-			source, origin = env, OriginEnvironment
-		}
-		for _, name := range pair { // upper case first
-			if v := source[name]; v != "" {
-				effective[i], names[i] = Setting{Value: v, Origin: origin}, name
-				break
-			}
-		}
-	}
-
-	for _, pair := range proxyVariables[:2] { // NO_PROXY is passed through as Go reads it
+	for _, pair := range [...][2]string{httpsProxyPair, httpProxyPair} { // NO_PROXY is passed through as Go reads it
 		for _, name := range pair {
 			// Validate both sources, even a file value the environment overrides.
 			if err := validateProxy(env[name], fmt.Sprintf("%s (%s)", name, OriginEnvironment)); err != nil {
@@ -99,14 +84,31 @@ func loadProxy(env, fromFile map[string]string, lines map[string]int, path strin
 		}
 	}
 
-	var p Proxy
-	if https := effective[0]; https.Value != "" {
-		p.Endpoint, _ = proxyEndpoint(https.Value) // validated above
-		p.Variable, p.Origin = names[0], https.Origin
+	// resolve returns a variable's value in effect, the spelling it was read
+	// under and where: from env when env sets either spelling, else from the
+	// file; upper case first within the source.
+	resolve := func(pair [2]string) (Setting, string) {
+		source, origin := fromFile, OriginConfigFile
+		if env[pair[0]] != "" || env[pair[1]] != "" {
+			source, origin = env, OriginEnvironment
+		}
+		for _, name := range pair {
+			if v := source[name]; v != "" {
+				return Setting{Value: v, Origin: origin}, name
+			}
+		}
+		return Setting{}, ""
 	}
-	p.NoProxy = effective[2].Value != ""
-	settings := ProxySettings{HTTPS: Secret{effective[0].Value}, HTTP: Secret{effective[1].Value}, NoProxy: effective[2].Value}
-	return p, settings, nil
+	https, httpsName := resolve(httpsProxyPair)
+	plainHTTP, _ := resolve(httpProxyPair)
+	noProxy, _ := resolve(noProxyPair)
+
+	p := Proxy{NoProxy: noProxy.Value != ""}
+	if https.Value != "" {
+		p.Endpoint, _ = proxyEndpoint(https.Value) // validated above
+		p.Variable, p.Origin = httpsName, https.Origin
+	}
+	return p, ProxySettings{HTTPS: Secret{https.Value}, HTTP: Secret{plainHTTP.Value}, NoProxy: noProxy.Value}, nil
 }
 
 // validateProxy returns an error starting with label (the variable and where

@@ -123,25 +123,47 @@ func TestLoadRefusesAnInvalidProxyValueWithoutEchoingIt(t *testing.T) {
 		"a port but no host":                      "http://" + credential + ":" + credential + "@:8080",
 		"scheme javascript, opaque":               "javascript:alert('" + credential + "')",
 	}
+	// The config file trims a value (Unicode white space, as README states)
+	// and ends it at a newline, so these cannot reach Load from the file as
+	// the invalid value they are.
+	notInAFileLine := map[string]bool{"a newline": true, "a tab": true, "leading whitespace": true, "a non-breaking space": true}
 	for _, variable := range []string{"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"} {
 		for name, value := range values {
-			t.Run(variable+"/"+name, func(t *testing.T) {
+			t.Run(variable+"/environment/"+name, func(t *testing.T) {
 				t.Parallel()
 
 				_, err := load(map[string]string{variable: value}, config.File{})
 
-				if err == nil {
-					t.Fatalf("Load accepted %s=%q, want a startup error", variable, value)
-				}
-				msg := err.Error()
-				if !strings.Contains(msg, variable) || !strings.Contains(msg, "environment") {
-					t.Errorf("error %q does not name %s and its source (environment)", msg, variable)
-				}
-				if strings.Contains(msg, value) || strings.Contains(msg, credential) {
-					t.Errorf("error %q echoes the value or its credentials", msg)
-				}
+				refusedWithoutEcho(t, err, variable, value, credential, variable+" (environment)")
+			})
+			if notInAFileLine[name] {
+				continue
+			}
+			t.Run(variable+"/config file/"+name, func(t *testing.T) {
+				t.Parallel()
+				file := configFile(variable + "=" + value + "\n")
+
+				_, err := load(nil, file)
+
+				refusedWithoutEcho(t, err, variable, value, credential, "config file "+file.Path+" line 1: "+variable)
 			})
 		}
+	}
+}
+
+// refusedWithoutEcho checks that Load refused variable=value with an error
+// naming the variable and its source (label), never the value or credential.
+func refusedWithoutEcho(t *testing.T, err error, variable, value, credential, label string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("Load accepted %s=%q, want a startup error", variable, value)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, label) {
+		t.Errorf("error %q does not name %q", msg, label)
+	}
+	if strings.Contains(msg, value) || strings.Contains(msg, credential) {
+		t.Errorf("error %q echoes the value or its credentials", msg)
 	}
 }
 
