@@ -101,7 +101,7 @@ func secondsRoundedUp(d time.Duration) int {
 
 // unavailableHint names, per unavailable flavour, the version or family the
 // deployment lacks and where the replacement is. The detected version comes
-// with the deployment profile of ADR-0012 (M3).
+// with the deployment profile of ADR-0012 (M3); see #34.
 func unavailableHint(why langfuse.Unavailability) string {
 	switch why {
 	case langfuse.EventsOnly:
