@@ -106,6 +106,7 @@ const (
 )
 
 func (ex executor) getTraceTree(ctx context.Context, req *mcp.CallToolRequest, a *audit) (*mcp.CallToolResult, error) {
+	a.operationID = workflows.ObservationsOperationID
 	in, err := decodeTraceTreeInput(req.Params.Arguments, ex.redact)
 	if err != nil {
 		return toolError(errorInvalidArgument, err.Error(), traceTreeArgumentsHint, "")

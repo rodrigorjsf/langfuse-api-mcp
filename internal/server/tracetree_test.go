@@ -375,6 +375,9 @@ func TestGetTraceTreeRefusesInvalidArgumentsBeforeAnyLangfuseCallWithoutEchoingT
 		"include not a list":               {"traceId": "t-1", "include": "io"},
 		"include holding another group":    {"traceId": "t-1", "include": []string{"io", marker}},
 		"include holding a number":         {"traceId": "t-1", "include": []any{1}},
+		"include an object":                {"traceId": "t-1", "include": map[string]any{"io": true}},
+		"traceId a list":                   {"traceId": []string{marker}},
+		"traceId null":                     {"traceId": nil},
 		// An unknown argument's name is echoed, but cut to 64 bytes.
 		"an unknown argument with a long name": {"traceId": "t-1", longName: "x"},
 		"a URL instead of a traceId arg":       {"url": "https://evil.example/" + marker},
@@ -450,6 +453,8 @@ func TestGetTraceTreeMapsALangfuseErrorToTheToolErrorExecuteReadReturns(t *testi
 			{status: 200, body: `{"data":[{"id":"a","startTime":"2026-09-25T10:00:00.000Z"}],"meta":{"cursor":"c2"}}`},
 			{status: 400, body: `{"message":"Invalid cursor"}`},
 		}, wantCode: "langfuse_bad_request", wantStatus: 400},
+		"a 200 answer that is not a page": {answers: []answer{{status: 200, body: `{"data":"not a list"}`}},
+			wantCode: "internal_error", wantStatus: 0},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -495,12 +500,57 @@ func TestGetTraceTreeLogsOneAuditLineWithItsLangfuseRequestCountAndNoPayload(t *
 				t.Fatalf("logged %d lines, want exactly 1:\n%s", len(lines), logs.String())
 			}
 			got := lines[0]
-			if got["tool"] != "get_trace_tree" || got["requests"] != tc.wantRequests || got["code"] != tc.wantCode {
-				t.Errorf("audit line = %v, want tool get_trace_tree, requests %v, code %q", got, tc.wantRequests, tc.wantCode)
+			if got["tool"] != "get_trace_tree" || got["operationId"] != "observations_getMany" ||
+				got["requests"] != tc.wantRequests || got["code"] != tc.wantCode {
+				t.Errorf("audit line = %v, want tool get_trace_tree, operationId observations_getMany, requests %v, code %q",
+					got, tc.wantRequests, tc.wantCode)
 			}
 			if strings.Contains(logs.String(), "SECRET-PAYLOAD-TEXT") {
 				t.Errorf("the audit line carries the payload:\n%s", logs.String())
 			}
 		})
 	}
+}
+
+// go.md: every parser of untrusted input is fuzzed. Whatever the arguments,
+// get_trace_tree answers with a result or an invalid_argument tool error, and
+// calls Langfuse only for a valid traceId.
+func FuzzGetTraceTreeArguments(f *testing.F) {
+	for _, seed := range []string{`{"traceId":"t-1"}`, `{"traceId":"t\u200b"}`, `{"traceId":"t-1","include":["io","x"]}`,
+		`{"traceId":1}`, `{"include":{}}`, `[]`, `{"traceId":"t-1","extra":0}`} {
+		f.Add(seed)
+	}
+	fake, _ := scriptedLangfuse(f, answer{status: 200, body: `{"data":[],"meta":{}}`})
+	cs := startServer(f, langfuse.New(testOptions(f, fake.URL)), slog.New(slog.DiscardHandler),
+		server.Secrets{Keys: testKeys()}, v4Profile)
+	f.Fuzz(func(t *testing.T, args string) {
+		if !json.Valid([]byte(args)) {
+			return // the MCP client refuses to send arguments that are not JSON
+		}
+		res := callTool(t, cs, "get_trace_tree", json.RawMessage(args))
+		if res.IsError && toolErrorOf(t, res).Error.Code != "invalid_argument" {
+			t.Fatalf("get_trace_tree(%s) = %s, want a result or invalid_argument", args, resultText(t, res))
+		}
+	})
+}
+
+// go.md: every parser of untrusted input is fuzzed. Whatever Langfuse answers,
+// get_trace_tree returns an envelope within the result cap or a tool error —
+// never a broken session.
+func FuzzGetTraceTreeLangfuseAnswer(f *testing.F) {
+	for _, seed := range []string{twoPagesSecond, `{"data":[],"meta":{}}`, `{"data":"x"}`, `[]`, `null`,
+		`{"data":[{"id":"a","parentObservationId":"a"}]}`, `{"data":[1,2]}`, `{"data":[{"id":1,"startTime":"nope"}]}`} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, body string) {
+		if !json.Valid([]byte(body)) {
+			return // the client refuses a non-JSON answer before the flow sees it
+		}
+		fake, _ := scriptedLangfuse(t, answer{status: 200, body: body})
+		cs := connectProfile(t, fake, v4Profile)
+		res := callTool(t, cs, "get_trace_tree", map[string]any{"traceId": "t-1"})
+		if !res.IsError && len(resultText(t, res)) > 100<<10 {
+			t.Fatalf("result of %d bytes exceeds the 100 KiB cap", len(resultText(t, res)))
+		}
+	})
 }

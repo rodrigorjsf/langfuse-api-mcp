@@ -230,7 +230,8 @@ func byStart(rows []observation) func(a, b int) int {
 }
 
 // preOrder returns the rows in depth-first pre-order, each with its depth,
-// and orphan: true on an extra root whose parent is missing. A row caught in
+// and orphan: true on an extra root whose parent is missing; it writes both
+// into the rows' own field maps. A row caught in
 // a parent cycle is never reached from a root; it too becomes an orphan root,
 // so no row is dropped.
 func preOrder(rows []observation) []map[string]json.RawMessage {
