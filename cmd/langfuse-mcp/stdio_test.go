@@ -363,3 +363,29 @@ func TestExecutableOffersOnlyTheOperationsOfTheDetectedDeploymentProfile(t *test
 		t.Errorf("deployment profile log line = %v, want version 4.46.0, families [v4 read experiments], 97 operations", got)
 	}
 }
+
+// ADR-0012 amendment, spec #68 stories 24 and 25: a Langfuse that never
+// answers holds startup only for the detection budget (about 5 s); the server
+// then starts with the version unknown and every family on.
+func TestExecutableStartsWithEveryFamilyOnWhenLangfuseDoesNotAnswerWithinTheBudget(t *testing.T) {
+	t.Parallel()
+	fake := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done() // released when the executable gives up on the request
+	}))
+	t.Cleanup(fake.Close)
+	start := time.Now()
+	s := startStdio(t, "LANGFUSE_BASE_URL="+fake.URL)
+
+	s.initialize()
+	elapsed := time.Since(start)
+	s.stop()
+
+	if elapsed > 15*time.Second {
+		t.Errorf("the executable answered initialize after %v, want about the 5 s detection budget", elapsed)
+	}
+	got := profileLogLine(t, s.stderr.Bytes())
+	families, _ := json.Marshal(got["families"])
+	if got["version"] != "unknown" || string(families) != `["legacy","v4 read","experiments"]` {
+		t.Errorf("deployment profile log line = %v, want version unknown and every family on", got)
+	}
+}

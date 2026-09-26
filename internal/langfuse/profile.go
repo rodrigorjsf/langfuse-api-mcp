@@ -1,6 +1,7 @@
 package langfuse
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,8 +11,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // Family is an operation family: a group of operations a deployment turns on
@@ -125,12 +127,15 @@ func (c *Client) DetectProfile(ctx context.Context, budget time.Duration) Detect
 	reasons := make([]string, len(sentinels))
 	on := make([]bool, len(sentinels))
 	var version, healthReason string
-	var wg sync.WaitGroup
-	wg.Go(func() { version, healthReason = c.detectVersion(ctx) })
+	// One goroutine per probe, bounded by their fixed number; each ends
+	// with ctx at the latest. No probe returns an error: each one decides.
+	var g errgroup.Group
+	g.SetLimit(1 + len(sentinels))
+	g.Go(func() error { version, healthReason = c.detectVersion(ctx); return nil })
 	for i, s := range sentinels {
-		wg.Go(func() { on[i], reasons[i] = c.probe(ctx, s) })
+		g.Go(func() error { on[i], reasons[i] = c.probe(ctx, s); return nil })
 	}
-	wg.Wait()
+	_ = g.Wait() // always nil: see above
 
 	d := Detection{Profile: DeploymentProfile{Version: version, Families: []Family{}}}
 	if healthReason != "" {
@@ -161,7 +166,8 @@ func (c *Client) detectVersion(ctx context.Context) (version, reason string) {
 	var health struct {
 		Version string `json:"version"`
 	}
-	if json.Unmarshal(resp.Body, &health) != nil || !versionPattern.MatchString(health.Version) {
+	err = json.NewDecoder(bytes.NewReader(resp.Body)).Decode(&health)
+	if _, known := (DeploymentProfile{Version: health.Version}).KnownVersion(); err != nil || !known {
 		return "", "version unknown: health reported no plain major.minor.patch version"
 	}
 	major, _, _ := strings.Cut(health.Version, ".")
