@@ -247,7 +247,10 @@ func TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows(t *testi
 		{"io, 13-day window, limit 50", mergedParams(map[string]any{"fields": "core,io", "limit": 50}, s.window(13)), 50, "input"},
 		{"io, 13-day window, limit 51", mergedParams(map[string]any{"fields": "core,io", "limit": 51}, s.window(13)), 51, "input"},
 	}
-	for _, p := range probes { // sequential subtests: the Cloud run spends its rate budget one call at a time
+	// Sequential subtests: parallel probes would burst the Cloud rate budget
+	// (Hobby: 30 req/min). The other live tests run alongside, but spend only
+	// two calls between them.
+	for _, p := range probes {
 		t.Run(p.name, func(t *testing.T) {
 			probeServes(t, cs, p.params, p.wantRows, p.field)
 		})
