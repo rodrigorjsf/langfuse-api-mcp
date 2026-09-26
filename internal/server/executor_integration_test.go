@@ -39,6 +39,7 @@ const (
 // live Langfuse client holds open after the tests, as it does in production;
 // the client has no way to close them. Only when a live Langfuse is configured:
 // without one, the integration build checks for leaks like the default build.
+// A client that can close its idle connections would remove this: see #41.
 func liveLeakOptions() []goleak.Option {
 	if os.Getenv(envTestBaseURL) == "" {
 		return nil
