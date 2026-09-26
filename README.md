@@ -402,6 +402,8 @@ What you need installed:
 
 Dependencies stay current through [Dependabot](.github/dependabot.yml) (Go modules and GitHub Actions). Dependabot does not bump the `toolchain` line, so a weekly workflow ([`.github/workflows/go-toolchain.yml`](.github/workflows/go-toolchain.yml)) opens a pull request when a newer Go 1.27.x patch release exists.
 
+**A toolchain bump PR shows no CI until you re-trigger it.** The workflow opens its pull request with the repository's `GITHUB_TOKEN`, and GitHub does not start workflows for events that token creates, so `CI` does not run on the PR by itself. Close and reopen the PR (or push a commit to its `deps/toolchain-*` branch) to run CI, and merge only once it is green. The workflow also relies on the repository setting "Allow GitHub Actions to create and approve pull requests" (Settings → Actions → General); without it the PR is not created. See [#24](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/24).
+
 ### Integration tests against a real Langfuse
 
 The integration suite drives `execute_read` (the real executor and Langfuse HTTP client) against a live Langfuse. It compiles only with the build tag `integration`, so `go test ./...` never runs it, and each live test skips with a message naming what is missing when `LANGFUSE_TEST_BASE_URL`, `LANGFUSE_TEST_PUBLIC_KEY` or `LANGFUSE_TEST_SECRET_KEY` is unset. On a 429 it waits for `Retry-After` once and never retries blind.
