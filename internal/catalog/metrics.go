@@ -73,8 +73,8 @@ var (
 	jsonList   = jsonType{name: "a list"}
 )
 
-// metricsQueryKeys are the top-level keys of a metrics query, sorted, and
-// the JSON type of each value.
+// metricsQueryKeys are the top-level keys of a metrics query and the JSON
+// type of each value.
 var metricsQueryKeys = map[string]jsonType{
 	"config":        {name: "an object", nullable: true},
 	"dimensions":    jsonList,
