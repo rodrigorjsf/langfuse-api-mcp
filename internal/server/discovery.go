@@ -66,7 +66,7 @@ func operationIndexSchema() map[string]any {
 			"count": map[string]any{"type": "integer", "description": "Number of operations listed."},
 			"groups": map[string]any{
 				"type":        "array",
-				"description": "The listed operations grouped by tag, tags in alphabetical order.",
+				"description": "The listed operations grouped by tag. Tags holding a v4-family operation come first and tags of legacy-family operations only come last; otherwise tags are in alphabetical order.",
 				"items": map[string]any{
 					"type":     "object",
 					"required": []any{"tag", "operations"},

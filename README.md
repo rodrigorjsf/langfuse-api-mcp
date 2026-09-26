@@ -100,7 +100,7 @@ When Langfuse answers with an error, the agent receives a tool error (`isError: 
 | 401 | `langfuse_unauthorized` | nothing; the hint points at the key pair and the key's region |
 | 403 | `langfuse_forbidden` | nothing; the key needs an organization key or an Enterprise feature |
 | 404 JSON "not found" | `langfuse_not_found` | nothing |
-| 404 with an HTML body, or a JSON message saying "Langfuse v4 events_only mode" / "Langfuse v4 write mode" | `operation_unavailable` | nothing; the deployment does not serve this operation, the hint names the operation's family and the replacement, then the deployment: its Langfuse version (only a plain `major.minor.patch`; anything else reads "version unknown") and the families on and off. Until startup detection lands ([#72](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/72), Planned) the version reads "unknown" and every family on. The body is never shown |
+| 404 with an HTML body, or a JSON message saying "Langfuse v4 events_only mode" / "Langfuse v4 write mode" | `operation_unavailable` | nothing; the deployment does not serve this operation, the hint names the operation's family and the replacement, then the deployment: its Langfuse version (only a plain `major.minor.patch`; anything else reads "version unknown") and the families on and off. When startup could not detect the version, it reads "unknown" (see [Deployment profile](#deployment-profile)). The body is never shown |
 | 409 / 422 | `langfuse_conflict` / `langfuse_unprocessable` | nothing |
 | 429 | `langfuse_rate_limited` (`retryable`, with `retryAfterSeconds`) | a GET waits `Retry-After` and retries once, if the wait fits the 60 s request deadline |
 | 5xx | `langfuse_unavailable` (`retryable`) | a GET is retried at most twice, after 250 ms then 500 ms (minus random jitter), within the deadline |
@@ -151,7 +151,7 @@ A truncated page looks like this:
 | Where it runs | Remote, inside Langfuse | Locally (binary or Docker) |
 | Custom CA / corporate proxy | Depends on your MCP client's runtime; no documented options | Explicit settings, plus automatic pickup of CA variables that are already set on your system |
 | Writes | Enabled by default; to restrict them you configure a client-side allowlist | **Off by default**. The write tool does not exist until you enable it. |
-| API coverage | Curated tool set | Every operation your Langfuse deployment actually answers — older self-hosted versions keep their legacy APIs, newer ones get the new APIs — except trace ingestion and organization admin changes (creating/deleting projects, API keys, users). Detected automatically at startup **(Planned)** |
+| API coverage | Curated tool set | Every operation your Langfuse deployment actually answers — older self-hosted versions keep their legacy APIs, newer ones get the new APIs — except trace ingestion and organization admin changes (creating/deleting projects, API keys, users). Detected automatically at startup, with nothing to configure ([Deployment profile](#deployment-profile)) |
 
 ## How it works
 
@@ -159,9 +159,9 @@ The Langfuse API has about 100 in-scope operations. One tool per operation would
 
 | Tool | What it does | Annotations | Available |
 |---|---|---|---|
-| `search_operations` | Lists the Langfuse operations you can run — one line each (ID and what it does), grouped by area (the OpenAPI tag) — optionally filtered by keywords (`query`: every keyword must appear in the ID, the area or the line, ignoring case). A search that matches nothing lists the areas. Write operations appear only when writes are enabled, each line then naming the tool that runs it. Works today over the bundled union catalog (every operation of the Langfuse releases since v3.0.0); filtering by what your deployment serves is **(Planned)** | read-only, closed-world | always |
+| `search_operations` | Lists the Langfuse operations you can run — one line each (ID and what it does), grouped by area (the OpenAPI tag) — optionally filtered by keywords (`query`: every keyword must appear in the ID, the area or the line, ignoring case). A search that matches nothing lists the areas. Write operations appear only when writes are enabled, each line then naming the tool that runs it. Lists only the operations your deployment serves, chosen at startup from the bundled union catalog (every operation of the Langfuse releases since v3.0.0; see [Deployment profile](#deployment-profile)); v4 operations are listed before the legacy operations they replace | read-only, closed-world | always |
 | `describe_operation` | Returns the parameters of one operation: location, type, required, allowed values, bounds and default | read-only, closed-world | always |
-| `execute_read` | Runs a **read** operation (HTTP GET) by its ID, with its path and query parameters; returns the Langfuse JSON inside an untrusted-data envelope. Works today over the bundled union catalog minus the excluded operations ([ADR-0004](docs/adr/0004-endpoint-scope.md)); until deployment detection lands **(Planned)**, it offers every operation of that catalog, including those only older Langfuse releases serve | read-only, non-destructive, idempotent, open-world | always |
+| `execute_read` | Runs a **read** operation (HTTP GET) by its ID, with its path and query parameters; returns the Langfuse JSON inside an untrusted-data envelope. Offers the operations your deployment serves (see [Deployment profile](#deployment-profile)), minus the excluded operations ([ADR-0004](docs/adr/0004-endpoint-scope.md)); another operation ID is `operation_not_found` | read-only, non-destructive, idempotent, open-world | always |
 | `execute_write` | Runs a **write** operation (POST/PUT/PATCH/DELETE) by its ID. The description says it is intended only for changes the user explicitly requested. Deletes ask for confirmation when your client supports it. **(Planned)** | destructive | only when writes are enabled |
 | `get_trace_tree` | Returns every observation of one trace as a tree (parents before children, with depth), following pages for you; input/output and metadata only when asked **(Planned)** | read-only | when the deployment answers the v4 read APIs (Cloud, self-hosted v4); not on self-hosted v3 |
 
@@ -221,6 +221,18 @@ Trusted roots = **your operating system's certificate store + every CA from the 
 `source` is `default-cloud`, `default-self-hosted` or `explicit` (you set the variable, in the environment or the config file).
 
 Both limits apply to the whole server process, shared by every tool call; no tool argument can change them. May also be set in the config file; the environment wins. A zero, negative, non-numeric or out-of-range value stops startup with an error naming the variable (from the config file, without quoting the value). A call that cannot get through the limits before its deadline is not sent: the agent gets the tool error `timeout` with `retryable: true` and a hint to call again later.
+
+### Deployment profile
+
+Nothing to configure: at startup the server detects which Langfuse it talks to, then offers exactly the operations that deployment serves ([ADR-0012](docs/adr/0012-version-aware-catalog.md)). It asks `GET /api/public/health` for the version (without your keys) and sends one small request per operation family: legacy (`GET /api/public/traces?limit=1`), v4 read (`GET /api/public/v2/observations?limit=1&fields=core`) and experiments (`GET /api/public/experiments?limit=1&fromStartTime=<now>`). All run in parallel, within your [request limits](#request-limits), and startup waits at most about 5 seconds for them. A family is off only when Langfuse answers that it does not serve it (a 404 with an HTML body, or one naming `events_only` or a v4 write mode). Anything else (401, another error, no answer in time) keeps the family on and logs a `WARN` line, so a Langfuse that is slow or down at startup hides nothing. A health answer without a plain `major.minor.patch` version leaves the version unknown, which keeps the operations of every release. A version below 3.0.0 is unsupported: the server logs a warning and filters by version alone. `/v2/metrics` is never called, so detection does not spend the Cloud Hobby plan's 100-per-day metrics budget. The profile is fixed until the process exits; restart the server after upgrading Langfuse.
+
+The startup log shows what was detected, as one JSON line on stderr:
+
+```json
+{"time":"…","level":"INFO","msg":"deployment profile","version":"4.46.0","families":["v4 read","experiments"],"operations":97}
+```
+
+`version` is `unknown` when it could not be detected; `families` lists the families on; `operations` counts the operations offered, reads and writes. Each undecided probe adds one line such as `{"level":"WARN","msg":"deployment profile probe undecided","probe":"legacy","reason":"family kept on: sentinel answered HTTP 401"}`. These lines never hold what Langfuse sent, nor your keys.
 
 ### Behavior **(Planned)**
 

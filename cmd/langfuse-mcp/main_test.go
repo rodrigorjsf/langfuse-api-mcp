@@ -136,6 +136,11 @@ var connectionEnv = []string{
 	"LANGFUSE_PUBLIC_KEY=" + stdioPublicKey, "LANGFUSE_SECRET_KEY=" + stdioSecretKey,
 }
 
+// noLangfuseProxy sends the child's requests to a proxy on the discard port,
+// where nothing listens: a child configured with a real Langfuse host never
+// reaches it, and its startup deployment profile detection fails at once.
+const noLangfuseProxy = "HTTPS_PROXY=http://127.0.0.1:9"
+
 // logLines decodes the JSON log lines the executable wrote to stderr.
 func logLines(t *testing.T, stderr []byte) []map[string]any {
 	t.Helper()
@@ -386,7 +391,7 @@ func TestStartupLogStatesTheEffectiveRateLimitAndItsSource(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			stderr, err := runExecutable(t, tc.env...)
+			stderr, err := runExecutable(t, append(tc.env, noLangfuseProxy)...)
 			if err != nil {
 				t.Fatalf("executable did not exit 0: %v\nstderr:\n%s", err, stderr)
 			}
@@ -409,7 +414,7 @@ func TestStartupLogStatesTheEffectiveRateLimitAndItsSource(t *testing.T) {
 func TestStartupLogNeverHoldsTheLangfuseKeys(t *testing.T) {
 	t.Parallel()
 
-	stderr, err := runExecutable(t, "LANGFUSE_BASE_URL=https://cloud.langfuse.com")
+	stderr, err := runExecutable(t, "LANGFUSE_BASE_URL=https://cloud.langfuse.com", noLangfuseProxy)
 	if err != nil {
 		t.Fatalf("executable did not exit 0: %v\nstderr:\n%s", err, stderr)
 	}
