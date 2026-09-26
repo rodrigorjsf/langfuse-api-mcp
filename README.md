@@ -163,7 +163,7 @@ The Langfuse API has about 100 in-scope operations. One tool per operation would
 | `describe_operation` | Returns the parameters of one operation: location, type, required, allowed values and bounds **(Planned)** | read-only, closed-world | always |
 | `execute_read` | Runs a **read** operation (HTTP GET) by its ID, with its path and query parameters; returns the Langfuse JSON inside an untrusted-data envelope. Works today over the bundled spec minus the excluded operations ([ADR-0004](docs/adr/0004-endpoint-scope.md)) | read-only, non-destructive, idempotent, open-world | always |
 | `execute_write` | Runs a **write** operation (POST/PUT/PATCH/DELETE) by its ID. The description says it is intended only for changes the user explicitly requested. Deletes ask for confirmation when your client supports it. **(Planned)** | destructive | only when writes are enabled |
-| Workflow tools, e.g. trace investigation | Ready-made read flows for the most common tasks (trace tree, errors, latency and cost spikes) **(Planned)** | read-only | when the deployment answers the v4 read APIs (Cloud, self-hosted v4); not on self-hosted v3 |
+| `get_trace_tree` | Returns every observation of one trace as a tree (parents before children, with depth), following pages for you; input/output and metadata only when asked **(Planned)** | read-only | when the deployment answers the v4 read APIs (Cloud, self-hosted v4); not on self-hosted v3 |
 
 The server keeps nothing between calls (it is stateless). It never takes a URL, host or credential from the agent. It only runs operations from its built-in catalog, against the host you configured.
 

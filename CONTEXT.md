@@ -75,6 +75,8 @@ _Avoid_: truststore (Java/Python term), CA bundle (when you mean the whole pool)
 
 **Observation**: a timed step inside a trace — span, generation, event and newer typed variants; forms a tree via `parentObservationId`.
 
+**Trace tree**: the observations of one trace in depth-first pre-order, each with its depth, the parent before its children; what `get_trace_tree` returns.
+
 **Payload query**: an observation query that requests the `io` or `metadata` field groups — the application's own content, not timing or cost data.
 _Avoid_: heavy query, io query
 

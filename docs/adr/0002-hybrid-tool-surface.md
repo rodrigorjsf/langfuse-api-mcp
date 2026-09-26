@@ -24,3 +24,15 @@ The Langfuse public API has ~100 in-scope operations; one tool per operation wou
 Rejected: **semantic search over embeddings** — an external embedding API breaks local-first (ADR-0005), a bundled model is a heavy dependency, it adds vector/embedding risk (LLM08:2025 / LLM09:2026), and the in-scope read index is ~1.2k tokens (58 GET operations; ~2.7k for all 117), small enough for the calling model to match intent itself. **A skill as the primary discovery path** — the server cannot make a client load a skill, and a static skill cannot know which operations the connected deployment serves (ADR-0012); skills stay the workflow layer of M6 and may point to `search_operations`. **One tool with a search mode and a detail mode** — mutually exclusive arguments are what small models mix up; the second tool costs ~150 tokens of definition.
 
 Evidence that small models benefit comes from a scripted eval in `scripts/` (about 10 natural-language intents; Haiku 4.5 must reach the right `operationId` and parameters through these tools alone), run by hand at the end of M3 and again in M6, its result recorded in the PR — not a CI gate.
+
+## Amendment: M3 ships one workflow tool, `get_trace_tree` (2026-09-26, M3 grilling)
+
+M3 ships a single workflow tool, the trace tree. Error, latency and cost triage are deferred: they are mostly a choice of filters and a reading of Metrics v2, which an M6 skill can teach over `execute_read`, and they come back only if the small-model eval shows agents fail at them. The payload-query guard (#42) moves with them.
+
+`get_trace_tree` is registered only when the v4 read family answers (ADR-0012 §6):
+
+- Input: `traceId` (1–128 runes; control or invisible characters refused with `invalid_argument`; sent as a query parameter, never echoed unbounded) and an optional `include`, a closed subset of `["io","metadata"]`. Unknown arguments are refused.
+- It calls `observations_getMany` with `traceId`, `limit=1000` and field groups `core,basic,time,usage,model,metrics`, plus `io`/`metadata` only when asked; it follows `meta.cursor` for at most 5 pages. Past that, the result is marked truncated and returns the cursor, with a hint to continue through `execute_read`.
+- Output: a flat list in depth-first pre-order with `depth` and `parentObservationId`, siblings by `startTime` ascending, so the existing row truncation of the untrusted-data envelope applies unchanged at the 100 KiB cap. An observation whose parent is absent becomes an extra root with `orphan: true`; several roots are ordered by `startTime`. A trace with no observations is an empty result with a hint, not `langfuse_not_found`, because Observations v2 cannot tell "missing" from "not yet ingested".
+- No scores: the agent reads them with `execute_read` `scoresV3_getManyV3`.
+- The payload is wrapped and sanitized like any `execute_read` result; the audit line names `get_trace_tree` and counts the Langfuse requests it made.
