@@ -200,6 +200,7 @@ func isKnownFileKey(key string) bool {
 		EnvSSLCertFile, EnvSSLCertDir, EnvNodeExtraCACerts, EnvRequestsCABundle, EnvCurlCABundle,
 		EnvBaseURL, EnvHost,
 		// Planned (README "Certificates and proxy" and "Behavior"); no code reads them yet.
+		// Lower-case proxy spellings are decided with proxy support: see #45.
 		"HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "LANGFUSE_MCP_ALLOW_WRITES", "LANGFUSE_MCP_TRANSPORT":
 		return true
 	}
