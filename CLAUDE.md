@@ -31,7 +31,7 @@ Never report work as done without the fresh-output checklist in `.claude/rules/d
 
 ### Issue tracker
 
-Issues and specs live as GitHub issues in `rodrigorjsf/langfuse-api-mcp` (use the `gh` CLI). See `docs/agents/issue-tracker.md`.
+Issues and specs live as GitHub issues in `rodrigorjsf/langfuse-api-mcp` (use the `gh` CLI). Every issue carries a GitHub milestone (M2–M7); a milestone's spec absorbs its open issues. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

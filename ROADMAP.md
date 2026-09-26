@@ -1,6 +1,6 @@
 # Roadmap
 
-> Living plan. Each milestone is delivered as **vertical slices** (tracer bullet first), each slice test-first (red → green; refactor at `/code-review`) and closed only with docs in sync (`.claude/rules/docs-sync.md`). Work items live as GitHub issues; this file tracks milestones only.
+> Living plan. Each milestone is delivered as **vertical slices** (tracer bullet first), each slice test-first (red → green; refactor at `/code-review`) and closed only with docs in sync (`.claude/rules/docs-sync.md`). Work items live as GitHub issues, each assigned to the GitHub milestone of the same name as its row below; this file tracks milestones only.
 
 ```mermaid
 flowchart LR
