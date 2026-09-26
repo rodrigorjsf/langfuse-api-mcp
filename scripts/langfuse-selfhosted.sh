@@ -23,7 +23,7 @@
 # must be detected as:
 #   4.46.0-events_only  (default) v4 read + experiments; a fresh v4 install
 #   4.46.0-dual         every family: v4 in LANGFUSE_MIGRATION_V4_WRITE_MODE=dual
-#   3.225.11            the latest 3.x: legacy only (its experiments routes want a v4 write mode)
+#   3.225.11            the latest 3.x: legacy only (its experiments routes want a v4 write mode; see #84)
 #   3.80.0              legacy only; the v4 read routes do not exist
 # One deployment at a time: they all bind the same ports.
 #

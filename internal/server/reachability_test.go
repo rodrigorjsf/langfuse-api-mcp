@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"slices"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -32,7 +31,7 @@ import (
 // (docs/research/langfuse-api-versions.md §1). 3.225.11, the latest 3.x,
 // serves the legacy family only: its experiments routes answer 404 "only
 // available in a Langfuse v4 write mode", unlike ADR-0012's "legacy plus
-// experiments" (observed 2026-09-26, #73).
+// experiments" (observed 2026-09-26, #73). Contradicts ADR-0012; see #84.
 var pinnedDeployments = map[string]catalog.Profile{
 	"3.80.0":             {Version: "3.80.0", Families: []catalog.Family{catalog.LegacyFamily}},
 	"3.225.11":           {Version: "3.225.11", Families: []catalog.Family{catalog.LegacyFamily}},
@@ -72,9 +71,7 @@ func sampleRead(op catalog.Operation, now time.Time) map[string]any {
 
 // unreachableReads sends the sample call of each read operation of reads
 // through execute_read, one at a time, and returns one line per operation
-// that did not get a Langfuse answer, or got operation_unavailable. Any other
-// Langfuse answer, an error status included, proves the deployment serves the
-// route. A line names the deployment, the operation ID and the tool error
+// whose outcome does not prove the deployment serves it (servedAnswers). A line names the deployment, the operation ID and the tool error
 // code, never a payload or a credential.
 func unreachableReads(t *testing.T, cs *mcp.ClientSession, deployment string, reads []catalog.Operation, now time.Time) []string {
 	t.Helper()
@@ -93,18 +90,19 @@ func unreachableReads(t *testing.T, cs *mcp.ClientSession, deployment string, re
 	return failures
 }
 
-// langfuseAnswered reports whether an execute_read outcome, "ok" or a tool
-// error code, is an answer from Langfuse that proves the route is served.
-func langfuseAnswered(code string) bool {
-	switch code {
-	case "ok", "response_too_large":
-		return true
-	case "operation_unavailable":
-		return false
-	default:
-		return strings.HasPrefix(code, "langfuse_")
-	}
+// servedAnswers are the execute_read outcomes, "ok" or a tool error code,
+// that prove the deployment serves a route: a success, or Langfuse refusing
+// the placeholder request itself. operation_unavailable, a 401 (the key pair
+// was refused), a 5xx, a 429 and every failure without a Langfuse answer
+// prove nothing, so they fail the check.
+var servedAnswers = []string{
+	"ok", "response_too_large", "langfuse_not_found", "langfuse_bad_request", "langfuse_forbidden",
+	"langfuse_conflict", "langfuse_unprocessable",
 }
+
+// langfuseAnswered reports whether an execute_read outcome proves the route
+// is served.
+func langfuseAnswered(code string) bool { return slices.Contains(servedAnswers, code) }
 
 // profileMismatch returns why the detection is not the pinned deployment's
 // profile, or "" when it is: the same version and families, every probe
@@ -142,13 +140,6 @@ func profileText(version string, families []catalog.Family) string {
 	return version + " (" + strings.Join(names, ", ") + ")"
 }
 
-// countingLangfuse answers every request with status and body and counts the
-// requests it received.
-func countingLangfuse(t *testing.T, status int, body string) (*httptest.Server, *atomic.Int32) {
-	t.Helper()
-	return scriptedLangfuse(t, answer{status: status, body: body})
-}
-
 // unthrottledClient returns a Langfuse client for the fake Langfuse at rawURL
 // whose rate limit does not slow a check of every read operation down.
 func unthrottledClient(t *testing.T, rawURL string) *langfuse.Client {
@@ -156,6 +147,17 @@ func unthrottledClient(t *testing.T, rawURL string) *langfuse.Client {
 	opts := testOptions(t, rawURL)
 	opts.RateLimit = 60_000
 	return langfuse.New(opts)
+}
+
+// pinnedSession starts the server as startup would on the pinned deployment
+// profile pin, against the Langfuse at rawURL, and returns the connected
+// session and the resolved catalog.
+func pinnedSession(t *testing.T, pin catalog.Profile, rawURL string) (*mcp.ClientSession, catalog.Catalog) {
+	t.Helper()
+	cat := resolvedFor(t, pin)
+	cs := startCatalog(t, cat, unthrottledClient(t, rawURL), slog.New(slog.DiscardHandler),
+		server.Secrets{Keys: testKeys()}, langfuse.DeploymentProfile(pin))
+	return cs, cat
 }
 
 // resolvedFor returns the real catalog resolved for the deployment profile p.
@@ -198,10 +200,8 @@ func TestEveryReadOperationOfEachPinnedDeploymentGetsASampleCallThatReachesLangf
 	for name, pin := range pinnedDeployments {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			fake, calls := countingLangfuse(t, http.StatusOK, `{"data":[]}`)
-			cat := resolvedFor(t, pin)
-			cs := startCatalog(t, cat, unthrottledClient(t, fake.URL), slog.New(slog.DiscardHandler),
-				server.Secrets{Keys: testKeys()}, langfuse.DeploymentProfile(pin))
+			fake, calls := scriptedLangfuse(t, answer{status: http.StatusOK, body: `{"data":[]}`})
+			cs, cat := pinnedSession(t, pin, fake.URL)
 
 			reads := readsOf(cat)
 
@@ -229,9 +229,7 @@ func TestAnUnavailableReadIsReportedByDeploymentAndOperationIDWithoutTheBodyOrTh
 	}))
 	t.Cleanup(fake.Close)
 	pin := pinnedDeployments["3.80.0"]
-	cat := resolvedFor(t, pin)
-	cs := startCatalog(t, cat, unthrottledClient(t, fake.URL), slog.New(slog.DiscardHandler),
-		server.Secrets{Keys: testKeys()}, langfuse.DeploymentProfile(pin))
+	cs, cat := pinnedSession(t, pin, fake.URL)
 
 	failures := unreachableReads(t, cs, "3.80.0", readsOf(cat), time.Now())
 
@@ -241,27 +239,26 @@ func TestAnUnavailableReadIsReportedByDeploymentAndOperationIDWithoutTheBodyOrTh
 	}
 }
 
-func TestAnyLangfuseAnswerButUnavailableProvesAReadIsReachable(t *testing.T) {
+func TestOnlyALangfuseAnswerToTheRequestItselfProvesAReadIsReachable(t *testing.T) {
 	t.Parallel()
 	pin := pinnedDeployments["4.46.0-events_only"]
 	tests := map[string]struct {
-		status  int
-		body    string
+		answer  answer
 		reached bool
 	}{
-		"not found":             {http.StatusNotFound, `{"message":"Trace not found","error":"LangfuseNotFoundError"}`, true},
-		"bad request":           {http.StatusBadRequest, `{"message":"Invalid request data"}`, true},
-		"forbidden":             {http.StatusForbidden, `{"message":"Organization-scoped API key required for this operation."}`, true},
-		"server error":          {http.StatusInternalServerError, `{"message":"boom"}`, true},
-		"events_only not found": {http.StatusNotFound, `{"message":"This endpoint is not available on deployments running in Langfuse v4 events_only mode."}`, false},
+		"not found":             {answer{status: http.StatusNotFound, body: `{"message":"Trace not found","error":"LangfuseNotFoundError"}`}, true},
+		"bad request":           {answer{status: http.StatusBadRequest, body: `{"message":"Invalid request data"}`}, true},
+		"forbidden":             {answer{status: http.StatusForbidden, body: `{"message":"Organization-scoped API key required for this operation."}`}, true},
+		"events_only not found": {eventsOnlyNotFound, false},
+		"HTML not found":        {htmlNotFound, false},
+		"unauthorized":          {answer{status: http.StatusUnauthorized, body: `{"message":"Invalid credentials"}`}, false},
+		"server error":          {answer{status: http.StatusInternalServerError, body: `{"message":"boom"}`}, false},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			fake, _ := countingLangfuse(t, tc.status, tc.body)
-			cat := resolvedFor(t, pin)
-			cs := startCatalog(t, cat, unthrottledClient(t, fake.URL), slog.New(slog.DiscardHandler),
-				server.Secrets{Keys: testKeys()}, langfuse.DeploymentProfile(pin))
+			fake, _ := scriptedLangfuse(t, tc.answer)
+			cs, cat := pinnedSession(t, pin, fake.URL)
 
 			failures := unreachableReads(t, cs, "4.46.0-events_only", operations(t, cat, "observations_getMany"), time.Now())
 
@@ -275,9 +272,7 @@ func TestAnyLangfuseAnswerButUnavailableProvesAReadIsReachable(t *testing.T) {
 func TestAReadThatGetsNoLangfuseAnswerIsNotReachable(t *testing.T) {
 	t.Parallel()
 	pin := pinnedDeployments["4.46.0-events_only"]
-	cat := resolvedFor(t, pin)
-	cs := startCatalog(t, cat, unthrottledClient(t, refusedURL(t)), slog.New(slog.DiscardHandler),
-		server.Secrets{Keys: testKeys()}, langfuse.DeploymentProfile(pin))
+	cs, cat := pinnedSession(t, pin, refusedURL(t))
 
 	failures := unreachableReads(t, cs, "4.46.0-events_only", operations(t, cat, "observations_getMany", "prompts_list"), time.Now())
 
@@ -302,7 +297,7 @@ func langfuse3800(t *testing.T) *httptest.Server {
 		case "/api/public/v2/observations", "/api/public/experiments":
 			w.Header().Set("Content-Type", "text/html")
 			w.WriteHeader(http.StatusNotFound)
-			_, _ = io.WriteString(w, "<!DOCTYPE html><html>404</html>") // as above
+			_, _ = io.WriteString(w, htmlNotFound.body) // as above
 		default:
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = io.WriteString(w, `{"data":[]}`) // as above
