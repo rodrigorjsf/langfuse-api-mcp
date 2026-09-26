@@ -156,8 +156,9 @@ Sources: `[sourced]` `/docs/api-and-data-platform/features/public-api#field-grou
   - **Verdict: the 14-day / 50-row rule is the official MCP tool's own guard, not a REST limit.** Our workflow tools
     keep a guard of their own anyway (`.claude/rules/langfuse-api.md`, "Time windows"), for budget reasons. The probe
     stays as a weekly Cloud regression (`.github/workflows/integration.yml`), so a guard added upstream fails the suite.
-    That scheduled Cloud job has not run in CI yet (it needs the workflow on the default branch, #40); the Cloud
-    evidence above comes from the same test run locally with the Cloud test project's keys.
+    The Cloud evidence above comes from the same test run locally with the Cloud test project's keys; the `cloud` job
+    then passed on GitHub too (`workflow_dispatch` run 36239908860 on `main`, 2026-09-26, Langfuse **4.46.0**, every
+    live test `PASS`, none skipped; #40). `[verified]`
   - **Seeding limitation on Cloud.** Cloud accepted (200) an OTLP export of a span **40 days** old but did not serve it
     within 90 s (the 1- and 20-day spans of the same export were queryable within 45 s); self-hosted serves it. The probe therefore
     seeds nothing older than 20 days. Verbatim: `raw/2026-09-26-cloud-backdated-40d.txt`. `[verified]` Hypothesis, not
