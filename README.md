@@ -322,6 +322,7 @@ Designed against the OWASP Top 10 for LLM Applications (2025 and 2026), the OWAS
 | **No data kept** | Stateless. No cache or database, no files written. |
 | **Your keys stay with the server** | Read only from the server's environment; a config file holding a key stops startup. Never accepted from the agent, never logged, never included in results: if Langfuse or the agent echoes a key or the `Authorization` header, it is replaced by `[REDACTED]`. |
 | **No arbitrary requests** | The agent picks operations from a fixed catalog. It cannot pass URLs or hosts; path parameters that could change the path (`/`, `..`, URLs) are refused. A redirect to another scheme, host or port is refused before it is sent, so your keys never leave the configured host. |
+| **Every change is tested against injection** | Each tool, operation or parameter ships with tests for prompt injection in Langfuse payloads and for dangerous parameters (unknown names, URLs, traversal, control characters, out-of-range values); see the [roadmap security gate](ROADMAP.md#security-gate-every-milestone). |
 | **No local system access** | No shell commands, no file access beyond reading the CA files you configured and the optional [config file](#config-file-non-secret-settings). |
 | **Verified TLS only** | OS store + your CAs, TLS 1.2+, no skip-verify option. |
 | **Untrusted data is labelled** | Trace and prompt content returned to the agent is marked as untrusted data and cleaned of hidden Unicode and control characters. |
