@@ -186,10 +186,21 @@ func truncate(s string) string {
 	return strings.ToValidUTF8(s[:maxEchoed], "") + "…"
 }
 
+// Hints of the invalid_argument tool errors (ADR-0008: every error names the
+// next useful action).
+const (
+	argumentsHint = "call execute_read again with operationId, a Langfuse read operation ID such as trace_list, " +
+		"and optionally parameters, an object of parameter name to value"
+	parametersHint = "fix the parameter named in the message and call again; each operation's parameters " +
+		"are in the Langfuse API reference: https://api.reference.langfuse.com"
+	writeRefusedHint = "this server changes no data; to read the data instead, use a read operation " +
+		"such as trace_list or trace_get"
+)
+
 func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a *audit) (*mcp.CallToolResult, error) {
 	in, err := decodeExecuteReadInput(req.Params.Arguments, ex.redact)
 	if err != nil {
-		return toolError(errorInvalidArgument, err.Error(), "", in.OperationID)
+		return toolError(errorInvalidArgument, err.Error(), argumentsHint, in.OperationID)
 	}
 	op, ok := ex.catalog.Lookup(in.OperationID)
 	if !ok && catalog.IsExcluded(in.OperationID) {
@@ -205,7 +216,7 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 	a.method = op.Method
 	if !op.IsRead() {
 		return toolError(errorInvalidArgument, "operation "+op.ID+" is a "+op.Method+
-			" operation; execute_read runs read (GET) operations only", "", op.ID)
+			" operation; execute_read runs read (GET) operations only", writeRefusedHint, op.ID)
 	}
 	request, err := op.Request(in.Parameters)
 	if errors.Is(err, catalog.ErrLimitOutOfRange) {
@@ -214,7 +225,7 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 			strconv.Itoa(catalog.DefaultLimit), op.ID)
 	}
 	if err != nil {
-		return toolError(errorInvalidArgument, err.Error(), "", op.ID)
+		return toolError(errorInvalidArgument, err.Error(), parametersHint, op.ID)
 	}
 	resp, err := ex.client.Do(ctx, request.Method, request.Path, request.Query)
 	a.status, a.bytes = resp.Status, len(resp.Body)

@@ -113,6 +113,9 @@ func TestExecuteReadRejectsInvalidParametersNamingTheFieldAndTheReason(t *testin
 			if !strings.Contains(got.Message, tc.wantField) || !strings.Contains(got.Message, tc.wantReason) {
 				t.Errorf("message %q does not name field %q and reason %q", got.Message, tc.wantField, tc.wantReason)
 			}
+			if got.Hint == "" {
+				t.Errorf("error = %+v, want a hint naming the next useful action", got)
+			}
 			assertNoRequest(t, seen)
 		})
 	}
@@ -180,6 +183,9 @@ func TestExecuteReadRefusesAWriteOperationSayingItRunsReadOperationsOnly(t *test
 		!strings.Contains(got.Message, "read (GET) operations only") {
 		t.Errorf("error = %+v, want invalid_argument saying execute_read runs read (GET) operations only", got)
 	}
+	if got.Hint == "" || strings.Contains(got.Hint, "execute_write") || strings.Contains(got.Hint, "ALLOW_WRITES") {
+		t.Errorf("hint %q, want one that names no write tool or setting: none exists yet", got.Hint)
+	}
 	assertNoRequest(t, seen)
 }
 
@@ -231,6 +237,9 @@ func TestExecuteReadRejectsInvalidArgumentsNamingTheField(t *testing.T) {
 
 			if got.Code != "invalid_argument" || !strings.Contains(got.Message, tc.wantField) {
 				t.Errorf("error = %+v, want invalid_argument naming %s", got, tc.wantField)
+			}
+			if got.Hint == "" {
+				t.Errorf("error = %+v, want a hint naming the next useful action", got)
 			}
 			if strings.Contains(got.Message, "Go struct") || strings.Contains(got.Message, "executeReadInput") {
 				t.Errorf("message %q exposes Go internals", got.Message)
