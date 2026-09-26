@@ -111,13 +111,16 @@ func New(opts Options) *Client {
 	transport := &http.Transport{
 		// Only the proxy the caller passes: nothing is sent through a proxy
 		// the operator did not configure for this server.
-		Proxy:                 opts.Proxy,
-		TLSClientConfig:       opts.TLS,
-		ForceAttemptHTTP2:     true,
-		MaxIdleConnsPerHost:   4,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 30 * time.Second,
+		Proxy: opts.Proxy,
+		// A CONNECT refused by the proxy becomes a typed network failure,
+		// without the proxy's text.
+		OnProxyConnectResponse: checkProxyConnect,
+		TLSClientConfig:        opts.TLS,
+		ForceAttemptHTTP2:      true,
+		MaxIdleConnsPerHost:    4,
+		IdleConnTimeout:        90 * time.Second,
+		TLSHandshakeTimeout:    10 * time.Second,
+		ResponseHeaderTimeout:  30 * time.Second,
 	}
 	c := &Client{
 		host: opts.Host,
