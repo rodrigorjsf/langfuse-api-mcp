@@ -93,7 +93,7 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 	if err != nil {
 		return app{}, err
 	}
-	// Logged once no startup step can fail: a failed startup logs one line only.
+	// Logged after the last startup step that returns an error: a failed startup logs one line only.
 	log.Info("rate limit", "perMinute", cfg.RateLimit, "source", cfg.RateLimitSource)
 	// The key pair leaves config.Secret straight into a langfuse.KeyPair,
 	// which redacts itself as config.Secret does.

@@ -359,7 +359,7 @@ func TestStartupFailsNamingAnInvalidRequestLimit(t *testing.T) {
 }
 
 // Issue #47: the startup log states the effective rate limit and why it has
-// that value, and never the keys.
+// that value.
 func TestStartupLogStatesTheEffectiveRateLimitAndItsSource(t *testing.T) {
 	t.Parallel()
 	tests := map[string]struct {
@@ -380,9 +380,6 @@ func TestStartupLogStatesTheEffectiveRateLimitAndItsSource(t *testing.T) {
 				t.Fatalf("executable did not exit 0: %v\nstderr:\n%s", err, stderr)
 			}
 
-			if bytes.Contains(stderr, []byte(stdioSecretKey)) || bytes.Contains(stderr, []byte(stdioPublicKey)) {
-				t.Fatalf("startup log contains a Langfuse key:\n%s", stderr)
-			}
 			for _, line := range logLines(t, stderr) {
 				if line["msg"] != "rate limit" {
 					continue
@@ -394,5 +391,19 @@ func TestStartupLogStatesTheEffectiveRateLimitAndItsSource(t *testing.T) {
 			}
 			t.Fatalf("no \"rate limit\" line in the startup log:\n%s", stderr)
 		})
+	}
+}
+
+// The startup log, rate-limit line included, never holds the Langfuse keys.
+func TestStartupLogNeverHoldsTheLangfuseKeys(t *testing.T) {
+	t.Parallel()
+
+	stderr, err := runExecutable(t, "LANGFUSE_BASE_URL=https://cloud.langfuse.com")
+	if err != nil {
+		t.Fatalf("executable did not exit 0: %v\nstderr:\n%s", err, stderr)
+	}
+
+	if bytes.Contains(stderr, []byte(stdioSecretKey)) || bytes.Contains(stderr, []byte(stdioPublicKey)) {
+		t.Fatalf("startup log contains a Langfuse key:\n%s", stderr)
 	}
 }

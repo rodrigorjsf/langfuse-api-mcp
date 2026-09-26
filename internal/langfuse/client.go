@@ -50,8 +50,8 @@ type Options struct {
 const DefaultRequestTimeout = 60 * time.Second
 
 // Default limits when Options leaves them zero. 30 requests per minute is the
-// Langfuse Cloud Hobby General API limit, the lowest of the plans; whether
-// that is the right default for other deployments is #47.
+// Langfuse Cloud Hobby General API limit, the lowest of the plans. The
+// executable never leaves RateLimit zero: config picks its default by host (#47).
 const (
 	DefaultRateLimit      = 30
 	DefaultMaxConcurrency = 4

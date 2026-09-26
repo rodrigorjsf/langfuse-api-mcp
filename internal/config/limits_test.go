@@ -128,8 +128,10 @@ func FuzzLoadLimits(f *testing.F) {
 		f.Add(seed)
 	}
 	f.Fuzz(func(t *testing.T, value string) {
-		cfg, err := load(map[string]string{"LANGFUSE_MCP_RATE_LIMIT": value, "LANGFUSE_MCP_MAX_CONCURRENCY": value}, config.File{})
-		if value == "" { // unset: the Cloud host default (load's host) and the client's concurrency default
+		cfg, err := load(map[string]string{
+			"LANGFUSE_BASE_URL": "https://cloud.langfuse.com", "LANGFUSE_MCP_RATE_LIMIT": value, "LANGFUSE_MCP_MAX_CONCURRENCY": value,
+		}, config.File{})
+		if value == "" { // unset: the Cloud host default and the client's concurrency default
 			if err != nil || cfg.RateLimit != 30 || cfg.MaxConcurrency != 0 {
 				t.Fatalf("Load(\"\") = %d, %d, %v; want 30 (Cloud default), 0 (unset)", cfg.RateLimit, cfg.MaxConcurrency, err)
 			}
