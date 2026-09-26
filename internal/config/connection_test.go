@@ -108,6 +108,34 @@ func TestLoadFailsNamingTheVariableOfAHostThatIsNotAnHTTPURL(t *testing.T) {
 	}
 }
 
+func TestLoadRequiresHTTPSExceptForALoopbackHost(t *testing.T) {
+	t.Parallel()
+	for host, wantOK := range map[string]bool{
+		"https://langfuse.internal.example.com": true,
+		"http://localhost:3000":                 true,
+		"http://LOCALHOST:3000":                 true,
+		"http://127.0.0.1:3000":                 true,
+		"http://127.1.2.3":                      true,
+		"http://[::1]:3000":                     true,
+		"http://langfuse.internal.example.com":  false,
+		"http://10.0.0.5:3000":                  false,
+		"http://localhost.evil.example":         false,
+		"http://127.0.0.1.evil.example":         false,
+		"http://[::ffff:10.0.0.5]:3000":         false,
+	} {
+		t.Run(host, func(t *testing.T) {
+			t.Parallel()
+			_, err := config.Load(connectionEnv(map[string]string{"LANGFUSE_BASE_URL": host}), config.File{})
+			switch {
+			case wantOK && err != nil:
+				t.Fatalf("Load() error = %v, want %s accepted", err, host)
+			case !wantOK && (err == nil || !strings.Contains(err.Error(), "LANGFUSE_BASE_URL") || !strings.Contains(err.Error(), "https")):
+				t.Fatalf("Load() error = %v, want one naming LANGFUSE_BASE_URL and requiring https", err)
+			}
+		})
+	}
+}
+
 func TestTheLangfuseKeysNeverPrintTheirValue(t *testing.T) {
 	t.Parallel()
 	cfg, err := config.Load(connectionEnv(nil), config.File{})

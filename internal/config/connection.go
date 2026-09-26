@@ -3,7 +3,9 @@ package config
 import (
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"net/url"
+	"strings"
 )
 
 // Names of the host variables: LANGFUSE_BASE_URL is the Langfuse docs'
@@ -68,6 +70,12 @@ func loadConnection(env, fromFile map[string]string) (Connection, error) {
 		// The value is not quoted: an operator may have pasted credentials into it.
 		return Connection{}, fmt.Errorf("%s: want an absolute http or https URL, e.g. https://cloud.langfuse.com", hostVar)
 	}
+	if u.Scheme == "http" && !isLoopback(u.Hostname()) {
+		// The keys travel in every request: plain http is only safe when the
+		// request never leaves this machine.
+		return Connection{}, fmt.Errorf("%s: want an https URL; plain http is accepted only for a loopback host "+
+			"(localhost, 127.0.0.0/8, ::1)", hostVar)
+	}
 	conn := Connection{Host: u, PublicKey: Secret{env[EnvPublicKey]}, SecretKey: Secret{env[EnvSecretKey]}}
 	for _, key := range []struct {
 		name   string
@@ -78,4 +86,15 @@ func loadConnection(env, fromFile map[string]string) (Connection, error) {
 		}
 	}
 	return conn, nil
+}
+
+// isLoopback reports whether host, a URL host name without port, is
+// "localhost" or a loopback IP address. Any other name, even one that
+// resolves to a loopback address, is not: resolution can change.
+func isLoopback(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip, err := netip.ParseAddr(host)
+	return err == nil && ip.IsLoopback()
 }

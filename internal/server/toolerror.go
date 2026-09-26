@@ -12,6 +12,7 @@ const (
 	errorInvalidArgument   = "invalid_argument"
 	errorOperationNotFound = "operation_not_found"
 	errorInternal          = "internal_error"
+	errorRedirectRefused   = "redirect_refused"
 )
 
 // toolErrorBody is the ADR-0008 tool error shape.
