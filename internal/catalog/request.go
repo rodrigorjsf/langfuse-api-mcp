@@ -300,7 +300,8 @@ func (p Param) inBounds(values []string) error {
 	return nil
 }
 
-// withinBounds checks one rendered value against the schema's bounds.
+// withinBounds checks one rendered value against the schema's bounds. A
+// schema without a type skips its bounds (see #83).
 func (s Schema) withinBounds(v string) error {
 	switch s.Type {
 	case "integer", "number":
