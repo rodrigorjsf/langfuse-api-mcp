@@ -24,7 +24,7 @@ Full risk→control mapping with sources: `docs/research/security.md`. Cite OWAS
 - Timeouts, concurrency cap and rate limit (one shared per process, retries included, set only by `LANGFUSE_MCP_RATE_LIMIT`/`LANGFUSE_MCP_MAX_CONCURRENCY`; unset, the rate limit defaults by host: 30/min on an exact Cloud host, 1000 elsewhere, an explicit value always wins, #47), max response bytes read, max tool-result bytes returned (truncate with a marker + pagination hint); default and cap `limit` on list operations, and `config.row_limit` in the metrics `query` JSON (default 100, refuse outside 1..1000; the JSON is bounded to 16 KiB and depth 10, known top-level keys and their types only, re-encoded before it is sent).
 
 **Tool results** (LLM01:2025/2026, MCP06:2025)
-- Langfuse payloads are untrusted data: wrap them in a labelled envelope; strip invisible/bidi Unicode (U+E0000–E007F, zero-width, bidi overrides) and control chars; never render HTML/Markdown from them; never echo them unescaped into error text.
+- Langfuse payloads are untrusted data: wrap them in a labelled envelope; strip invisible/bidi Unicode (U+E0000–E007F, zero-width, bidi overrides) and control chars; never render HTML/Markdown from them; never echo them unescaped into error text. A proxy's CONNECT answer (status reason, body) is untrusted too: it is dropped, never echoed into an error, hint or audit line (#32).
 - Tool names/descriptions are static strings compiled into the binary — never built from API data.
 
 **Transport**

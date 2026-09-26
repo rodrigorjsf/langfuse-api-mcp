@@ -180,12 +180,16 @@ func (p *connectProxy) seen() (connects, auths []string) {
 // tunnelClient returns a Langfuse client for https://langfuse.test trusting
 // ca, sending its requests through proxy (nil: no proxy). It closes its idle
 // connections when the test ends, so no transport goroutine outlives it.
-func tunnelClient(t *testing.T, ca testCA, proxy *url.URL) *langfuse.Client {
+// Each option adjusts the client's options before it is built.
+func tunnelClient(t *testing.T, ca testCA, proxy *url.URL, options ...func(*langfuse.Options)) *langfuse.Client {
 	t.Helper()
 	opts := testOptions(t, "https://"+tunnelHost)
 	opts.TLS = ca.pool()
 	if proxy != nil {
 		opts.Proxy = http.ProxyURL(proxy)
+	}
+	for _, option := range options {
+		option(&opts)
 	}
 	client := langfuse.New(opts)
 	t.Cleanup(client.CloseIdleConnections)
@@ -353,7 +357,7 @@ func TestAProxyThatRejectsTheTunnelIsANetworkErrorThatNeverEchoesTheProxysText(t
 	for _, status := range []int{http.StatusProxyAuthRequired, http.StatusBadGateway} {
 		t.Run(strconv.Itoa(status), func(t *testing.T) {
 			t.Parallel()
-			proxy, _ := rejectingProxy(t, status)
+			proxy, connects := rejectingProxy(t, status)
 			var logs syncBuffer
 			cs := connectClient(t, tunnelClient(t, newTestCA(t), proxy), slog.New(slog.NewJSONHandler(&logs, nil)))
 
@@ -364,8 +368,18 @@ func TestAProxyThatRejectsTheTunnelIsANetworkErrorThatNeverEchoesTheProxysText(t
 				t.Fatalf("code = %q, retryable = %v; want network_error, true (error %+v)",
 					got.Error.Code, got.Error.Retryable, got.Error)
 			}
-			if !strings.Contains(got.Error.Hint, "HTTPS_PROXY") {
-				t.Errorf("hint %q does not name HTTPS_PROXY", got.Error.Hint)
+			for _, want := range []string{"HTTPS_PROXY", "NO_PROXY"} {
+				if !strings.Contains(got.Error.Hint, want) {
+					t.Errorf("hint %q does not name %s", got.Error.Hint, want)
+				}
+			}
+			// The failure came from the proxy, not from a direct DNS lookup,
+			// and the audit line the absence check reads was written.
+			if connects.Load() == 0 {
+				t.Fatal("the proxy saw no CONNECT: the failure did not come from the proxy")
+			}
+			if !strings.Contains(logs.String(), `"code":"network_error"`) {
+				t.Fatalf("no audit line with code network_error was logged:\n%s", logs.String())
 			}
 			result, err := json.Marshal(res)
 			if err != nil {
@@ -385,12 +399,7 @@ func TestAReadThatMeetsAProxyFailureIsRetriedTwiceBeforeTheNetworkErrorIsReporte
 	t.Parallel()
 	proxy, connects := rejectingProxy(t, http.StatusBadGateway)
 	var w fakeWait
-	opts := testOptions(t, "https://"+tunnelHost)
-	opts.TLS = newTestCA(t).pool()
-	opts.Proxy = http.ProxyURL(proxy)
-	opts.Wait = w.wait
-	client := langfuse.New(opts)
-	t.Cleanup(client.CloseIdleConnections)
+	client := tunnelClient(t, newTestCA(t), proxy, func(opts *langfuse.Options) { opts.Wait = w.wait })
 	cs := connectClient(t, client, slog.New(slog.DiscardHandler))
 
 	got := toolErrorOf(t, callExecuteRead(t, cs, traceGet))
