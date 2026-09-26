@@ -34,6 +34,9 @@ const (
 // APIError is a Langfuse answer with a non-2xx status.
 type APIError struct {
 	Status int
+	// Code is Langfuse's own error code or name from a JSON error body, such
+	// as "resource_not_found" or "LangfuseNotFoundError"; empty when absent.
+	Code string
 	// Message is Langfuse's own explanation, taken from a JSON error body
 	// (message, error name or validation issues). It is untrusted text: the
 	// caller truncates and sanitizes it before anyone sees it. Empty when the
@@ -56,9 +59,10 @@ func (e *APIError) Is(target error) bool {
 // newAPIError classifies a non-2xx answer from its status, Content-Type and
 // (bounded) body.
 func newAPIError(status int, header http.Header, body []byte) *APIError {
-	e := &APIError{Status: status, Message: errorMessage(body), RetryAfter: retryAfter(header, time.Now())}
+	eb := parseErrorBody(body)
+	e := &APIError{Status: status, Code: eb.code(), Message: eb.message(), RetryAfter: retryAfter(header, time.Now())}
 	if status == http.StatusNotFound {
-		e.Unavailable = unavailability(header, body, e.Message)
+		e.Unavailable = unavailability(header, body)
 	}
 	if e.Unavailable != "" {
 		e.Message = "" // the body of an unavailable answer is never echoed
@@ -68,15 +72,16 @@ func newAPIError(status int, header http.Header, body []byte) *APIError {
 
 // unavailability tells the three 404 flavours that mean "not served here"
 // (docs/research/langfuse-api-versions.md §2) from a plain not-found.
-func unavailability(header http.Header, body []byte, message string) Unavailability {
+func unavailability(header http.Header, body []byte) Unavailability {
 	mediaType, _, _ := mime.ParseMediaType(header.Get("Content-Type")) // an unparsable type falls back to the body check
 	if mediaType == "text/html" || bytes.HasPrefix(bytes.TrimSpace(body), []byte("<")) {
 		return RouteMissing
 	}
+	// The phrases may sit in "message" or "error": look at the whole body.
 	switch {
-	case strings.Contains(message, "events_only"):
+	case bytes.Contains(body, []byte("events_only")):
 		return EventsOnly
-	case strings.Contains(message, "v4 write mode"):
+	case bytes.Contains(body, []byte("v4 write mode")):
 		return V4WriteModeOff
 	}
 	return ""
@@ -96,6 +101,7 @@ const maxErrorBodyBytes = 64 << 10
 // SCIM {"detail"}.
 type errorBody struct {
 	Message string          `json:"message"`
+	Code    json.RawMessage `json:"code"`
 	Error   json.RawMessage `json:"error"`
 	Errors  []string        `json:"errors"`
 	Detail  string          `json:"detail"`
@@ -107,13 +113,31 @@ type zodIssue struct {
 	Message string `json:"message"`
 }
 
-// errorMessage extracts Langfuse's explanation from an error body. A body
-// that is not a JSON object yields "": it is never echoed.
-func errorMessage(body []byte) string {
+// parseErrorBody decodes a JSON error body; a body that is not a JSON object
+// yields the zero errorBody, so nothing of it is ever echoed.
+func parseErrorBody(body []byte) errorBody {
 	var b errorBody
 	if err := json.Unmarshal(bytes.TrimSpace(body), &b); err != nil {
-		return ""
+		return errorBody{}
 	}
+	return b
+}
+
+// code returns Langfuse's error code ("code") or, failing that, its error
+// name ("error" as a string).
+func (b errorBody) code() string {
+	for _, raw := range []json.RawMessage{b.Code, b.Error} {
+		var s string
+		if json.Unmarshal(raw, &s) == nil && s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+// message returns Langfuse's explanation: the message, the validation
+// issues, the error string when no message was given, and SCIM's detail.
+func (b errorBody) message() string {
 	parts := make([]string, 0, 4)
 	if b.Message != "" {
 		parts = append(parts, b.Message)
@@ -133,8 +157,8 @@ func errorField(raw json.RawMessage, noMessage bool) []string {
 	var issues []zodIssue
 	if err := json.Unmarshal(raw, &issues); err == nil {
 		out := make([]string, 0, len(issues))
-		for _, is := range issues {
-			out = append(out, issueText(is))
+		for _, issue := range issues {
+			out = append(out, issueText(issue))
 		}
 		return out
 	}
@@ -145,13 +169,13 @@ func errorField(raw json.RawMessage, noMessage bool) []string {
 	return nil
 }
 
-func issueText(is zodIssue) string {
-	if len(is.Path) == 0 {
-		return is.Message
+func issueText(issue zodIssue) string {
+	if len(issue.Path) == 0 {
+		return issue.Message
 	}
-	path := make([]string, 0, len(is.Path))
-	for _, p := range is.Path {
+	path := make([]string, 0, len(issue.Path))
+	for _, p := range issue.Path {
 		path = append(path, fmt.Sprint(p))
 	}
-	return strings.Join(path, ".") + ": " + is.Message
+	return strings.Join(path, ".") + ": " + issue.Message
 }

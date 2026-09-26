@@ -143,7 +143,7 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest) (*
 	}
 	resp, err := ex.client.Do(ctx, r.Method, r.Path, r.Query)
 	if err != nil {
-		if res, ok, rerr := langfuseError(err, op.ID); ok {
+		if res, rerr := langfuseError(err, op.ID); res != nil || rerr != nil {
 			return res, rerr
 		}
 		// The error codes of #21 replace this catch-all; until then the

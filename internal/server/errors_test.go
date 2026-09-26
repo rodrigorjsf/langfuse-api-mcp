@@ -157,6 +157,16 @@ func TestALangfuseClientErrorStatusMapsToItsToolErrorCode(t *testing.T) {
 			wantCode:    "langfuse_unprocessable",
 			wantMessage: "Langfuse answered HTTP 422: Unprocessable entity",
 		},
+		"another 4xx (405) is a refused request": {
+			answer:      answer{status: 405, body: `{"message":"Method not allowed","error":"MethodNotAllowedError"}`},
+			wantCode:    "langfuse_bad_request",
+			wantMessage: "Langfuse answered HTTP 405: Method not allowed",
+		},
+		"a non-JSON body is never echoed": {
+			answer:      answer{status: 401, contentType: "text/plain", body: "No authorization header"},
+			wantCode:    "langfuse_unauthorized",
+			wantMessage: "Langfuse answered HTTP 401",
+		},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -175,7 +185,7 @@ func TestALangfuseClientErrorStatusMapsToItsToolErrorCode(t *testing.T) {
 	}
 }
 
-func TestA404MeaningTheDeploymentDoesNotServeTheOperationReturnsOperationUnavailableWithoutEchoingTheBody(t *testing.T) {
+func TestAnUnavailableOperationReturnsOperationUnavailableWithoutEchoingTheBody(t *testing.T) {
 	t.Parallel()
 	tests := map[string]struct {
 		answer   answer
@@ -197,6 +207,11 @@ func TestA404MeaningTheDeploymentDoesNotServeTheOperationReturnsOperationUnavail
 			answer:   answer{status: 404, body: `{"message":"The observations v2 API is only available in a Langfuse v4 write mode. Learn more at: https://langfuse.com/docs/v4","error":"LangfuseNotFoundError"}`},
 			bodyText: "observations v2 API",
 			wantHint: "v4 write mode",
+		},
+		"JSON naming events_only in the error field": {
+			answer:   answer{status: 404, body: `{"message":"Not found","error":"not available in Langfuse v4 events_only mode"}`},
+			bodyText: "Not found",
+			wantHint: "events_only",
 		},
 	}
 	for name, tc := range tests {
@@ -388,7 +403,22 @@ func TestAPanicInTheToolHandlerReturnsInternalErrorAndTheSessionContinues(t *tes
 	if log := stderr.String(); !strings.Contains(log, "goroutine") {
 		t.Fatalf("the stack trace did not reach the stderr log:\n%s", log)
 	}
-	if _, err := cs.ListTools(context.Background(), nil); err != nil {
-		t.Fatalf("the session did not survive the panic: %v", err)
+	if again := callExecuteRead(t, cs, traceList); toolErrorOf(t, again).Error.Code != "internal_error" {
+		t.Fatalf("the session did not survive the panic: second call returned %s", resultText(t, again))
+	}
+}
+
+func TestA429WithoutRetryAfterIsNotRetriedAndReturnsLangfuseRateLimited(t *testing.T) {
+	t.Parallel()
+	fake, calls := scriptedLangfuse(t, rateLimited(""))
+	var w fakeWait
+	cs := connectFakeTime(t, fake, &w, 0)
+
+	got := toolErrorOf(t, callExecuteRead(t, cs, traceList)).Error
+
+	if got.Code != "langfuse_rate_limited" || !got.Retryable || got.RetryAfterSeconds != 0 ||
+		calls.Load() != 1 || len(w.recorded()) != 0 {
+		t.Fatalf("tool error %+v after %d requests and waits %v, want langfuse_rate_limited, retryable, "+
+			"retryAfterSeconds 0 after 1 request, no wait (never blind-retry a 429)", got, calls.Load(), w.recorded())
 	}
 }
