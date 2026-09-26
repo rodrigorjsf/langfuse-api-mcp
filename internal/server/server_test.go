@@ -111,7 +111,7 @@ func startServer(t testing.TB, client *langfuse.Client, log *slog.Logger, secret
 	return cs
 }
 
-func TestTheToolSetIsTheDiscoveryToolsAndExecuteRead(t *testing.T) {
+func TestTheToolSetWithEveryFamilyOnIsTheDiscoveryToolsExecuteReadAndGetTraceTree(t *testing.T) {
 	t.Parallel()
 	fake := httptest.NewServer(nil)
 	t.Cleanup(fake.Close)
@@ -127,7 +127,7 @@ func TestTheToolSetIsTheDiscoveryToolsAndExecuteRead(t *testing.T) {
 		names = append(names, tool.Name)
 	}
 	slices.Sort(names)
-	if want := []string{"describe_operation", "execute_read", "search_operations"}; !slices.Equal(names, want) {
+	if want := []string{"describe_operation", "execute_read", "get_trace_tree", "search_operations"}; !slices.Equal(names, want) {
 		t.Fatalf("tools = %v, want exactly %v", names, want)
 	}
 }

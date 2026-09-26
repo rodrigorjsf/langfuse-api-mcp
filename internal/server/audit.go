@@ -25,6 +25,8 @@ type audit struct {
 	bytes int
 	// cause is why a request that got no usable answer failed; never a payload.
 	cause string
+	// requests is the number of Langfuse requests the call made.
+	requests int
 }
 
 // auditedHandler is a tool handler that records its call in a.
@@ -63,6 +65,7 @@ func audited(log *slog.Logger, r sanitize.Redactor, handler auditedHandler) mcp.
 				"status", a.status,
 				"latencyMs", time.Since(start).Milliseconds(),
 				"bytes", a.bytes,
+				"requests", a.requests,
 				"code", code,
 			}
 			if a.cause != "" {
