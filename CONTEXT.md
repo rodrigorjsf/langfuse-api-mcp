@@ -49,6 +49,8 @@ _Avoid_: missing endpoint, not found (that is a missing resource)
 
 **Request limits**: the rate limit (Langfuse requests per minute) and concurrency cap (Langfuse requests in flight) one server process applies to all its Langfuse calls, set only by the operator (`LANGFUSE_MCP_RATE_LIMIT`, `LANGFUSE_MCP_MAX_CONCURRENCY`), never by a tool argument; left unset, the rate limit's default depends on whether the host is a Cloud host; a call they hold past its deadline is *throttled* and never sent.
 
+**Proxy**: the HTTP or SOCKS proxy the server's Langfuse calls go through, named by the operator with `HTTPS_PROXY` (hosts in `NO_PROXY` reached directly) in the environment or the config file, never by a tool argument; the *proxy in use* is shown only as scheme, host and port, never with its credentials.
+
 **Config file**: an optional per-user file at the OS config location holding non-secret settings; environment variables take precedence over it and it may never hold keys.
 _Avoid_: dotenv, settings file
 
