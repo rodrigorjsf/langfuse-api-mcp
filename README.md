@@ -194,7 +194,7 @@ Trusted roots = **your operating system's certificate store + every CA from the 
 
 | Variable | Default | Allowed values | Meaning |
 |---|---|---|---|
-| `LANGFUSE_MCP_RATE_LIMIT` | `30` | whole number, 1 to 60000 | The most Langfuse requests the server sends per minute, retries included. The default is the Langfuse Cloud Hobby General API limit, the lowest plan's; raise it for a higher plan or a self-hosted Langfuse, which has no rate limits. |
+| `LANGFUSE_MCP_RATE_LIMIT` | `30` | whole number, 1 to 60000 | The most Langfuse requests the server sends per minute, retries included. The default is the Langfuse Cloud Hobby General API limit, the lowest plan's; raise it for a higher plan or a self-hosted Langfuse, which has no rate limits (default under review: [#47](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/47)). |
 | `LANGFUSE_MCP_MAX_CONCURRENCY` | `4` | whole number, 1 to 64 | The most Langfuse requests in flight at once. Up to this many requests may also leave at once before the rate limit starts pacing them. |
 
 Both apply to the whole server process, shared by every tool call; no tool argument can change them. May also be set in the config file; the environment wins. A zero, negative, non-numeric or out-of-range value stops startup with an error naming the variable (from the config file, without quoting the value). A call that cannot get through the limits before its deadline is not sent: the agent gets the tool error `timeout` with `retryable: true` and a hint to call again later.
