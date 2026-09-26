@@ -37,6 +37,9 @@ _Avoid_: endpoint, server URL
 **Legacy operation**: a deprecated operation, part of the legacy family; exposed only when the connected deployment still answers it.
 _Avoid_: v1 API, old API
 
+**Unavailable operation**: an operation of the catalog that the connected deployment does not serve (its version lacks the route, or its write mode turns the operation's family off); a call to it returns the tool error `operation_unavailable`, never Langfuse's body.
+_Avoid_: missing endpoint, not found (that is a missing resource)
+
 **Deployment profile**: the detected Langfuse version plus the families that answered at startup; it decides which operations are in the catalog for the process lifetime.
 
 **Project key**: a public/secret key pair (`pk-lf-…`/`sk-lf-…`) scoped to one Langfuse project; it has full access to that project.

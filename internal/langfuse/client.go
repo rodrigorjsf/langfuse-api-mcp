@@ -28,7 +28,16 @@ type Options struct {
 	// TLS is the client TLS configuration built from the trust pool; nil uses
 	// Go's defaults.
 	TLS *tls.Config
+	// RequestTimeout is the deadline of one Do call, retries and their waits
+	// included; zero means DefaultRequestTimeout.
+	RequestTimeout time.Duration
+	// Wait pauses between retries until d has passed or ctx is done; nil
+	// uses a real timer. Tests replace it so backoff never sleeps.
+	Wait func(ctx context.Context, d time.Duration) error
 }
+
+// DefaultRequestTimeout is the deadline of one Do call when Options leaves it zero.
+const DefaultRequestTimeout = 60 * time.Second
 
 // redacted replaces the key pair wherever Options or Client are printed.
 const redacted = "[REDACTED]"
@@ -51,6 +60,8 @@ type Client struct {
 	publicKey  string
 	secretKey  string
 	httpClient *http.Client
+	timeout    time.Duration
+	wait       func(ctx context.Context, d time.Duration) error
 }
 
 // String keeps the key pair out of %v and %s.
@@ -84,12 +95,23 @@ func New(opts Options) *Client {
 		TLSHandshakeTimeout:   10 * time.Second,
 		ResponseHeaderTimeout: 30 * time.Second,
 	}
-	return &Client{
-		host:       opts.Host,
-		publicKey:  opts.PublicKey,
-		secretKey:  opts.SecretKey,
-		httpClient: &http.Client{Transport: transport, Timeout: 60 * time.Second, CheckRedirect: sameOrigin},
+	c := &Client{
+		host:      opts.Host,
+		publicKey: opts.PublicKey,
+		secretKey: opts.SecretKey,
+		// The per-call deadline is a context deadline set in Do, so that it
+		// also bounds the retries and their waits.
+		httpClient: &http.Client{Transport: transport, CheckRedirect: sameOrigin},
+		timeout:    opts.RequestTimeout,
+		wait:       opts.Wait,
 	}
+	if c.timeout <= 0 {
+		c.timeout = DefaultRequestTimeout
+	}
+	if c.wait == nil {
+		c.wait = sleep
+	}
+	return c
 }
 
 // ErrRedirectRefused marks a request Langfuse redirected to another scheme,
@@ -139,17 +161,27 @@ type Response struct {
 	Body json.RawMessage
 }
 
-// APIError is a Langfuse answer with a non-2xx status.
-type APIError struct {
-	Status int
+// Do sends a request: method, the escaped path below the host (e.g.
+// /api/public/traces/abc) and the query, with Basic auth, under the client's
+// per-call deadline. It returns the response JSON for a 2xx answer and an
+// *APIError otherwise. A GET is retried within the deadline: twice with
+// exponential backoff and jitter on a 5xx, once after Retry-After on a 429.
+// Other methods are never retried: they are not idempotent.
+func (c *Client) Do(ctx context.Context, method, escapedPath string, query url.Values) (Response, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+	var r retries
+	for {
+		resp, err := c.send(ctx, method, escapedPath, query)
+		wait, retry := r.next(method, err)
+		if !retry || !fits(ctx, wait) || c.wait(ctx, wait) != nil {
+			return resp, err
+		}
+	}
 }
 
-func (e *APIError) Error() string { return fmt.Sprintf("langfuse answered HTTP %d", e.Status) }
-
-// Do sends one request: method, the escaped path below the host (e.g.
-// /api/public/traces/abc) and the query, with Basic auth. It returns the
-// response JSON for a 2xx answer and an *APIError otherwise.
-func (c *Client) Do(ctx context.Context, method, escapedPath string, query url.Values) (Response, error) {
+// send makes one attempt of Do.
+func (c *Client) send(ctx context.Context, method, escapedPath string, query url.Values) (Response, error) {
 	u := *c.host
 	u.RawPath = strings.TrimSuffix(c.host.EscapedPath(), "/") + escapedPath
 	path, err := url.PathUnescape(u.RawPath)
@@ -175,7 +207,11 @@ func (c *Client) Do(ctx context.Context, method, escapedPath string, query url.V
 		_ = resp.Body.Close()                                                   // nothing useful to do on a close error
 	}()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return Response{}, &APIError{Status: resp.StatusCode}
+		body, err := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
+		if err != nil {
+			return Response{}, fmt.Errorf("read error response: %w", err)
+		}
+		return Response{}, newAPIError(resp.StatusCode, resp.Header, body)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err != nil {

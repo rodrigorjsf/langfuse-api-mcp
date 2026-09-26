@@ -33,16 +33,28 @@ const (
 // MCP client session.
 func connect(t *testing.T, fake *httptest.Server) *mcp.ClientSession {
 	t.Helper()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	return connectClient(t, langfuse.New(clientOptions(t, fake)), slog.New(slog.DiscardHandler))
+}
+
+// clientOptions returns the Langfuse client options for the fake Langfuse.
+func clientOptions(t *testing.T, fake *httptest.Server) langfuse.Options {
+	t.Helper()
 	host, err := url.Parse(fake.URL)
 	if err != nil {
 		t.Fatalf("parse fake Langfuse URL: %v", err)
 	}
-	client := langfuse.New(langfuse.Options{Host: host, PublicKey: testPublicKey, SecretKey: testSecretKey})
-	srv := server.New(cat, client, slog.New(slog.DiscardHandler))
+	return langfuse.Options{Host: host, PublicKey: testPublicKey, SecretKey: testSecretKey}
+}
+
+// connectClient starts the server with the given Langfuse client and log, and
+// returns a connected MCP client session.
+func connectClient(t *testing.T, client *langfuse.Client, log *slog.Logger) *mcp.ClientSession {
+	t.Helper()
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatalf("load catalog: %v", err)
+	}
+	srv := server.New(cat, client, log)
 
 	ctx := context.Background()
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"strconv"
 	"strings"
 
@@ -77,8 +78,35 @@ func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger) *mcp.Se
 			IdempotentHint:  true,
 			OpenWorldHint:   new(true),
 		},
-	}, ex.executeRead)
+	}, recovering(log, ex.executeRead))
 	return s
+}
+
+// recovering turns a panic in handler into an internal_error tool result, so
+// that a bug never breaks the session; the stack goes to log (stderr) only.
+func recovering(log *slog.Logger, handler mcp.ToolHandler) mcp.ToolHandler {
+	return func(ctx context.Context, req *mcp.CallToolRequest) (res *mcp.CallToolResult, err error) {
+		defer func() {
+			if p := recover(); p != nil {
+				log.Error("tool handler panicked", "tool", req.Params.Name,
+					"panic", fmt.Sprint(p), "stack", string(debug.Stack()))
+				res, err = toolError(errorInternal, "the server hit an internal error",
+					"this is a bug in the server, not in the call; report it with the server's stderr log",
+					operationIDOf(req))
+			}
+		}()
+		return handler(ctx, req)
+	}
+}
+
+// operationIDOf returns the operationId argument of req, or "" when there is
+// none; it never fails, because it runs while recovering from a panic.
+func operationIDOf(req *mcp.CallToolRequest) string {
+	var in struct {
+		OperationID string `json:"operationId"`
+	}
+	_ = json.Unmarshal(req.Params.Arguments, &in) // best effort: the ID only labels the error
+	return in.OperationID
 }
 
 // executor runs catalog operations through the Langfuse client (ADR-0010).
@@ -169,7 +197,10 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest) (*
 				"(for example https instead of http) and restarts the server", op.ID)
 	}
 	if err != nil {
-		// The error codes of #20/#21 replace this catch-all; until then the
+		if res, rerr := langfuseError(err, op.ID); res != nil || rerr != nil {
+			return res, rerr
+		}
+		// The error codes of #21 replace this catch-all; until then the
 		// cause goes to stderr, never to the agent.
 		ex.log.Error("execute_read failed", "operationId", op.ID, "error", err.Error())
 		return toolError(errorInternal, "the Langfuse request failed", "", op.ID)

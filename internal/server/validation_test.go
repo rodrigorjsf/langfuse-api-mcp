@@ -20,9 +20,9 @@ type toolErrorFields struct {
 	OperationID       string `json:"operationId"`
 }
 
-// toolErrorOf returns the tool error of a result, failing the test when the
+// toolErrorFieldsOf returns the tool error of a result, failing the test when the
 // result is not a tool error.
-func toolErrorOf(t *testing.T, res *mcp.CallToolResult) toolErrorFields {
+func toolErrorFieldsOf(t *testing.T, res *mcp.CallToolResult) toolErrorFields {
 	t.Helper()
 	if !res.IsError {
 		t.Fatalf("result is not a tool error: %s", resultText(t, res))
@@ -105,7 +105,7 @@ func TestExecuteReadRejectsInvalidParametersNamingTheFieldAndTheReason(t *testin
 				args["parameters"] = tc.params
 			}
 
-			got := toolErrorOf(t, callExecuteRead(t, cs, args))
+			got := toolErrorFieldsOf(t, callExecuteRead(t, cs, args))
 
 			if got.Code != "invalid_argument" || got.OperationID != tc.operationID {
 				t.Errorf("error = %+v, want code invalid_argument for %s", got, tc.operationID)
@@ -138,7 +138,7 @@ func TestExecuteReadRejectsPathParameterValuesThatCouldRedirectTheRequest(t *tes
 			fake, seen := fakeLangfuse(t, http.StatusOK, `{}`)
 			cs := connect(t, fake)
 
-			got := toolErrorOf(t, callExecuteRead(t, cs, map[string]any{
+			got := toolErrorFieldsOf(t, callExecuteRead(t, cs, map[string]any{
 				"operationId": "sessions_get", "parameters": map[string]any{"sessionId": value},
 			}))
 
@@ -172,7 +172,7 @@ func TestExecuteReadRefusesAWriteOperationSayingItRunsReadOperationsOnly(t *test
 	fake, seen := fakeLangfuse(t, http.StatusOK, `{}`)
 	cs := connect(t, fake)
 
-	got := toolErrorOf(t, callExecuteRead(t, cs, map[string]any{
+	got := toolErrorFieldsOf(t, callExecuteRead(t, cs, map[string]any{
 		"operationId": "prompts_create", "parameters": map[string]any{},
 	}))
 
@@ -195,7 +195,7 @@ func TestExecuteReadAnswersAnUnknownOrExcludedOperationWithOperationNotFound(t *
 			fake, seen := fakeLangfuse(t, http.StatusOK, `{}`)
 			cs := connect(t, fake)
 
-			got := toolErrorOf(t, callExecuteRead(t, cs, map[string]any{"operationId": id}))
+			got := toolErrorFieldsOf(t, callExecuteRead(t, cs, map[string]any{"operationId": id}))
 
 			if got.Code != "operation_not_found" || got.OperationID != id || got.Hint == "" {
 				t.Errorf("error = %+v, want operation_not_found for %s with a hint", got, id)
@@ -227,7 +227,7 @@ func TestExecuteReadRejectsInvalidArgumentsNamingTheField(t *testing.T) {
 			fake, seen := fakeLangfuse(t, http.StatusOK, `{}`)
 			cs := connect(t, fake)
 
-			got := toolErrorOf(t, callExecuteRead(t, cs, tc.args))
+			got := toolErrorFieldsOf(t, callExecuteRead(t, cs, tc.args))
 
 			if got.Code != "invalid_argument" || !strings.Contains(got.Message, tc.wantField) {
 				t.Errorf("error = %+v, want invalid_argument naming %s", got, tc.wantField)
@@ -246,7 +246,7 @@ func TestExecuteReadBoundsTheCallersOperationIDInTheToolError(t *testing.T) {
 	cs := connect(t, fake)
 	long := strings.Repeat("x", 10_000)
 
-	got := toolErrorOf(t, callExecuteRead(t, cs, map[string]any{"operationId": long}))
+	got := toolErrorFieldsOf(t, callExecuteRead(t, cs, map[string]any{"operationId": long}))
 
 	if len(got.OperationID) > 100 || len(got.Message) > 500 {
 		t.Errorf("operationId has %d bytes and message %d bytes, want both bounded (≤ 100, ≤ 500)",

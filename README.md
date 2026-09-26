@@ -76,7 +76,29 @@ Every call is validated before anything is sent to Langfuse, and a bad call come
 | passes a path parameter holding `/`, `\`, `.`/`..`, an `http(s):` URL, a control character, or nothing (prompt names in folders are therefore refused for now: [#33](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/33)) | `invalid_argument` | `parameter traceId: must not contain "/" or "\"…` |
 | gets a redirect from Langfuse to another scheme, host or port | `redirect_refused` | not followed; the key pair never leaves the configured host |
 
-Path parameters are percent-encoded. The structured codes for Langfuse HTTP, TLS, network and timeout failures, the size limits, Unicode stripping and the audit line are still **Planned** (the remaining M1 tickets); until then those failures return `internal_error`.
+Path parameters are percent-encoded.
+
+When Langfuse answers with an error, the agent receives a tool error (`isError: true`) with one shape for every failure ([ADR-0008](docs/adr/0008-structured-tool-errors.md)):
+
+```json
+{"error": {"code": "langfuse_bad_request", "message": "Langfuse answered HTTP 400: Invalid request data: limit: Too big: expected number to be <=1000", "hint": "fix the parameters named in the message and call again", "retryable": false, "httpStatus": 400, "retryAfterSeconds": 0, "operationId": "trace_list"}}
+```
+
+`message` carries Langfuse's own explanation, cut to 500 characters, with control and invisible Unicode characters removed.
+
+| Langfuse answer | `code` | What the server does first |
+|---|---|---|
+| 400 (and any other 4xx not listed here) | `langfuse_bad_request` | nothing; the message names the invalid parameter |
+| 401 | `langfuse_unauthorized` | nothing; the hint points at the key pair and the key's region |
+| 403 | `langfuse_forbidden` | nothing; the key needs an organization key or an Enterprise feature |
+| 404 JSON "not found" | `langfuse_not_found` | nothing |
+| 404 with an HTML body, or naming `events_only` / "v4 write mode" | `operation_unavailable` | nothing; the deployment does not serve this operation, the hint names the replacement family (naming the detected version is [#34](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/34)). The body is never shown |
+| 409 / 422 | `langfuse_conflict` / `langfuse_unprocessable` | nothing |
+| 429 | `langfuse_rate_limited` (`retryable`, with `retryAfterSeconds`) | a GET waits `Retry-After` and retries once, if the wait fits the 60 s request deadline |
+| 5xx | `langfuse_unavailable` (`retryable`) | a GET is retried at most twice, after 250 ms then 500 ms (minus random jitter), within the deadline |
+| a bug in the server (panic) | `internal_error` | the stack trace goes to stderr only; the session continues |
+
+TLS and network errors (`tls_untrusted_certificate`, `network_error`, `timeout`), size limits, Unicode stripping of payloads and the audit line are still **Planned** (the remaining M1 tickets); until then TLS and network failures return `internal_error`.
 
 ## When to use it
 

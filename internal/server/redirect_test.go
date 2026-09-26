@@ -55,7 +55,7 @@ func TestExecuteReadRefusesARedirectToAnotherSchemeHostOrPort(t *testing.T) {
 			fake, seen := redirectingLangfuse(t, target)
 			cs := connect(t, fake)
 
-			got := toolErrorOf(t, callExecuteRead(t, cs, map[string]any{"operationId": "trace_list"}))
+			got := toolErrorFieldsOf(t, callExecuteRead(t, cs, map[string]any{"operationId": "trace_list"}))
 
 			if got.Code != "redirect_refused" || got.OperationID != "trace_list" || got.Hint == "" {
 				t.Errorf("error = %+v, want redirect_refused with a hint", got)
