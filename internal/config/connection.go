@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"net/netip"
 	"net/url"
@@ -24,10 +25,9 @@ type Connection struct {
 	SecretKey Secret
 }
 
-// Secret holds a credential. It never prints its value: String, GoString,
-// LogValue and MarshalJSON all return [REDACTED]. Reveal returns the value
-// for the one place that must send it. Non-string fmt verbs such as %d
-// still print the value: see #46.
+// Secret holds a credential. It never prints its value: Format (every fmt
+// verb and flag), String, GoString, LogValue and MarshalJSON all render
+// [REDACTED]. Reveal returns the value for the one place that must send it.
 type Secret struct {
 	value string
 }
@@ -37,10 +37,15 @@ const redacted = "[REDACTED]"
 // Reveal returns the secret value.
 func (s Secret) Reveal() string { return s.value }
 
-// String returns [REDACTED], so %v and %s never print the value.
+// Format writes [REDACTED] for every fmt verb and flag. Without it fmt calls
+// String only for %v %s %x %X %q and prints the value field by reflection
+// for any other verb, such as %d or %t.
+func (Secret) Format(f fmt.State, _ rune) { _, _ = io.WriteString(f, redacted) }
+
+// String returns [REDACTED], for callers that convert a Secret to a string.
 func (Secret) String() string { return redacted }
 
-// GoString returns [REDACTED], so %#v never prints the value.
+// GoString returns [REDACTED], for callers that ask for a Go-syntax rendering.
 func (Secret) GoString() string { return redacted }
 
 // LogValue returns [REDACTED], so slog never logs the value.

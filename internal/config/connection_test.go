@@ -191,3 +191,20 @@ func TestTheLangfuseKeysNeverPrintTheirValue(t *testing.T) {
 		}
 	}
 }
+
+func TestASecretRendersRedactedForEveryFmtVerb(t *testing.T) {
+	t.Parallel()
+	cfg, _, err := config.Load(connectionEnv(nil), config.File{})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	secret := cfg.Connection.SecretKey
+	// String covers only %v %s %x %X %q: other verbs print the struct field by
+	// reflection unless Secret formats itself (#46).
+	for _, verb := range []string{"%d", "%t", "%v", "%+v", "%#v", "%s", "%q", "%x", "%X", "%10.3f"} {
+		format := verb // a variable format string: vet would reject the wrong-type verbs
+		if got := fmt.Sprintf(format, secret); got != "[REDACTED]" {
+			t.Errorf("Sprintf(%q, secret) = %q, want [REDACTED]", verb, got)
+		}
+	}
+}
