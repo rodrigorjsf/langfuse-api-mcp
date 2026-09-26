@@ -48,9 +48,11 @@ type toolErrorFields struct {
 }
 
 // toolError returns a tool result with isError set and the ADR-0008 shape.
+// The operation ID may be the caller's raw input: it is cut to maxEchoed and
+// cleaned like a message, so no control, invisible or bidi character comes back.
 func toolError(code, message, hint, operationID string) (*mcp.CallToolResult, error) {
 	return errorResult(toolErrorFields{
-		Code: code, Message: message, Hint: hint, OperationID: truncate(operationID), // the ID may be the caller's raw input
+		Code: code, Message: message, Hint: hint, OperationID: sanitize.Message(truncate(operationID)),
 	})
 }
 
