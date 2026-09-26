@@ -131,9 +131,9 @@ func TestSearchOperationsWithoutQueryListsEveryReadOperationGroupedByTag(t *test
 
 	assertMatchesOutputSchema(t, tool, res)
 	idx := operationIndexOf(t, res)
-	// The embedded spec has 58 GET operations and no excluded one among them.
-	if idx.Count != 58 || len(idx.listed()) != 58 {
-		t.Fatalf("index lists %d operations (count %d), want the 58 read operations", len(idx.listed()), idx.Count)
+	// The union catalog has 68 GET operations and no excluded one among them.
+	if idx.Count != 68 || len(idx.listed()) != 68 {
+		t.Fatalf("index lists %d operations (count %d), want the 68 read operations", len(idx.listed()), idx.Count)
 	}
 	if idx.Groups[0].Tag != "AnnotationQueues" || idx.Groups[0].Operations[0].OperationID != "annotationQueues_getQueue" {
 		t.Errorf("first group = %+v, want AnnotationQueues starting with annotationQueues_getQueue", idx.Groups[0])

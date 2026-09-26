@@ -42,15 +42,18 @@ func TestCatalogContainsNoExcludedOperation(t *testing.T) {
 	}
 }
 
-// The catalog is the embedded spec minus the exclusions: organization reads,
-// deprecated reads and every other operation stay in.
-func TestCatalogKeepsEveryOperationOfTheSpecThatIsNotExcluded(t *testing.T) {
+// Until it is resolved, the catalog is the whole union catalog minus the
+// exclusions: organization reads, deprecated reads, operations of older
+// releases and every other operation stay in.
+func TestCatalogKeepsEveryOperationOfTheUnionThatIsNotExcluded(t *testing.T) {
 	t.Parallel()
 	cat := mustLoad(t)
 
-	// The embedded spec has 117 operations, 13 of them excluded.
-	if got := len(cat.Operations()); got != 104 {
-		t.Fatalf("catalog has %d operations, want 104", got)
+	// The union catalog (v3.0.0 to v4.46.0) has 137 operations, 13 of them
+	// excluded; promptVersion_update names two of them (its path changed in
+	// 3.18.0), and the newer one wins.
+	if got := len(cat.Operations()); got != 123 {
+		t.Fatalf("catalog has %d operations, want 123", got)
 	}
 	for id, want := range map[string]string{ //nolint:gosec // G101: operation IDs, not credentials
 		"trace_list":                           "GET /api/public/traces",
@@ -58,6 +61,8 @@ func TestCatalogKeepsEveryOperationOfTheSpecThatIsNotExcluded(t *testing.T) {
 		"legacy_observationsV1_getMany":        "GET /api/public/observations",
 		"organizations_getOrganizationApiKeys": "GET /api/public/organizations/apiKeys",
 		"prompts_create":                       "POST /api/public/v2/prompts",
+		"score_get":                            "GET /api/public/scores",
+		"promptVersion_update":                 "PATCH /api/public/v2/prompts/{name}/versions/{version}",
 	} {
 		op, ok := cat.Lookup(id)
 		if !ok {
@@ -66,6 +71,36 @@ func TestCatalogKeepsEveryOperationOfTheSpecThatIsNotExcluded(t *testing.T) {
 		}
 		if got := op.Method + " " + op.Path; got != want {
 			t.Errorf("operation %s = %s, want %s", id, got, want)
+		}
+	}
+}
+
+// ADR-0012 §1: each operation carries its version range, taken from the
+// release specs or from an earlier floor the docs state, and its family.
+func TestEveryUnionOperationCarriesItsRangeAndFamily(t *testing.T) {
+	t.Parallel()
+	cat := mustLoad(t)
+
+	for id, want := range map[string][3]string{ // introduced, removed, family
+		"trace_list":                {"3.0.0", "", "legacy"},
+		"datasets_getRuns":          {"3.0.0", "", "legacy"},
+		"observations_getMany":      {"3.141.0", "", "v4 read"},
+		"metrics_metrics":           {"3.141.0", "", "v4 read"},
+		"experiments_list":          {"3.206.0", "", "experiments"},
+		"scoresV3_getManyV3":        {"3.179.0", "", ""}, // docs floor; first in the spec at 3.180.0
+		"score_get":                 {"3.0.0", "3.53.0", ""},
+		"metrics_daily":             {"3.0.0", "3.62.0", ""},
+		"unstable_evaluators_list":  {"3.170.0", "4.31.0", ""}, // deprecated, then removed: bounded by range only
+		"unstable_skills_list":      {"4.46.0", "", ""},
+		"annotationQueues_getQueue": {"3.42.0", "", ""},
+	} {
+		op, ok := cat.Lookup(id)
+		if !ok {
+			t.Errorf("operation %s missing from the catalog", id)
+			continue
+		}
+		if got := [3]string{op.Introduced, op.Removed, string(op.Family)}; got != want {
+			t.Errorf("%s = {introduced, removed, family} %q, want %q", id, got, want)
 		}
 	}
 }

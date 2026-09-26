@@ -1,12 +1,14 @@
 // Package catalog is the set of in-scope Langfuse operations the server can
-// execute, read from the OpenAPI spec embedded in the binary.
+// execute, read from the union catalog embedded in the binary.
 //
 // It is pure data: it knows operation IDs, methods, path templates and
 // parameters, and builds the request an operation needs from the caller's
 // parameters (ADR-0010). It never performs I/O.
 //
-// In M1 the catalog is the embedded spec minus the ADR-0004 exclusions. The
-// version-aware union catalog of ADR-0012 replaces this source in M3.
+// The union catalog (ADR-0012) holds every operation of the Langfuse release
+// specs since v3.0.0, each with its version range and operation family, minus
+// the ADR-0004 exclusions; scripts/gen-union-catalog.py generates it. Resolve
+// narrows it to the operations one deployment profile serves.
 package catalog
 
 import (
@@ -19,8 +21,8 @@ import (
 	"unicode"
 )
 
-//go:embed spec/langfuse-openapi.json
-var openAPISpec []byte
+//go:embed spec/langfuse-union-catalog.json
+var unionCatalog []byte
 
 // excluded holds the operation IDs never exposed on any deployment (ADR-0004):
 // trace ingestion, and organization admin mutations (projects, API keys,
@@ -42,9 +44,11 @@ var excluded = []string{
 }
 
 // Catalog is the set of in-scope operations, built once at startup and shared
-// read-only.
+// read-only. Lookup, Operations and Search see the operations of one
+// resolution (Resolve); the union stays behind them for the next one.
 type Catalog struct {
-	byID map[string]Operation
+	union union
+	byID  map[string]Operation
 }
 
 // Operation is one method+path pair of the Langfuse public API.
@@ -64,6 +68,16 @@ type Operation struct {
 	DescriptionLine string
 	// Params are the operation's path and query parameters.
 	Params []Param
+	// Introduced is the first Langfuse version whose spec lists the operation
+	// ("3.0.0" when it predates the union catalog), or the earlier floor the
+	// docs state; empty when unknown.
+	Introduced string
+	// Removed is the first Langfuse version whose spec no longer lists the
+	// operation; empty while the newest known spec still lists it.
+	Removed string
+	// Family is the operation family the deployment's migration mode gates
+	// the operation by (ADR-0012 §2); empty when no mode gates it.
+	Family Family
 }
 
 // Param is one path or query parameter of an operation.
@@ -109,22 +123,34 @@ type Schema struct {
 // IsRead reports whether the operation is a read operation (HTTP GET).
 func (o Operation) IsRead() bool { return o.Method == http.MethodGet }
 
-// Load builds the catalog from the embedded Langfuse OpenAPI spec, minus the
-// excluded operations.
-func Load() (Catalog, error) { return load(openAPISpec) }
+// Load builds the catalog from the embedded union catalog, minus the excluded
+// operations. Until it is resolved for a deployment profile, it offers every
+// operation, as Resolve does for an unknown version with every family on.
+func Load() (Catalog, error) { return load(unionCatalog) }
 
-// load builds the catalog from an OpenAPI spec, minus the excluded operations.
+// load builds the catalog from a union catalog, an OpenAPI document whose
+// operations carry x-introduced, x-removed and x-family, minus the excluded
+// operations. A plain OpenAPI spec loads too: its operations have no range.
 func load(spec []byte) (Catalog, error) {
 	var doc struct {
+		Oldest     string                                `json:"x-oldest-version"`
+		Newest     string                                `json:"x-newest-version"`
 		Paths      map[string]map[string]json.RawMessage `json:"paths"`
 		Components struct {
 			Schemas map[string]Schema `json:"schemas"`
 		} `json:"components"`
 	}
 	if err := json.Unmarshal(spec, &doc); err != nil {
-		return Catalog{}, fmt.Errorf("embedded OpenAPI spec: %w", err)
+		return Catalog{}, fmt.Errorf("embedded union catalog: %w", err)
 	}
-	cat := Catalog{byID: map[string]Operation{}}
+	var u union
+	var err error
+	if u.oldest, err = optionalVersion(doc.Oldest); err == nil {
+		u.newest, err = optionalVersion(doc.Newest)
+	}
+	if err != nil {
+		return Catalog{}, fmt.Errorf("embedded union catalog: %w", err)
+	}
 	for path, item := range doc.Paths {
 		for method, raw := range item {
 			m := strings.ToUpper(method)
@@ -136,20 +162,30 @@ func load(spec []byte) (Catalog, error) {
 				Tags        []string `json:"tags"`
 				Description string   `json:"description"`
 				Parameters  []Param  `json:"parameters"`
+				Introduced  string   `json:"x-introduced"`
+				Removed     string   `json:"x-removed"`
+				Family      Family   `json:"x-family"`
 			}
 			if err := json.Unmarshal(raw, &op); err != nil {
-				return Catalog{}, fmt.Errorf("embedded OpenAPI spec: %s %s: %w", m, path, err)
+				return Catalog{}, fmt.Errorf("embedded union catalog: %s %s: %w", m, path, err)
 			}
 			if op.OperationID == "" || slices.Contains(excluded, op.OperationID) {
 				continue
 			}
 			for i := range op.Parameters {
 				if err := resolve(&op.Parameters[i].Schema, doc.Components.Schemas); err != nil {
-					return Catalog{}, fmt.Errorf("embedded OpenAPI spec: %s parameter %s: %w",
+					return Catalog{}, fmt.Errorf("embedded union catalog: %s parameter %s: %w",
 						op.OperationID, op.Parameters[i].Name, err)
 				}
 			}
-			o := Operation{ID: op.OperationID, Method: m, Path: path, Params: op.Parameters}
+			o := Operation{
+				ID: op.OperationID, Method: m, Path: path, Params: op.Parameters,
+				Introduced: op.Introduced, Removed: op.Removed, Family: op.Family,
+			}
+			r, err := rangeOf(o)
+			if err != nil {
+				return Catalog{}, fmt.Errorf("embedded union catalog: %s: %w", o.ID, err)
+			}
 			if len(op.Tags) > 0 {
 				o.Tag = visible(op.Tags[0])
 			}
@@ -162,10 +198,10 @@ func load(spec []byte) (Catalog, error) {
 					o.Params[i].Schema.Default = DefaultLimit
 				}
 			}
-			cat.byID[o.ID] = o
+			u.ops = append(u.ops, rangedOperation{Operation: o, span: r})
 		}
 	}
-	return cat, nil
+	return Catalog{union: u}.Resolve(Profile{Families: AllFamilies()}), nil
 }
 
 // resolve replaces a component reference in s by the referenced schema's type

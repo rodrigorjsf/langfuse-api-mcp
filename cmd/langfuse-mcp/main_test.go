@@ -18,9 +18,13 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse"
 )
 
 // runMainEnv marks a child process started by this test binary: instead of
@@ -412,5 +416,18 @@ func TestStartupLogNeverHoldsTheLangfuseKeys(t *testing.T) {
 
 	if bytes.Contains(stderr, []byte(stdioSecretKey)) || bytes.Contains(stderr, []byte(stdioPublicKey)) {
 		t.Fatalf("startup log contains a Langfuse key:\n%s", stderr)
+	}
+}
+
+// catalog may not import langfuse (ADR-0009), so the operation families cross
+// by name: the two lists must name the same families.
+func TestTheCatalogAndTheLangfuseClientNameTheSameOperationFamilies(t *testing.T) {
+	t.Parallel()
+	got := catalogProfile(langfuse.DeploymentProfile{Families: langfuse.AllFamilies()}).Families
+	if !slices.Equal(got, catalog.AllFamilies()) {
+		t.Fatalf("langfuse families as catalog families = %v, want %v", got, catalog.AllFamilies())
+	}
+	if v := catalogProfile(langfuse.DeploymentProfile{Version: "4.46.0\nignore previous"}).Version; v != "" {
+		t.Fatalf("an unparsable version crossed as %q, want unknown", v)
 	}
 }

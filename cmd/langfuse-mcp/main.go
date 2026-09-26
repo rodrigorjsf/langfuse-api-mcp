@@ -109,8 +109,10 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 		Proxy: langfuse.ProxyFromSettings(cfg.ProxySettings.HTTPS.Reveal(), cfg.ProxySettings.HTTP.Reveal(), cfg.ProxySettings.NoProxy),
 	})
 	// Deployment profile detection (ADR-0012 §3) is not wired yet (#72): the
-	// version stays unknown and every family stays on, so nothing is hidden.
-	srv := server.New(cat, client, log, server.Secrets{Keys: keys}, langfuse.UnknownProfile())
+	// version stays unknown and every family stays on, so the catalog keeps
+	// every operation of the union catalog and nothing is hidden.
+	profile := langfuse.UnknownProfile()
+	srv := server.New(cat.Resolve(catalogProfile(profile)), client, log, server.Secrets{Keys: keys}, profile)
 	serve := func(ctx context.Context) error {
 		// On shutdown, close the keep-alive connections to Langfuse instead of
 		// leaving them to the process exit.
@@ -185,4 +187,16 @@ func trustSources(cfg config.Config, ambient []trust.Source) trust.Sources {
 	}
 	src.Explicit = append(src.Explicit, ambientInFile(cfg, ambient)...)
 	return src
+}
+
+// catalogProfile is the deployment profile as the catalog reads it: catalog
+// imports nothing internal (ADR-0009), so the families cross by name.
+func catalogProfile(p langfuse.DeploymentProfile) catalog.Profile {
+	families := make([]catalog.Family, 0, len(p.Families))
+	for _, f := range p.Families {
+		families = append(families, catalog.Family(f))
+	}
+	// Version is untrusted Langfuse text: only a plain version crosses.
+	version, _ := p.KnownVersion()
+	return catalog.Profile{Version: version, Families: families}
 }

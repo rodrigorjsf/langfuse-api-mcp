@@ -32,12 +32,15 @@ func TestEveryOperationCarriesItsTagAndTheFirstLineOfItsDescription(t *testing.T
 }
 
 // ADR-0002 amendment: descriptions are third-party text; the index never
-// carries a character that hides or reorders text.
+// carries a character that hides or reorders text. Every operation of the
+// union catalog is checked: the unresolved catalog holds all of them but the
+// older operation behind a shared ID, which resolving for v3.0.0 holds.
 func TestNoTagOrDescriptionLineOfTheEmbeddedCatalogHoldsAForbiddenCharacter(t *testing.T) {
 	t.Parallel()
 	cat := mustLoad(t)
 
-	for _, op := range cat.Operations() {
+	ops := append(cat.Operations(), cat.Resolve(catalog.Profile{Version: "3.0.0"}).Operations()...)
+	for _, op := range ops {
 		if op.Tag == "" || op.DescriptionLine == "" {
 			t.Errorf("%s: tag %q, description line %q; want both non-empty", op.ID, op.Tag, op.DescriptionLine)
 		}
@@ -97,8 +100,8 @@ func TestSearchWithoutTermsReturnsEveryOperationGroupedByTag(t *testing.T) {
 
 	got := cat.Search("")
 
-	if len(got) != 104 {
-		t.Fatalf("Search(\"\") returned %d operations, want all 104", len(got))
+	if len(got) != 123 {
+		t.Fatalf("Search(\"\") returned %d operations, want all 123", len(got))
 	}
 	if first := got[:3]; !slices.Equal(ids(first), []string{
 		"annotationQueues_createQueue", "annotationQueues_createQueueAssignment", "annotationQueues_createQueueItem",
