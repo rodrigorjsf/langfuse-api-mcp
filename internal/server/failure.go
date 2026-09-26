@@ -90,6 +90,11 @@ func failureFields(err error) toolErrorFields {
 			Hint:    "if the call was canceled because it was slow, " + narrowHint,
 		}
 	default:
-		return toolErrorFields{Code: errorInternal, Message: "the Langfuse request failed"}
+		return toolErrorFields{
+			Code:    errorInternal,
+			Message: "the Langfuse request failed",
+			Hint: "check that LANGFUSE_BASE_URL points at the Langfuse API itself, not a login page or proxy; " +
+				"if it does, report this with the server's stderr log",
+		}
 	}
 }
