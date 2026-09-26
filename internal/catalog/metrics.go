@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"maps"
-	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -138,12 +137,15 @@ func metricsQuery(raw string) (string, error) {
 	}
 	rowLimit := DefaultRowLimit
 	if v, ok := config["row_limit"]; ok {
-		n, isNumber := number(v)
-		if !isNumber || n != math.Trunc(n) || n < 1 || n > MaxRowLimit {
+		// Only an integer literal counts: a float such as 1000.0 or 1e3 is
+		// refused like 1.5, never rounded.
+		literal, _ := v.(json.Number)
+		n, err := strconv.Atoi(string(literal))
+		if err != nil || n < 1 || n > MaxRowLimit {
 			return "", rowLimitError{invalidf("parameter query: config.row_limit: want an integer from 1 to %d, got %s",
 				MaxRowLimit, kind(v))}
 		}
-		rowLimit = int(n)
+		rowLimit = n
 	}
 	config["row_limit"] = json.Number(strconv.Itoa(rowLimit))
 	var out bytes.Buffer

@@ -98,7 +98,7 @@ func refusedMetricsQuery(t *testing.T, query string) toolErrorFields {
 
 func TestARowLimitOutsideOneTo1000IsRefusedWithAHintWithoutCallingLangfuse(t *testing.T) {
 	t.Parallel()
-	for _, rowLimit := range []string{"0", "1001", "-5", `"50"`, "1.5", "null", "true"} {
+	for _, rowLimit := range []string{"0", "1001", "-5", `"50"`, "1.5", "1000.0", "1e3", "null", "true"} {
 		t.Run(rowLimit, func(t *testing.T) {
 			t.Parallel()
 
