@@ -6,6 +6,7 @@ toolchain go1.27.1
 
 require (
 	github.com/modelcontextprotocol/go-sdk v1.8.0
+	go.uber.org/goleak v1.3.0
 	golang.org/x/crypto/x509roots/fallback v0.0.0-20260921070245-7a4a4d6beae2
 )
 
