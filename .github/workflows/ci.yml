@@ -2,11 +2,23 @@
 # The test step also runs the cross-OS trust proof against a throwaway CA installed in each
 # runner's system trust store (spec #7).
 # Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current.
+# A push or pull request that only changes docs (Markdown, docs/, .claude/, LICENSE) starts no run:
+# nothing in those paths is compiled or embedded (the only go:embed is internal/catalog/spec/*.json).
 name: CI
 
 on:
   push:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - ".claude/**"
+      - "LICENSE"
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - ".claude/**"
+      - "LICENSE"
 
 permissions:
   contents: read
