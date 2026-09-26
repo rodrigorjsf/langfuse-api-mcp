@@ -8,6 +8,8 @@ import (
 )
 
 // redacted replaces the key pair wherever it, Options or Client are printed.
+// It repeats config's and sanitize's marker on purpose: depguard lets
+// langfuse import neither, so each layer defines the marker once.
 const redacted = "[REDACTED]"
 
 // KeyPair is the Langfuse public/secret key pair the client sends as HTTP
@@ -38,7 +40,8 @@ func (k KeyPair) reveal() (public, secret string) {
 
 // RedactionValues returns every value a redactor must hide for this pair: the
 // public key, the secret key, their Basic auth value and the Authorization
-// header value built from it.
+// header value built from it. It exists for building a redactor only: never
+// store its result in a plain string field.
 func (k KeyPair) RedactionValues() []string {
 	public, secret := k.reveal()
 	basic := base64.StdEncoding.EncodeToString([]byte(public + ":" + secret))

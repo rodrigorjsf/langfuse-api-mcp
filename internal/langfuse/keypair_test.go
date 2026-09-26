@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"testing"
 
@@ -86,7 +87,7 @@ func TestAKeyPairHandsTheRedactorTheKeysAndTheirAuthorizationValues(t *testing.T
 
 	// base64("pk-lf-a:sk-lf-b") worked out by hand: cGstbGYtYTpzay1sZi1i.
 	want := []string{"pk-lf-a", "sk-lf-b", "cGstbGYtYTpzay1sZi1i", "Basic cGstbGYtYTpzay1sZi1i"}
-	if fmt.Sprint([]string(got)) != fmt.Sprint(want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("RedactionValues() = %q, want %q", got, want)
 	}
 }
