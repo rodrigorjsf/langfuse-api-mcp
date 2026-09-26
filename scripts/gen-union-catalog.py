@@ -19,7 +19,10 @@
 #               here (default: $XDG_CACHE_HOME/langfuse-api-mcp/langfuse.git)
 #       --out   default internal/catalog/spec/langfuse-union-catalog.json
 #
-# Needs git, network access to github.com and PyYAML (pip install pyyaml).
+# Needs git, network access to github.com and PyYAML (pip install pyyaml): the
+# release specs are YAML, and parsing them in Go would add a module dependency
+# to the server for a maintainer-only step (security.md: no new dependency
+# without justification). The weekly workflow pins PyYAML's version.
 # The first run downloads the commit and tree history (a few hundred MiB) and
 # about 150 distinct spec blobs; later runs fetch only new tags.
 #
@@ -235,7 +238,7 @@ def check_ids(paths):
 
 def main():
     cache_home = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
-    ap = argparse.ArgumentParser(description=__doc__)
+    ap = argparse.ArgumentParser(description="Regenerate the union catalog from the Langfuse release specs since v3.0.0.")
     ap.add_argument("--repo", default=os.path.join(cache_home, "langfuse-api-mcp", "langfuse.git"))
     ap.add_argument("--out", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
                                                   "internal", "catalog", "spec", "langfuse-union-catalog.json"))

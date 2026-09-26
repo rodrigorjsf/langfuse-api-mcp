@@ -75,8 +75,8 @@ type Operation struct {
 	// Removed is the first Langfuse version whose spec no longer lists the
 	// operation; empty while the newest known spec still lists it.
 	Removed string
-	// Family is the operation family a write mode gates the operation by;
-	// empty when no mode gates it.
+	// Family is the operation family the deployment's migration mode gates
+	// the operation by (ADR-0012 §2); empty when no mode gates it.
 	Family Family
 }
 
@@ -144,18 +144,12 @@ func load(spec []byte) (Catalog, error) {
 		return Catalog{}, fmt.Errorf("embedded union catalog: %w", err)
 	}
 	var u union
-	for _, v := range []struct {
-		text string
-		into *version
-	}{{doc.Oldest, &u.oldest}, {doc.Newest, &u.newest}} {
-		if v.text == "" {
-			continue
-		}
-		parsed, ok := parseVersion(v.text)
-		if !ok {
-			return Catalog{}, fmt.Errorf("embedded union catalog: version %q is not major.minor.patch", v.text)
-		}
-		*v.into = parsed
+	var err error
+	if u.oldest, err = optionalVersion(doc.Oldest); err == nil {
+		u.newest, err = optionalVersion(doc.Newest)
+	}
+	if err != nil {
+		return Catalog{}, fmt.Errorf("embedded union catalog: %w", err)
 	}
 	for path, item := range doc.Paths {
 		for method, raw := range item {

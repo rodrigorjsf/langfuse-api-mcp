@@ -196,5 +196,7 @@ func catalogProfile(p langfuse.DeploymentProfile) catalog.Profile {
 	for _, f := range p.Families {
 		families = append(families, catalog.Family(f))
 	}
-	return catalog.Profile{Version: p.Version, Families: families}
+	// Version is untrusted Langfuse text: only a plain version crosses.
+	version, _ := p.KnownVersion()
+	return catalog.Profile{Version: version, Families: families}
 }

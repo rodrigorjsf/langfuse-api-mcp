@@ -7,8 +7,10 @@ import (
 	"strconv"
 )
 
-// Family is an operation family: a group of operations a deployment's write
-// mode turns on or off together (ADR-0012 §2).
+// Family is an operation family: a group of operations a Langfuse deployment
+// turns on or off together through its migration mode
+// (LANGFUSE_MIGRATION_V4_WRITE_MODE, ADR-0012 §2) — not the server's own
+// write mode.
 type Family string
 
 // The operation families of ADR-0012 §2.
@@ -96,21 +98,25 @@ func (s span) contains(v version) bool {
 
 // rangeOf parses an operation's version range.
 func rangeOf(o Operation) (span, error) {
-	var s span
-	for _, f := range []struct {
-		text string
-		into *version
-	}{{o.Introduced, &s.introduced}, {o.Removed, &s.removed}} {
-		if f.text == "" {
-			continue
-		}
-		v, ok := parseVersion(f.text)
-		if !ok {
-			return span{}, fmt.Errorf("version %q is not major.minor.patch", f.text)
-		}
-		*f.into = v
+	introduced, err := optionalVersion(o.Introduced)
+	if err != nil {
+		return span{}, err
 	}
-	return s, nil
+	removed, err := optionalVersion(o.Removed)
+	return span{introduced: introduced, removed: removed}, err
+}
+
+// optionalVersion parses a version of the union catalog; "" is the zero
+// version (none).
+func optionalVersion(s string) (version, error) {
+	if s == "" {
+		return version{}, nil
+	}
+	v, ok := parseVersion(s)
+	if !ok {
+		return version{}, fmt.Errorf("version %q is not major.minor.patch", s)
+	}
+	return v, nil
 }
 
 // version is a parsed Langfuse release version; the zero value means none.

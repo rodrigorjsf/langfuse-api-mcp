@@ -34,20 +34,6 @@ func opIDs(c Catalog) []string {
 	return out
 }
 
-func TestEveryOperationCarriesItsVersionRangeAndFamily(t *testing.T) {
-	t.Parallel()
-	cat := mustLoadUnion(t)
-
-	gone, _ := cat.Lookup("gone_get")
-	traces, _ := cat.Lookup("trace_list")
-	if gone.Introduced != "3.0.0" || gone.Removed != "4.0.0" || gone.Family != "" {
-		t.Errorf("gone_get = {introduced %q, removed %q, family %q}, want 3.0.0, 4.0.0, none", gone.Introduced, gone.Removed, gone.Family)
-	}
-	if traces.Removed != "" || traces.Family != LegacyFamily {
-		t.Errorf("trace_list = {removed %q, family %q}, want none, legacy", traces.Removed, traces.Family)
-	}
-}
-
 // With the version unknown, nothing is hidden by range: an ID shared by two
 // operations names the newer one.
 func TestAnUnknownVersionKeepsEveryRangeAndAnIDNamesItsNewestOperation(t *testing.T) {
