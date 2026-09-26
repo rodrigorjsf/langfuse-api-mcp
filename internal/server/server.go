@@ -166,6 +166,17 @@ func decodeExecuteReadInput(raw json.RawMessage, r sanitize.Redactor) (executeRe
 	return in, nil
 }
 
+// folderNameHintFor returns the hint of a 404 or 400 answering a call with a
+// Folder name. An operation_unavailable hint names the deployment's version
+// or family (ADR-0012) and is kept, followed by the Folder-name hint; the
+// Folder-name hint replaces the generic not-found or bad-request one.
+func folderNameHintFor(f toolErrorFields) string {
+	if f.Code == errorUnavailableOperation {
+		return f.Hint + "; or, since " + folderNameHint
+	}
+	return folderNameHint
+}
+
 // maxEchoed bounds how much of a caller-supplied name an error repeats.
 const maxEchoed = 64
 
@@ -238,7 +249,7 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 		if f, ok := langfuseErrorFields(err, op.ID, ex.redact); ok {
 			a.status = f.HTTPStatus
 			if request.FolderName && (f.HTTPStatus == http.StatusNotFound || f.HTTPStatus == http.StatusBadRequest) {
-				f.Hint = folderNameHint
+				f.Hint = folderNameHintFor(f)
 			}
 			return errorResult(f)
 		}

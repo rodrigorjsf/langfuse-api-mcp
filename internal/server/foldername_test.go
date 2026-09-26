@@ -53,9 +53,9 @@ func TestAFolderNameReachesLangfuseAsOnePathSegmentWithEverySlashEncoded(t *test
 	}
 }
 
-// folderCapable lists one call per folder-capable path parameter, with the
+// folderCapableCalls lists one call per folder-capable path parameter, with the
 // parameter's value left to the test.
-var folderCapable = map[string]struct{ operationID, param string }{
+var folderCapableCalls = map[string]struct{ operationID, param string }{
 	"prompts_get promptName":       {"prompts_get", "promptName"},
 	"datasets_get datasetName":     {"datasets_get", "datasetName"},
 	"datasets_getRuns datasetName": {"datasets_getRuns", "datasetName"},
@@ -78,7 +78,7 @@ func TestAFolderNameThatCouldLeaveItsSegmentIsRefusedWithoutCallingLangfuse(t *t
 		"a/../b", "a/./b", "..", ".", "../x", "x/..", "/a", "a/", "a//b", `a\b`,
 		"https://evil/x", "HTTP://evil/x", "//evil/x", "a/b\x00c", "a/b\nc", "a/\x7f",
 	} {
-		for name, fc := range folderCapable {
+		for name, fc := range folderCapableCalls {
 			t.Run(name+" "+value, func(t *testing.T) {
 				t.Parallel()
 				fake, seen := fakeLangfuse(t, http.StatusOK, `{}`)
@@ -214,13 +214,20 @@ var folderNameHintMarkers = []string{"%2F", "proxy", "langfuse/langfuse#12720", 
 
 func TestALangfuse404Or400OnAFolderNameCallCarriesTheFolderNameHint(t *testing.T) {
 	t.Parallel()
-	tests := map[string]answer{
-		"404 not found":                     {status: http.StatusNotFound, body: `{"message":"Prompt not found"}`},
-		"404 route missing (proxy decoded)": {status: http.StatusNotFound, contentType: "text/html", body: `<!DOCTYPE html><html>404</html>`},
-		"400 bad request":                   {status: http.StatusBadRequest, body: `{"message":"Invalid request data"}`},
+	tests := map[string]struct {
+		a        answer
+		wantCode string
+	}{
+		"404 not found": {answer{status: http.StatusNotFound, body: `{"message":"Prompt not found"}`}, "langfuse_not_found"},
+		"404 route missing (proxy decoded)": {
+			answer{status: http.StatusNotFound, contentType: "text/html", body: `<!DOCTYPE html><html>404</html>`},
+			"operation_unavailable",
+		},
+		"400 bad request": {answer{status: http.StatusBadRequest, body: `{"message":"Invalid request data"}`}, "langfuse_bad_request"},
 	}
-	for name, a := range tests {
-		for opName, fc := range folderCapable {
+	for name, tc := range tests {
+		a := tc.a
+		for opName, fc := range folderCapableCalls {
 			t.Run(name+" "+opName, func(t *testing.T) {
 				t.Parallel()
 				fake, _ := scriptedLangfuse(t, a)
@@ -228,8 +235,13 @@ func TestALangfuse404Or400OnAFolderNameCallCarriesTheFolderNameHint(t *testing.T
 
 				got := toolErrorOf(t, callExecuteRead(t, cs, folderCall(fc.operationID, fc.param, "support/triage/system"))).Error
 
-				if got.HTTPStatus != a.status {
-					t.Errorf("httpStatus = %d, want %d", got.HTTPStatus, a.status)
+				if got.HTTPStatus != a.status || got.Code != tc.wantCode {
+					t.Errorf("httpStatus %d, code %s; want %d, %s", got.HTTPStatus, got.Code, a.status, tc.wantCode)
+				}
+				// A route-missing 404 keeps its hint about the deployment's
+				// version (ADR-0012) before the Folder-name one.
+				if tc.wantCode == "operation_unavailable" && !strings.Contains(got.Hint, "older Langfuse version") {
+					t.Errorf("hint %q dropped the operation_unavailable hint", got.Hint)
 				}
 				for _, m := range folderNameHintMarkers {
 					if !strings.Contains(got.Hint, m) {
