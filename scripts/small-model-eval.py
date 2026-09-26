@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 #
-# WHAT: the small-model discovery eval (spec #68, ticket #75). It sends about 10
+# WHAT: the small-model discovery eval (spec #68, ticket #75). It sends 11
 #       natural-language intents to Haiku 4.5, one conversation each, with only
 #       this server's tools (search_operations, describe_operation, execute_read,
 #       get_trace_tree) and no word about the Langfuse API. An intent passes when
 #       the model calls the expected tool with the expected operationId and key
-#       parameters. It prints one PASS/FAIL line per intent and the total.
+#       parameters and the server accepts that call. It prints one PASS/FAIL
+#       line per intent and the total.
 # WHY:  M3 claims that a small model can go from an intent to the right
 #       operation using the discovery tools alone. This run is the evidence. A
 #       failing intent becomes a follow-up issue on M3 or M6 (a description,
@@ -23,8 +24,9 @@
 #
 # The Anthropic key is read only from the ANTHROPIC_API_KEY environment
 # variable, sent only in the x-api-key header, and never printed, logged or
-# passed to the server process. ANTHROPIC_BASE_URL may point the run at another
-# Messages API endpoint (https, or http on a loopback host only).
+# passed to the server process or to go build. ANTHROPIC_BASE_URL may point
+# the run at another Messages API endpoint (https, or http on a loopback host
+# only).
 #
 # No production data: the server runs against a fake Langfuse started here on
 # 127.0.0.1. It answers as Langfuse 4.46.0 in events_only mode (health version,
@@ -135,7 +137,8 @@ INTENTS = [
         # so the cost sits on the observations view, filtered by traceName.
         "expect": [{"tool": "execute_read", "operationId": "metrics_metrics",
                     "parameters": {}, "query": {"view": "observations", "measure": "totalCost",
-                                                "filter": ["traceName", "checkout"]}}],
+                                                "filter": ["traceName", "checkout"],
+                                                "granularity": "day"}}],
     },
 ]
 
@@ -179,8 +182,9 @@ def start_fake_langfuse():
 
 # --- MCP client over stdio ----------------------------------------------------
 
-class MCPServer:
-    """A minimal MCP client: newline-delimited JSON-RPC over the server's stdio."""
+class MCPSession:
+    """The server process and a minimal MCP client session over its stdio
+    (newline-delimited JSON-RPC)."""
 
     def __init__(self, binary, langfuse_url, workdir):
         # A clean environment: the Anthropic key and the operator's Langfuse
@@ -310,7 +314,10 @@ def metrics_query_matches(raw, want):
     measures = [m.get("measure") for m in query.get("metrics") or [] if isinstance(m, dict)]
     column, value = want["filter"]
     filters = [f for f in query.get("filters") or [] if isinstance(f, dict) and f.get("column") == column]
-    return want["measure"] in measures and any(same_value(f.get("value"), value) for f in filters)
+    time = query.get("timeDimension") if isinstance(query.get("timeDimension"), dict) else {}
+    return (want["measure"] in measures
+            and any(same_value(f.get("value"), value) for f in filters)
+            and time.get("granularity") == want["granularity"])
 
 
 def same_value(got, want):
@@ -357,9 +364,10 @@ def run_intent(server, tools, endpoint, key, model, max_turns, item):
         for use in uses:
             call = {"tool": use["name"], "arguments": use.get("input", {})}
             calls.append(call)
-            if any(matches(call, expected) for expected in item["expect"]):
-                return True, calls
             result = server.request("tools/call", {"name": use["name"], "arguments": use.get("input", {})})
+            # A pass is the expected call that the server also accepts.
+            if not result.get("isError") and any(matches(call, e) for e in item["expect"]):
+                return True, calls
             text = "\n".join(c.get("text", "") for c in result.get("content", []) if c.get("type") == "text")
             results.append({"type": "tool_result", "tool_use_id": use["id"],
                             "content": text, "is_error": bool(result.get("isError"))})
@@ -372,7 +380,9 @@ def build_server(workdir):
         raise SetupError("go is not on PATH; pass --server with a prebuilt binary")
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     binary = os.path.join(workdir, "bin", "langfuse-mcp")
-    subprocess.run(["go", "build", "-o", binary, "./cmd/langfuse-mcp"], cwd=root, check=True)
+    # The Anthropic key stays out of the toolchain's environment too.
+    env = {k: v for k, v in os.environ.items() if not k.startswith("ANTHROPIC_")}
+    subprocess.run(["go", "build", "-o", binary, "./cmd/langfuse-mcp"], cwd=root, env=env, check=True)
     return binary
 
 
@@ -394,7 +404,7 @@ def main():
         try:
             endpoint = anthropic_endpoint()
             binary = args.server or build_server(workdir)
-            server = MCPServer(binary, langfuse_url, workdir)
+            server = MCPSession(binary, langfuse_url, workdir)
             listed = server.request("tools/list", {})["tools"]
             names = {tool["name"] for tool in listed}
             if names != EXPECTED_TOOLS:
