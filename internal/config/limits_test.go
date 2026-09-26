@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -117,4 +118,30 @@ func TestLoadDoesNotWarnAboutTheLimitKeysInTheConfigFile(t *testing.T) {
 	if len(ignored) != 0 {
 		t.Fatalf("ignored keys = %+v, want none", ignored)
 	}
+}
+
+// FuzzLoadLimits checks that Load never panics on a limit value and either
+// refuses it or accepts exactly a whole number in range (go.md: fuzz every
+// config parser).
+func FuzzLoadLimits(f *testing.F) {
+	for _, seed := range []string{"", "1", "30", "64", "65", "60000", "60001", "0", "-1", "+5", "1e3", "abc", "\x00"} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, value string) {
+		cfg, err := load(map[string]string{"LANGFUSE_MCP_RATE_LIMIT": value, "LANGFUSE_MCP_MAX_CONCURRENCY": value}, config.File{})
+		if value == "" {
+			if err != nil || cfg.RateLimit != 0 || cfg.MaxConcurrency != 0 {
+				t.Fatalf("Load(\"\") = %d, %d, %v; want both unset", cfg.RateLimit, cfg.MaxConcurrency, err)
+			}
+			return
+		}
+		n, parseErr := strconv.Atoi(value)
+		valid := parseErr == nil && n >= 1 && n <= 64 // 64 is the tighter of the two ranges
+		if valid != (err == nil) {
+			t.Fatalf("Load(%q) error = %v, want accepted: %v", value, err, valid)
+		}
+		if valid && (cfg.RateLimit != n || cfg.MaxConcurrency != n) {
+			t.Fatalf("Load(%q) = %d, %d; want %d, %d", value, cfg.RateLimit, cfg.MaxConcurrency, n, n)
+		}
+	})
 }

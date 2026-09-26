@@ -203,7 +203,10 @@ type Response struct {
 // *APIError otherwise, or ErrResponseTooLarge, with the Response's Status
 // set, for a 2xx body above MaxResponseBytes. A request that got no answer returns an error wrapping
 // ErrUntrustedCertificate, ErrCertificateRejected, ErrNetwork, ErrTimeout or
-// ErrCanceled. A GET is retried within the deadline: twice with exponential
+// ErrCanceled. A request held by the client's rate limit or concurrency cap
+// past the deadline is never sent and returns ErrThrottled, which wraps
+// ErrTimeout; a held retry returns the failure that caused it instead. Every
+// attempt, retries included, waits on both limits. A GET is retried within the deadline: twice with exponential
 // backoff and jitter on a 5xx or a network failure, once after Retry-After on
 // a 429 (see retries.next). Other methods are never retried: they are not
 // idempotent.
@@ -211,12 +214,18 @@ func (c *Client) Do(ctx context.Context, method, escapedPath string, query url.V
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 	var r retries
+	var last error // the failure that caused the current retry
 	for {
 		resp, err := c.attempt(ctx, method, escapedPath, query)
+		if last != nil && errors.Is(err, ErrThrottled) {
+			// The retry never left: Langfuse's own answer is the useful error.
+			return Response{}, last
+		}
 		wait, retry := r.next(method, err)
 		if !retry || !fits(ctx, wait) || c.wait(ctx, wait) != nil {
 			return resp, err
 		}
+		last = err
 	}
 }
 

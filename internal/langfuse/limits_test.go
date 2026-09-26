@@ -280,3 +280,68 @@ func TestARequestWaitingForASlotPastItsDeadlineReturnsAThrottledTimeoutWithoutCa
 		t.Fatalf("%d requests, want Langfuse called once", calls.Load())
 	}
 }
+
+// A request queued for a slot takes its rate-limit token only once it has the
+// slot, so queued requests cannot all leave together when slots free up.
+func TestARequestQueuedForASlotTakesNoRateLimitTokenUntilItHasTheSlot(t *testing.T) {
+	t.Parallel()
+	arrived, release := make(chan struct{}), make(chan struct{})
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		arrived <- struct{}{}
+		<-release
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{}`) // a failed write shows up as a client error in the test
+	}))
+	t.Cleanup(fake.Close)
+	clock := newFakeClock()
+	// The next token is due in 10ms, well within the queued request's deadline.
+	client := langfuse.New(pacedOptions(t, fake, clock, 6000, 1))
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil)
+		done <- err
+	}()
+	<-arrived // the only slot is taken, and so is the only token
+	short, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	_, err := client.Do(short, http.MethodGet, "/api/public/traces", nil)
+
+	close(release)
+	if firstErr := <-done; firstErr != nil {
+		t.Fatalf("first Do: %v", firstErr)
+	}
+	if !errors.Is(err, langfuse.ErrThrottled) {
+		t.Fatalf("queued Do error = %v, want ErrThrottled", err)
+	}
+	if waits := clock.recorded(); len(waits) != 0 {
+		t.Fatalf("the queued request waited %v on the rate limit before it had a slot, want no wait", waits)
+	}
+}
+
+// A retry the rate limit cannot let out before the deadline returns the
+// Langfuse answer that caused the retry, not the throttling.
+func TestARetryHeldByTheRateLimitReturnsTheLangfuseErrorThatCausedIt(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = io.WriteString(w, `{"message":"Service Unavailable"}`) // a failed write shows up as a client error in the test
+	}))
+	t.Cleanup(fake.Close)
+	opts := pacedOptions(t, fake, newFakeClock(), 1, 1) // the retry may leave in a minute
+	opts.RequestTimeout = 5 * time.Second
+	client := langfuse.New(opts)
+
+	_, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil)
+
+	var apiErr *langfuse.APIError
+	if !errors.As(err, &apiErr) || apiErr.Status != http.StatusServiceUnavailable || errors.Is(err, langfuse.ErrThrottled) {
+		t.Fatalf("Do error = %v, want the 503 APIError, not a throttling", err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("%d requests, want 1", calls.Load())
+	}
+}
