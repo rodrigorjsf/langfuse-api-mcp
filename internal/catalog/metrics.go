@@ -134,7 +134,7 @@ func metricsQuery(raw string) (string, error) {
 		// refused like 1.5, never rounded, and a non-number (a string, null,
 		// true) is refused outright.
 		literal, isNumber := v.(json.Number)
-		n, ok := intInRange(string(literal), MaxRowLimit)
+		n, ok := parsePageSize(string(literal), MaxRowLimit)
 		if !isNumber || !ok {
 			return "", rangeError{ErrRowLimitOutOfRange,
 				invalidf("parameter query: config.row_limit: want an integer from 1 to %d, got %s", MaxRowLimit, kind(v))}

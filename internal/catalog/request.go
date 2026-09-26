@@ -88,7 +88,7 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 			return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
 		}
 		if o.isListLimit(p) {
-			if _, ok := intInRange(values[0], MaxLimit); !ok {
+			if _, ok := parsePageSize(values[0], MaxLimit); !ok {
 				return Request{}, rangeError{ErrLimitOutOfRange, invalidf("parameter %s: want an integer from 1 to %d, got %s",
 					p.Name, MaxLimit, values[0])}
 			}
@@ -164,8 +164,8 @@ type rangeError struct {
 func (e rangeError) Unwrap() error        { return e.error }
 func (e rangeError) Is(target error) bool { return target == e.sentinel }
 
-// intInRange parses s as a decimal integer from 1 to upper.
-func intInRange(s string, upper int) (int, bool) {
+// parsePageSize parses s as a page size: a decimal integer from 1 to upper.
+func parsePageSize(s string, upper int) (int, bool) {
 	n, err := strconv.Atoi(s)
 	return n, err == nil && n >= 1 && n <= upper
 }
