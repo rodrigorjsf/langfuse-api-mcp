@@ -25,13 +25,14 @@ import (
 // parallel tests only start once the sequential ones are done.
 //
 //nolint:paralleltest // see above
-func TestNoTransportGoroutineSurvivesCloseIdleConnections(t *testing.T) {
+func TestTheClientReleasesItsIdleConnectionsLeavingNoTransportGoroutine(t *testing.T) {
 	for _, tc := range []struct {
-		name  string
-		http2 bool
+		name      string
+		http2     bool
+		wantProto int32
 	}{
-		{name: "HTTP/1.1", http2: false},
-		{name: "HTTP/2", http2: true},
+		{name: "HTTP/1.1", http2: false, wantProto: 1},
+		{name: "HTTP/2", http2: true, wantProto: 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var protoMajor atomic.Int32
@@ -54,8 +55,9 @@ func TestNoTransportGoroutineSurvivesCloseIdleConnections(t *testing.T) {
 			if _, err := client.Do(context.Background(), http.MethodGet, "/api/public/health", nil); err != nil {
 				t.Fatalf("request: %v", err)
 			}
-			if want := map[bool]int32{false: 1, true: 2}[tc.http2]; protoMajor.Load() != want {
-				t.Fatalf("the request used HTTP/%d, want HTTP/%d", protoMajor.Load(), want)
+			// Precondition, not the behaviour under test: the case ran over its protocol.
+			if protoMajor.Load() != tc.wantProto {
+				t.Fatalf("the request used HTTP/%d, want HTTP/%d", protoMajor.Load(), tc.wantProto)
 			}
 
 			client.CloseIdleConnections()
