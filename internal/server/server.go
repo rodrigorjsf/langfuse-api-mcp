@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -183,6 +184,15 @@ const (
 		"and optionally parameters, an object of parameter name to value"
 	parametersHint = "fix the parameter named in the message and call again; each operation's parameters " +
 		"are in the Langfuse API reference: https://api.reference.langfuse.com"
+	// folderNameHint replaces the hint of a 404 or 400 answering a call with
+	// a Folder name: the name may be wrong, or the %2F may not have reached
+	// Langfuse intact. The runs-route claim is lifted once langfuse/langfuse#13933
+	// is fixed (#49).
+	folderNameHint = "the name has folders, sent with each \"/\" encoded as %2F as Langfuse asks: verify the name " +
+		"(prompts_list and datasets_list list existing ones); a reverse proxy in front of a self-hosted Langfuse " +
+		"may decode %2F before Langfuse sees it (langfuse/langfuse#12720), and then for a prompt, prompts_list " +
+		"with the full name in its name query parameter still finds it; the dataset runs routes " +
+		"(datasets_getRuns, datasets_getRun) currently fail upstream for Folder names (langfuse/langfuse#13933)"
 	writeRefusedHint = "this server changes no data; to read the data instead, use a read operation " +
 		"such as trace_list or trace_get"
 )
@@ -227,6 +237,9 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 	if err != nil {
 		if f, ok := langfuseErrorFields(err, op.ID, ex.redact); ok {
 			a.status = f.HTTPStatus
+			if request.FolderName && (f.HTTPStatus == http.StatusNotFound || f.HTTPStatus == http.StatusBadRequest) {
+				f.Hint = folderNameHint
+			}
 			return errorResult(f)
 		}
 		a.cause = err.Error()

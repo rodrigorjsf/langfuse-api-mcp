@@ -73,10 +73,18 @@ Every call is validated before anything is sent to Langfuse, and a bad call come
 | misses a required parameter, passes an unknown one, or a value of the wrong type or outside the allowed values | `invalid_argument` | `parameter limit: want an integer, got a string` |
 | names a write (POST, PUT, PATCH, DELETE) operation | `invalid_argument` | `… execute_read runs read (GET) operations only` |
 | names an unknown or excluded operation | `operation_not_found` | `unknown operation ID "trace_lst"` (with a hint) |
-| passes a path parameter holding `/`, `\`, `.`/`..`, an `http(s):` URL, a control character, or nothing (prompt names in folders are therefore refused for now: [#33](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/33)) | `invalid_argument` | `parameter traceId: must not contain "/" or "\"…` |
+| passes a path parameter holding `/` (except a Folder name, below), `\`, a `.` or `..` segment, an `http(s):` URL, a control character, or nothing | `invalid_argument` | `parameter traceId: must not contain "/": …` (never the value itself) |
+| passes a Folder name that starts or ends with `/` or holds `//` | `invalid_argument` | `parameter promptName: a Folder name must not start or end with "/" or contain "//"…` |
 | gets a redirect from Langfuse to another scheme, host or port | `redirect_refused` | not followed; the key pair never leaves the configured host |
 
-Path parameters are percent-encoded.
+Path parameters are percent-encoded. Two dots inside a name (`v1..2`) are fine; only a whole `.` or `..` segment is refused.
+
+**Folder names.** Prompts and datasets can live in folders: their name is a Folder name such as `support/triage/system`. Four path parameters accept one: `promptName` of `prompts_get`, and `datasetName` of `datasets_get`, `datasets_getRuns` and `datasets_getRun`. Every `/` is sent as `%2F`, as the Langfuse API reference asks, so `prompts_get` with `folder/sub/name` requests `GET /api/public/v2/prompts/folder%2Fsub%2Fname`. Every other path parameter, including `runName`, still refuses `/`. Known limits, both upstream:
+
+- A reverse proxy in front of a self-hosted Langfuse may decode `%2F` into `/` before Langfuse sees it ([langfuse/langfuse#12720](https://github.com/langfuse/langfuse/issues/12720)); the read then fails with 404. For a prompt, `prompts_list` with the full name in its `name` query parameter still finds it.
+- The dataset runs routes (`datasets_getRuns`, `datasets_getRun`) currently fail for Folder names in Langfuse itself ([langfuse/langfuse#13933](https://github.com/langfuse/langfuse/issues/13933)); a live test for them waits on that fix ([#49](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/49)).
+
+A 404 or 400 answering a call with a Folder name carries a hint naming these cases.
 
 When Langfuse answers with an error, the agent receives a tool error (`isError: true`) with one shape for every failure ([ADR-0008](docs/adr/0008-structured-tool-errors.md)):
 
@@ -329,7 +337,7 @@ Designed against the OWASP Top 10 for LLM Applications (2025 and 2026), the OWAS
 | **Read-only unless you opt in** | Langfuse API keys cannot be made read-only, so the server enforces it. Without `LANGFUSE_MCP_ALLOW_WRITES=true` the write tool is not registered at all. |
 | **No data kept** | Stateless. No cache or database, no files written. |
 | **Your keys stay with the server** | Read only from the server's environment; a config file holding a key stops startup, and the warning for an unknown config-file key names the key (escaped and shortened) but never its value, so a key filed under a misspelled name is not logged. Never accepted from the agent, never logged, never included in results: if Langfuse or the agent echoes a key or the `Authorization` header, it is replaced by `[REDACTED]`. Inside the server the key pair travels as one type that prints as `[REDACTED]` through every format verb, JSON and log call. |
-| **No arbitrary requests** | The agent picks operations from a fixed catalog. It cannot pass URLs or hosts; path parameters that could change the path (`/`, `..`, URLs) are refused. A redirect to another scheme, host or port is refused before it is sent, so your keys never leave the configured host. |
+| **No arbitrary requests** | The agent picks operations from a fixed catalog. It cannot pass URLs or hosts; path parameters that could change the path (`/`, `\`, `.`/`..` segments, URLs) are refused. Only four prompt and dataset name parameters accept `/` for a Folder name, sent encoded as `%2F` so it stays one path segment; `.`/`..` segments, empty segments and a leading or trailing `/` are still refused there. A redirect to another scheme, host or port is refused before it is sent, so your keys never leave the configured host. |
 | **Every change is tested against injection** | Each tool, operation or parameter ships with tests for prompt injection in Langfuse payloads and for dangerous parameters (unknown names, URLs, traversal, control characters, out-of-range values); see the [roadmap security gate](ROADMAP.md#security-gate-every-milestone). |
 | **No local system access** | No shell commands, no file access beyond reading the CA files you configured and the optional [config file](#config-file-non-secret-settings). |
 | **Verified TLS only** | OS store + your CAs, TLS 1.2+, no skip-verify option. |

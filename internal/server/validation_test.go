@@ -97,7 +97,6 @@ func TestExecuteReadRejectsPathParameterValuesThatCouldRedirectTheRequest(t *tes
 		"a/b",
 		"..",
 		".",
-		"trace..1",
 		"../../ingestion",
 		`..\ingestion`,
 		"//evil.example",

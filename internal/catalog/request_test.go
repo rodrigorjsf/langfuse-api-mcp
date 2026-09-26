@@ -12,30 +12,53 @@ import (
 
 // Any value a caller passes as a path parameter either is refused as an
 // invalid parameter or stays one percent-encoded segment of the operation's
-// path: it can never add a segment, climb out of the path or name a host.
+// path: it can never add a segment, a query or a fragment, climb out of the
+// path or name a host. That holds for an ID (sessions_get) and for a Folder
+// name (prompts_get), whose "/" are sent as %2F and whose folders are never
+// empty, "." or "..".
 func FuzzRequestKeepsAPathParameterInsideItsSegment(f *testing.F) {
-	for _, seed := range []string{"trace-1", "a/b", "..", "%2e%2e", "https://evil.example", "//x", `a\b`, "user:42 chat?x#y", "\x00"} {
+	for _, seed := range []string{
+		"trace-1", "a/b", "..", "%2e%2e", "https://evil.example", "//x", `a\b`, "user:42 chat?x#y", "\x00",
+		"folder/sub/name", "a/../b", "a/./b", "/a", "a/", "a//b", "v1..2", "a/%2F/b", "a/b?c#d",
+	} {
 		f.Add(seed)
 	}
-	op, ok := mustLoad(f).Lookup("sessions_get")
-	if !ok {
-		f.Fatal("sessions_get missing from the catalog")
+	cat := mustLoad(f)
+	targets := []struct{ operationID, param, prefix string }{
+		{"sessions_get", "sessionId", "/api/public/sessions/"},
+		{"prompts_get", "promptName", "/api/public/v2/prompts/"},
+	}
+	ops := make([]catalog.Operation, len(targets))
+	for i, tg := range targets {
+		op, ok := cat.Lookup(tg.operationID)
+		if !ok {
+			f.Fatalf("%s missing from the catalog", tg.operationID)
+		}
+		ops[i] = op
 	}
 	f.Fuzz(func(t *testing.T, value string) {
-		req, err := op.Request(map[string]any{"sessionId": value})
-		if err != nil {
-			if !errors.Is(err, catalog.ErrInvalidParameter) {
-				t.Fatalf("Request(%q) error %v does not wrap ErrInvalidParameter", value, err)
+		for i, tg := range targets {
+			req, err := ops[i].Request(map[string]any{tg.param: value})
+			if err != nil {
+				if !errors.Is(err, catalog.ErrInvalidParameter) {
+					t.Fatalf("%s: Request(%q) error %v does not wrap ErrInvalidParameter", tg.operationID, value, err)
+				}
+				continue
 			}
-			return
-		}
-		segment, ok := strings.CutPrefix(req.Path, "/api/public/sessions/")
-		if !ok || strings.Contains(segment, "/") {
-			t.Fatalf("Request(%q) path = %s, want one segment below /api/public/sessions/", value, req.Path)
-		}
-		decoded, err := url.PathUnescape(segment)
-		if err != nil || decoded != value || decoded == ".." || decoded == "." {
-			t.Fatalf("Request(%q) segment %q decodes to %q (%v)", value, segment, decoded, err)
+			segment, ok := strings.CutPrefix(req.Path, tg.prefix)
+			if !ok || strings.ContainsAny(segment, "/?#") || len(req.Query) != 0 {
+				t.Fatalf("%s: Request(%q) = %s?%s, want one segment below %s and no query",
+					tg.operationID, value, req.Path, req.Query.Encode(), tg.prefix)
+			}
+			decoded, err := url.PathUnescape(segment)
+			if err != nil || decoded != value {
+				t.Fatalf("%s: Request(%q) segment %q decodes to %q (%v)", tg.operationID, value, segment, decoded, err)
+			}
+			for folder := range strings.SplitSeq(decoded, "/") {
+				if folder == "" || folder == "." || folder == ".." {
+					t.Fatalf("%s: Request(%q) accepted an empty, \".\" or \"..\" segment", tg.operationID, value)
+				}
+			}
 		}
 	})
 }
