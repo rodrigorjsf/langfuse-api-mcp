@@ -15,6 +15,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 // Options configures a Client.
@@ -22,9 +24,8 @@ type Options struct {
 	// Host is the Langfuse base URL (LANGFUSE_BASE_URL); operation paths
 	// such as /api/public/traces are appended to it.
 	Host *url.URL
-	// PublicKey and SecretKey are the key pair sent as HTTP Basic auth.
-	PublicKey string
-	SecretKey string
+	// Keys is the key pair sent as HTTP Basic auth.
+	Keys KeyPair
 	// TLS is the client TLS configuration built from the trust pool; nil uses
 	// Go's defaults.
 	TLS *tls.Config
@@ -34,13 +35,27 @@ type Options struct {
 	// Wait pauses between retries until d has passed or ctx is done; nil
 	// uses a real timer. Tests replace it so backoff never sleeps.
 	Wait func(ctx context.Context, d time.Duration) error
+	// Now is the clock the rate limit reads; nil uses time.Now. Tests replace
+	// it, with Wait, so paced requests never sleep.
+	Now func() time.Time
+	// RateLimit is the most requests the client sends per minute, retries
+	// included (LANGFUSE_MCP_RATE_LIMIT); zero or less means DefaultRateLimit.
+	RateLimit int
+	// MaxConcurrency is the most requests in flight at once
+	// (LANGFUSE_MCP_MAX_CONCURRENCY); zero or less means DefaultMaxConcurrency.
+	MaxConcurrency int
 }
 
 // DefaultRequestTimeout is the deadline of one Do call when Options leaves it zero.
 const DefaultRequestTimeout = 60 * time.Second
 
-// redacted replaces the key pair wherever Options or Client are printed.
-const redacted = "[REDACTED]"
+// Default limits when Options leaves them zero. 30 requests per minute is the
+// Langfuse Cloud Hobby General API limit, the lowest of the plans; whether
+// that is the right default for other deployments is #47.
+const (
+	DefaultRateLimit      = 30
+	DefaultMaxConcurrency = 4
+)
 
 // String keeps the key pair out of %v and %s.
 func (o Options) String() string {
@@ -57,11 +72,15 @@ func (o Options) LogValue() slog.Value { return slog.StringValue(o.String()) }
 // Printing it never shows the key pair.
 type Client struct {
 	host       *url.URL
-	publicKey  string
-	secretKey  string
+	keys       KeyPair
 	httpClient *http.Client
 	timeout    time.Duration
 	wait       func(ctx context.Context, d time.Duration) error
+	now        func() time.Time
+	// limiter paces every request of the client, retries included.
+	limiter *rate.Limiter
+	// slots holds one token per request in flight; its capacity is the cap.
+	slots chan struct{}
 }
 
 // String keeps the key pair out of %v and %s.
@@ -96,9 +115,8 @@ func New(opts Options) *Client {
 		ResponseHeaderTimeout: 30 * time.Second,
 	}
 	c := &Client{
-		host:      opts.Host,
-		publicKey: opts.PublicKey,
-		secretKey: opts.SecretKey,
+		host: opts.Host,
+		keys: opts.Keys,
 		// The per-call deadline is a context deadline set in Do, so that it
 		// also bounds the retries and their waits.
 		httpClient: &http.Client{Transport: transport, CheckRedirect: sameOrigin},
@@ -111,8 +129,29 @@ func New(opts Options) *Client {
 	if c.wait == nil {
 		c.wait = sleep
 	}
+	c.now = opts.Now
+	if c.now == nil {
+		c.now = time.Now
+	}
+	perMinute, concurrency := opts.RateLimit, opts.MaxConcurrency
+	if perMinute <= 0 {
+		perMinute = DefaultRateLimit
+	}
+	if concurrency <= 0 {
+		concurrency = DefaultMaxConcurrency
+	}
+	// The burst equals the cap, so that a full set of parallel requests
+	// leaves at once; the rate then paces the rest.
+	c.limiter = rate.NewLimiter(rate.Limit(float64(perMinute)/60), concurrency)
+	c.slots = make(chan struct{}, concurrency)
 	return c
 }
+
+// CloseIdleConnections closes the connections the client keeps open between
+// requests, and the transport goroutines that serve them; requests in flight
+// are not interrupted, and a later request opens a new connection. The server
+// calls it on shutdown; tests call it so that no goroutine outlives them.
+func (c *Client) CloseIdleConnections() { c.httpClient.CloseIdleConnections() }
 
 // ErrRedirectRefused marks a request Langfuse redirected to another scheme,
 // host or port: the client never follows it, so the key pair is never sent
@@ -171,7 +210,10 @@ type Response struct {
 // *APIError otherwise, or ErrResponseTooLarge, with the Response's Status
 // set, for a 2xx body above MaxResponseBytes. A request that got no answer returns an error wrapping
 // ErrUntrustedCertificate, ErrCertificateRejected, ErrNetwork, ErrTimeout or
-// ErrCanceled. A GET is retried within the deadline: twice with exponential
+// ErrCanceled. A request held by the client's rate limit or concurrency cap
+// past the deadline is never sent and returns ErrThrottled, which wraps
+// ErrTimeout; a held retry returns the failure that caused it instead. Every
+// attempt, retries included, waits on both limits. A GET is retried within the deadline: twice with exponential
 // backoff and jitter on a 5xx or a network failure, once after Retry-After on
 // a 429 (see retries.next). Other methods are never retried: they are not
 // idempotent.
@@ -179,17 +221,33 @@ func (c *Client) Do(ctx context.Context, method, escapedPath string, query url.V
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 	var r retries
+	var last error // the failure that caused the current retry
 	for {
 		resp, err := c.attempt(ctx, method, escapedPath, query)
+		if last != nil && errors.Is(err, ErrThrottled) {
+			// The retry never left: Langfuse's own answer is the useful error.
+			return Response{}, last
+		}
 		wait, retry := r.next(method, err)
 		if !retry || !fits(ctx, wait) || c.wait(ctx, wait) != nil {
 			return resp, err
 		}
+		last = err
 	}
 }
 
-// attempt makes one attempt of Do.
+// attempt makes one attempt of Do, within the client's limits.
 func (c *Client) attempt(ctx context.Context, method, escapedPath string, query url.Values) (Response, error) {
+	release, err := c.acquire(ctx)
+	if err != nil {
+		return Response{}, err
+	}
+	defer release()
+	return c.send(ctx, method, escapedPath, query)
+}
+
+// send sends one request and reads its answer.
+func (c *Client) send(ctx context.Context, method, escapedPath string, query url.Values) (Response, error) {
 	u := *c.host
 	u.RawPath = strings.TrimSuffix(c.host.EscapedPath(), "/") + escapedPath
 	path, err := url.PathUnescape(u.RawPath)
@@ -203,7 +261,7 @@ func (c *Client) attempt(ctx context.Context, method, escapedPath string, query 
 	if err != nil {
 		return Response{}, fmt.Errorf("build request: %w", err)
 	}
-	req.SetBasicAuth(c.publicKey, c.secretKey)
+	req.SetBasicAuth(c.keys.reveal())
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.httpClient.Do(req)

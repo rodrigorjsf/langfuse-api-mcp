@@ -5,11 +5,11 @@ package server
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -63,25 +63,16 @@ const executeReadTitle = "Run a Langfuse read operation"
 
 // Secrets are the credentials the server never lets reach a tool result, a
 // tool error or a log line: the Langfuse key pair, and so the Authorization
-// header built from it.
+// header built from it. Printing Secrets never shows them: the KeyPair
+// redacts itself.
 type Secrets struct {
-	PublicKey, SecretKey string
+	Keys langfuse.KeyPair
 }
-
-// String keeps the key pair out of %v and %s.
-func (Secrets) String() string { return "server.Secrets{" + sanitize.Redacted + "}" }
-
-// GoString keeps the key pair out of %#v.
-func (s Secrets) GoString() string { return s.String() }
-
-// LogValue keeps the key pair out of slog.
-func (s Secrets) LogValue() slog.Value { return slog.StringValue(s.String()) }
 
 // redactor returns the Redactor for the key pair, its Basic auth value and
 // the Authorization header; any other Langfuse key is redacted too.
 func (s Secrets) redactor() sanitize.Redactor {
-	basic := base64.StdEncoding.EncodeToString([]byte(s.PublicKey + ":" + s.SecretKey))
-	return sanitize.NewRedactor(s.PublicKey, s.SecretKey, basic, "Basic "+basic)
+	return sanitize.NewRedactor(s.Keys.RedactionValues()...)
 }
 
 // New returns the MCP server exposing execute_read over the catalog. The tool
@@ -175,6 +166,17 @@ func decodeExecuteReadInput(raw json.RawMessage, r sanitize.Redactor) (executeRe
 	return in, nil
 }
 
+// folderNameHintFor returns the hint of a 404 or 400 answering a call with a
+// Folder name. An operation_unavailable hint names the deployment's version
+// or family (ADR-0012) and is kept, followed by the Folder-name hint; the
+// Folder-name hint replaces the generic not-found or bad-request one.
+func folderNameHintFor(f toolErrorFields) string {
+	if f.Code == errorUnavailableOperation {
+		return f.Hint + "; or, since " + folderNameHint
+	}
+	return folderNameHint
+}
+
 // maxEchoed bounds how much of a caller-supplied name an error repeats.
 const maxEchoed = 64
 
@@ -193,6 +195,15 @@ const (
 		"and optionally parameters, an object of parameter name to value"
 	parametersHint = "fix the parameter named in the message and call again; each operation's parameters " +
 		"are in the Langfuse API reference: https://api.reference.langfuse.com"
+	// folderNameHint replaces the hint of a 404 or 400 answering a call with
+	// a Folder name: the name may be wrong, or the %2F may not have reached
+	// Langfuse intact. The runs-route claim is lifted once langfuse/langfuse#13933
+	// is fixed (#49).
+	folderNameHint = "the name has folders, sent with each \"/\" encoded as %2F as Langfuse asks: verify the name " +
+		"(prompts_list and datasets_list list existing ones); a reverse proxy in front of a self-hosted Langfuse " +
+		"may decode %2F before Langfuse sees it (langfuse/langfuse#12720), and then for a prompt, prompts_list " +
+		"with the full name in its name query parameter still finds it; the dataset runs routes " +
+		"(datasets_getRuns, datasets_getRun) currently fail upstream for Folder names (langfuse/langfuse#13933)"
 	writeRefusedHint = "this server changes no data; to read the data instead, use a read operation " +
 		"such as trace_list or trace_get"
 )
@@ -219,19 +230,17 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 			" operation; execute_read runs read (GET) operations only", writeRefusedHint, op.ID)
 	}
 	request, err := op.Request(in.Parameters)
-	if errors.Is(err, catalog.ErrLimitOutOfRange) {
-		return toolError(errorInvalidArgument, err.Error(), "use a limit from 1 to "+strconv.Itoa(catalog.MaxLimit)+
-			" and page through the rest (page, or cursor from meta.cursor); without a limit the server asks for "+
-			strconv.Itoa(catalog.DefaultLimit), op.ID)
-	}
 	if err != nil {
-		return toolError(errorInvalidArgument, err.Error(), parametersHint, op.ID)
+		return toolError(errorInvalidArgument, err.Error(), parametersHintFor(err), op.ID)
 	}
 	resp, err := ex.client.Do(ctx, request.Method, request.Path, request.Query)
 	a.status, a.bytes = resp.Status, len(resp.Body)
 	if err != nil {
 		if f, ok := langfuseErrorFields(err, op.ID, ex.redact); ok {
 			a.status = f.HTTPStatus
+			if request.FolderName && (f.HTTPStatus == http.StatusNotFound || f.HTTPStatus == http.StatusBadRequest) {
+				f.Hint = folderNameHintFor(f)
+			}
 			return errorResult(f)
 		}
 		a.cause = err.Error()
@@ -243,4 +252,21 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 		return failure(op.ID, err) // unreachable: the client returns valid JSON only
 	}
 	return jsonResult(sanitize.Wrap(op.ID, payload), false)
+}
+
+// parametersHintFor is the hint for a parameter the catalog refused: a page
+// size out of range gets how to page instead, anything else the generic
+// parametersHint.
+func parametersHintFor(err error) string {
+	switch {
+	case errors.Is(err, catalog.ErrLimitOutOfRange):
+		return "use a limit from 1 to " + strconv.Itoa(catalog.MaxLimit) +
+			" and page through the rest (page, or cursor from meta.cursor); without a limit the server asks for " +
+			strconv.Itoa(catalog.DefaultLimit)
+	case errors.Is(err, catalog.ErrRowLimitOutOfRange):
+		return "set config.row_limit in the query JSON to an integer from 1 to " +
+			strconv.Itoa(catalog.MaxRowLimit) + ", or leave it out and the server asks for " +
+			strconv.Itoa(catalog.DefaultRowLimit) + "; for fewer rows, narrow the time window or add filters"
+	}
+	return parametersHint
 }

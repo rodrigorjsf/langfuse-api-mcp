@@ -54,6 +54,12 @@ type Config struct {
 	AmbientInFile Ambient
 	// Connection is the Langfuse host and key pair.
 	Connection Connection
+	// RateLimit is the most Langfuse requests per minute; 0 when unset, so
+	// the Langfuse client's default applies.
+	RateLimit int
+	// MaxConcurrency is the most Langfuse requests in flight at once; 0 when
+	// unset, so the Langfuse client's default applies.
+	MaxConcurrency int
 }
 
 // Ambient holds the values of the ambient CA source variables; "" when unset.
@@ -135,11 +141,12 @@ func ReadFile() (File, error) {
 // environment in production, a literal map in tests), then from file for every
 // setting env leaves unset. An empty value counts as unset. It fails, naming
 // the variable, on a value it cannot parse and when the host or a key is
-// missing.
-func Load(env map[string]string, file File) (Config, error) {
-	fromFile, err := parseFile(file)
+// missing. It also returns the config file lines whose key is not a known
+// setting (#26), so the caller can warn about them; they never stop startup.
+func Load(env map[string]string, file File) (Config, []IgnoredKey, error) {
+	fromFile, ignored, err := parseFile(file)
 	if err != nil {
-		return Config{}, err
+		return Config{}, nil, err
 	}
 	setting := func(name string) Setting {
 		if v := env[name]; v != "" {
@@ -165,24 +172,61 @@ func Load(env map[string]string, file File) (Config, error) {
 		ignore, err := strconv.ParseBool(flag.Value)
 		if err != nil && flag.Origin == OriginConfigFile {
 			// File errors never quote content: the file may hold a secret by mistake.
-			return Config{}, fmt.Errorf("config file %s: %s: want true or false", file.Path, EnvIgnoreAmbientCA)
+			return Config{}, nil, fmt.Errorf("config file %s: %s: want true or false", file.Path, EnvIgnoreAmbientCA)
 		}
 		if err != nil {
-			return Config{}, fmt.Errorf("%s=%q: want true or false", EnvIgnoreAmbientCA, flag.Value)
+			return Config{}, nil, fmt.Errorf("%s=%q: want true or false", EnvIgnoreAmbientCA, flag.Value)
 		}
 		cfg.IgnoreAmbientCA = ignore
 	}
-	if cfg.Connection, err = loadConnection(env, fromFile); err != nil {
-		return Config{}, err
+	if cfg.RateLimit, err = loadLimit(setting(EnvRateLimit), EnvRateLimit, maxRateLimit,
+		"requests per minute", file.Path); err != nil {
+		return Config{}, nil, err
 	}
-	return cfg, nil
+	if cfg.MaxConcurrency, err = loadLimit(setting(EnvMaxConcurrency), EnvMaxConcurrency, maxMaxConcurrency,
+		"requests in flight", file.Path); err != nil {
+		return Config{}, nil, err
+	}
+	if cfg.Connection, err = loadConnection(env, fromFile); err != nil {
+		return Config{}, nil, err
+	}
+	return cfg, ignored, nil
 }
 
-// parseFile returns the KEY=VALUE settings of a config file. Unknown keys are
-// kept and ignored by Load, without a warning (see #26). Errors name the
-// file and line number but never quote the line, which could hold a secret.
-func parseFile(file File) (map[string]string, error) {
+// IgnoredKey is a config file line whose key is not a known setting, most
+// likely a misspelling: Load ignores it. It carries no value, which could be a
+// secret filed under a misspelled key name.
+type IgnoredKey struct {
+	// Line is the 1-based line number in the config file.
+	Line int
+	// Name is the key, cut to 64 runes and with control, invisible and bidi
+	// characters escaped (Go string-literal escapes), so it cannot flood,
+	// forge or hide text in a log.
+	Name string
+}
+
+// isKnownFileKey reports whether key is a setting the config file may hold:
+// one Load reads today or one the README documents as Planned, so a documented
+// setting never draws a warning. The Langfuse keys are not: parseFile refuses them.
+func isKnownFileKey(key string) bool {
+	switch key {
+	case EnvCACert, EnvCACertsPath, EnvIgnoreAmbientCA,
+		EnvSSLCertFile, EnvSSLCertDir, EnvNodeExtraCACerts, EnvRequestsCABundle, EnvCurlCABundle,
+		EnvBaseURL, EnvHost, EnvRateLimit, EnvMaxConcurrency,
+		// Planned (README "Certificates and proxy" and "Behavior"); no code reads them yet.
+		// Lower-case proxy spellings are decided with proxy support: see #45.
+		"HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "LANGFUSE_MCP_ALLOW_WRITES", "LANGFUSE_MCP_TRANSPORT":
+		return true
+	}
+	return false
+}
+
+// parseFile returns the KEY=VALUE settings of a config file and the lines whose
+// key is not a known setting. Errors name the file and line number but never
+// quote the line, which could hold a secret.
+func parseFile(file File) (map[string]string, []IgnoredKey, error) {
 	settings := map[string]string{}
+	var ignored []IgnoredKey
 	n := 0
 	content := strings.TrimPrefix(string(file.Content), "\uFEFF") // byte order mark some Windows editors write
 	for line := range strings.Lines(content) {
@@ -193,17 +237,37 @@ func parseFile(file File) (map[string]string, error) {
 		}
 		k, v, ok := strings.Cut(line, "=")
 		if !ok || strings.TrimSpace(k) == "" {
-			return nil, fmt.Errorf("config file %s line %d: expected KEY=VALUE", file.Path, n)
+			return nil, nil, fmt.Errorf("config file %s line %d: expected KEY=VALUE", file.Path, n)
 		}
 		// Accept the dotenv "export KEY=VALUE" form, so it cannot hide a key either.
 		k = strings.TrimSpace(strings.TrimPrefix(k, "export "))
 		for _, secret := range []string{EnvPublicKey, EnvSecretKey} {
 			if strings.EqualFold(k, secret) { // any spelling: a key must never sit in the file
-				return nil, fmt.Errorf("config file %s line %d: %s is not allowed in the config file; "+
+				return nil, nil, fmt.Errorf("config file %s line %d: %s is not allowed in the config file; "+
 					"set it in the environment or in your MCP client's env block", file.Path, n, secret)
 			}
 		}
+		if !isKnownFileKey(k) {
+			ignored = append(ignored, IgnoredKey{Line: n, Name: logSafeKeyName(k)})
+			continue
+		}
 		settings[k] = strings.TrimSpace(v)
 	}
-	return settings, nil
+	return settings, ignored, nil
+}
+
+// maxKeyNameRunes bounds the key name an IgnoredKey carries, so a huge line
+// cannot flood the log.
+const maxKeyNameRunes = 64
+
+// logSafeKeyName returns key cut to maxKeyNameRunes runes (marked with "..."),
+// with every non-printable rune (control, zero-width, bidi, tag characters)
+// and backslash written as a Go string-literal escape.
+func logSafeKeyName(key string) string {
+	cut := ""
+	if runes := []rune(key); len(runes) > maxKeyNameRunes {
+		key, cut = string(runes[:maxKeyNameRunes]), "..."
+	}
+	quoted := strconv.Quote(key)
+	return quoted[1:len(quoted)-1] + cut
 }

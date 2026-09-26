@@ -38,6 +38,9 @@ func connect(t *testing.T, fake *httptest.Server) *mcp.ClientSession {
 	return connectClient(t, langfuse.New(testOptions(t, fake.URL)), slog.New(slog.DiscardHandler))
 }
 
+// testKeys returns the test key pair.
+func testKeys() langfuse.KeyPair { return langfuse.NewKeyPair(testPublicKey, testSecretKey) }
+
 // clientOptions returns the Langfuse client options for the fake Langfuse.
 func clientOptions(t *testing.T, fake *httptest.Server) langfuse.Options {
 	t.Helper()
@@ -52,14 +55,14 @@ func testOptions(t *testing.T, rawURL string) langfuse.Options {
 	if err != nil {
 		t.Fatalf("parse fake Langfuse URL: %v", err)
 	}
-	return langfuse.Options{Host: host, PublicKey: testPublicKey, SecretKey: testSecretKey}
+	return langfuse.Options{Host: host, Keys: testKeys()}
 }
 
 // connectClient starts the server with the given Langfuse client and logger
 // and returns a connected MCP client session.
 func connectClient(t *testing.T, client *langfuse.Client, log *slog.Logger) *mcp.ClientSession {
 	t.Helper()
-	return connectServer(t, client, log, server.Secrets{PublicKey: testPublicKey, SecretKey: testSecretKey})
+	return connectServer(t, client, log, server.Secrets{Keys: testKeys()})
 }
 
 // connectServer starts the server with the real catalog, the given Langfuse

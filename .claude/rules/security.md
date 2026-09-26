@@ -5,7 +5,9 @@ Full risk→control mapping with sources: `docs/research/security.md`. Cite OWAS
 **Credentials**
 - Langfuse keys come only from the server's environment/config — never from tool arguments, never forwarded from the MCP client (no token passthrough). Langfuse keys cannot be read-only, so the server is the only write gate.
 - The config file (ADR-0011) must never hold keys: reject `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` found there with a startup error; tests prove it.
+- An unknown config-file key only draws a startup warning naming file, line and key (escaped, cut to 64 runes), never its value (#26); tests prove it.
 - Redact `Authorization`, `sk-lf-…`, `pk-lf-…` and the HTTP bearer token from logs, errors and tool output.
+- After startup the key pair travels only as `langfuse.KeyPair`, which renders `[REDACTED]` in fmt, JSON and slog; never copy the keys into plain `string` fields.
 
 **Write gating** (ADR-0003)
 - `execute_read` accepts GET operation IDs only. `execute_write` is not registered unless `LANGFUSE_MCP_ALLOW_WRITES=true`. Tests must prove both.
@@ -17,9 +19,9 @@ Full risk→control mapping with sources: `docs/research/security.md`. Cite OWAS
 
 **Requests to Langfuse** (SSRF / injection)
 - Base URL comes only from operator config; `https` required except loopback hosts.
-- Model input selects an operation ID + params; every value is checked against the operation schema and unknown params are rejected; reject absolute URLs, schemes, hosts, `//`, `.`/`..` segments, `/` and `\` in path params (folder names that need `/`: #33); percent-encode path params.
+- Model input selects an operation ID + params; every value is checked against the operation schema and unknown params are rejected; reject absolute URLs, schemes, hosts, `//`, `.`/`..` segments, `/` and `\` in path params; percent-encode path params. `/` is accepted only for a Folder name on the static, fail-closed allow-list of `(operationId, parameter)` in `internal/catalog` (`prompts_get`/`promptName`, `datasets_get`/`datasetName`, `datasets_getRuns`/`datasetName`, `datasets_getRun`/`datasetName`), sent as `%2F`, with no empty, `.` or `..` segment; a refusal message never contains the value (#33).
 - Custom `CheckRedirect`: refuse any redirect that changes scheme, host, or port (Go forwards `Authorization` on same-host and subdomain redirects).
-- Timeouts, concurrency cap, rate limit, max response bytes read, max tool-result bytes returned (truncate with a marker + pagination hint); default and cap `limit` on list operations.
+- Timeouts, concurrency cap and rate limit (one shared per process, retries included, set only by `LANGFUSE_MCP_RATE_LIMIT`/`LANGFUSE_MCP_MAX_CONCURRENCY`), max response bytes read, max tool-result bytes returned (truncate with a marker + pagination hint); default and cap `limit` on list operations, and `config.row_limit` in the metrics `query` JSON (default 100, refuse outside 1..1000; the JSON is bounded to 16 KiB and depth 10, known top-level keys and their types only, re-encoded before it is sent).
 
 **Tool results** (LLM01:2025/2026, MCP06:2025)
 - Langfuse payloads are untrusted data: wrap them in a labelled envelope; strip invisible/bidi Unicode (U+E0000–E007F, zero-width, bidi overrides) and control chars; never render HTML/Markdown from them; never echo them unescaped into error text.

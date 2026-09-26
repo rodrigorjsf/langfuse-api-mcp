@@ -1,14 +1,17 @@
 package server_test
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse"
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/server"
 )
 
 // Seam S1: the key pair and the Authorization header never reach the agent or
@@ -89,4 +92,23 @@ func partOf(secret, text string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func TestPrintingTheServerSecretsNeverShowsTheKeyPair(t *testing.T) {
+	t.Parallel()
+	secrets := server.Secrets{Keys: testKeys()}
+
+	var out bytes.Buffer
+	fmt.Fprintf(&out, "%v %+v %#v %s", secrets, secrets, secrets, secrets)
+	if err := json.NewEncoder(&out).Encode(secrets); err != nil {
+		t.Fatal(err)
+	}
+	slog.New(slog.NewJSONHandler(&out, nil)).Info("x", "secrets", secrets)
+	slog.New(slog.NewTextHandler(&out, nil)).Info("x", "secrets", secrets)
+
+	for form, secret := range plantedSecrets() {
+		if strings.Contains(out.String(), secret) {
+			t.Fatalf("printed server.Secrets leak the %s:\n%s", form, out.String())
+		}
+	}
 }

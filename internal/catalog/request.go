@@ -18,6 +18,9 @@ type Request struct {
 	// Path is the operation's path with every path parameter percent-encoded.
 	Path  string
 	Query url.Values
+	// FolderName is set when a path parameter holds a Folder name: a value
+	// with "/" on a folder-capable parameter, sent as %2F.
+	FolderName bool
 }
 
 // ErrInvalidParameter marks every error Request returns: the caller's
@@ -85,15 +88,23 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 			return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
 		}
 		if o.isListLimit(p) {
-			if n, err := strconv.Atoi(values[0]); err != nil || n < 1 || n > MaxLimit {
-				return Request{}, limitError{invalidf("parameter %s: want an integer from 1 to %d, got %s",
+			if _, ok := parsePageSize(values[0], MaxLimit); !ok {
+				return Request{}, rangeError{ErrLimitOutOfRange, invalidf("parameter %s: want an integer from 1 to %d, got %s",
 					p.Name, MaxLimit, values[0])}
 			}
 		}
+		if o.isMetricsQuery(p) {
+			q, err := metricsQuery(values[0])
+			if err != nil {
+				return Request{}, err
+			}
+			values = []string{q}
+		}
 		if p.In == "path" {
-			if err := safePathValue(values[0]); err != nil {
+			if err := safePathValue(values[0], o.takesFolderName(p)); err != nil {
 				return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
 			}
+			req.FolderName = req.FolderName || strings.Contains(values[0], "/")
 			req.Path = strings.ReplaceAll(req.Path, "{"+p.Name+"}", url.PathEscape(values[0]))
 			continue
 		}
@@ -106,39 +117,62 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 
 // safePathValue refuses a path parameter value that could change which
 // resource is requested or where the request goes, even before it is
-// percent-encoded: an empty value, a path separator (which also covers "//"
-// and "scheme://host"), a "." or ".." segment, a control character, or a leading
-// http/https scheme. Other "name:" prefixes pass on purpose: IDs such as
-// "user:42" are legitimate, and after the "/" refusal and percent-encoding a
+// percent-encoded: an empty value, a "\\", a "/" (unless the parameter takes
+// a Folder name), a "." or ".." segment, a control character, or a leading
+// http/https scheme. The messages name the rule, never the value.
+//
+// A Folder name may hold "/" between non-empty segments, which rules out a
+// leading or trailing "/" and "//" (so also "scheme://host"); url.PathEscape
+// then sends every "/" as %2F, inside one path segment. Two dots inside a
+// segment ("v1..2") are harmless and pass. Other "name:" prefixes pass on
+// purpose: IDs such as "user:42" are legitimate, and after percent-encoding a
 // scheme cannot name a host.
-func safePathValue(v string) error {
+func safePathValue(v string, folderName bool) error {
 	lower := strings.ToLower(v)
 	switch {
 	case v == "":
 		return errors.New("must not be empty")
-	case strings.ContainsAny(v, `/\`):
-		// Prompt names in folders contain "/" and are refused for now (see #33).
-		return errors.New(`must not contain "/" or "\": a path parameter is a single ID or name`)
-	case v == ".", strings.Contains(v, ".."):
-		return errors.New(`must not be "." or contain "..": those are relative path segments`)
+	case strings.Contains(v, `\`):
+		return errors.New(`must not contain "\"`)
+	case strings.Contains(v, "/") && !folderName:
+		return errors.New(`must not contain "/": a path parameter is a single ID or name`)
 	case strings.HasPrefix(lower, "http:") || strings.HasPrefix(lower, "https:"):
 		return errors.New("must not be a URL: pass the ID or name only")
 	case strings.ContainsFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f }):
 		return errors.New("must not contain control characters")
 	}
+	for segment := range strings.SplitSeq(v, "/") {
+		switch segment {
+		case "":
+			return errors.New(`a Folder name must not start or end with "/" or contain "//": ` +
+				`its folders and name are non-empty segments separated by single "/"`)
+		case ".", "..":
+			return errors.New(`must not be or contain a "." or ".." segment: those are relative path segments`)
+		}
+	}
 	return nil
 }
 
-// limitError is a limit outside 1..MaxLimit; it matches ErrLimitOutOfRange
-// and, through the error it wraps, ErrInvalidParameter.
-type limitError struct{ error }
+// rangeError is a page size outside its range (limit or config.row_limit);
+// it matches its sentinel and, through the error it wraps,
+// ErrInvalidParameter.
+type rangeError struct {
+	sentinel error
+	error
+}
 
-func (e limitError) Unwrap() error      { return e.error }
-func (limitError) Is(target error) bool { return target == ErrLimitOutOfRange }
+func (e rangeError) Unwrap() error        { return e.error }
+func (e rangeError) Is(target error) bool { return target == e.sentinel }
+
+// parsePageSize parses s as a page size: a decimal integer from 1 to upper.
+func parsePageSize(s string, upper int) (int, bool) {
+	n, err := strconv.Atoi(s)
+	return n, err == nil && n >= 1 && n <= upper
+}
 
 // isListLimit reports whether p is the page size of a list operation: the
-// "limit" query parameter of a read. The metrics row_limit inside a JSON query
-// is not covered (see #35).
+// "limit" query parameter of a read. The metrics operations bound their page
+// size as config.row_limit inside their JSON query instead (metricsQuery).
 func (o Operation) isListLimit(p Param) bool {
 	return o.IsRead() && p.In == "query" && p.Name == "limit"
 }

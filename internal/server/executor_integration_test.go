@@ -53,8 +53,11 @@ func liveSession(t *testing.T) *mcp.ClientSession {
 	if err != nil {
 		t.Fatalf("%s is not a URL: %v", envTestBaseURL, err)
 	}
-	keys := server.Secrets{PublicKey: os.Getenv(envTestPublicKey), SecretKey: os.Getenv(envTestSecretKey)}
-	client := langfuse.New(langfuse.Options{Host: host, PublicKey: keys.PublicKey, SecretKey: keys.SecretKey})
+	keys := server.Secrets{Keys: langfuse.NewKeyPair(os.Getenv(envTestPublicKey), os.Getenv(envTestSecretKey))}
+	client := langfuse.New(langfuse.Options{Host: host, Keys: keys.Keys})
+	// Registered before connectServer's cleanups, so it runs after the session
+	// closes: no idle connection outlives the test to trip TestMain's leak check.
+	t.Cleanup(client.CloseIdleConnections)
 	return connectServer(t, client, slog.New(slog.DiscardHandler), keys)
 }
 

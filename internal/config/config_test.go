@@ -1,9 +1,12 @@
 package config_test
 
 import (
+	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/config"
 )
@@ -57,7 +60,8 @@ func mustLoad(t *testing.T, env map[string]string, file config.File) config.Conf
 // load calls config.Load with a valid connection environment (host and key
 // pair) plus env, so each test sets only the settings it asserts on.
 func load(env map[string]string, file config.File) (config.Config, error) {
-	return config.Load(connectionEnv(env), file)
+	cfg, _, err := config.Load(connectionEnv(env), file)
+	return cfg, err
 }
 
 func fromEnv(value string) config.Setting {
@@ -199,7 +203,8 @@ func TestLoadReadsAConfigFileSavedByAWindowsEditor(t *testing.T) {
 
 // FuzzLoadConfigFile checks that any config file content either loads or fails
 // with one of the two fixed error shapes, which name the file, the line number
-// and at most a key variable, so the content (possibly a secret) is never quoted.
+// and at most a key variable, so the content (possibly a secret) is never quoted,
+// and that every ignored key name it reports holds only printable runes.
 func FuzzLoadConfigFile(f *testing.F) {
 	f.Add("LANGFUSE_CA_CERT=/etc/corp/root.pem\n# comment\n\n")
 	f.Add("\uFEFFLANGFUSE_CA_CERTS_PATH=C:\\corp\\certs\r\n")
@@ -211,9 +216,14 @@ func FuzzLoadConfigFile(f *testing.F) {
 		`set it in the environment or in your MCP client's env block)$|` +
 		`^config file ` + path + `: LANGFUSE_MCP_IGNORE_AMBIENT_CA: want true or false$`)
 	f.Fuzz(func(t *testing.T, content string) {
-		_, err := load(map[string]string{}, configFile(content))
+		_, ignored, err := config.Load(connectionEnv(nil), configFile(content))
 		if err != nil && !shape.MatchString(err.Error()) {
 			t.Fatalf("error %q is not one of the fixed shapes", err)
+		}
+		for _, k := range ignored {
+			if i := strings.IndexFunc(k.Name, func(r rune) bool { return !unicode.IsPrint(r) }); i >= 0 {
+				t.Fatalf("ignored key %q holds an unescaped non-printable rune at byte %d", k.Name, i)
+			}
 		}
 	})
 }
@@ -297,4 +307,104 @@ func FuzzLoad(f *testing.F) {
 			t.Fatalf("Load(\"\") = %+v, %v; want the flag unset", cfg, err)
 		}
 	})
+}
+
+func TestLoadReportsAnUnknownConfigFileKeyWithItsLineNumber(t *testing.T) {
+	t.Parallel()
+	content := "# corporate CA\n" +
+		"LANGFUSE_CA_CRT=/x.pem\n" +
+		"LANGFUSE_CA_CERT=/etc/corp/root.pem\n"
+
+	_, ignored, err := config.Load(connectionEnv(nil), configFile(content))
+
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	want := []config.IgnoredKey{{Line: 2, Name: "LANGFUSE_CA_CRT"}}
+	if !slices.Equal(ignored, want) {
+		t.Fatalf("ignored keys = %+v, want %+v", ignored, want)
+	}
+}
+
+func TestLoadAcceptsEveryKnownConfigFileKeyWithoutReportingIt(t *testing.T) {
+	t.Parallel()
+	// Every setting the file accepts today, plus those the README documents as Planned.
+	known := []string{
+		"LANGFUSE_CA_CERT", "LANGFUSE_CA_CERTS_PATH", "LANGFUSE_MCP_IGNORE_AMBIENT_CA",
+		"SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
+		"LANGFUSE_BASE_URL", "LANGFUSE_HOST", "LANGFUSE_MCP_RATE_LIMIT", "LANGFUSE_MCP_MAX_CONCURRENCY",
+		"HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY",
+		"LANGFUSE_MCP_ALLOW_WRITES", "LANGFUSE_MCP_TRANSPORT",
+	}
+	var content strings.Builder
+	for _, key := range known {
+		content.WriteString("export " + key + "=\n") // empty values: no setting is acted on
+	}
+
+	_, ignored, err := config.Load(connectionEnv(nil), configFile(content.String()))
+
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(ignored) != 0 {
+		t.Fatalf("ignored keys = %+v, want none for known settings", ignored)
+	}
+}
+
+func TestLoadNeverReportsTheValueOfAnUnknownConfigFileKey(t *testing.T) {
+	t.Parallel()
+	// A secret filed under a misspelled key name must not reach the warning.
+	content := "LANGFUSE_SECRT_KEY=sk-lf-do-not-log\n"
+
+	_, ignored, err := config.Load(connectionEnv(nil), configFile(content))
+
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(ignored) != 1 {
+		t.Fatalf("ignored keys = %+v, want one", ignored)
+	}
+	if got := fmt.Sprintf("%+v %#v", ignored, ignored); strings.Contains(got, "sk-lf-do-not-log") {
+		t.Fatalf("ignored key report %s holds the value", got)
+	}
+}
+
+func TestLoadEscapesControlAndBidiCharactersInAnUnknownConfigFileKey(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct{ key, want string }{
+		"right-to-left override": {"LANGFUSE_\u202eCA_CERT", `LANGFUSE_\u202eCA_CERT`},
+		"zero-width space":       {"LANGFUSE_CA\u200b_CERT", `LANGFUSE_CA\u200b_CERT`},
+		"escape sequence":        {"LANGFUSE_\x1b[31mCA", `LANGFUSE_\x1b[31mCA`},
+		"tag character":          {"KEY\U000E0041", `KEY\U000e0041`},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, ignored, err := config.Load(connectionEnv(nil), configFile(tc.key+"=v\n"))
+
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			want := []config.IgnoredKey{{Line: 1, Name: tc.want}}
+			if !slices.Equal(ignored, want) {
+				t.Fatalf("ignored keys = %+v, want %+v", ignored, want)
+			}
+		})
+	}
+}
+
+func TestLoadShortensAnOversizedUnknownConfigFileKey(t *testing.T) {
+	t.Parallel()
+	key := strings.Repeat("K", 10000)
+
+	_, ignored, err := config.Load(connectionEnv(nil), configFile(key+"=v\n"))
+
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	want := []config.IgnoredKey{{Line: 1, Name: strings.Repeat("K", 64) + "..."}}
+	if !slices.Equal(ignored, want) {
+		t.Fatalf("ignored keys = %+v, want %+v", ignored, want)
+	}
 }

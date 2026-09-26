@@ -304,3 +304,56 @@ func TestStartupLoadsCASourcesNamedInTheConfigFileAsExplicitSources(t *testing.T
 		t.Fatalf("logged sources = %v, want %v", got, want)
 	}
 }
+
+func TestStartupWarnsNamingTheFileLineAndKeyOfAnUnknownConfigFileKey(t *testing.T) {
+	t.Parallel()
+
+	stderr, err := runExecutableWithConfigFile(t, "LANGFUSE_CA_CRT=/x.pem\n", "LANGFUSE_CA_CERT=", "LANGFUSE_CA_CERTS_PATH=")
+	if err != nil {
+		t.Fatalf("executable did not exit 0: %v\nstderr:\n%s", err, stderr)
+	}
+
+	for _, line := range logLines(t, stderr) {
+		if line["level"] != "WARN" || line["key"] != "LANGFUSE_CA_CRT" {
+			continue
+		}
+		file, ok := line["file"].(string)
+		if !ok || !strings.HasSuffix(file, filepath.Join("langfuse-mcp", "config.env")) || line["line"] != float64(1) {
+			t.Fatalf("warning %v does not name the config file and line 1", line)
+		}
+		return
+	}
+	t.Fatalf("no warning naming LANGFUSE_CA_CRT in the startup log:\n%s", stderr)
+}
+
+func TestStartupWarningAboutAnUnknownConfigFileKeyNeverHoldsItsValue(t *testing.T) {
+	t.Parallel()
+
+	stderr, err := runExecutableWithConfigFile(t, "LANGFUSE_SECRT_KEY=sk-lf-do-not-log\n")
+	if err != nil {
+		t.Fatalf("executable did not exit 0: %v\nstderr:\n%s", err, stderr)
+	}
+
+	if bytes.Contains(stderr, []byte("sk-lf-do-not-log")) {
+		t.Fatalf("startup log quotes the config file value:\n%s", stderr)
+	}
+}
+
+func TestStartupFailsNamingAnInvalidRequestLimit(t *testing.T) {
+	t.Parallel()
+	for _, setting := range []string{"LANGFUSE_MCP_RATE_LIMIT=0", "LANGFUSE_MCP_MAX_CONCURRENCY=-1"} {
+		t.Run(setting, func(t *testing.T) {
+			t.Parallel()
+			variable, _, _ := strings.Cut(setting, "=")
+
+			stderr, err := runExecutable(t, setting)
+
+			if err == nil {
+				t.Fatalf("executable exited 0 with %s; stderr:\n%s", setting, stderr)
+			}
+			if !strings.Contains(string(stderr), variable) {
+				t.Fatalf("startup error does not name %s:\n%s", variable, stderr)
+			}
+		})
+	}
+}
