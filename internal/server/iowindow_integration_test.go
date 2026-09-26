@@ -51,13 +51,15 @@ const bulkSpans = 61
 
 // ioSeed is what seedIOWindow created: one trace per age, plus the bulk trace.
 type ioSeed struct {
-	run         string            // unique per run: names and environment carry it
-	environment string            // every seeded span's Langfuse environment
-	traceIDs    map[string]string // by age label
-	bulkTraceID string            // the trace holding the bulkSpans spans
-	spanIDs     map[string]string // by age label
-	now         time.Time         // the time the ages are counted from
+	run         string                // unique per run: names and environment carry it
+	environment string                // every seeded span's Langfuse environment
+	spans       map[string]seededSpan // the single-span traces, by age label
+	bulkTraceID string                // the trace holding the bulkSpans spans
+	now         time.Time             // the time the ages are counted from
 }
+
+// seededSpan is one single-span trace: its trace id and its span id.
+type seededSpan struct{ traceID, spanID string }
 
 // name is the observation name of a seeded span; every bulk span shares one.
 func (s ioSeed) name(label string) string { return s.run + "-" + label }
@@ -113,11 +115,12 @@ func otlpSpan(traceID, spanID, name, env string, start time.Time) map[string]any
 func seedIOWindow(t *testing.T, cs *mcp.ClientSession) ioSeed {
 	t.Helper()
 	run := "it-io-" + randomHex(t, 4)
-	s := ioSeed{run: run, environment: run, traceIDs: map[string]string{}, spanIDs: map[string]string{}, now: time.Now().UTC()}
+	s := ioSeed{run: run, environment: run, spans: map[string]seededSpan{}, now: time.Now().UTC()}
 	var spans []any
 	for label, age := range seededAges() {
-		s.traceIDs[label], s.spanIDs[label] = randomHex(t, 16), randomHex(t, 8)
-		spans = append(spans, otlpSpan(s.traceIDs[label], s.spanIDs[label], s.name(label), s.environment, s.now.Add(-age)))
+		span := seededSpan{traceID: randomHex(t, 16), spanID: randomHex(t, 8)}
+		s.spans[label] = span
+		spans = append(spans, otlpSpan(span.traceID, span.spanID, s.name(label), s.environment, s.now.Add(-age)))
 	}
 	s.bulkTraceID = randomHex(t, 16)
 	for i := range bulkSpans {
@@ -174,8 +177,8 @@ func waitSeeded(t *testing.T, cs *mcp.ClientSession, s ioSeed, want int) {
 func deleteSeededTraces(t *testing.T, s ioSeed) {
 	t.Helper()
 	ids := []string{s.bulkTraceID}
-	for _, id := range s.traceIDs {
-		ids = append(ids, id)
+	for _, span := range s.spans {
+		ids = append(ids, span.traceID)
 	}
 	// t.Context() is already cancelled when cleanups run.
 	status, body := langfuseDirect(context.WithoutCancel(t.Context()), t, http.MethodDelete, "/api/public/traces", map[string]any{"traceIds": ids})
@@ -212,7 +215,7 @@ func TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows(t *testi
 	s := seedIOWindow(t, cs)
 	// idFilter is the observations filter JSON selecting one seeded span by id.
 	idFilter := func(label string) string {
-		f, err := json.Marshal([]map[string]any{{"type": "string", "column": "id", "operator": "=", "value": s.spanIDs[label]}})
+		f, err := json.Marshal([]map[string]any{{"type": "string", "column": "id", "operator": "=", "value": s.spans[label].spanID}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -238,8 +241,8 @@ func TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows(t *testi
 		{"metadata, 14-day window", mergedParams(payloadBy("metadata", "d13_5"), s.window(14)), 1, "metadata"},
 		{"metadata, 15-day window", mergedParams(payloadBy("metadata", "d14_5"), s.window(15)), 1, "metadata"},
 		{"metadata, 30-day window", mergedParams(payloadBy("metadata", "d20"), s.window(30)), 1, "metadata"},
-		{"io, trace id, no window", map[string]any{"fields": "core,io", "traceId": s.traceIDs["d20"]}, 1, "input"},
-		{"io, trace id, 15-day window", mergedParams(map[string]any{"fields": "core,io", "traceId": s.traceIDs["d14_5"]}, s.window(15)), 1, "input"},
+		{"io, trace id, no window", map[string]any{"fields": "core,io", "traceId": s.spans["d20"].traceID}, 1, "input"},
+		{"io, trace id, 15-day window", mergedParams(map[string]any{"fields": "core,io", "traceId": s.spans["d14_5"].traceID}, s.window(15)), 1, "input"},
 		{"io, id filter, no window", map[string]any{"fields": "core,io", "filter": idFilter("d20")}, 1, "input"},
 		{"io, id filter, 15-day window", mergedParams(map[string]any{"fields": "core,io", "filter": idFilter("d14_5")}, s.window(15)), 1, "input"},
 		// The combination the official MCP caps at 50 rows: a date window, the io
