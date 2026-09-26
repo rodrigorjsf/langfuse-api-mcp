@@ -44,7 +44,7 @@ jobs:
           for name in LANGFUSE_TEST_BASE_URL LANGFUSE_TEST_PUBLIC_KEY LANGFUSE_TEST_SECRET_KEY; do
             [ -n "${!name:-}" ] || { echo "::error::$name missing from the self-hosted env file"; exit 1; }
           done
-          go test -race -tags integration -count=1 -v ./...
+          go test -race -tags integration -count=1 -v ./internal/server/
       - name: Langfuse logs
         if: failure()
         run: scripts/langfuse-selfhosted.sh logs 200
@@ -83,4 +83,4 @@ jobs:
           cache-dependency-path: go.mod
       - name: Integration tests
         env: *cloud-secrets
-        run: go test -race -tags integration -count=1 -v ./...
+        run: go test -race -tags integration -count=1 -v ./internal/server/

@@ -11,7 +11,7 @@
 #       run the suite without touching Langfuse Cloud. `down` afterwards.
 # HOW:  scripts/langfuse-selfhosted.sh up [env-file]   (default .env.integration.selfhosted)
 #       set -a; . ./.env.integration.selfhosted; set +a
-#       go test -tags integration -count=1 ./...
+#       go test -tags integration -count=1 ./internal/server/
 #       scripts/langfuse-selfhosted.sh down
 #
 # Needs docker with the compose plugin, curl and ~3 GiB of free RAM; the stack

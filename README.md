@@ -396,7 +396,7 @@ Run it locally against a self-hosted Langfuse (needs Docker with the compose plu
 ```bash
 scripts/langfuse-selfhosted.sh up          # official compose, images pinned by digest; fresh project + keys
 set -a; . ./.env.integration.selfhosted; set +a
-go test -tags integration -count=1 ./...
+go test -tags integration -count=1 ./internal/server/
 scripts/langfuse-selfhosted.sh down        # removes the containers and their volumes
 ```
 
