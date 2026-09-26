@@ -168,8 +168,8 @@ type Response struct {
 // Do sends a request: method, the escaped path below the host (e.g.
 // /api/public/traces/abc) and the query, with Basic auth, under the client's
 // per-call deadline. It returns the response JSON for a 2xx answer and an
-// *APIError otherwise, or ErrResponseTooLarge for a 2xx body above
-// MaxResponseBytes. A request that got no answer returns an error wrapping
+// *APIError otherwise, or ErrResponseTooLarge, with the Response's Status
+// set, for a 2xx body above MaxResponseBytes. A request that got no answer returns an error wrapping
 // ErrUntrustedCertificate, ErrCertificateRejected, ErrNetwork, ErrTimeout or
 // ErrCanceled. A GET is retried within the deadline: twice with exponential
 // backoff and jitter on a 5xx, once after Retry-After on a 429, and twice on a
@@ -226,7 +226,7 @@ func (c *Client) attempt(ctx context.Context, method, escapedPath string, query 
 		return Response{}, fmt.Errorf("read response: %w", classify(err))
 	}
 	if len(body) > MaxResponseBytes {
-		return Response{}, ErrResponseTooLarge
+		return Response{Status: resp.StatusCode}, ErrResponseTooLarge // the status tells what Langfuse answered
 	}
 	if !json.Valid(body) {
 		return Response{}, errors.New("response is not JSON")

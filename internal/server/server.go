@@ -67,6 +67,15 @@ type Secrets struct {
 	PublicKey, SecretKey string
 }
 
+// String keeps the key pair out of %v and %s.
+func (Secrets) String() string { return "server.Secrets{" + sanitize.Redacted + "}" }
+
+// GoString keeps the key pair out of %#v.
+func (s Secrets) GoString() string { return s.String() }
+
+// LogValue keeps the key pair out of slog.
+func (s Secrets) LogValue() slog.Value { return slog.StringValue(s.String()) }
+
 // redactor returns the Redactor for the key pair, its Basic auth value and
 // the Authorization header; any other Langfuse key is redacted too.
 func (s Secrets) redactor() sanitize.Redactor {
@@ -196,7 +205,7 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 		return toolError(errorInvalidArgument, "operation "+op.ID+" is a "+op.Method+
 			" operation; execute_read runs read (GET) operations only", "", op.ID)
 	}
-	r, err := op.Request(in.Parameters)
+	request, err := op.Request(in.Parameters)
 	if errors.Is(err, catalog.ErrLimitOutOfRange) {
 		return toolError(errorInvalidArgument, err.Error(), "use a limit from 1 to "+strconv.Itoa(catalog.MaxLimit)+
 			" and page through the rest (page, or cursor from meta.cursor); without a limit the server asks for "+
@@ -205,7 +214,7 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 	if err != nil {
 		return toolError(errorInvalidArgument, err.Error(), "", op.ID)
 	}
-	resp, err := ex.client.Do(ctx, r.Method, r.Path, r.Query)
+	resp, err := ex.client.Do(ctx, request.Method, request.Path, request.Query)
 	a.status, a.bytes = resp.Status, len(resp.Body)
 	if errors.Is(err, langfuse.ErrRedirectRefused) {
 		return toolError(errorRedirectRefused, "Langfuse answered with a redirect to another scheme, host or port; "+
@@ -225,12 +234,3 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 	}
 	return jsonResult(sanitize.Wrap(op.ID, payload), false)
 }
-
-// String keeps the key pair out of %v and %s.
-func (Secrets) String() string { return "server.Secrets{" + sanitize.Redacted + "}" }
-
-// GoString keeps the key pair out of %#v.
-func (s Secrets) GoString() string { return s.String() }
-
-// LogValue keeps the key pair out of slog.
-func (s Secrets) LogValue() slog.Value { return slog.StringValue(s.String()) }

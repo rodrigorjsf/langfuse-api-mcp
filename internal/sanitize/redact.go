@@ -11,8 +11,8 @@ import (
 const Redacted = "[REDACTED]"
 
 // keyPattern matches any Langfuse API key, the configured pair or not:
-// pk-lf-… and sk-lf-….
-var keyPattern = regexp.MustCompile(`[ps]k-lf-[A-Za-z0-9_-]+`)
+// pk-lf-… and sk-lf-…, not a word that merely ends in "pk" or "sk".
+var keyPattern = regexp.MustCompile(`\b[ps]k-lf-[A-Za-z0-9_-]+`)
 
 // Redactor replaces secrets in text shown to the agent or written to a log.
 // The zero Redactor still redacts every Langfuse API key.

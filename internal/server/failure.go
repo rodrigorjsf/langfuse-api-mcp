@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"strconv"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -55,9 +56,10 @@ func failureFields(err error) toolErrorFields {
 		}
 	case errors.Is(err, langfuse.ErrResponseTooLarge):
 		return toolErrorFields{
-			Code:    errorResponseTooLarge,
-			Message: "the Langfuse response is larger than the 5 MiB this server reads; it was not returned",
-			Hint:    tooLargeHint,
+			Code: errorResponseTooLarge,
+			Message: "the Langfuse response is larger than the " + strconv.Itoa(langfuse.MaxResponseBytes>>20) +
+				" MiB this server reads; it was not returned",
+			Hint: tooLargeHint,
 		}
 	case errors.Is(err, langfuse.ErrNetwork):
 		return toolErrorFields{

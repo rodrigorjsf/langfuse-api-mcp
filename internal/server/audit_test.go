@@ -42,6 +42,8 @@ func TestEveryToolCallLogsExactlyOneAuditLineWithoutThePayload(t *testing.T) {
 			wantStatus: 200, wantBytes: float64(len(payload)), wantMethod: "GET"},
 		"a Langfuse error": {status: http.StatusBadRequest, body: `{"message":"SECRET-PAYLOAD-TEXT"}`, args: traceList,
 			wantStatus: 400, wantMethod: "GET", wantCode: "langfuse_bad_request"},
+		"a response too large to read": {status: http.StatusOK, body: `{"data":"` + strings.Repeat("a", 5<<20) + `"}`,
+			args: traceList, wantStatus: 200, wantMethod: "GET", wantCode: "response_too_large"},
 		"an unknown operation": {status: http.StatusOK, body: payload,
 			args: map[string]any{"operationId": "no_such_operation"}, wantCode: "operation_not_found"},
 	}

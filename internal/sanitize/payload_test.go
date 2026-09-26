@@ -77,10 +77,36 @@ func FuzzWrap(f *testing.F) {
 		if err != nil {
 			return // strconv.Quote is not always JSON
 		}
-		env := sanitize.Wrap("trace_list", clean)
-		got, err := json.Marshal(env)
-		if err != nil || len(got) > sanitize.MaxResultBytes {
-			t.Fatalf("envelope is %d bytes (err %v), want at most %d", len(got), err, sanitize.MaxResultBytes)
+		page := json.RawMessage(`{"data":` + string(clean) + `,"meta":{"cursor":"c"}}`)
+		for _, p := range []json.RawMessage{clean, page} {
+			got, err := json.Marshal(sanitize.Wrap("trace_list", p))
+			if err != nil || len(got) > sanitize.MaxResultBytes {
+				t.Fatalf("envelope is %d bytes (err %v), want at most %d", len(got), err, sanitize.MaxResultBytes)
+			}
+		}
+		if env := sanitize.Wrap("trace_list", page); env.Truncated && !strings.Contains(string(env.Data), `"cursor":"c"`) {
+			t.Fatalf("a truncated page lost its meta: %.200s", env.Data)
 		}
 	})
+}
+
+func TestAKeyThatCollidesAfterCleaningNeverShadowsTheCleanKey(t *testing.T) {
+	t.Parallel()
+	for range 20 { // map iteration order varies between runs
+		got, err := sanitize.Payload(json.RawMessage(`{"a\u200Bb":"hidden","ab":"real","z\u202Ey":"first","z\u200By":"second"}`), sanitize.Redactor{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != `{"ab":"real","zy":"second"}` { // "z\u200By" sorts before "z\u202Ey"
+			t.Fatalf("Payload = %s, want the clean key's value kept", got)
+		}
+	}
+}
+
+func TestRedactReplacesLangfuseKeysButNotWordsThatContainTheirPrefix(t *testing.T) {
+	t.Parallel()
+	got := sanitize.Redactor{}.Redact("key pk-lf-abc123 and a task-lf-name")
+	if got != "key [REDACTED] and a task-lf-name" {
+		t.Fatalf("Redact = %q", got)
+	}
 }

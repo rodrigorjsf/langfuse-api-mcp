@@ -75,35 +75,79 @@ func TestALimitOutsideOneToTheCapIsRefusedWithAHintWithoutCallingLangfuse(t *tes
 	}
 }
 
-func TestAResultAboveTheMaximumReturnedBytesIsTruncatedWithAMarkerAndAHint(t *testing.T) {
-	t.Parallel()
-	row := `{"id":"obs-1","input":"<p>\"quoted\" & long text é</p>"},`
-	body := `{"data":[` + strings.Repeat(row, 5000) + `{"id":"last"}],"meta":{"cursor":"next"}}`
+// truncatedEnvelope is the envelope of a truncated result as the agent reads it.
+type truncatedEnvelope struct {
+	Label     string          `json:"label"`
+	Truncated bool            `json:"truncated"`
+	Hint      string          `json:"hint"`
+	Data      json.RawMessage `json:"data"`
+}
+
+// readTruncated calls operationID against a fake Langfuse answering body and
+// returns the envelope, after checking the result fits 100 KiB.
+func readTruncated(t *testing.T, operationID, body string) truncatedEnvelope {
+	t.Helper()
 	fake, _ := fakeLangfuse(t, http.StatusOK, body)
 	cs := connect(t, fake)
 
-	res := callExecuteRead(t, cs, map[string]any{"operationId": "observations_getMany"})
+	res := callExecuteRead(t, cs, map[string]any{"operationId": operationID, "parameters": map[string]any{"traceId": "t-1"}})
 
-	if res.IsError {
-		t.Fatalf("execute_read returned a tool error: %s", resultText(t, res)[:200])
-	}
 	text := resultText(t, res)
+	if res.IsError {
+		t.Fatalf("execute_read returned a tool error: %s", text[:min(200, len(text))])
+	}
 	if len(text) > 100<<10 {
 		t.Fatalf("result is %d bytes, want at most 102400", len(text))
 	}
-	var env struct {
-		Label     string `json:"label"`
-		Truncated bool   `json:"truncated"`
-		Hint      string `json:"hint"`
-		Data      string `json:"data"`
-	}
+	var env truncatedEnvelope
 	if err := json.Unmarshal([]byte(text), &env); err != nil {
-		t.Fatalf("truncated result is not the envelope with the payload as text: %v", err)
+		t.Fatalf("truncated result is not the envelope: %v", err)
 	}
-	if !env.Truncated || !strings.Contains(env.Hint, "limit") || env.Label == "" ||
-		!strings.HasPrefix(env.Data, `{"data":[{"id":"obs-1"`) || !strings.HasSuffix(env.Data, "… [truncated]") {
-		t.Fatalf("envelope = {truncated: %v, hint: %q, label: %q, data: %q…%q}, want truncated, a hint to narrow "+
-			"the query, the label, and the payload's start ending with the truncation marker",
-			env.Truncated, env.Hint, env.Label, env.Data[:min(40, len(env.Data))], env.Data[max(0, len(env.Data)-20):])
+	if !env.Truncated || !strings.Contains(env.Hint, "limit") || env.Label == "" {
+		t.Fatalf("envelope = {truncated: %v, hint: %q, label: %q}, want truncated with a hint to narrow the query",
+			env.Truncated, env.Hint, env.Label)
+	}
+	return env
+}
+
+func TestAListResultAboveTheMaximumReturnedBytesKeepsTheFirstRowsAndThePaginationMeta(t *testing.T) {
+	t.Parallel()
+	row := `{"id":"obs-1","input":"<p>\"quoted\" & long text é</p>"},`
+	body := `{"data":[` + strings.Repeat(row, 5000) + `{"id":"last"}],"meta":{"cursor":"next"}}`
+
+	env := readTruncated(t, "observations_getMany", body)
+
+	var page struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+		Meta struct {
+			Cursor string `json:"cursor"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal(env.Data, &page); err != nil {
+		t.Fatalf("truncated list is not the Langfuse page shape: %v", err)
+	}
+	if len(page.Data) == 0 || len(page.Data) >= 5001 || page.Data[0].ID != "obs-1" || page.Meta.Cursor != "next" ||
+		!strings.Contains(env.Hint, strconv.Itoa(len(page.Data))+" of 5001") {
+		t.Fatalf("kept %d rows (first %+v), cursor %q, hint %q; want the first rows, fewer than 5001, "+
+			"meta.cursor next and a hint naming how many of 5001 rows are shown",
+			len(page.Data), page.Data[:min(1, len(page.Data))], page.Meta.Cursor, env.Hint)
+	}
+}
+
+func TestAResultAboveTheMaximumReturnedBytesThatIsNotAListIsCutWithAMarker(t *testing.T) {
+	t.Parallel()
+	body := `{"id":"t-1","input":"` + strings.Repeat(`<p>\"long\" & é</p>`, 20000) + `"}`
+
+	env := readTruncated(t, "trace_get", body)
+
+	var data string
+	if err := json.Unmarshal(env.Data, &data); err != nil {
+		t.Fatalf("truncated data is not the payload as text: %v", err)
+	}
+	if !strings.HasPrefix(data, `{"id":"t-1","input":"<p>`) || !strings.HasSuffix(data, "… [truncated]") {
+		t.Fatalf("data = %q…%q, want the payload's start ending with the truncation marker",
+			data[:min(40, len(data))], data[max(0, len(data)-20):])
 	}
 }

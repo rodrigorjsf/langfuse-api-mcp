@@ -3,6 +3,8 @@ package sanitize
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
+	"slices"
 	"strings"
 	"unicode"
 )
@@ -42,8 +44,14 @@ func clean(v any, r Redactor) any {
 		return v
 	case map[string]any:
 		out := make(map[string]any, len(v))
-		for k, item := range v {
-			out[r.Redact(Text(k))] = clean(item, r)
+		// Keys that clean to the same key keep one value, deterministically:
+		// the key that was already clean, else the first in byte order.
+		for _, k := range slices.Sorted(maps.Keys(v)) {
+			key := r.Redact(Text(k))
+			if _, taken := out[key]; taken && key != k {
+				continue
+			}
+			out[key] = clean(v[k], r)
 		}
 		return out
 	}
