@@ -8,7 +8,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
-	"encoding/json"
 	"io"
 	"log"
 	"net"
@@ -121,40 +120,6 @@ func (p *connectProxy) seen() (connects, auths []string) {
 	return append([]string(nil), p.connects...), append([]string(nil), p.auths...)
 }
 
-// toolCall is the part of a tools/call result these tests read.
-type toolCall struct {
-	IsError           bool           `json:"isError"`
-	StructuredContent map[string]any `json:"structuredContent"`
-}
-
-// callTraceGet initializes the session and calls execute_read for a trace.
-func callTraceGet(t *testing.T, s *stdioSession) toolCall {
-	t.Helper()
-	s.send("initialize", map[string]any{
-		"protocolVersion": "2025-06-18", "capabilities": map[string]any{},
-		"clientInfo": map[string]any{"name": "proxy-test", "version": "0"},
-	}, true)
-	s.send("notifications/initialized", map[string]any{}, false)
-	var call toolCall
-	if err := json.Unmarshal(s.send("tools/call", map[string]any{
-		"name": "execute_read", "arguments": map[string]any{
-			"operationId": "trace_get", "parameters": map[string]any{"traceId": "trace-1"},
-		},
-	}, true), &call); err != nil {
-		t.Fatalf("decode tools/call: %v", err)
-	}
-	return call
-}
-
-// stop closes stdin and waits for the executable to exit cleanly.
-func (s *stdioSession) stop() {
-	s.t.Helper()
-	_ = s.stdin.Close() // the exit status below is what matters
-	if err := s.cmd.Wait(); err != nil {
-		s.t.Fatalf("executable did not exit 0 after stdin closed: %v\nstderr:\n%s", err, s.stderr)
-	}
-}
-
 // proxyLogLine returns the startup log line about the proxy.
 func proxyLogLine(t *testing.T, stderr []byte) map[string]any {
 	t.Helper()
@@ -175,7 +140,8 @@ func TestExecutableReachesLangfuseThroughTheProxyInItsEnvironment(t *testing.T) 
 	s := startStdio(t, "LANGFUSE_BASE_URL=https://"+tunnelHost, "LANGFUSE_CA_CERT="+caFile,
 		"HTTPS_PROXY=http://"+user+":"+password+"@"+proxy.url.Host)
 
-	call := callTraceGet(t, s)
+	s.initialize()
+	call := s.callTraceGet()
 	s.stop()
 
 	if call.IsError {
@@ -208,7 +174,8 @@ func TestExecutableBypassesTheProxyForAHostInNoProxy(t *testing.T) {
 	s := startStdio(t, "LANGFUSE_BASE_URL=https://"+tunnelHost, "LANGFUSE_CA_CERT="+caFile,
 		"HTTPS_PROXY="+proxy.url.String(), "NO_PROXY="+tunnelHost)
 
-	call := callTraceGet(t, s)
+	s.initialize()
+	call := s.callTraceGet()
 	s.stop()
 
 	// Bypassed, the executable connects directly, and tunnelHost never resolves.

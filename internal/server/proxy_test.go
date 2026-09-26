@@ -264,3 +264,28 @@ func TestProxyCredentialsAreSentAsBasicProxyAuthAndNeverReachTheResultOrAuditLin
 		}
 	}
 }
+
+// Dangerous parameters: no tool argument selects or changes the proxy. A
+// proxy-like parameter is refused before any request, and the next call still
+// goes through the operator's proxy.
+func TestAToolArgumentCannotSelectOrChangeTheProxy(t *testing.T) {
+	t.Parallel()
+	ca := newTestCA(t)
+	proxy := newConnectProxy(t, tunnelLangfuse(t, ca).Listener.Addr().String())
+	cs := connectClient(t, tunnelClient(t, ca, proxy.url), slog.New(slog.DiscardHandler))
+
+	refused := toolErrorOf(t, callExecuteRead(t, cs, map[string]any{"operationId": "trace_get", "parameters": map[string]any{
+		"traceId": "trace-1", "HTTPS_PROXY": "http://evil.example:3128", "NO_PROXY": tunnelHost,
+	}}))
+	res := callExecuteRead(t, cs, traceGet)
+
+	if refused.Error.Code != "invalid_argument" {
+		t.Errorf("proxy-like parameters: code = %q, want invalid_argument (error %+v)", refused.Error.Code, refused.Error)
+	}
+	if res.IsError {
+		t.Fatalf("the next execute_read failed: %+v", toolErrorOf(t, res).Error)
+	}
+	if connects, _ := proxy.seen(); len(connects) != 1 || connects[0] != tunnelHost+":443" {
+		t.Errorf("the proxy saw CONNECT %v, want exactly one to %s:443, for the valid call", connects, tunnelHost)
+	}
+}

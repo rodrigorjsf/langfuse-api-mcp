@@ -1,8 +1,10 @@
 package config_test
 
 import (
+	"net/url"
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/config"
 )
@@ -96,24 +98,28 @@ func TestLoadRefusesAnInvalidProxyValueWithoutEchoingIt(t *testing.T) {
 	t.Parallel()
 	const credential = "hunter2"
 	values := map[string]string{
-		"malformed":                 "http://proxyuser:" + credential + "@proxy.example.com:port",
-		"no host":                   "http://proxyuser:" + credential + "@",
-		"no scheme":                 "proxyuser:" + credential + "@proxy.example.com:8080",
-		"scheme htps":               "htps://proxyuser:" + credential + "@proxy.example.com:8080",
-		"scheme file":               "file://proxyuser:" + credential + "@proxy.example.com/etc/passwd",
-		"scheme javascript":         "javascript://proxyuser:" + credential + "@proxy.example.com/%0Aalert(1)",
-		"scheme ftp":                "ftp://proxyuser:" + credential + "@proxy.example.com:21",
-		"a newline":                 "http://proxyuser:" + credential + "@proxy.example.com:8080\n",
-		"a NUL":                     "http://proxyuser:" + credential + "@proxy.example.com\x00:8080",
-		"an escape character":       "http://proxyuser:" + credential + "@proxy.example.com:8080/\x1b[2J",
-		"embedded whitespace":       "http://proxyuser:" + credential + "@proxy.example.com:8080/ x",
-		"a tab":                     "http://proxyuser:" + credential + "@proxy.example.com:8080\t",
-		"leading whitespace":        " http://proxyuser:" + credential + "@proxy.example.com:8080",
-		"a zero-width space":        "http://proxyuser:" + credential + "@proxy.example.com\u200b:8080",
-		"a bidi override":           "http://proxyuser:" + credential + "@proxy.example.com:8080/\u202e",
-		"a non-breaking space":      "http://proxyuser:" + credential + "@proxy.example.com:8080/\u00a0",
-		"a port but no host":        "http://" + credential + ":" + credential + "@:8080",
-		"scheme javascript, opaque": "javascript:alert('" + credential + "')",
+		"malformed":                            "http://proxyuser:" + credential + "@proxy.example.com:port",
+		"no host":                              "http://proxyuser:" + credential + "@",
+		"no scheme":                            "proxyuser:" + credential + "@proxy.example.com:8080",
+		"scheme htps":                          "htps://proxyuser:" + credential + "@proxy.example.com:8080",
+		"scheme file":                          "file://proxyuser:" + credential + "@proxy.example.com/etc/passwd",
+		"scheme javascript":                    "javascript://proxyuser:" + credential + "@proxy.example.com/%0Aalert(1)",
+		"scheme ftp":                           "ftp://proxyuser:" + credential + "@proxy.example.com:21",
+		"a newline":                            "http://proxyuser:" + credential + "@proxy.example.com:8080\n",
+		"a NUL":                                "http://proxyuser:" + credential + "@proxy.example.com\x00:8080",
+		"an escape character":                  "http://proxyuser:" + credential + "@proxy.example.com:8080/\x1b[2J",
+		"embedded whitespace":                  "http://proxyuser:" + credential + "@proxy.example.com:8080/ x",
+		"a tab":                                "http://proxyuser:" + credential + "@proxy.example.com:8080\t",
+		"leading whitespace":                   " http://proxyuser:" + credential + "@proxy.example.com:8080",
+		"a zero-width space":                   "http://proxyuser:" + credential + "@proxy.example.com\u200b:8080",
+		"a bidi override":                      "http://proxyuser:" + credential + "@proxy.example.com:8080/\u202e",
+		"a non-breaking space":                 "http://proxyuser:" + credential + "@proxy.example.com:8080/\u00a0",
+		"an encoded bidi override in the host": "http://proxyuser:" + credential + "@proxy%E2%80%AE.example.com:8080",
+		"an encoded zero-width space in the host": "http://proxyuser:" + credential + "@proxy%E2%80%8B.example.com:8080",
+		"a port out of range":                     "http://proxyuser:" + credential + "@proxy.example.com:99999",
+		"port zero":                               "http://proxyuser:" + credential + "@proxy.example.com:0",
+		"a port but no host":                      "http://" + credential + ":" + credential + "@:8080",
+		"scheme javascript, opaque":               "javascript:alert('" + credential + "')",
 	}
 	for _, variable := range []string{"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"} {
 		for name, value := range values {
@@ -135,4 +141,48 @@ func TestLoadRefusesAnInvalidProxyValueWithoutEchoingIt(t *testing.T) {
 			})
 		}
 	}
+}
+
+// FuzzLoadProxy checks that Load never panics on a proxy value, never echoes
+// a refused value, and never shows userinfo or an invisible character in the
+// endpoint it accepts (go.md: fuzz every config parser).
+func FuzzLoadProxy(f *testing.F) {
+	for _, seed := range []string{
+		"", "http://proxy.example.com:8080", "socks5h://p", "https://u:p@p:443", "htps://p", "p:8080",
+		"http://p%E2%80%AE:1", "http://[::1]:3128", "http://p:99999", "\x00", "http://u:p@",
+	} {
+		f.Add(seed)
+	}
+	// Every refusal message, one per reason: a value that is a substring of
+	// one of them (e.g. "://p") is not an echo.
+	var refusals strings.Builder
+	for _, invalid := range []string{"a b", "http://", "http://p%E2%80%AE:1", "htps://p", "http://p:99999"} {
+		if _, err := load(map[string]string{"HTTPS_PROXY": invalid}, config.File{}); err != nil {
+			refusals.WriteString(err.Error() + "\n")
+		}
+	}
+	f.Fuzz(func(t *testing.T, value string) {
+		cfg, err := load(map[string]string{"HTTPS_PROXY": value}, config.File{})
+		if err != nil {
+			if strings.Contains(err.Error(), value) && !strings.Contains(refusals.String(), value) {
+				t.Fatalf("Load(%q) error %q echoes the value", value, err)
+			}
+			return
+		}
+		if value == "" {
+			if cfg.Proxy.Endpoint != "" {
+				t.Fatalf("Load(\"\") endpoint = %q, want none", cfg.Proxy.Endpoint)
+			}
+			return
+		}
+		u, parseErr := url.Parse(cfg.Proxy.Endpoint)
+		if parseErr != nil || u.User != nil || u.Port() == "" {
+			t.Fatalf("Load(%q) endpoint = %q, want scheme://host:port without userinfo", value, cfg.Proxy.Endpoint)
+		}
+		for _, r := range cfg.Proxy.Endpoint {
+			if !unicode.IsPrint(r) || unicode.IsSpace(r) {
+				t.Fatalf("Load(%q) endpoint %q holds %U", value, cfg.Proxy.Endpoint, r)
+			}
+		}
+	})
 }

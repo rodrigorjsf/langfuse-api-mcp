@@ -105,8 +105,9 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 		// Operator settings only (config resolves the rate limit's host-based
 		// default; zero concurrency keeps the client's); no tool argument reaches them.
 		RateLimit: cfg.RateLimit, MaxConcurrency: cfg.MaxConcurrency,
-		// The proxy variables config.Load validated; Go reads them once, at the
-		// first request. Like every setting here, no tool argument reaches them.
+		// Go reads the proxy variables from the process environment, once, at
+		// the first request (ADR-0006). They are the ones config.Load validated
+		// because start passes os.Environ() as environ; no tool argument reaches them.
 		Proxy: http.ProxyFromEnvironment,
 	})
 	srv := server.New(cat, client, log, server.Secrets{Keys: keys})
