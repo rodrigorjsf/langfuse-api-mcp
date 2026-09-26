@@ -170,10 +170,11 @@ func TestSearchOperationsRanksTheV4FamilyBeforeTheLegacyFamily(t *testing.T) {
 }
 
 // Spec #68 story 12, ADR-0002, #79: listing every read operation of the
-// unresolved union catalog (68) stays within 7 KiB of text (7,081 bytes with the #82 third-party note,
-// ~1.8k tokens, when measured; ~9 KB while legacy lines carried the whole
-// deprecation notice). A catalog regeneration that crosses the budget
-// updates ADR-0002 and spec #68 with the new figure.
+// unresolved union catalog (68) stays within 7 KiB of text (7,081 bytes,
+// ~1.8k tokens, when measured with the #82 third-party note; ~9 KB while
+// legacy lines carried the whole deprecation notice). A catalog regeneration
+// that crosses the budget updates ADR-0002 and spec #68 with the new figure;
+// the headroom is thin, see #87.
 func TestSearchOperationsWithoutQueryListsTheReadIndexWithinItsBudget(t *testing.T) {
 	t.Parallel()
 	cs := connectOffline(t)
