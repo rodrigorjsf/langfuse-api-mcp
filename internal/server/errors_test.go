@@ -56,15 +56,18 @@ func scriptedLangfuse(t *testing.T, answers ...answer) (*httptest.Server, *atomi
 
 // toolErrorBody is the ADR-0008 tool error shape as the agent reads it.
 type toolErrorBody struct {
-	Error struct {
-		Code              string `json:"code"`
-		Message           string `json:"message"`
-		Hint              string `json:"hint"`
-		Retryable         bool   `json:"retryable"`
-		HTTPStatus        int    `json:"httpStatus"`
-		RetryAfterSeconds int    `json:"retryAfterSeconds"`
-		OperationID       string `json:"operationId"`
-	} `json:"error"`
+	Error toolErrorFields `json:"error"`
+}
+
+// toolErrorFields is the error object of a toolErrorBody.
+type toolErrorFields struct {
+	Code              string `json:"code"`
+	Message           string `json:"message"`
+	Hint              string `json:"hint"`
+	Retryable         bool   `json:"retryable"`
+	HTTPStatus        int    `json:"httpStatus"`
+	RetryAfterSeconds int    `json:"retryAfterSeconds"`
+	OperationID       string `json:"operationId"`
 }
 
 // toolErrorOf returns the tool error of res, failing the test when res is not one.
