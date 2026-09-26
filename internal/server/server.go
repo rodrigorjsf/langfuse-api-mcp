@@ -214,6 +214,11 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 			" and page through the rest (page, or cursor from meta.cursor); without a limit the server asks for "+
 			strconv.Itoa(catalog.DefaultLimit), op.ID)
 	}
+	if errors.Is(err, catalog.ErrRowLimitOutOfRange) {
+		return toolError(errorInvalidArgument, err.Error(), "set config.row_limit in the query JSON to an integer from 1 to "+
+			strconv.Itoa(catalog.MaxRowLimit)+", or leave it out and the server asks for "+
+			strconv.Itoa(catalog.DefaultRowLimit)+"; for fewer rows, narrow the time window or add filters", op.ID)
+	}
 	if err != nil {
 		return toolError(errorInvalidArgument, err.Error(), parametersHint, op.ID)
 	}

@@ -90,6 +90,13 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 					p.Name, MaxLimit, values[0])}
 			}
 		}
+		if o.isMetricsQuery(p) {
+			q, err := metricsQuery(values[0])
+			if err != nil {
+				return Request{}, err
+			}
+			values = []string{q}
+		}
 		if p.In == "path" {
 			if err := safePathValue(values[0]); err != nil {
 				return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
@@ -137,8 +144,8 @@ func (e limitError) Unwrap() error      { return e.error }
 func (limitError) Is(target error) bool { return target == ErrLimitOutOfRange }
 
 // isListLimit reports whether p is the page size of a list operation: the
-// "limit" query parameter of a read. The metrics row_limit inside a JSON query
-// is not covered (see #35).
+// "limit" query parameter of a read. The metrics operations bound their page
+// size as config.row_limit inside their JSON query instead (metricsQuery).
 func (o Operation) isListLimit(p Param) bool {
 	return o.IsRead() && p.In == "query" && p.Name == "limit"
 }
