@@ -150,9 +150,13 @@ func effectivePort(u *url.URL) string {
 	return "443"
 }
 
-// maxResponseBytes caps how much of a response body the client reads: Langfuse
+// MaxResponseBytes caps how much of a response body the client reads: Langfuse
 // Cloud caps responses at 5 MB.
-const maxResponseBytes = 5 << 20
+const MaxResponseBytes = 5 << 20
+
+// ErrResponseTooLarge marks a 2xx answer whose body exceeds MaxResponseBytes;
+// the body is not read further.
+var ErrResponseTooLarge = fmt.Errorf("response exceeds %d bytes", MaxResponseBytes)
 
 // Response is a successful Langfuse answer.
 type Response struct {
@@ -164,7 +168,8 @@ type Response struct {
 // Do sends a request: method, the escaped path below the host (e.g.
 // /api/public/traces/abc) and the query, with Basic auth, under the client's
 // per-call deadline. It returns the response JSON for a 2xx answer and an
-// *APIError otherwise. A request that got no answer returns an error wrapping
+// *APIError otherwise, or ErrResponseTooLarge for a 2xx body above
+// MaxResponseBytes. A request that got no answer returns an error wrapping
 // ErrUntrustedCertificate, ErrCertificateRejected, ErrNetwork, ErrTimeout or
 // ErrCanceled. A GET is retried within the deadline: twice with exponential
 // backoff and jitter on a 5xx, once after Retry-After on a 429, and twice on a
@@ -206,7 +211,7 @@ func (c *Client) attempt(ctx context.Context, method, escapedPath string, query 
 		return Response{}, fmt.Errorf("send request: %w", err)
 	}
 	defer func() {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxResponseBytes)) // drain so the connection is reused
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, MaxResponseBytes)) // drain so the connection is reused
 		_ = resp.Body.Close()                                                   // nothing useful to do on a close error
 	}()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
@@ -216,12 +221,12 @@ func (c *Client) attempt(ctx context.Context, method, escapedPath string, query 
 		}
 		return Response{}, newAPIError(resp.StatusCode, resp.Header, body)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxResponseBytes+1))
 	if err != nil {
 		return Response{}, fmt.Errorf("read response: %w", classify(err))
 	}
-	if len(body) > maxResponseBytes {
-		return Response{}, fmt.Errorf("response exceeds %d bytes", maxResponseBytes)
+	if len(body) > MaxResponseBytes {
+		return Response{}, ErrResponseTooLarge
 	}
 	if !json.Valid(body) {
 		return Response{}, errors.New("response is not JSON")

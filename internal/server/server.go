@@ -5,11 +5,11 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
-	"runtime/debug"
 	"strconv"
 	"strings"
 
@@ -60,12 +60,28 @@ func executeReadSchema() map[string]any {
 // executeReadTitle is the tool's display name.
 const executeReadTitle = "Run a Langfuse read operation"
 
+// Secrets are the credentials the server never lets reach a tool result, a
+// tool error or a log line: the Langfuse key pair, and so the Authorization
+// header built from it.
+type Secrets struct {
+	PublicKey, SecretKey string
+}
+
+// redactor returns the Redactor for the key pair, its Basic auth value and
+// the Authorization header; any other Langfuse key is redacted too.
+func (s Secrets) redactor() sanitize.Redactor {
+	basic := base64.StdEncoding.EncodeToString([]byte(s.PublicKey + ":" + s.SecretKey))
+	return sanitize.NewRedactor(s.PublicKey, s.SecretKey, basic, "Basic "+basic)
+}
+
 // New returns the MCP server exposing execute_read over the catalog. The tool
 // set is fixed here, at startup, and is the same for every client. log
-// receives the causes of failed calls; it must write to stderr.
-func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger) *mcp.Server {
+// receives one audit line per tool call; it must write to stderr. secrets are
+// redacted from every result and log line.
+func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets Secrets) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "langfuse-mcp", Version: "0.0.0-dev"}, nil)
-	ex := executor{catalog: cat, client: client, log: log}
+	redact := secrets.redactor()
+	ex := executor{catalog: cat, client: client, redact: redact}
 	s.AddTool(&mcp.Tool{
 		Name:        "execute_read",
 		Title:       executeReadTitle,
@@ -78,29 +94,12 @@ func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger) *mcp.Se
 			IdempotentHint:  true,
 			OpenWorldHint:   new(true),
 		},
-	}, recovering(log, ex.executeRead))
+	}, audited(log, redact, ex.executeRead))
 	return s
 }
 
-// recovering turns a panic in handler into an internal_error tool result, so
-// that a bug never breaks the session; the stack goes to log (stderr) only.
-func recovering(log *slog.Logger, handler mcp.ToolHandler) mcp.ToolHandler {
-	return func(ctx context.Context, req *mcp.CallToolRequest) (res *mcp.CallToolResult, err error) {
-		defer func() {
-			if p := recover(); p != nil {
-				log.Error("tool handler panicked", "tool", req.Params.Name,
-					"panic", fmt.Sprint(p), "stack", string(debug.Stack()))
-				res, err = toolError(errorInternal, "the server hit an internal error",
-					"this is a bug in the server, not in the call; report it with the server's stderr log",
-					operationIDOf(req))
-			}
-		}()
-		return handler(ctx, req)
-	}
-}
-
 // operationIDOf returns the operationId argument of req, or "" when there is
-// none; it never fails, because it runs while recovering from a panic.
+// none; it never fails, because it also runs while recovering from a panic.
 func operationIDOf(req *mcp.CallToolRequest) string {
 	var in struct {
 		OperationID string `json:"operationId"`
@@ -113,7 +112,7 @@ func operationIDOf(req *mcp.CallToolRequest) string {
 type executor struct {
 	catalog catalog.Catalog
 	client  *langfuse.Client
-	log     *slog.Logger
+	redact  sanitize.Redactor
 }
 
 // executeReadInput is the execute_read argument object (executeReadSchema).
@@ -126,7 +125,11 @@ type executeReadInput struct {
 // offending argument when one is missing, unknown or of the wrong type. The
 // SDK's low-level AddTool does not validate arguments against the input
 // schema, so this is the validation.
-func decodeExecuteReadInput(raw json.RawMessage) (executeReadInput, error) {
+//
+// The operation ID and the parameter names are echoed in errors and cut to a
+// bounded length there, so secrets are redacted from them first: a secret cut
+// short would no longer match. Parameter values are sent as given.
+func decodeExecuteReadInput(raw json.RawMessage, r sanitize.Redactor) (executeReadInput, error) {
 	var in executeReadInput
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &fields); err != nil {
@@ -135,7 +138,7 @@ func decodeExecuteReadInput(raw json.RawMessage) (executeReadInput, error) {
 	for name := range fields {
 		if name != "operationId" && name != "parameters" {
 			return in, fmt.Errorf("argument %s: unknown argument; execute_read takes operationId and parameters only",
-				strconv.Quote(truncate(name)))
+				strconv.Quote(truncate(r.Redact(name))))
 		}
 	}
 	id, ok := fields["operationId"]
@@ -145,11 +148,18 @@ func decodeExecuteReadInput(raw json.RawMessage) (executeReadInput, error) {
 	if err := json.Unmarshal(id, &in.OperationID); err != nil || in.OperationID == "" {
 		return executeReadInput{}, errors.New("argument operationId: want a non-empty string, e.g. trace_list")
 	}
+	in.OperationID = r.Redact(in.OperationID)
 	if params, ok := fields["parameters"]; ok && string(params) != "null" {
 		dec := json.NewDecoder(bytes.NewReader(params))
 		dec.UseNumber() // keep integers exact: 10 stays "10", never "1e+01"
 		if err := dec.Decode(&in.Parameters); err != nil {
 			return in, errors.New("argument parameters: want an object of parameter name to value")
+		}
+		for name, v := range in.Parameters {
+			if clean := r.Redact(name); clean != name {
+				delete(in.Parameters, name)
+				in.Parameters[clean] = v
+			}
 		}
 	}
 	return in, nil
@@ -166,8 +176,8 @@ func truncate(s string) string {
 	return strings.ToValidUTF8(s[:maxEchoed], "") + "…"
 }
 
-func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	in, err := decodeExecuteReadInput(req.Params.Arguments)
+func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a *audit) (*mcp.CallToolResult, error) {
+	in, err := decodeExecuteReadInput(req.Params.Arguments, ex.redact)
 	if err != nil {
 		return toolError(errorInvalidArgument, err.Error(), "", in.OperationID)
 	}
@@ -181,15 +191,22 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest) (*
 		return toolError(errorOperationNotFound, "unknown operation ID "+strconv.Quote(truncate(in.OperationID)),
 			"use an operation ID of the Langfuse API reference: https://api.reference.langfuse.com", in.OperationID)
 	}
+	a.method = op.Method
 	if !op.IsRead() {
 		return toolError(errorInvalidArgument, "operation "+op.ID+" is a "+op.Method+
 			" operation; execute_read runs read (GET) operations only", "", op.ID)
 	}
 	r, err := op.Request(in.Parameters)
+	if errors.Is(err, catalog.ErrLimitOutOfRange) {
+		return toolError(errorInvalidArgument, err.Error(), "use a limit from 1 to "+strconv.Itoa(catalog.MaxLimit)+
+			" and page through the rest (page, or cursor from meta.cursor); without a limit the server asks for "+
+			strconv.Itoa(catalog.DefaultLimit), op.ID)
+	}
 	if err != nil {
 		return toolError(errorInvalidArgument, err.Error(), "", op.ID)
 	}
 	resp, err := ex.client.Do(ctx, r.Method, r.Path, r.Query)
+	a.status, a.bytes = resp.Status, len(resp.Body)
 	if errors.Is(err, langfuse.ErrRedirectRefused) {
 		return toolError(errorRedirectRefused, "Langfuse answered with a redirect to another scheme, host or port; "+
 			"it was not followed, so the key pair was not sent there",
@@ -197,10 +214,23 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest) (*
 				"(for example https instead of http) and restarts the server", op.ID)
 	}
 	if err != nil {
-		if res, rerr := langfuseError(err, op.ID); res != nil || rerr != nil {
+		if res, rerr := langfuseError(err, op.ID, a, ex.redact); res != nil || rerr != nil {
 			return res, rerr
 		}
-		return ex.failure(op.ID, err)
+		return failure(op.ID, err, a)
 	}
-	return jsonResult(sanitize.Wrap(op.ID, resp.Body), false)
+	payload, err := sanitize.Payload(resp.Body, ex.redact)
+	if err != nil {
+		return failure(op.ID, err, a) // unreachable: the client returns valid JSON only
+	}
+	return jsonResult(sanitize.Wrap(op.ID, payload), false)
 }
+
+// String keeps the key pair out of %v and %s.
+func (Secrets) String() string { return "server.Secrets{" + sanitize.Redacted + "}" }
+
+// GoString keeps the key pair out of %#v.
+func (s Secrets) GoString() string { return s.String() }
+
+// LogValue keeps the key pair out of slog.
+func (s Secrets) LogValue() slog.Value { return slog.StringValue(s.String()) }

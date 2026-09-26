@@ -25,8 +25,10 @@ import (
 // httptest.Server standing in for Langfuse.
 
 const (
-	testPublicKey = "pk-lf-test-public"
-	testSecretKey = "sk-lf-test-secret" //nolint:gosec // G101: a fake key for the fake Langfuse
+	// Fake keys of the real length, so that a key cut short in an echoed
+	// message is tested too.
+	testPublicKey = "pk-lf-1a2b3c4d-5e6f-4a8b-9c0d-1e2f3a4b5c6d"
+	testSecretKey = "sk-lf-6d5c4b3a-2f1e-4d0c-8b9a-7f6e5d4c3b2a" //nolint:gosec // G101: a fake key for the fake Langfuse
 )
 
 // connect starts the server against the fake Langfuse and returns a connected
@@ -61,7 +63,7 @@ func connectClient(t *testing.T, client *langfuse.Client, log *slog.Logger) *mcp
 	if err != nil {
 		t.Fatalf("load catalog: %v", err)
 	}
-	srv := server.New(cat, client, log)
+	srv := server.New(cat, client, log, server.Secrets{PublicKey: testPublicKey, SecretKey: testSecretKey})
 
 	ctx := context.Background()
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
@@ -162,7 +164,7 @@ func TestExecuteReadSendsTheOperationsRequestWithBasicAuth(t *testing.T) {
 				"tags": []any{"prod", "checkout"}, "userId": "u-42",
 			}},
 			wantPath:  "/api/public/traces",
-			wantQuery: url.Values{"tags": {"prod", "checkout"}, "userId": {"u-42"}},
+			wantQuery: url.Values{"tags": {"prod", "checkout"}, "userId": {"u-42"}, "limit": {"50"}}, // the default limit
 		},
 	}
 	for name, tc := range tests {

@@ -28,6 +28,7 @@ const (
 	errorRateLimited          = "langfuse_rate_limited"
 	errorLangfuseUnavailable  = "langfuse_unavailable"
 	errorRedirectRefused      = "redirect_refused"
+	errorResponseTooLarge     = "response_too_large"
 )
 
 // toolErrorBody is the ADR-0008 tool error shape.
@@ -80,6 +81,8 @@ func statusErrorFor(status int) statusError {
 		return statusError{errorNotFound, "verify the ID or name; list operations (e.g. trace_list) find existing ones", false}
 	case status == 409:
 		return statusError{errorConflict, "the request conflicts with the current state: read the resource again before changing it", false}
+	case status == 413:
+		return statusError{errorResponseTooLarge, tooLargeHint, false}
 	case status == 422:
 		return statusError{errorUnprocessable, "Langfuse could not process the request: read the resource again and check the parameters", false}
 	case status == 429:
@@ -95,6 +98,10 @@ func statusErrorFor(status int) statusError {
 		return statusError{errorBadRequest, "Langfuse refused the request as sent: check the operation and its parameters", false}
 	}
 }
+
+// tooLargeHint tells the agent how to get a smaller answer.
+const tooLargeHint = "narrow the query: request fewer fields, a shorter time window or a lower limit, " +
+	"and page through the rest"
 
 // secondsRoundedUp rounds d up to whole seconds, so that waiting
 // retryAfterSeconds is never too short.
@@ -122,12 +129,15 @@ func unavailableHint(why langfuse.Unavailability) string {
 }
 
 // langfuseError translates a failed Langfuse request into a tool error. It
-// returns a nil result when err is not a Langfuse answer.
-func langfuseError(err error, operationID string) (*mcp.CallToolResult, error) {
+// returns a nil result when err is not a Langfuse answer. It records the
+// status in a. Langfuse's message is redacted by r before errorResult cuts it
+// to length: a secret cut short would no longer match.
+func langfuseError(err error, operationID string, a *audit, r sanitize.Redactor) (*mcp.CallToolResult, error) {
 	var apiErr *langfuse.APIError
 	if !errors.As(err, &apiErr) {
 		return nil, nil
 	}
+	a.status = apiErr.Status
 	f := toolErrorFields{HTTPStatus: apiErr.Status, OperationID: operationID}
 	if errors.Is(apiErr, langfuse.ErrOperationUnavailable) {
 		f.Code = errorUnavailableOperation
@@ -140,7 +150,7 @@ func langfuseError(err error, operationID string) (*mcp.CallToolResult, error) {
 	f.RetryAfterSeconds = secondsRoundedUp(apiErr.RetryAfter)
 	f.Message = "Langfuse answered HTTP " + strconv.Itoa(apiErr.Status)
 	if apiErr.Message != "" {
-		f.Message += ": " + apiErr.Message
+		f.Message += ": " + r.Redact(apiErr.Message)
 	}
 	return errorResult(f)
 }

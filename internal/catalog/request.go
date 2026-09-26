@@ -25,6 +25,20 @@ type Request struct {
 // the reason.
 var ErrInvalidParameter = errors.New("invalid parameter")
 
+// ErrLimitOutOfRange marks a limit outside 1..MaxLimit on a list operation;
+// it also matches ErrInvalidParameter.
+var ErrLimitOutOfRange = errors.New("limit out of range")
+
+// List operations — the read operations with a "limit" query parameter — get
+// DefaultLimit when the caller names no limit, and refuse a limit above
+// MaxLimit. MaxLimit is the lowest page size cap Langfuse enforces on a list
+// operation (scores and legacy routes answer 400 above 100), so an accepted
+// limit is never refused upstream; it also keeps a page small.
+const (
+	DefaultLimit = 50
+	MaxLimit     = 100
+)
+
 // maxNameInMessage bounds how much of a caller-supplied parameter name an
 // error message repeats.
 const maxNameInMessage = 64
@@ -56,6 +70,10 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 		if present && v == nil && p.Schema.Nullable {
 			present = false // null omits a nullable parameter
 		}
+		if !present && o.isListLimit(p) {
+			req.Query.Set(p.Name, strconv.Itoa(DefaultLimit))
+			continue
+		}
 		if !present {
 			if p.Required {
 				return Request{}, invalidf("parameter %s: required parameter is missing", p.Name)
@@ -65,6 +83,12 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 		values, err := p.values(v)
 		if err != nil {
 			return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
+		}
+		if o.isListLimit(p) {
+			if n, err := strconv.Atoi(values[0]); err != nil || n < 1 || n > MaxLimit {
+				return Request{}, limitError{invalidf("parameter %s: want an integer from 1 to %d, got %s",
+					p.Name, MaxLimit, values[0])}
+			}
 		}
 		if p.In == "path" {
 			if err := safePathValue(values[0]); err != nil {
@@ -103,6 +127,20 @@ func safePathValue(v string) error {
 		return errors.New("must not contain control characters")
 	}
 	return nil
+}
+
+// limitError is a limit outside 1..MaxLimit; it matches ErrLimitOutOfRange
+// and, through the error it wraps, ErrInvalidParameter.
+type limitError struct{ error }
+
+func (e limitError) Unwrap() error      { return e.error }
+func (limitError) Is(target error) bool { return target == ErrLimitOutOfRange }
+
+// isListLimit reports whether p is the page size of a list operation: the
+// "limit" query parameter of a read. The metrics row_limit inside a JSON query
+// is not covered (see #35).
+func (o Operation) isListLimit(p Param) bool {
+	return o.IsRead() && p.In == "query" && p.Name == "limit"
 }
 
 func invalidf(format string, args ...any) error {

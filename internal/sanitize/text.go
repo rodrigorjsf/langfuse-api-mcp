@@ -22,7 +22,7 @@ func Message(s string) string {
 		switch {
 		case unicode.IsControl(r):
 			clean = append(clean, ' ')
-		case unicode.Is(unicode.Cf, r):
+		case hidden(r):
 			// format characters: zero-width, bidi controls, tag characters
 		default:
 			clean = append(clean, r)

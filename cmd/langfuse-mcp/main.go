@@ -89,13 +89,14 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 	if err != nil {
 		return app{}, err
 	}
+	keys := server.Secrets{PublicKey: cfg.Connection.PublicKey.Reveal(), SecretKey: cfg.Connection.SecretKey.Reveal()}
 	client := langfuse.New(langfuse.Options{
 		Host:      cfg.Connection.Host,
-		PublicKey: cfg.Connection.PublicKey.Reveal(),
-		SecretKey: cfg.Connection.SecretKey.Reveal(),
+		PublicKey: keys.PublicKey,
+		SecretKey: keys.SecretKey,
 		TLS:       pool.TLSConfig(),
 	})
-	srv := server.New(cat, client, log)
+	srv := server.New(cat, client, log, keys)
 	serve := func(ctx context.Context) error { return transport.Stdio(ctx, srv) }
 	return app{log: log, pool: pool, serve: serve}, nil
 }

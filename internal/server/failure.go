@@ -26,12 +26,12 @@ const caHint = "set LANGFUSE_CA_CERT " +
 	"then check the 'CA sources loaded' line of the server's startup log"
 
 // failure is the tool error for a failed Langfuse request. It is the one place
-// where client errors become tool errors; the cause goes to stderr, never to
-// the agent.
-func (ex executor) failure(operationID string, err error) (*mcp.CallToolResult, error) {
+// where client errors become tool errors; the cause goes to the audit line a
+// (stderr), never to the agent.
+func failure(operationID string, err error, a *audit) (*mcp.CallToolResult, error) {
 	fields := failureFields(err)
 	fields.OperationID = truncate(operationID)
-	ex.log.Error("execute_read failed", "operationId", operationID, "code", fields.Code, "error", err.Error())
+	a.cause = err.Error()
 	return errorResult(fields)
 }
 
@@ -52,6 +52,12 @@ func failureFields(err error) toolErrorFields {
 				"(host name, validity period or usage)",
 			Hint: "check that LANGFUSE_BASE_URL names the host the Langfuse server's certificate was issued for; " +
 				"if its CA is the problem, " + caHint,
+		}
+	case errors.Is(err, langfuse.ErrResponseTooLarge):
+		return toolErrorFields{
+			Code:    errorResponseTooLarge,
+			Message: "the Langfuse response is larger than the 5 MiB this server reads; it was not returned",
+			Hint:    tooLargeHint,
 		}
 	case errors.Is(err, langfuse.ErrNetwork):
 		return toolErrorFields{
