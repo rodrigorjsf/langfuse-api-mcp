@@ -31,5 +31,4 @@ idea → grill → (prototype) → spec → tickets → implement (red → green
 - **Ubiquitous language.** Read `CONTEXT.md` and relevant ADRs before exploring; name types, tools, tests, issues with its terms; update it via `/domain-modeling` the moment a term resolves. It is a glossary only — no implementation details.
 - **ADRs** only when hard to reverse + surprising + a real trade-off. Surface conflicts as "_Contradicts ADR-NNNN — worth reopening because…_".
 - Specs/tickets describe interfaces and behavioral contracts, not file paths or line numbers.
-- Every issue gets a GitHub milestone at creation (follow-ups included); a milestone's spec absorbs all its open issues (`docs/agents/issue-tracker.md` "Milestones").
 - Specs/tickets touching a tool, operation, parameter or workflow carry prompt-injection and dangerous-parameter acceptance criteria (`security.md` "Every slice").

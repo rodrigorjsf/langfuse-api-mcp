@@ -30,7 +30,7 @@ Full risk→control mapping with sources: `docs/research/security.md`. Cite OWAS
 **Transport**
 - stdio: logs to stderr only. HTTP (opt-in): bind 127.0.0.1, require a random ≥256-bit bearer token compared in constant time, validate `Origin` (403 on invalid) and `Host` (loopback only), answer session GET/DELETE with 405.
 
-**TLS** (ADR-0006): system pool + explicit/ambient CAs appended in code; `MinVersion` TLS 1.2; no skip-verify option exists.
+**TLS** (ADR-0006): system pool + explicit/ambient CAs appended in code; `SSL_CERT_FILE`/`SSL_CERT_DIR` are captured and removed from the environment before anything loads certificates (proven by `TestExecutableTrustsTheOSStoreAndAmbientCAsAtOnce`); `MinVersion` TLS 1.2; no skip-verify option exists.
 
 **Supply chain**: `govulncheck` in CI; pinned `go.sum`; base image pinned by digest; SBOM for archives *and* image; cosign keyless signing; `actions/attest` provenance; no new dependency without justification.
 

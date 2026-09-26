@@ -7,12 +7,12 @@ Stateless Go MCP server exposing the Langfuse public API (Cloud + self-hosted) w
 | Need | Go to |
 |---|---|
 | domain terms (use them verbatim) | `CONTEXT.md` |
-| why things are the way they are | `docs/adr/` (0001 Go · 0002 tool surface · 0003 read-only default · 0004 scope · 0005 local-first · 0006 TLS · 0007 license · 0008 tool errors · 0009 package layout · 0010 generic executor · 0011 config file · 0012 version-aware catalog) |
+| why things are the way they are | `docs/adr/` |
 | architecture diagram (archify) | `docs/architecture/target-architecture.html` |
 | evidence behind decisions | `docs/research/INDEX.md` |
 | milestones | `ROADMAP.md` |
 
-Before creating any file, place it per `.claude/rules/project-structure.md`. Rules in `.claude/rules/` load automatically; path-scoped ones load when you touch matching files.
+Rules in `.claude/rules/` load automatically; path-scoped ones load when you touch matching files.
 
 ## Definition of done
 
