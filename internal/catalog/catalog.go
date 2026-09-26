@@ -261,8 +261,8 @@ func indexLine(summary, description string) string {
 	return line
 }
 
-// cleanSchema returns the JSON schema raw with every string in it, keys and
-// values alike, cleaned of hidden characters (visible): a compromised
+// cleanSchema returns the JSON schema raw with every string in it cleaned of
+// hidden characters: keys by visible, values by visibleText. A compromised
 // upstream spec cannot smuggle hidden instructions through a body schema.
 func cleanSchema(raw json.RawMessage) (json.RawMessage, error) {
 	dec := json.NewDecoder(bytes.NewReader(raw))
@@ -284,7 +284,7 @@ func cleanSchema(raw json.RawMessage) (json.RawMessage, error) {
 func cleanValue(v any) (any, error) {
 	switch v := v.(type) {
 	case string:
-		return visible(v), nil
+		return visibleText(v), nil
 	case []any:
 		for i := range v {
 			x, err := cleanValue(v[i])
@@ -300,10 +300,11 @@ func cleanValue(v any) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			if _, dup := out[visible(k)]; dup {
-				return nil, fmt.Errorf("schema key %q appears twice once hidden characters are removed", visible(k))
+			k := visible(k)
+			if _, dup := out[k]; dup {
+				return nil, fmt.Errorf("schema key %q appears twice once hidden characters are removed", k)
 			}
-			out[visible(k)] = x
+			out[k] = x
 		}
 		return out, nil
 	}
@@ -339,11 +340,27 @@ func resolve(s *Schema, components map[string]Schema) error {
 // which catalog may not import (ADR-0009).
 func visible(s string) string {
 	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || (r >= 0xE0000 && r <= 0xE007F) {
+		if hidden(r) {
 			return -1
 		}
 		return r
 	}, strings.ToValidUTF8(s, ""))
+}
+
+// visibleText is visible for multi-line text: tab, line feed and carriage
+// return are kept, as sanitize.Text keeps them in a payload.
+func visibleText(s string) string {
+	return strings.Map(func(r rune) rune {
+		if hidden(r) && r != '\t' && r != '\n' && r != '\r' {
+			return -1
+		}
+		return r
+	}, strings.ToValidUTF8(s, ""))
+}
+
+// hidden reports whether r hides or reorders text (see visible).
+func hidden(r rune) bool {
+	return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || (r >= 0xE0000 && r <= 0xE007F)
 }
 
 // Lookup returns the in-scope operation with the given ID.

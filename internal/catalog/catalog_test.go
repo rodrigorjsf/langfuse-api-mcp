@@ -108,9 +108,11 @@ func TestEveryUnionOperationCarriesItsRangeAndFamily(t *testing.T) {
 }
 
 // #81: a write operation carries the request body schema of the release spec
-// it was taken from, never the newest spec's: promptVersion_update at its
-// pre-3.18.0 path, and unstable_evaluators_create, whose body component
-// (unstableCreateEvaluatorRequest) the newest spec no longer has.
+// it was taken from, never the newest spec's. unstable_evaluators_create
+// proves it: its body component (unstableCreateEvaluatorRequest) exists only
+// in the specs before 4.31.0. promptVersion_update at its pre-3.18.0 path
+// shows an operation of an older path keeps a body (its schema happens to
+// equal the newer path's); prompts_create is a current operation.
 func TestAWriteOperationOfAnOlderReleaseCarriesItsOwnReleasesBodySchema(t *testing.T) {
 	t.Parallel()
 	cat := mustLoad(t)

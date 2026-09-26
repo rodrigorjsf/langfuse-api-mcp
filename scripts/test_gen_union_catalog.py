@@ -8,7 +8,8 @@
 #       tests), not how it treats a hostile or broken release spec; these cases
 #       need no network.
 # WHEN: before each weekly regeneration (.github/workflows/union-catalog.yml),
-#       and by hand after changing the generator.
+#       and by hand after changing the generator; pull-request CI does not
+#       run them yet (see #89).
 # HOW:  python3 scripts/test_gen_union_catalog.py   (needs PyYAML, like the generator)
 
 import importlib.util
