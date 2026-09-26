@@ -113,7 +113,9 @@ func secondsRoundedUp(d time.Duration) int {
 // unavailableHint names, per unavailable flavour, the family the operation
 // is in or the version the deployment lacks, and where the replacement is;
 // then the detected deployment profile: the version and the families on and
-// off (ADR-0012 §7). The Langfuse body is never part of it.
+// off (ADR-0012 §7). The Langfuse body is never part of it. An HTML 404
+// names the families off, not the operation's own family: the catalog carries
+// no family per operation yet (see #78).
 func unavailableHint(why langfuse.Unavailability, profile langfuse.DeploymentProfile) string {
 	var flavour string
 	switch why {
@@ -126,7 +128,7 @@ func unavailableHint(why langfuse.Unavailability, profile langfuse.DeploymentPro
 			"Langfuse v3, or v4 in legacy mode); use the legacy operation instead, e.g. trace_list or legacy_observationsV1_getMany"
 	default: // langfuse.RouteMissing
 		flavour = "this route does not exist on the deployment: it runs an older Langfuse version " +
-			"that predates the operation, or one that does not serve the operation's family; use the older operation it replaces " +
+			"that predates the operation, or the operation is in a family listed as off below; use the older operation it replaces " +
 			"(see https://langfuse.com/faq/all/deprecated-api-migration)"
 	}
 	return flavour + "; " + profileSummary(profile)
@@ -142,7 +144,7 @@ func profileSummary(profile langfuse.DeploymentProfile) string {
 		version = "Langfuse " + v
 	}
 	var on, off []string
-	for _, f := range langfuse.Families() {
+	for _, f := range langfuse.AllFamilies() {
 		if profile.On(f) {
 			on = append(on, string(f))
 		} else {

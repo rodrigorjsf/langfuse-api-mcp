@@ -16,8 +16,8 @@ const (
 	ExperimentsFamily Family = "experiments"
 )
 
-// Families lists every operation family, in a fixed order.
-func Families() []Family {
+// AllFamilies lists every operation family, in a fixed order.
+func AllFamilies() []Family {
 	return []Family{LegacyFamily, V4ReadFamily, ExperimentsFamily}
 }
 
@@ -36,7 +36,7 @@ type DeploymentProfile struct {
 // UnknownProfile is the profile when nothing was detected: the version is
 // unknown and every family stays on, so that nothing is hidden (ADR-0012 §3).
 func UnknownProfile() DeploymentProfile {
-	return DeploymentProfile{Families: Families()}
+	return DeploymentProfile{Families: AllFamilies()}
 }
 
 // versionPattern accepts a plain major.minor.patch version, such as "3.80.0".

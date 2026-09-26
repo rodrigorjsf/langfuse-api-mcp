@@ -85,7 +85,7 @@ func TestAServerCertificateThatFailsVerificationIsReportedAsTLSUntrustedCertific
 }
 
 // refusedURL returns a loopback URL where nothing listens: connecting to it is
-// refused.
+// refused. The freed port can be reused by a parallel test's server (see #77).
 func refusedURL(t *testing.T) string {
 	t.Helper()
 	ln, err := new(net.ListenConfig).Listen(t.Context(), "tcp", "127.0.0.1:0")

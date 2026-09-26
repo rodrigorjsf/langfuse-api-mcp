@@ -198,6 +198,14 @@ func TestALangfuseClientErrorStatusMapsToItsToolErrorCode(t *testing.T) {
 	}
 }
 
+// htmlNotFound is the HTML 404 a Langfuse version answers for a route it lacks.
+var htmlNotFound = answer{status: 404, contentType: "text/html; charset=utf-8",
+	body: `<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width"/><meta name="next-head-count" content="2"/><link rel="icon" href="/favicon.ico"/></head><body><h1>404</h1></body></html>`}
+
+// eventsOnlyNotFound is the 404 of a Langfuse v4 deployment in events_only
+// mode for a legacy operation.
+var eventsOnlyNotFound = answer{status: 404, body: `{"message":"This endpoint is not available on deployments running in Langfuse v4 events_only mode."}`}
+
 func TestAnUnavailableOperationReturnsOperationUnavailableWithoutEchoingTheBody(t *testing.T) {
 	t.Parallel()
 	tests := map[string]struct {
@@ -206,13 +214,12 @@ func TestAnUnavailableOperationReturnsOperationUnavailableWithoutEchoingTheBody(
 		wantHint string // the family or version the hint names
 	}{
 		"HTML body: the route does not exist in this version": {
-			answer: answer{status: 404, contentType: "text/html; charset=utf-8",
-				body: `<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width"/><meta name="next-head-count" content="2"/><link rel="icon" href="/favicon.ico"/></head><body><h1>404</h1></body></html>`},
+			answer:   htmlNotFound,
 			bodyText: "DOCTYPE",
 			wantHint: "older Langfuse version",
 		},
 		"JSON naming events_only: the legacy family is off": {
-			answer:   answer{status: 404, body: `{"message":"This endpoint is not available on deployments running in Langfuse v4 events_only mode."}`},
+			answer:   eventsOnlyNotFound,
 			bodyText: "This endpoint",
 			wantHint: "events_only",
 		},
@@ -248,9 +255,6 @@ func TestAnUnavailableOperationReturnsOperationUnavailableWithoutEchoingTheBody(
 	}
 }
 
-// htmlNotFound is the HTML 404 a Langfuse version answers for a route it lacks.
-var htmlNotFound = answer{status: 404, contentType: "text/html; charset=utf-8", body: `<!DOCTYPE html><html><body><h1>404</h1></body></html>`}
-
 func TestAnUnavailableOperationHintNamesTheDetectedVersionAndTheMissingFamily(t *testing.T) {
 	t.Parallel()
 	fake, _ := scriptedLangfuse(t, htmlNotFound)
@@ -266,7 +270,6 @@ func TestAnUnavailableOperationHintNamesTheDetectedVersionAndTheMissingFamily(t 
 
 func TestAnUnavailableOperationHintSaysTheVersionIsUnknownWhenNoneWasDetectedOrItIsNotAPlainVersion(t *testing.T) {
 	t.Parallel()
-	eventsOnly := answer{status: 404, body: `{"message":"This endpoint is not available on deployments running in Langfuse v4 events_only mode."}`}
 	tests := map[string]struct {
 		profile  langfuse.DeploymentProfile
 		injected string // text of the reported version that must never reach the agent
@@ -278,7 +281,7 @@ func TestAnUnavailableOperationHintSaysTheVersionIsUnknownWhenNoneWasDetectedOrI
 		},
 		"bidi and control characters in the reported version": {
 			profile:  langfuse.DeploymentProfile{Version: "3.80.0\u202e\n0.0.4", Families: []langfuse.Family{langfuse.V4ReadFamily}},
-			injected: "0.0.4",
+			injected: "\u202e",
 		},
 		"markup in the reported version": {
 			profile:  langfuse.DeploymentProfile{Version: "<b>9.9.9</b>", Families: []langfuse.Family{langfuse.V4ReadFamily}},
@@ -288,7 +291,7 @@ func TestAnUnavailableOperationHintSaysTheVersionIsUnknownWhenNoneWasDetectedOrI
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			fake, _ := scriptedLangfuse(t, eventsOnly)
+			fake, _ := scriptedLangfuse(t, eventsOnlyNotFound)
 			cs := connectProfile(t, fake, tc.profile)
 
 			res := callExecuteRead(t, cs, traceList)
