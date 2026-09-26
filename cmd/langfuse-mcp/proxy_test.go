@@ -222,3 +222,76 @@ func TestStartupFailsNamingAnInvalidProxyVariableButNeverItsValue(t *testing.T) 
 		}
 	}
 }
+
+// Ticket #45 (spec #58), seam S3: a proxy set in the config file reaches the
+// Langfuse client, in either spelling; the environment wins over the file.
+
+// throughTheProxy calls execute_read on a session and checks the call
+// succeeded through proxy, with exactly one CONNECT to tunnelHost.
+func throughTheProxy(t *testing.T, s *stdioSession, proxy *connectProxy) {
+	t.Helper()
+	s.initialize()
+	call := s.callTraceGet()
+	s.stop()
+	if call.IsError {
+		t.Fatalf("execute_read through the proxy failed: %+v\nstderr:\n%s", call.StructuredContent, s.stderr)
+	}
+	if connects, _ := proxy.seen(); len(connects) != 1 || connects[0] != tunnelHost+":443" {
+		t.Errorf("the proxy saw CONNECT %v, want exactly one to %s:443", connects, tunnelHost)
+	}
+}
+
+func TestExecutableReachesLangfuseThroughTheProxyInItsConfigFile(t *testing.T) {
+	t.Parallel()
+	ca, caFile := newCertAuthority(t, "proxy test CA")
+	proxy := newConnectProxy(t, tunnelLangfuse(t, ca).Listener.Addr().String())
+	// hermeticEnv leaves every proxy variable of the environment empty.
+	s := startStdioWithConfigFile(t, "HTTPS_PROXY="+proxy.url.String()+"\n",
+		"LANGFUSE_BASE_URL=https://"+tunnelHost, "LANGFUSE_CA_CERT="+caFile)
+
+	throughTheProxy(t, s, proxy)
+
+	got := proxyLogLine(t, s.stderr.Bytes())
+	if got["endpoint"] != "http://"+proxy.url.Host || got["variable"] != "HTTPS_PROXY" || got["source"] != "config-file" {
+		t.Errorf("proxy log line = %v, want endpoint http://%s, variable HTTPS_PROXY, source config-file", got, proxy.url.Host)
+	}
+}
+
+func TestExecutableHonoursALowerCaseProxyKeyInItsConfigFileWithoutAWarning(t *testing.T) {
+	t.Parallel()
+	ca, caFile := newCertAuthority(t, "proxy test CA")
+	proxy := newConnectProxy(t, tunnelLangfuse(t, ca).Listener.Addr().String())
+	s := startStdioWithConfigFile(t, "https_proxy="+proxy.url.String()+"\n",
+		"LANGFUSE_BASE_URL=https://"+tunnelHost, "LANGFUSE_CA_CERT="+caFile)
+
+	throughTheProxy(t, s, proxy)
+
+	for _, line := range logLines(t, s.stderr.Bytes()) {
+		if line["level"] == "WARN" {
+			t.Errorf("startup logged a warning for the lower-case proxy key: %v", line)
+		}
+	}
+	if got := proxyLogLine(t, s.stderr.Bytes()); got["variable"] != "https_proxy" || got["source"] != "config-file" {
+		t.Errorf("proxy log line = %v, want variable https_proxy, source config-file", got)
+	}
+}
+
+func TestExecutableUsesTheEnvironmentsProxyOverTheConfigFiles(t *testing.T) {
+	t.Parallel()
+	ca, caFile := newCertAuthority(t, "proxy test CA")
+	langfuseAddr := tunnelLangfuse(t, ca).Listener.Addr().String()
+	envProxy, fileProxy := newConnectProxy(t, langfuseAddr), newConnectProxy(t, langfuseAddr)
+	// The file's upper-case spelling would win over the environment's lower
+	// case in Go's order if the file were exported regardless: it is not.
+	s := startStdioWithConfigFile(t, "HTTPS_PROXY="+fileProxy.url.String()+"\n",
+		"LANGFUSE_BASE_URL=https://"+tunnelHost, "LANGFUSE_CA_CERT="+caFile, "https_proxy="+envProxy.url.String())
+
+	throughTheProxy(t, s, envProxy)
+
+	if connects, _ := fileProxy.seen(); len(connects) != 0 {
+		t.Errorf("the config file's proxy saw CONNECT %v, want none: the environment wins", connects)
+	}
+	if got := proxyLogLine(t, s.stderr.Bytes()); got["variable"] != "https_proxy" || got["source"] != "environment" {
+		t.Errorf("proxy log line = %v, want variable https_proxy, source environment", got)
+	}
+}

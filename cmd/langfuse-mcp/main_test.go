@@ -55,13 +55,19 @@ func runExecutable(t *testing.T, env ...string) ([]byte, error) {
 func runExecutableWithConfigFile(t *testing.T, content string, env ...string) ([]byte, error) {
 	t.Helper()
 	configEnv, path := userConfigLocation(t)
+	writeConfigFile(t, path, content)
+	return runChild(t, append(configEnv, env...))
+}
+
+// writeConfigFile writes a config file holding content at path.
+func writeConfigFile(t *testing.T, path, content string) {
+	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatalf("create config directory: %v", err)
 	}
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("write config file: %v", err)
 	}
-	return runChild(t, append(configEnv, env...))
 }
 
 // userConfigLocation points the child's OS user config location at a fresh

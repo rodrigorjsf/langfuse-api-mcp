@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -24,9 +23,8 @@ const (
 )
 
 // Proxy is the proxy the server's Langfuse requests go through, for the
-// startup log only: the executable hands the Langfuse client
-// http.ProxyFromEnvironment, which reads the same variables. It never holds
-// the proxy's credentials.
+// startup log only: the executable builds the Langfuse client's proxy
+// function from ProxySettings. It never holds the proxy's credentials.
 type Proxy struct {
 	// Endpoint is the proxy as scheme://host:port, the scheme's default port
 	// filled in; "" when no proxy is set.
@@ -43,34 +41,85 @@ type Proxy struct {
 // without one.
 var defaultProxyPorts = map[string]string{"http": "80", "https": "443", "socks5": "1080", "socks5h": "1080"}
 
-// httpsProxyVariables name the proxy in use, in Go's order; httpProxyVariables
-// are validated too, since Go would read them, but never in use: Langfuse
-// hosts are https except loopback, and Go never proxies loopback.
-var (
-	httpsProxyVariables = []string{EnvHTTPSProxy, EnvHTTPSProxyLower}
-	httpProxyVariables  = []string{EnvHTTPProxy, EnvHTTPProxyLower}
-)
+// proxyVariables are the variables Go's http.ProxyFromEnvironment reads, one
+// pair per variable, each in Go's order: upper case, then lower case.
+var proxyVariables = [...][2]string{
+	{EnvHTTPSProxy, EnvHTTPSProxyLower},
+	{EnvHTTPProxy, EnvHTTPProxyLower},
+	{EnvNoProxy, EnvNoProxyLower},
+}
 
-// loadProxy validates every proxy variable set in env and returns the proxy
-// in use: HTTPS_PROXY, else https_proxy. An empty value counts as unset, as in Go.
-func loadProxy(env map[string]string) (Proxy, error) {
-	var p Proxy
-	for _, name := range append(slices.Clone(httpsProxyVariables), httpProxyVariables...) {
-		value := env[name]
-		if value == "" {
-			continue
+// ProxySettings are the proxy variables in effect, one value per variable,
+// resolved as Go's http.ProxyFromEnvironment resolves them (upper case over
+// lower case) over the environment and the config file together: the
+// environment wins for a variable it sets in either spelling (ADR-0006, #45).
+// The executable builds the Langfuse client's proxy function from them, so a
+// config-file proxy never has to reach the process environment. The proxy
+// URLs may carry credentials, so they are Secrets; "" means unset.
+type ProxySettings struct {
+	HTTPS   Secret // HTTPS_PROXY, else https_proxy
+	HTTP    Secret // HTTP_PROXY, else http_proxy
+	NoProxy string // NO_PROXY, else no_proxy; passed through as Go reads it
+}
+
+// loadProxy validates every proxy variable set in env or in the config file
+// (fromFile, read from path at lines) and returns the proxy in use and the
+// settings in effect. A variable the environment sets in either spelling is
+// read from the environment only, so the environment wins over the file while
+// Go's upper-over-lower order applies within each source (ADR-0006, #45). The
+// proxy in use is HTTPS_PROXY, else https_proxy; HTTP_PROXY is validated,
+// since Go would read it, but never in use: Langfuse hosts are https except
+// loopback, and Go never proxies loopback. An empty value counts as unset, as
+// in Go.
+func loadProxy(env, fromFile map[string]string, lines map[string]int, path string) (Proxy, ProxySettings, error) {
+	var effective [len(proxyVariables)]Setting
+	var names [len(proxyVariables)]string
+	for i, pair := range proxyVariables {
+		source, origin := fromFile, OriginConfigFile
+		if env[pair[0]] != "" || env[pair[1]] != "" {
+			source, origin = env, OriginEnvironment
 		}
-		endpoint, err := proxyEndpoint(value)
-		if err != nil {
-			// Never the value: a proxy URL may carry credentials.
-			return Proxy{}, fmt.Errorf("%s (%s): %w", name, OriginEnvironment, err)
-		}
-		if p.Endpoint == "" && slices.Contains(httpsProxyVariables, name) {
-			p.Endpoint, p.Variable, p.Origin = endpoint, name, OriginEnvironment
+		for _, name := range pair { // upper case first
+			if v := source[name]; v != "" {
+				effective[i], names[i] = Setting{Value: v, Origin: origin}, name
+				break
+			}
 		}
 	}
-	p.NoProxy = env[EnvNoProxy] != "" || env[EnvNoProxyLower] != ""
-	return p, nil
+
+	for _, pair := range proxyVariables[:2] { // NO_PROXY is passed through as Go reads it
+		for _, name := range pair {
+			// Validate both sources, even a file value the environment overrides.
+			if err := validateProxy(env[name], fmt.Sprintf("%s (%s)", name, OriginEnvironment)); err != nil {
+				return Proxy{}, ProxySettings{}, err
+			}
+			if err := validateProxy(fromFile[name], fmt.Sprintf("config file %s line %d: %s", path, lines[name], name)); err != nil {
+				return Proxy{}, ProxySettings{}, err
+			}
+		}
+	}
+
+	var p Proxy
+	if https := effective[0]; https.Value != "" {
+		p.Endpoint, _ = proxyEndpoint(https.Value) // validated above
+		p.Variable, p.Origin = names[0], https.Origin
+	}
+	p.NoProxy = effective[2].Value != ""
+	settings := ProxySettings{HTTPS: Secret{effective[0].Value}, HTTP: Secret{effective[1].Value}, NoProxy: effective[2].Value}
+	return p, settings, nil
+}
+
+// validateProxy returns an error starting with label (the variable and where
+// it was read) when value is set and not a valid proxy URL; never the value:
+// it may carry credentials.
+func validateProxy(value, label string) error {
+	if value == "" {
+		return nil
+	}
+	if _, err := proxyEndpoint(value); err != nil {
+		return fmt.Errorf("%s: %w", label, err)
+	}
+	return nil
 }
 
 // proxyEndpoint returns the proxy URL value as scheme://host:port, or an

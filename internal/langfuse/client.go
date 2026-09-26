@@ -45,7 +45,8 @@ type Options struct {
 	// (LANGFUSE_MCP_MAX_CONCURRENCY); zero or less means DefaultMaxConcurrency.
 	MaxConcurrency int
 	// Proxy picks the proxy for each request, with the http.Transport.Proxy
-	// signature: the executable passes http.ProxyFromEnvironment, tests pass
+	// signature: the executable passes one built from the resolved proxy
+	// settings with Go's http.ProxyFromEnvironment semantics, tests pass
 	// http.ProxyURL of a fake proxy (ADR-0006). Credentials in the proxy URL
 	// go out as Basic proxy authentication. Nil means no proxy.
 	Proxy func(*http.Request) (*url.URL, error)

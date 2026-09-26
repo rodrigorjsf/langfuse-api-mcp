@@ -10,9 +10,12 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"slices"
 	"strings"
+
+	"golang.org/x/net/http/httpproxy"
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/config"
@@ -105,10 +108,9 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 		// Operator settings only (config resolves the rate limit's host-based
 		// default; zero concurrency keeps the client's); no tool argument reaches them.
 		RateLimit: cfg.RateLimit, MaxConcurrency: cfg.MaxConcurrency,
-		// Go reads the proxy variables from the process environment, once, at
-		// the first request (ADR-0006). They are the ones config.Load validated
-		// because start passes os.Environ() as environ; no tool argument reaches them.
-		Proxy: http.ProxyFromEnvironment,
+		// The proxy variables config.Load validated and resolved over the
+		// environment and the config file; no tool argument reaches them.
+		Proxy: proxyFunc(cfg.ProxySettings),
 	})
 	srv := server.New(cat, client, log, server.Secrets{Keys: keys})
 	serve := func(ctx context.Context) error {
@@ -118,6 +120,17 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 		return transport.Stdio(ctx, srv)
 	}
 	return app{log: log, pool: pool, serve: serve}, nil
+}
+
+// proxyFunc returns the Langfuse client's proxy function for the resolved
+// proxy settings, with the semantics of http.ProxyFromEnvironment (the same
+// httpproxy code Go vendors), but read from the settings, not the process
+// environment: Go caches that environment the first time anything asks, and
+// the MCP SDK asks during package initialization, before main could export a
+// config-file proxy (ADR-0006, #61).
+func proxyFunc(s config.ProxySettings) func(*http.Request) (*url.URL, error) {
+	proxy := (&httpproxy.Config{HTTPSProxy: s.HTTPS.Reveal(), HTTPProxy: s.HTTP.Reveal(), NoProxy: s.NoProxy}).ProxyFunc()
+	return func(req *http.Request) (*url.URL, error) { return proxy(req.URL) }
 }
 
 // logProxy logs the proxy in use as scheme://host:port with its variable and

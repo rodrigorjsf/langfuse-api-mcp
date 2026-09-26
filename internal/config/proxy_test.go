@@ -1,7 +1,9 @@
 package config_test
 
 import (
+	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"unicode"
@@ -185,4 +187,175 @@ func FuzzLoadProxy(f *testing.F) {
 			}
 		}
 	})
+}
+
+// Ticket #45 (spec #58): the config file's proxy keys, in either spelling,
+// reach the Langfuse client. Load resolves each proxy variable as Go reads
+// it, upper case over lower case, from the environment when it sets the
+// variable in either spelling, else from the config file (ADR-0006).
+
+func TestLoadKnowsTheLowerCaseProxyKeysButNoOtherLowerCaseKey(t *testing.T) {
+	t.Parallel()
+	content := "https_proxy=http://proxy.example.com:8080\n" +
+		"http_proxy=http://proxy.example.com:8080\n" +
+		"no_proxy=langfuse.internal\n" +
+		"langfuse_ca_cert=/etc/corp/root.pem\n"
+
+	_, ignored, err := config.Load(connectionEnv(nil), configFile(content))
+
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	// Only the proxy variables are read in either spelling, as Go reads them.
+	want := []config.IgnoredKey{{Line: 4, Name: "langfuse_ca_cert"}}
+	if !slices.Equal(ignored, want) {
+		t.Fatalf("ignored keys = %+v, want %+v", ignored, want)
+	}
+}
+
+// resolved is the proxy settings Load hands the executable, in plain strings.
+type resolved struct{ HTTPS, HTTP, NoProxy string }
+
+func settingsOf(cfg config.Config) resolved {
+	s := cfg.ProxySettings
+	return resolved{HTTPS: s.HTTPS.Reveal(), HTTP: s.HTTP.Reveal(), NoProxy: s.NoProxy}
+}
+
+func TestLoadResolvesEachProxyVariableFromTheEnvironmentElseTheConfigFile(t *testing.T) {
+	t.Parallel()
+	const (
+		fileProxy = "http://file.example.com:8080"
+		envProxy  = "http://env.example.com:8080"
+	)
+	fromFileProxy := func(variable string) config.Proxy {
+		return config.Proxy{Endpoint: fileProxy, Variable: variable, Origin: config.OriginConfigFile}
+	}
+	tests := map[string]struct {
+		env       map[string]string
+		file      string
+		want      resolved
+		wantProxy config.Proxy
+	}{
+		"HTTPS_PROXY only in the file": {
+			file: "HTTPS_PROXY=" + fileProxy + "\n",
+			want: resolved{HTTPS: fileProxy}, wantProxy: fromFileProxy("HTTPS_PROXY"),
+		},
+		"lower-case https_proxy only in the file": {
+			file: "https_proxy=" + fileProxy + "\n",
+			want: resolved{HTTPS: fileProxy}, wantProxy: fromFileProxy("https_proxy"),
+		},
+		"both spellings in the file: the upper case wins": {
+			file:      "https_proxy=http://lower.example.com:8080\nHTTPS_PROXY=" + fileProxy + "\n",
+			want:      resolved{HTTPS: fileProxy},
+			wantProxy: fromFileProxy("HTTPS_PROXY"),
+		},
+		"both spellings in the environment: the upper case wins": {
+			env:       map[string]string{"HTTPS_PROXY": envProxy, "https_proxy": "http://lower.example.com:8080"},
+			want:      resolved{HTTPS: envProxy},
+			wantProxy: config.Proxy{Endpoint: envProxy, Variable: "HTTPS_PROXY", Origin: config.OriginEnvironment},
+		},
+		"the environment's HTTPS_PROXY wins over the file's https_proxy": {
+			env:       map[string]string{"HTTPS_PROXY": envProxy},
+			file:      "https_proxy=" + fileProxy + "\n",
+			want:      resolved{HTTPS: envProxy},
+			wantProxy: config.Proxy{Endpoint: envProxy, Variable: "HTTPS_PROXY", Origin: config.OriginEnvironment},
+		},
+		"the environment's https_proxy wins over the file's HTTPS_PROXY": {
+			env:       map[string]string{"https_proxy": envProxy},
+			file:      "HTTPS_PROXY=" + fileProxy + "\n",
+			want:      resolved{HTTPS: envProxy},
+			wantProxy: config.Proxy{Endpoint: envProxy, Variable: "https_proxy", Origin: config.OriginEnvironment},
+		},
+		"an empty environment value counts as unset": {
+			env:  map[string]string{"HTTPS_PROXY": "", "https_proxy": ""},
+			file: "HTTPS_PROXY=" + fileProxy + "\n",
+			want: resolved{HTTPS: fileProxy}, wantProxy: fromFileProxy("HTTPS_PROXY"),
+		},
+		"HTTP_PROXY and no_proxy from the file": {
+			file:      "HTTP_PROXY=" + fileProxy + "\nno_proxy=langfuse.internal\n",
+			want:      resolved{HTTP: fileProxy, NoProxy: "langfuse.internal"},
+			wantProxy: config.Proxy{NoProxy: true},
+		},
+		"the environment's NO_PROXY wins over the file's no_proxy, not over the file's proxy": {
+			env:       map[string]string{"NO_PROXY": "langfuse.internal"},
+			file:      "HTTPS_PROXY=" + fileProxy + "\nno_proxy=other.internal\n",
+			want:      resolved{HTTPS: fileProxy, NoProxy: "langfuse.internal"},
+			wantProxy: config.Proxy{Endpoint: fileProxy, Variable: "HTTPS_PROXY", Origin: config.OriginConfigFile, NoProxy: true},
+		},
+		"empty file values set nothing": {
+			file: "HTTPS_PROXY=\nhttps_proxy=\nNO_PROXY=\n",
+		},
+		"nothing in the file": {
+			env:       map[string]string{"HTTPS_PROXY": envProxy},
+			want:      resolved{HTTPS: envProxy},
+			wantProxy: config.Proxy{Endpoint: envProxy, Variable: "HTTPS_PROXY", Origin: config.OriginEnvironment},
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := mustLoad(t, tc.env, configFile(tc.file))
+
+			if got := settingsOf(cfg); got != tc.want {
+				t.Errorf("proxy settings = %+v, want %+v", got, tc.want)
+			}
+			if cfg.Proxy != tc.wantProxy {
+				t.Errorf("Proxy = %+v, want %+v", cfg.Proxy, tc.wantProxy)
+			}
+		})
+	}
+}
+
+// The resolved proxy URLs carry proxy credentials: they never print.
+func TestProxySettingsNeverPrintTheProxyCredentials(t *testing.T) {
+	t.Parallel()
+	const password = "hunter2"
+	cfg := mustLoad(t, map[string]string{"HTTP_PROXY": "http://proxyuser:" + password + "@env.example.com:8080"},
+		configFile("HTTPS_PROXY=http://proxyuser:"+password+"@proxy.example.com:8080\n"))
+
+	for _, verb := range []string{"%v", "%+v", "%#v", "%s"} {
+		for name, v := range map[string]any{"ProxySettings": cfg.ProxySettings, "Config": cfg} {
+			if got := fmt.Sprintf(verb, v); strings.Contains(got, password) {
+				t.Errorf("Sprintf(%q, %s) = %q, holds the credential", verb, name, got)
+			}
+		}
+	}
+}
+
+// Dangerous parameters (MCP05:2025): an invalid proxy value in the config file
+// stops startup naming the file, the line and the variable, never the value,
+// even when the environment sets that variable.
+func TestLoadRefusesAnInvalidConfigFileProxyValueWithoutEchoingIt(t *testing.T) {
+	t.Parallel()
+	const credential = "hunter2"
+	const value = "htps://proxyuser:" + credential + "@proxy.example.com:8080"
+	for _, variable := range []string{"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"} {
+		for name, env := range map[string]map[string]string{
+			"environment unset":             nil,
+			"environment sets the variable": {variable: "http://env.example.com:8080"},
+		} {
+			t.Run(variable+"/"+name, func(t *testing.T) {
+				t.Parallel()
+				file := configFile("# corporate proxy\n" + variable + "=" + value + "\n")
+
+				_, err := load(env, file)
+
+				if err == nil {
+					t.Fatalf("Load accepted %s=%q in the config file, want a startup error", variable, value)
+				}
+				msg := err.Error()
+				for _, want := range []string{"config file", file.Path, "line 2", variable} {
+					if !strings.Contains(msg, want) {
+						t.Errorf("error %q does not name %q", msg, want)
+					}
+				}
+				for _, leak := range []string{value, credential, "proxy.example.com"} {
+					if strings.Contains(msg, leak) {
+						t.Errorf("error %q echoes %q from the value", msg, leak)
+					}
+				}
+			})
+		}
+	}
 }

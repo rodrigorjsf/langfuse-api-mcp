@@ -34,8 +34,15 @@ type stdioSession struct {
 }
 
 // startStdio starts the executable as a child with the extra environment
-// entries (later entries win) and returns the session.
+// entries (later entries win) and no config file, and returns the session.
 func startStdio(t *testing.T, env ...string) *stdioSession {
+	t.Helper()
+	return startStdioWithConfigFile(t, "", env...)
+}
+
+// startStdioWithConfigFile is startStdio with a config file holding content
+// at the documented location for the running OS; "" means no config file.
+func startStdioWithConfigFile(t *testing.T, content string, env ...string) *stdioSession {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
@@ -43,7 +50,10 @@ func startStdio(t *testing.T, env ...string) *stdioSession {
 	if err != nil {
 		t.Fatalf("locate test binary: %v", err)
 	}
-	configEnv, _ := userConfigLocation(t)
+	configEnv, path := userConfigLocation(t)
+	if content != "" {
+		writeConfigFile(t, path, content)
+	}
 	cmd := exec.CommandContext(ctx, exe, "-test.run=^$") //nolint:gosec // G204: exe is this test binary, not external input
 	cmd.Env = append(append(append(os.Environ(), runMainEnv+"=1"), hermeticEnv...), connectionEnv...)
 	cmd.Env = append(append(cmd.Env, configEnv...), env...)
