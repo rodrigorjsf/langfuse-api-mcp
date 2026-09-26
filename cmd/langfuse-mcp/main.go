@@ -189,14 +189,10 @@ func trustSources(cfg config.Config, ambient []trust.Source) trust.Sources {
 	return src
 }
 
-// catalogProfile is the deployment profile as the catalog reads it: catalog
-// imports nothing internal (ADR-0009), so the families cross by name.
+// catalogProfile is the deployment profile as the catalog reads it. Both share
+// the catalog's family type; only the version needs checking on the way.
 func catalogProfile(p langfuse.DeploymentProfile) catalog.Profile {
-	families := make([]catalog.Family, 0, len(p.Families))
-	for _, f := range p.Families {
-		families = append(families, catalog.Family(f))
-	}
 	// Version is untrusted Langfuse text: only a plain version crosses.
 	version, _ := p.KnownVersion()
-	return catalog.Profile{Version: version, Families: families}
+	return catalog.Profile{Version: version, Families: p.Families}
 }
