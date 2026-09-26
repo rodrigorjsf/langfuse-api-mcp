@@ -89,8 +89,8 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 		}
 		if o.isListLimit(p) {
 			if _, ok := parsePageSize(values[0], MaxLimit); !ok {
-				return Request{}, rangeError{ErrLimitOutOfRange, invalidf("parameter %s: want an integer from 1 to %d, got %s",
-					p.Name, MaxLimit, values[0])}
+				return Request{}, rangeError{ErrLimitOutOfRange, invalidf("parameter %s: want an integer from 1 to %d",
+					p.Name, MaxLimit)}
 			}
 		}
 		if o.isMetricsQuery(p) {

@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"unicode"
 )
 
 //go:embed spec/langfuse-openapi.json
@@ -54,6 +55,13 @@ type Operation struct {
 	Method string
 	// Path is the path template below the host, e.g. /api/public/traces/{traceId}.
 	Path string
+	// Tag is the operation's OpenAPI tag, the area it belongs to (Trace,
+	// Prompts, Datasets…); the operation index groups by it.
+	Tag string
+	// DescriptionLine is the first line of the operation's OpenAPI
+	// description, with invisible, bidirectional formatting and control
+	// characters removed: the spec is third-party text.
+	DescriptionLine string
 	// Params are the operation's path and query parameters.
 	Params []Param
 }
@@ -84,6 +92,18 @@ type Schema struct {
 	// Ref names a component schema (#/components/schemas/<name>); Load
 	// resolves it into Type and Enum.
 	Ref string `json:"$ref"`
+	// Format refines Type, e.g. "date-time"; empty when the spec names none.
+	Format string `json:"format"`
+	// Minimum and Maximum bound a number; MinLength and MaxLength bound a
+	// string's length. Nil when the spec gives no bound, except for the page
+	// size of a list operation, which the catalog bounds itself (MaxLimit).
+	Minimum   *float64 `json:"minimum"`
+	Maximum   *float64 `json:"maximum"`
+	MinLength *int     `json:"minLength"`
+	MaxLength *int     `json:"maxLength"`
+	// Default is the value used when the parameter is absent; nil when the
+	// spec names none, DefaultLimit for the page size of a list operation.
+	Default any `json:"default"`
 }
 
 // IsRead reports whether the operation is a read operation (HTTP GET).
@@ -91,14 +111,17 @@ func (o Operation) IsRead() bool { return o.Method == http.MethodGet }
 
 // Load builds the catalog from the embedded Langfuse OpenAPI spec, minus the
 // excluded operations.
-func Load() (Catalog, error) {
+func Load() (Catalog, error) { return load(openAPISpec) }
+
+// load builds the catalog from an OpenAPI spec, minus the excluded operations.
+func load(spec []byte) (Catalog, error) {
 	var doc struct {
 		Paths      map[string]map[string]json.RawMessage `json:"paths"`
 		Components struct {
 			Schemas map[string]Schema `json:"schemas"`
 		} `json:"components"`
 	}
-	if err := json.Unmarshal(openAPISpec, &doc); err != nil {
+	if err := json.Unmarshal(spec, &doc); err != nil {
 		return Catalog{}, fmt.Errorf("embedded OpenAPI spec: %w", err)
 	}
 	cat := Catalog{byID: map[string]Operation{}}
@@ -109,8 +132,10 @@ func Load() (Catalog, error) {
 				continue // path-level keys such as "parameters"
 			}
 			var op struct {
-				OperationID string  `json:"operationId"`
-				Parameters  []Param `json:"parameters"`
+				OperationID string   `json:"operationId"`
+				Tags        []string `json:"tags"`
+				Description string   `json:"description"`
+				Parameters  []Param  `json:"parameters"`
 			}
 			if err := json.Unmarshal(raw, &op); err != nil {
 				return Catalog{}, fmt.Errorf("embedded OpenAPI spec: %s %s: %w", m, path, err)
@@ -124,7 +149,20 @@ func Load() (Catalog, error) {
 						op.OperationID, op.Parameters[i].Name, err)
 				}
 			}
-			cat.byID[op.OperationID] = Operation{ID: op.OperationID, Method: m, Path: path, Params: op.Parameters}
+			o := Operation{ID: op.OperationID, Method: m, Path: path, Params: op.Parameters}
+			if len(op.Tags) > 0 {
+				o.Tag = visible(op.Tags[0])
+			}
+			line, _, _ := strings.Cut(strings.TrimSpace(op.Description), "\n")
+			o.DescriptionLine = strings.TrimSpace(visible(line))
+			for i, p := range o.Params {
+				if o.isListLimit(p) {
+					// The catalog bounds the page size itself (Request).
+					o.Params[i].Schema.Minimum, o.Params[i].Schema.Maximum = new(float64(1)), new(float64(MaxLimit))
+					o.Params[i].Schema.Default = DefaultLimit
+				}
+			}
+			cat.byID[o.ID] = o
 		}
 	}
 	return cat, nil
@@ -150,6 +188,20 @@ func resolve(s *Schema, components map[string]Schema) error {
 	}
 	s.Type, s.Enum, s.Nullable, s.Ref = target.Type, target.Enum, s.Nullable || target.Nullable, ""
 	return nil
+}
+
+// visible drops the characters of s that hide or reorder text: control
+// characters, the Unicode format category Cf (zero-width characters, bidi
+// overrides and isolates, the byte order mark) and the tag block
+// U+E0000–E007F. Invalid UTF-8 is dropped too. It mirrors sanitize.Text,
+// which catalog may not import (ADR-0009).
+func visible(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || (r >= 0xE0000 && r <= 0xE007F) {
+			return -1
+		}
+		return r
+	}, strings.ToValidUTF8(s, ""))
 }
 
 // Lookup returns the in-scope operation with the given ID.

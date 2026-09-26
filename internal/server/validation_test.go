@@ -172,8 +172,9 @@ func TestExecuteReadAnswersAnUnknownOrExcludedOperationWithOperationNotFound(t *
 
 			got := toolErrorOf(t, callExecuteRead(t, cs, map[string]any{"operationId": id})).Error
 
-			if got.Code != "operation_not_found" || got.OperationID != id || got.Hint == "" {
-				t.Errorf("error = %+v, want operation_not_found for %s with a hint", got, id)
+			if got.Code != "operation_not_found" || got.OperationID != id || !strings.Contains(got.Hint, "search_operations") ||
+				strings.Contains(got.Hint, "http") {
+				t.Errorf("error = %+v, want operation_not_found for %s with a hint naming search_operations (#36)", got, id)
 			}
 			// An excluded operation is in the Langfuse API reference: the
 			// message says it is out of this server's scope instead.
