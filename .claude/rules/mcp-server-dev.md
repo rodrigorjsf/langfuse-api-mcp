@@ -1,3 +1,11 @@
+---
+paths:
+  - "internal/server/**"
+  - "internal/catalog/**"
+  - "internal/workflows/**"
+  - "internal/transport/**"
+  - "packaging/**"
+---
 # MCP development: use the official skills
 
 Whenever you design, add, or change anything MCP-facing (tools, schemas, annotations, transports, elicitation, packaging), **load the official `mcp-server-dev` skills first** and follow them unless an ADR records a deliberate deviation:

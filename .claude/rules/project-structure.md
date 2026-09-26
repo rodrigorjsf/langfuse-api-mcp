@@ -16,13 +16,13 @@ Packages are organized **by domain concept** (terms from `CONTEXT.md`), never by
 │   │   └── spec/            exclusions, search, param validation; spec/ holds the go:embed'ed generated catalog
 │   ├── sanitize/            Untrusted-data envelope, invisible/bidi Unicode + control-char stripping,
 │   │                        size truncation; pure functions
-│   ├── workflows/           Workflow tools' logic, one file per workflow (trace.go, errors.go, cost.go…);
+│   ├── workflows/           (Planned, M3) Workflow tools' logic, one file per workflow (trace.go, errors.go, cost.go…);
 │   │                        uses langfuse + sanitize; knows nothing about MCP registration
 │   ├── server/              MCP surface: go-sdk server, tool registration + annotations, write-mode gate,
 │   │                        search/execute handlers, the ONLY translation of errors into tool errors (ADR-0008)
 │   └── transport/           stdio start-up; loopback Streamable HTTP: bind, bearer token, Origin/Host checks
 ├── skills/<skill-name>/     M6 user-facing skills (SKILL.md + references), authored with /writing-great-skills
-├── packaging/               Dockerfile, .goreleaser.yaml inputs, mcpb/manifest.json
+├── packaging/               (Planned, M5) Dockerfile, .goreleaser.yaml inputs, mcpb/manifest.json
 ├── scripts/                 repeatable maintainer procedures (WHAT/WHY/WHEN/HOW header), e.g. setup-ci-langfuse-cloud.sh
 ├── docs/                    adr/, architecture/, research/, agents/ — no code
 └── .claude/                 rules/, hooks/, handoffs/ (session handoff notes), settings.json

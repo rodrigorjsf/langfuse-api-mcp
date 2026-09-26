@@ -1,6 +1,6 @@
 # langfuse-api-mcp
 
-Stateless Go MCP server exposing the Langfuse public API (Cloud + self-hosted) with explicit corporate TLS/CA support. Phase: **M0 foundations — no code yet** (`ROADMAP.md`).
+Stateless Go MCP server exposing the Langfuse public API (Cloud + self-hosted) with explicit corporate TLS/CA support. Status: `ROADMAP.md`.
 
 ## Read before working
 
@@ -12,11 +12,11 @@ Stateless Go MCP server exposing the Langfuse public API (Cloud + self-hosted) w
 | evidence behind decisions | `docs/research/INDEX.md` |
 | milestones | `ROADMAP.md` |
 
-Before creating any file, place it per `.claude/rules/project-structure.md`. Rules in `.claude/rules/` load automatically; path-scoped ones (`go`, `testing`, `mcp-tool-design`, `langfuse-api`) load when you touch matching files.
+Before creating any file, place it per `.claude/rules/project-structure.md`. Rules in `.claude/rules/` load automatically; path-scoped ones load when you touch matching files.
 
 ## Definition of done
 
-Never report work as done unless, in this turn, you have fresh output of `go build ./...`, `go test -race ./...`, `golangci-lint run` (once code exists) **and** every affected doc is updated in the same commit (`.claude/rules/docs-sync.md`). Unclosable gaps become GitHub issues (`/follow-up-issue`), not chat notes.
+Never report work as done without the fresh-output checklist in `.claude/rules/docs-sync.md`. Unclosable gaps become GitHub issues (`/follow-up-issue`), not chat notes.
 
 ## Always
 
