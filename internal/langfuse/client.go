@@ -28,7 +28,13 @@ type Options struct {
 	// TLS is the client TLS configuration built from the trust pool; nil uses
 	// Go's defaults.
 	TLS *tls.Config
+	// Timeout is the deadline of one request, retries included; zero means
+	// defaultTimeout.
+	Timeout time.Duration
 }
+
+// defaultTimeout is the request deadline when Options.Timeout is zero.
+const defaultTimeout = 60 * time.Second
 
 // redacted replaces the key pair wherever Options or Client are printed.
 const redacted = "[REDACTED]"
@@ -50,6 +56,7 @@ type Client struct {
 	host       *url.URL
 	publicKey  string
 	secretKey  string
+	timeout    time.Duration
 	httpClient *http.Client
 }
 
@@ -84,11 +91,19 @@ func New(opts Options) *Client {
 		TLSHandshakeTimeout:   10 * time.Second,
 		ResponseHeaderTimeout: 30 * time.Second,
 	}
+	timeout := opts.Timeout
+	if timeout <= 0 {
+		timeout = defaultTimeout
+	}
 	return &Client{
-		host:       opts.Host,
-		publicKey:  opts.PublicKey,
-		secretKey:  opts.SecretKey,
-		httpClient: &http.Client{Transport: transport, Timeout: 60 * time.Second},
+		host:      opts.Host,
+		publicKey: opts.PublicKey,
+		secretKey: opts.SecretKey,
+		timeout:   timeout,
+		// No Client.Timeout: Do puts the deadline on the request context, so
+		// it covers retries and the body read and is told apart from a
+		// cancellation.
+		httpClient: &http.Client{Transport: transport},
 	}
 }
 
@@ -112,8 +127,12 @@ func (e *APIError) Error() string { return fmt.Sprintf("langfuse answered HTTP %
 
 // Do sends one request: method, the escaped path below the host (e.g.
 // /api/public/traces/abc) and the query, with Basic auth. It returns the
-// response JSON for a 2xx answer and an *APIError otherwise.
+// response JSON for a 2xx answer and an *APIError otherwise. A request that
+// got no answer returns an error wrapping ErrUntrustedCertificate,
+// ErrCertificateRejected, ErrNetwork, ErrTimeout or ErrCanceled.
 func (c *Client) Do(ctx context.Context, method, escapedPath string, query url.Values) (Response, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
 	u := *c.host
 	u.RawPath = strings.TrimSuffix(c.host.EscapedPath(), "/") + escapedPath
 	path, err := url.PathUnescape(u.RawPath)
@@ -130,7 +149,7 @@ func (c *Client) Do(ctx context.Context, method, escapedPath string, query url.V
 	req.SetBasicAuth(c.publicKey, c.secretKey)
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.send(ctx, req)
 	if err != nil {
 		return Response{}, fmt.Errorf("send request: %w", err)
 	}
@@ -143,7 +162,7 @@ func (c *Client) Do(ctx context.Context, method, escapedPath string, query url.V
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err != nil {
-		return Response{}, fmt.Errorf("read response: %w", err)
+		return Response{}, fmt.Errorf("read response: %w", classify(err))
 	}
 	if len(body) > maxResponseBytes {
 		return Response{}, fmt.Errorf("response exceeds %d bytes", maxResponseBytes)
