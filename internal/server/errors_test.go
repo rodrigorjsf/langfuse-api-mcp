@@ -34,7 +34,7 @@ type answer struct {
 
 // scriptedLangfuse answers the n-th request with answers[n]; once the script
 // runs out it repeats the last answer. It counts the requests it received.
-func scriptedLangfuse(t *testing.T, answers ...answer) (*httptest.Server, *atomic.Int32) {
+func scriptedLangfuse(t testing.TB, answers ...answer) (*httptest.Server, *atomic.Int32) {
 	t.Helper()
 	var calls atomic.Int32
 	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

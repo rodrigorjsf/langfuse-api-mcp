@@ -194,7 +194,7 @@ func profileLogLine(t *testing.T, stderr []byte) map[string]any {
 	return nil
 }
 
-func TestExecutableServesTheDiscoveryToolsAndExecuteReadOverStdio(t *testing.T) {
+func TestExecutableServesTheDiscoveryToolsExecuteReadAndGetTraceTreeOverStdio(t *testing.T) {
 	t.Parallel()
 	gotAuth := make(chan string, 1)
 	fake := deploymentLangfuse(t, `{"status":"OK","version":"4.46.0"}`, nil, func(w http.ResponseWriter, r *http.Request) {
@@ -219,7 +219,7 @@ func TestExecutableServesTheDiscoveryToolsAndExecuteReadOverStdio(t *testing.T) 
 		names = append(names, tool.Name)
 	}
 	slices.Sort(names)
-	if want := []string{"describe_operation", "execute_read", "search_operations"}; !slices.Equal(names, want) {
+	if want := []string{"describe_operation", "execute_read", "get_trace_tree", "search_operations"}; !slices.Equal(names, want) {
 		t.Fatalf("tools = %v, want exactly %v", names, want)
 	}
 

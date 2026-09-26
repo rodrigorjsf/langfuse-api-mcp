@@ -50,7 +50,7 @@ func clientOptions(t *testing.T, fake *httptest.Server) langfuse.Options {
 
 // testOptions returns the client options for the fake Langfuse at rawURL,
 // with the test key pair.
-func testOptions(t *testing.T, rawURL string) langfuse.Options {
+func testOptions(t testing.TB, rawURL string) langfuse.Options {
 	t.Helper()
 	host, err := url.Parse(rawURL)
 	if err != nil {
@@ -78,7 +78,7 @@ func connectServer(t testing.TB, client *langfuse.Client, log *slog.Logger, secr
 
 // connectProfile starts the server against the fake Langfuse as if startup
 // had detected the given deployment profile.
-func connectProfile(t *testing.T, fake *httptest.Server, profile langfuse.DeploymentProfile) *mcp.ClientSession {
+func connectProfile(t testing.TB, fake *httptest.Server, profile langfuse.DeploymentProfile) *mcp.ClientSession {
 	t.Helper()
 	return startServer(t, langfuse.New(testOptions(t, fake.URL)), slog.New(slog.DiscardHandler), server.Secrets{Keys: testKeys()}, profile)
 }
@@ -120,7 +120,7 @@ func startCatalog(t testing.TB, cat catalog.Catalog, client *langfuse.Client, lo
 	return cs
 }
 
-func TestTheToolSetIsTheDiscoveryToolsAndExecuteRead(t *testing.T) {
+func TestTheToolSetWithEveryFamilyOnIsTheDiscoveryToolsExecuteReadAndGetTraceTree(t *testing.T) {
 	t.Parallel()
 	fake := httptest.NewServer(nil)
 	t.Cleanup(fake.Close)
@@ -136,7 +136,7 @@ func TestTheToolSetIsTheDiscoveryToolsAndExecuteRead(t *testing.T) {
 		names = append(names, tool.Name)
 	}
 	slices.Sort(names)
-	if want := []string{"describe_operation", "execute_read", "search_operations"}; !slices.Equal(names, want) {
+	if want := []string{"describe_operation", "execute_read", "get_trace_tree", "search_operations"}; !slices.Equal(names, want) {
 		t.Fatalf("tools = %v, want exactly %v", names, want)
 	}
 }

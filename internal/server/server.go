@@ -132,6 +132,9 @@ func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets
 			OpenWorldHint:   new(true),
 		},
 	}, audited(log, redact, ex.executeRead))
+	if profile.On(catalog.V4ReadFamily) {
+		s.AddTool(traceTreeTool(), audited(log, redact, ex.getTraceTree))
+	}
 	return s
 }
 
@@ -278,7 +281,7 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 		return toolError(errorInvalidArgument, err.Error(), parametersHintFor(err, op), op.ID)
 	}
 	resp, err := ex.client.Do(ctx, request.Method, request.Path, request.Query)
-	a.status, a.bytes = resp.Status, len(resp.Body)
+	a.requests, a.status, a.bytes = 1, resp.Status, len(resp.Body)
 	if err != nil {
 		if f, ok := langfuseErrorFields(err, op, ex.redact, ex.profile); ok {
 			a.status = f.HTTPStatus

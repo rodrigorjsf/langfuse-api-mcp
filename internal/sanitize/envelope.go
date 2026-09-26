@@ -49,22 +49,42 @@ type Envelope struct {
 //   - any other payload becomes a string holding as much of its start as fits,
 //     followed by the truncation marker.
 func Wrap(operationID string, payload json.RawMessage) Envelope {
-	env := Envelope{Label: UntrustedLabel, OperationID: operationID, Data: payload}
+	return wrap(operationID, payload, "", rowsHint, truncatedHint)
+}
+
+// WrapWith is Wrap for a payload whose hints are fixed text, such as a
+// workflow tool's result: hint is always set, and when the payload is cut,
+// cutHint comes before it. The envelope, hints included, fits MaxResultBytes.
+func WrapWith(operationID string, payload json.RawMessage, hint, cutHint string) Envelope {
+	cut := cutHint
+	if hint != "" {
+		cut += "; " + hint
+	}
+	return wrap(operationID, payload, hint, func(int, int) string { return cut }, cut)
+}
+
+// wrap builds the envelope with hint, cutting the payload when it does not
+// fit: a page keeps its leading rows under rowHint(kept, total), anything
+// else becomes text under textHint.
+func wrap(operationID string, payload json.RawMessage, hint string, rowHint func(kept, total int) string,
+	textHint string,
+) Envelope {
+	env := Envelope{Label: UntrustedLabel, OperationID: operationID, Hint: hint, Data: payload}
 	if size(env) <= MaxResultBytes {
 		return env
 	}
 	env.Truncated = true
-	if page, ok := firstRows(env, payload); ok {
+	if page, ok := firstRows(env, payload, rowHint); ok {
 		return page
 	}
-	env.Hint = truncatedHint
+	env.Hint = textHint
 	return cutText(env, string(payload))
 }
 
 // firstRows returns env holding the page payload with as many leading rows of
-// its "data" list as fit MaxResultBytes, or false when payload is not a page
+// its "data" list as fit MaxResultBytes, hinted by rowHint, or false when payload is not a page
 // or not even its other fields fit.
-func firstRows(env Envelope, payload json.RawMessage) (Envelope, bool) {
+func firstRows(env Envelope, payload json.RawMessage, rowHint func(kept, total int) string) (Envelope, bool) {
 	var page map[string]json.RawMessage
 	var rows []json.RawMessage
 	if json.Unmarshal(payload, &page) != nil || json.Unmarshal(page["data"], &rows) != nil || rows == nil {
@@ -73,7 +93,7 @@ func firstRows(env Envelope, payload json.RawMessage) (Envelope, bool) {
 	with := func(k int) Envelope {
 		page["data"] = marshal(rows[:k])
 		e := env
-		e.Data, e.Hint = marshal(page), rowsHint(k, len(rows))
+		e.Data, e.Hint = marshal(page), rowHint(k, len(rows))
 		return e
 	}
 	// Rows past the cap even on their own never fit: search only below them.
