@@ -21,7 +21,8 @@ import (
 )
 
 // executeReadDescription is static text compiled into the binary; it is never
-// built from API data.
+// built from API data. It names no sibling tool yet: search_operations is
+// planned (M3); see #36.
 const executeReadDescription = "Runs one read operation (HTTP GET) of the Langfuse public API, " +
 	"selected by its operation ID, with its path and query parameters.\n\n" +
 	"Returns the Langfuse JSON response wrapped in an untrusted-data envelope: " +
@@ -197,6 +198,7 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 			"read the data with a read operation instead, e.g. trace_list or trace_get", in.OperationID)
 	}
 	if !ok {
+		// The hint points at search_operations once that tool ships; see #36.
 		return toolError(errorOperationNotFound, "unknown operation ID "+strconv.Quote(truncate(in.OperationID)),
 			"use an operation ID of the Langfuse API reference: https://api.reference.langfuse.com", in.OperationID)
 	}
