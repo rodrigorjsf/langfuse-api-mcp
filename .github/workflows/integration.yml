@@ -10,10 +10,16 @@
 #   First green Cloud run without the goleak ignores (#41): workflow_dispatch run 36244125560
 #   (2026-09-26, main at 988b3d2, #51).
 # Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current.
+# A pull request that only changes docs (same paths-ignore list as ci.yml) starts no run.
 name: Integration
 
 on:
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - ".claude/**"
+      - "LICENSE"
   schedule:
     - cron: "41 5 * * 2"
   workflow_dispatch:
