@@ -39,7 +39,11 @@ jobs:
       - name: Integration tests
         run: |
           set -a; . "$RUNNER_TEMP/langfuse.env"; set +a
-          go test -tags integration -count=1 -v ./...
+          # Without the variables the suite would skip every live test and the job would pass green.
+          for name in LANGFUSE_TEST_BASE_URL LANGFUSE_TEST_PUBLIC_KEY LANGFUSE_TEST_SECRET_KEY; do
+            [ -n "${!name:-}" ] || { echo "::error::$name missing from the self-hosted env file"; exit 1; }
+          done
+          go test -race -tags integration -count=1 -v ./...
       - name: Langfuse logs
         if: failure()
         run: scripts/langfuse-selfhosted.sh logs 200
@@ -55,13 +59,13 @@ jobs:
     concurrency:
       group: integration-cloud
       cancel-in-progress: false
-    env:
-      LANGFUSE_TEST_BASE_URL: ${{ secrets.LANGFUSE_TEST_BASE_URL }}
-      LANGFUSE_TEST_PUBLIC_KEY: ${{ secrets.LANGFUSE_TEST_PUBLIC_KEY }}
-      LANGFUSE_TEST_SECRET_KEY: ${{ secrets.LANGFUSE_TEST_SECRET_KEY }}
     steps:
       # Without the secrets the suite would skip every live test and the job would pass green.
       - name: Require the Cloud test project's secrets
+        env: &cloud-secrets
+          LANGFUSE_TEST_BASE_URL: ${{ secrets.LANGFUSE_TEST_BASE_URL }}
+          LANGFUSE_TEST_PUBLIC_KEY: ${{ secrets.LANGFUSE_TEST_PUBLIC_KEY }}
+          LANGFUSE_TEST_SECRET_KEY: ${{ secrets.LANGFUSE_TEST_SECRET_KEY }}
         run: |
           for name in LANGFUSE_TEST_BASE_URL LANGFUSE_TEST_PUBLIC_KEY LANGFUSE_TEST_SECRET_KEY; do
             if [ -z "${!name}" ]; then
@@ -77,4 +81,5 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.mod
       - name: Integration tests
-        run: go test -tags integration -count=1 -v ./...
+        env: *cloud-secrets
+        run: go test -race -tags integration -count=1 -v ./...

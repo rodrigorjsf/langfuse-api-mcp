@@ -38,7 +38,8 @@ IMAGE_POSTGRES=docker.io/postgres:17@sha256:d74eeac9a635390a49bc21bd49fccd973de7
 PROJECT=langfuse-mcp-it
 BASE_URL=http://localhost:3000
 READY_TIMEOUT_SECONDS=${READY_TIMEOUT_SECONDS:-300}
-WORK_DIR="${TMPDIR:-/tmp}/$PROJECT"
+# A user-owned directory, not a predictable path in a shared /tmp: `down` removes it.
+WORK_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/$PROJECT"
 
 compose() {
   docker compose --project-name "$PROJECT" \
@@ -63,7 +64,9 @@ services:
 EOF
 
   # A fresh project and key pair on every start: nothing is reused between runs.
-  local public_key="pk-lf-$(random_hex 16)" secret_key="sk-lf-$(random_hex 16)"
+  local public_key secret_key
+  public_key="pk-lf-$(random_hex 16)"
+  secret_key="sk-lf-$(random_hex 16)"
   if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
     echo "::add-mask::$secret_key"
   fi
@@ -105,7 +108,10 @@ down() {
 case "${1:-}" in
   up) up "${2:-}" ;;
   down) down ;;
-  logs) compose logs --tail "${2:-200}" ;;
+  logs)
+    [[ -f "$WORK_DIR/docker-compose.yml" ]] || { echo "no stack started: run $0 up first" >&2; exit 1; }
+    compose logs --tail "${2:-200}"
+    ;;
   *)
     echo "usage: $0 up [env-file] | down | logs [lines]" >&2
     exit 2
