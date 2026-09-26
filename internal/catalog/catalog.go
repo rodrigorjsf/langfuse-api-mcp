@@ -216,9 +216,10 @@ var markdownLink = regexp.MustCompile(`!?\[([^\]]*)\]\([^)]*\)`)
 // the union catalog gives a deprecated operation (x-summary: what it does
 // and its replacement, #79), else the first line of its description. Either
 // is third-party text: hidden characters are removed, a Markdown link keeps
-// only its text, emphasis markers (** and __) are removed, and a line over
-// maxIndexLineRunes is cut with an ellipsis. Backticks stay: they mark
-// parameter names. Instruction-like text shorter than that passes through;
+// only its text, bold markers (** and __) are removed, and a line over
+// maxIndexLineRunes is cut with an ellipsis. Single * and _ and backticks
+// stay; __ goes even inside a code span (no catalog line holds one today).
+// Instruction-like text shorter than that passes through;
 // search_operations and describe_operation frame the lines as third-party
 // text instead (#82).
 func indexLine(summary, description string) string {
@@ -226,21 +227,21 @@ func indexLine(summary, description string) string {
 	if strings.TrimSpace(line) == "" {
 		line, _, _ = strings.Cut(strings.TrimSpace(description), "\n")
 	}
-	line = strings.TrimSpace(withoutEmphasis(markdownLink.ReplaceAllString(visible(line), "$1")))
+	line = strings.TrimSpace(withoutBoldMarkers(markdownLink.ReplaceAllString(visible(line), "$1")))
 	if r := []rune(line); len(r) > maxIndexLineRunes {
 		line = string(r[:maxIndexLineRunes-1]) + "…"
 	}
 	return line
 }
 
-// emphasisMarker matches a run of the Markdown bold markers * and _.
-var emphasisMarker = regexp.MustCompile(`\*\*+|__+`)
+// boldMarker matches a Markdown bold marker: a run of two or more * or _.
+var boldMarker = regexp.MustCompile(`\*\*+|__+`)
 
-// withoutEmphasis removes every ** and __ from s. Removing one run can join
+// withoutBoldMarkers removes every ** and __ from s. Removing one run can join
 // two others ("*__*"), so it repeats until none is left; each pass shortens s.
-func withoutEmphasis(s string) string {
-	for emphasisMarker.MatchString(s) {
-		s = emphasisMarker.ReplaceAllString(s, "")
+func withoutBoldMarkers(s string) string {
+	for boldMarker.MatchString(s) {
+		s = boldMarker.ReplaceAllString(s, "")
 	}
 	return s
 }
