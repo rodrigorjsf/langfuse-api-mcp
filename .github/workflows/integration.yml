@@ -7,6 +7,7 @@
 #   keys scripts/setup-ci-langfuse-cloud.sh stored as repository secrets. Weekly only, to respect
 #   the Hobby plan's rate limits; the suite waits for Retry-After on 429.
 #   First green Cloud run: workflow_dispatch run 36239908860 (2026-09-26, Langfuse 4.46.0, #40).
+#   That run predates #41's goleak tightening; a green run on it is still owed: see #51.
 # Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current.
 name: Integration
 
