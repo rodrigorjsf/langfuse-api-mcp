@@ -57,6 +57,7 @@ cmd → transport → server → workflows → langfuse → trust
                          ↘ catalog     ↘ sanitize
 config is imported only by cmd; every other package receives plain values/structs (accept dependencies, don't create them).
 server also imports langfuse (its error types, errors.md) and sanitize (wraps executor results).
+langfuse also imports catalog, a leaf, for the one operation family type (ADR-0009 amendment, #78).
 ```
 
 - Lower packages never import higher ones (`langfuse` never imports `server`; `catalog` imports nothing internal).

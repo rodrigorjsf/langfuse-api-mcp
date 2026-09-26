@@ -14,23 +14,9 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
+
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 )
-
-// Family is an operation family: a group of operations a deployment turns on
-// or off together through its write mode (ADR-0012 §2).
-type Family string
-
-// The operation families of ADR-0012 §2, in the order they are listed.
-const (
-	LegacyFamily      Family = "legacy"
-	V4ReadFamily      Family = "v4 read"
-	ExperimentsFamily Family = "experiments"
-)
-
-// AllFamilies lists every operation family, in a fixed order.
-func AllFamilies() []Family {
-	return []Family{LegacyFamily, V4ReadFamily, ExperimentsFamily}
-}
 
 // DeploymentProfile is the connected deployment's detected Langfuse version
 // plus the operation families that answered at startup (ADR-0012 §3). It is
@@ -40,14 +26,15 @@ type DeploymentProfile struct {
 	// unknown. It comes from Langfuse, so it is untrusted: read it through
 	// KnownVersion, never directly into text shown to the agent.
 	Version string
-	// Families are the operation families that are on.
-	Families []Family
+	// Families are the operation families that are on. The family type is the
+	// catalog's, the one definition shared by the catalog and the client.
+	Families []catalog.Family
 }
 
 // UnknownProfile is the profile when nothing was detected: the version is
 // unknown and every family stays on, so that nothing is hidden (ADR-0012 §3).
 func UnknownProfile() DeploymentProfile {
-	return DeploymentProfile{Families: AllFamilies()}
+	return DeploymentProfile{Families: catalog.AllFamilies()}
 }
 
 // versionPattern accepts a plain major.minor.patch version, such as "3.80.0".
@@ -64,7 +51,7 @@ func (p DeploymentProfile) KnownVersion() (string, bool) {
 }
 
 // On reports whether family f is on.
-func (p DeploymentProfile) On(f Family) bool {
+func (p DeploymentProfile) On(f catalog.Family) bool {
 	return slices.Contains(p.Families, f)
 }
 
@@ -94,17 +81,17 @@ type ProbeWarning struct {
 
 // sentinel is the probe that decides one family (ADR-0012 §2).
 type sentinel struct {
-	family Family
+	family catalog.Family
 	path   string
 	query  url.Values
 }
 
-// sentinels returns the probe of each family, in AllFamilies order.
+// sentinels returns the probe of each family, in catalog.AllFamilies order.
 func (c *Client) sentinels() []sentinel {
 	return []sentinel{
-		{LegacyFamily, "/api/public/traces", url.Values{"limit": {"1"}}},
-		{V4ReadFamily, "/api/public/v2/observations", url.Values{"limit": {"1"}, "fields": {"core"}}},
-		{ExperimentsFamily, "/api/public/experiments", url.Values{
+		{catalog.LegacyFamily, "/api/public/traces", url.Values{"limit": {"1"}}},
+		{catalog.V4ReadFamily, "/api/public/v2/observations", url.Values{"limit": {"1"}, "fields": {"core"}}},
+		{catalog.ExperimentsFamily, "/api/public/experiments", url.Values{
 			"limit": {"1"}, "fromStartTime": {c.now().UTC().Format(time.RFC3339)},
 		}},
 	}
@@ -137,7 +124,7 @@ func (c *Client) DetectProfile(ctx context.Context, budget time.Duration) Detect
 	}
 	_ = g.Wait() // always nil: see above
 
-	d := Detection{Profile: DeploymentProfile{Version: version, Families: []Family{}}}
+	d := Detection{Profile: DeploymentProfile{Version: version, Families: []catalog.Family{}}}
 	if healthReason != "" {
 		d.Warnings = append(d.Warnings, ProbeWarning{Probe: "health", Reason: healthReason})
 	}

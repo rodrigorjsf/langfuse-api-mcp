@@ -4,6 +4,7 @@
 #
 #   cmd -> transport -> server -> workflows -> langfuse -> trust
 #                              \-> catalog      \-> sanitize
+#   langfuse also imports catalog, a leaf, for the operation family type (ADR-0009 amendment, #78).
 #   config is imported only by cmd; only server and transport import the MCP SDK.
 #
 # Requires a golangci-lint binary built with Go >= 1.27 (the module's go version).
@@ -96,7 +97,7 @@ linters:
           deny:
             - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/
               desc: "catalog may import nothing internal (project-structure.md, ADR-0009)"
-        # langfuse knows HTTP, not MCP.
+        # langfuse knows HTTP, not MCP; it takes the operation family type from catalog.
         langfuse:
           list-mode: lax
           files:
@@ -104,9 +105,10 @@ linters:
           allow:
             - github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse
             - github.com/rodrigorjsf/langfuse-api-mcp/internal/trust
+            - github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog
           deny:
             - pkg: github.com/rodrigorjsf/langfuse-api-mcp/internal/
-              desc: "langfuse may import trust (project-structure.md, ADR-0009)"
+              desc: "langfuse may import trust, catalog (project-structure.md, ADR-0009)"
         # workflows know nothing about MCP registration.
         workflows:
           list-mode: lax

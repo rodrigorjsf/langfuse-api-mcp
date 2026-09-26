@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse"
 )
 
@@ -119,7 +120,7 @@ func TestDetectionReadsTheVersionFromHealthWithoutCredentialsAndProbesOneSentine
 	if v, ok := got.Profile.KnownVersion(); !ok || v != "3.80.0" {
 		t.Errorf("version = %q (known %v), want 3.80.0", got.Profile.Version, ok)
 	}
-	if !slices.Equal(got.Profile.Families, langfuse.AllFamilies()) || len(got.Warnings) != 0 {
+	if !slices.Equal(got.Profile.Families, catalog.AllFamilies()) || len(got.Warnings) != 0 {
 		t.Errorf("families %v, warnings %v; want every family on and no warning", got.Profile.Families, got.Warnings)
 	}
 	want := map[string]map[string][]string{
@@ -171,8 +172,8 @@ func TestEachSentinelAnswerTurnsItsFamilyOnOrOff(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			for family, path := range map[langfuse.Family]string{
-				langfuse.LegacyFamily: legacyPath, langfuse.V4ReadFamily: v4ReadPath, langfuse.ExperimentsFamily: experimentsPath,
+			for family, path := range map[catalog.Family]string{
+				catalog.LegacyFamily: legacyPath, catalog.V4ReadFamily: v4ReadPath, catalog.ExperimentsFamily: experimentsPath,
 			} {
 				fake := newProfileLangfuse(t, map[string]probeAnswer{healthPath: healthy("4.46.0"), path: tc.answer})
 
@@ -181,7 +182,7 @@ func TestEachSentinelAnswerTurnsItsFamilyOnOrOff(t *testing.T) {
 				if on := got.Profile.On(family); on != tc.on {
 					t.Errorf("%s family on = %v, want %v", family, on, tc.on)
 				}
-				for _, other := range langfuse.AllFamilies() {
+				for _, other := range catalog.AllFamilies() {
 					if other != family && !got.Profile.On(other) {
 						t.Errorf("%s family turned off by the %s sentinel's answer", other, family)
 					}
@@ -236,7 +237,7 @@ func TestAnUnreachableOrUnparsableHealthLeavesTheVersionUnknownWithAWarning(t *t
 			if got.Profile.Version != "" {
 				t.Errorf("version = %q, want unknown", got.Profile.Version)
 			}
-			if !slices.Equal(got.Profile.Families, langfuse.AllFamilies()) {
+			if !slices.Equal(got.Profile.Families, catalog.AllFamilies()) {
 				t.Errorf("families = %v, want every family on: the sentinels answered 200", got.Profile.Families)
 			}
 			assertWarnings(t, got.Warnings, "health", tc.reason, tc.answer.body)
@@ -274,7 +275,7 @@ func TestDetectionEndsWhenTheBudgetExpiresWithTheUndecidedFamiliesOn(t *testing.
 	if elapsed > 2*time.Second {
 		t.Errorf("detection took %v with a 50ms budget", elapsed)
 	}
-	if got.Profile.Version != "" || !slices.Equal(got.Profile.Families, langfuse.AllFamilies()) {
+	if got.Profile.Version != "" || !slices.Equal(got.Profile.Families, catalog.AllFamilies()) {
 		t.Errorf("profile = %+v, want the version unknown and every family on", got.Profile)
 	}
 	probes := make([]string, 0, len(got.Warnings))
