@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -109,29 +110,62 @@ func secondsRoundedUp(d time.Duration) int {
 	return int((d + time.Second - 1) / time.Second)
 }
 
-// unavailableHint names, per unavailable flavour, the version or family the
-// deployment lacks and where the replacement is. The detected version comes
-// with the deployment profile of ADR-0012 (M3); see #34.
-func unavailableHint(why langfuse.Unavailability) string {
+// unavailableHint names, per unavailable flavour, the family the operation
+// is in or the version the deployment lacks, and where the replacement is;
+// then the detected deployment profile: the version and the families on and
+// off (ADR-0012 §7). The Langfuse body is never part of it. An HTML 404
+// names the families off, not the operation's own family: the catalog carries
+// no family per operation yet (see #78).
+func unavailableHint(why langfuse.Unavailability, profile langfuse.DeploymentProfile) string {
+	var flavour string
 	switch why {
 	case langfuse.EventsOnly:
-		return "the deployment runs Langfuse v4 in events_only mode, which turns the legacy family off; " +
+		flavour = "the operation is in the legacy family, which Langfuse v4 in events_only mode turns off; " +
 			"use the replacement operation, e.g. observations_getMany (/v2/observations), metrics_metrics (/v2/metrics) " +
 			"or scoresV3_getManyV3 (/v3/scores) (see https://langfuse.com/faq/all/deprecated-api-migration)"
 	case langfuse.V4WriteModeOff:
-		return "the v4 read family is off on this deployment (it is not in a Langfuse v4 write mode: " +
+		flavour = "the operation is in the v4 read family, which is off on this deployment (it is not in a Langfuse v4 write mode: " +
 			"Langfuse v3, or v4 in legacy mode); use the legacy operation instead, e.g. trace_list or legacy_observationsV1_getMany"
 	default: // langfuse.RouteMissing
-		return "this route does not exist on the deployment: it runs an older Langfuse version " +
-			"that predates the operation; use the older operation it replaces " +
+		flavour = "this route does not exist on the deployment: it runs an older Langfuse version " +
+			"that predates the operation, or the operation is in a family listed as off below; use the older operation it replaces " +
 			"(see https://langfuse.com/faq/all/deprecated-api-migration)"
 	}
+	return flavour + "; " + profileSummary(profile)
+}
+
+// profileSummary names the detected Langfuse version and the families on and
+// off. The version is untrusted: it appears only when it is a plain
+// major.minor.patch version. Family names come from the fixed list, never
+// from the profile's own strings.
+func profileSummary(profile langfuse.DeploymentProfile) string {
+	version := "Langfuse version unknown"
+	if v, ok := profile.KnownVersion(); ok {
+		version = "Langfuse " + v
+	}
+	var on, off []string
+	for _, f := range langfuse.AllFamilies() {
+		if profile.On(f) {
+			on = append(on, string(f))
+		} else {
+			off = append(off, string(f))
+		}
+	}
+	return "deployment: " + version + "; families on: " + listOrNone(on) + "; families off: " + listOrNone(off)
+}
+
+// listOrNone joins names with ", ", or returns "none" when there are none.
+func listOrNone(names []string) string {
+	if len(names) == 0 {
+		return "none"
+	}
+	return strings.Join(names, ", ")
 }
 
 // langfuseErrorFields translates a Langfuse error answer into the tool error
 // fields; ok is false when err is not a Langfuse answer. Langfuse's message is redacted by r before errorResult cuts it
 // to length: a secret cut short would no longer match.
-func langfuseErrorFields(err error, operationID string, r sanitize.Redactor) (toolErrorFields, bool) {
+func langfuseErrorFields(err error, operationID string, r sanitize.Redactor, profile langfuse.DeploymentProfile) (toolErrorFields, bool) {
 	var apiErr *langfuse.APIError
 	if !errors.As(err, &apiErr) {
 		return toolErrorFields{}, false
@@ -140,7 +174,7 @@ func langfuseErrorFields(err error, operationID string, r sanitize.Redactor) (to
 	if errors.Is(apiErr, langfuse.ErrOperationUnavailable) {
 		f.Code = errorUnavailableOperation
 		f.Message = "operation " + operationID + " is not served by the connected Langfuse deployment (HTTP 404)"
-		f.Hint = unavailableHint(apiErr.Unavailable)
+		f.Hint = unavailableHint(apiErr.Unavailable, profile)
 		return f, true
 	}
 	se := statusErrorFor(apiErr.Status)
