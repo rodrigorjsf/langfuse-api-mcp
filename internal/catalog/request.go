@@ -288,7 +288,7 @@ func (p Param) inBounds(values []string) error {
 		s = *s.Items
 	}
 	for i, v := range values {
-		err := s.inBounds(v)
+		err := s.withinBounds(v)
 		if err == nil {
 			continue
 		}
@@ -300,13 +300,16 @@ func (p Param) inBounds(values []string) error {
 	return nil
 }
 
-// inBounds checks one rendered value against the schema's bounds.
-func (s Schema) inBounds(v string) error {
+// withinBounds checks one rendered value against the schema's bounds.
+func (s Schema) withinBounds(v string) error {
 	switch s.Type {
 	case "integer", "number":
 		n, err := strconv.ParseFloat(v, 64)
-		if err != nil || (s.Minimum == nil || n >= *s.Minimum) && (s.Maximum == nil || n <= *s.Maximum) {
-			return nil // a rendered number always parses
+		if err != nil {
+			return errors.New("want a number") // unreachable: scalar renders finite numbers only
+		}
+		if (s.Minimum == nil || n >= *s.Minimum) && (s.Maximum == nil || n <= *s.Maximum) {
+			return nil
 		}
 		return errors.New("want a value " + boundText(s.Minimum, s.Maximum, formatBound))
 	case "string":
@@ -320,15 +323,17 @@ func (s Schema) inBounds(v string) error {
 }
 
 // boundText renders a closed or half-open range: "from lo to hi", "of at
-// least lo" or "of at most hi".
+// least lo" or "of at most hi" ("of any size" without bounds).
 func boundText[T any](lo, hi *T, format func(T) string) string {
 	switch {
 	case lo != nil && hi != nil:
 		return "from " + format(*lo) + " to " + format(*hi)
 	case lo != nil:
 		return "of at least " + format(*lo)
+	case hi != nil:
+		return "of at most " + format(*hi)
 	}
-	return "of at most " + format(*hi)
+	return "of any size"
 }
 
 func formatBound(f float64) string { return strconv.FormatFloat(f, 'f', -1, 64) }

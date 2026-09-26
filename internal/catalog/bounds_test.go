@@ -157,3 +157,17 @@ func FuzzRequestEnforcesALengthBoundWithoutRepeatingTheValue(f *testing.F) {
 		}
 	})
 }
+
+// The page size of a list operation keeps its own refusal, which carries the
+// paging hint, even for a value outside the wider bound the spec gives it too.
+func TestAListLimitOutsideTheCapKeepsItsOwnRefusalWhenTheSpecBoundsItToo(t *testing.T) {
+	t.Parallel()
+	op := catalog.Operation{
+		ID: "x_list", Method: "GET", Path: "/api/public/x",
+		Params: []catalog.Param{{Name: "limit", In: "query", Schema: catalog.Schema{Type: "integer", Minimum: new(float64(1)), Maximum: new(float64(1000))}}},
+	}
+
+	if _, err := op.Request(map[string]any{"limit": 1001.0}); !errors.Is(err, catalog.ErrLimitOutOfRange) {
+		t.Fatalf("Request(limit 1001) error = %v, want ErrLimitOutOfRange", err)
+	}
+}
