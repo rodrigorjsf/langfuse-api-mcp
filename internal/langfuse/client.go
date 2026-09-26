@@ -147,6 +147,12 @@ func New(opts Options) *Client {
 	return c
 }
 
+// CloseIdleConnections closes the connections the client keeps open between
+// requests, and the transport goroutines that serve them; requests in flight
+// are not interrupted, and a later request opens a new connection. The server
+// calls it on shutdown; tests call it so that no goroutine outlives them.
+func (c *Client) CloseIdleConnections() { c.httpClient.CloseIdleConnections() }
+
 // ErrRedirectRefused marks a request Langfuse redirected to another scheme,
 // host or port: the client never follows it, so the key pair is never sent
 // anywhere but the configured host.

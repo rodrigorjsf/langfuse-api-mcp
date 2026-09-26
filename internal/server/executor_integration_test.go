@@ -55,6 +55,9 @@ func liveSession(t *testing.T) *mcp.ClientSession {
 	}
 	keys := server.Secrets{Keys: langfuse.NewKeyPair(os.Getenv(envTestPublicKey), os.Getenv(envTestSecretKey))}
 	client := langfuse.New(langfuse.Options{Host: host, Keys: keys.Keys})
+	// Registered before connectServer's cleanups, so it runs after the session
+	// closes: no idle connection outlives the test to trip TestMain's leak check.
+	t.Cleanup(client.CloseIdleConnections)
 	return connectServer(t, client, slog.New(slog.DiscardHandler), keys)
 }
 

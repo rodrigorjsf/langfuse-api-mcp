@@ -102,7 +102,12 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 		RateLimit: cfg.RateLimit, MaxConcurrency: cfg.MaxConcurrency,
 	})
 	srv := server.New(cat, client, log, server.Secrets{Keys: keys})
-	serve := func(ctx context.Context) error { return transport.Stdio(ctx, srv) }
+	serve := func(ctx context.Context) error {
+		// On shutdown, close the keep-alive connections to Langfuse instead of
+		// leaving them to the process exit.
+		defer client.CloseIdleConnections()
+		return transport.Stdio(ctx, srv)
+	}
 	return app{log: log, pool: pool, serve: serve}, nil
 }
 
