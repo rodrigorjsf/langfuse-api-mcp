@@ -18,7 +18,7 @@ import (
 // all: a call to Langfuse would panic and surface as internal_error.
 
 // connectOffline starts the server without a Langfuse client.
-func connectOffline(t *testing.T, opts ...server.Option) *mcp.ClientSession {
+func connectOffline(t testing.TB, opts ...server.Option) *mcp.ClientSession {
 	t.Helper()
 	return connectServer(t, nil, slog.New(slog.DiscardHandler), server.Secrets{Keys: testKeys()}, opts...)
 }
@@ -284,4 +284,31 @@ func TestEveryDiscoveryCallLogsOneAuditLineWithoutTheQueryOrAPayload(t *testing.
 			}
 		})
 	}
+}
+
+// go.md: every parser of untrusted input is fuzzed. Whatever the query, the
+// discovery tools answer with a result or an invalid_argument tool error —
+// never an internal error — and never repeat a refused query.
+func FuzzDiscoveryArguments(f *testing.F) {
+	for _, seed := range []string{"", "prompt get", "trace\u200blist", "\u202e", strings.Repeat("é", 129), "a\x00b", "sk-lf-x"} {
+		f.Add(seed)
+	}
+	cs := connectOffline(f)
+	f.Fuzz(func(t *testing.T, s string) {
+		for _, call := range []struct{ tool, arg string }{
+			{"search_operations", "query"}, {"describe_operation", "operationId"},
+		} {
+			res := callTool(t, cs, call.tool, map[string]any{call.arg: s})
+			if !res.IsError {
+				continue
+			}
+			got := toolErrorOf(t, res).Error
+			if got.Code != "invalid_argument" && got.Code != "operation_not_found" {
+				t.Fatalf("%s(%q) = %+v, want a result, invalid_argument or operation_not_found", call.tool, s, got)
+			}
+			if call.tool == "search_operations" && len(s) >= 8 && strings.Contains(resultText(t, res), s) {
+				t.Fatalf("search_operations echoes the refused query %q", s)
+			}
+		}
+	})
 }

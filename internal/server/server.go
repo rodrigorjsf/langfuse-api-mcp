@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -41,7 +40,7 @@ func executeReadSchema() map[string]any {
 			"operationId": map[string]any{
 				"type":        "string",
 				"minLength":   1,
-				"maxLength":   128,
+				"maxLength":   maxOperationIDRunes,
 				"description": "Operation ID of a Langfuse read (GET) operation, e.g. trace_list or trace_get.",
 			},
 			"parameters": map[string]any{
@@ -117,7 +116,7 @@ func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets
 		Annotations:  closedWorldReadOnly(describeOperationTitle),
 	}, audited(log, redact, d.describeOperation))
 	s.AddTool(&mcp.Tool{
-		Name:        "execute_read",
+		Name:        toolExecuteRead,
 		Title:       executeReadTitle,
 		Description: executeReadDescription,
 		InputSchema: executeReadSchema(),
@@ -177,15 +176,9 @@ type executeReadInput struct {
 // short would no longer match. Parameter values are sent as given.
 func decodeExecuteReadInput(raw json.RawMessage, r sanitize.Redactor) (executeReadInput, error) {
 	var in executeReadInput
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &fields); err != nil {
-		return in, errors.New("arguments: want a JSON object with operationId and parameters")
-	}
-	for name := range fields {
-		if name != "operationId" && name != "parameters" {
-			return in, fmt.Errorf("argument %s: unknown argument; execute_read takes operationId and parameters only",
-				strconv.Quote(truncate(r.Redact(name))))
-		}
+	fields, err := argumentFields(raw, r, toolExecuteRead, "operationId", "parameters")
+	if err != nil {
+		return in, err
 	}
 	id, ok := fields["operationId"]
 	if !ok {
@@ -264,7 +257,7 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 	if !ok && catalog.IsExcluded(in.OperationID) {
 		return toolError(errorOperationNotFound, "operation "+in.OperationID+" is not exposed by this server: "+
 			"trace ingestion and organization admin changes are out of its scope",
-			"read the data with a read operation instead; search_operations lists them", in.OperationID)
+			"read the data with a read operation instead, e.g. trace_list; search_operations lists them", in.OperationID)
 	}
 	if !ok {
 		return toolError(errorOperationNotFound, "unknown operation ID "+strconv.Quote(truncate(in.OperationID)),

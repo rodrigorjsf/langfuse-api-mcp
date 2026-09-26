@@ -69,7 +69,7 @@ func connectClient(t *testing.T, client *langfuse.Client, log *slog.Logger) *mcp
 // connectServer starts the server with the real catalog, the given Langfuse
 // client, logger, key pair to redact and construction options, and returns a
 // connected MCP client session.
-func connectServer(t *testing.T, client *langfuse.Client, log *slog.Logger, secrets server.Secrets,
+func connectServer(t testing.TB, client *langfuse.Client, log *slog.Logger, secrets server.Secrets,
 	opts ...server.Option,
 ) *mcp.ClientSession {
 	t.Helper()

@@ -34,6 +34,13 @@ const searchOperationsTitle = "Search the Langfuse operations"
 // maxQueryRunes bounds the search_operations query.
 const maxQueryRunes = 128
 
+// The tools that run operations: the operation index and the operation
+// description name one of them per operation.
+const (
+	toolExecuteRead  = "execute_read"
+	toolExecuteWrite = "execute_write"
+)
+
 // searchOperationsSchema returns the search_operations input schema.
 func searchOperationsSchema() map[string]any {
 	return map[string]any{
@@ -73,7 +80,7 @@ func operationIndexSchema() map[string]any {
 								"properties": map[string]any{
 									"operationId": map[string]any{"type": "string"},
 									"description": map[string]any{"type": "string", "description": "First line of the operation's description."},
-									"tool":        map[string]any{"type": "string", "enum": []any{"execute_read", "execute_write"}},
+									"tool":        map[string]any{"type": "string", "enum": []any{toolExecuteRead, toolExecuteWrite}},
 								},
 							},
 						},
@@ -108,8 +115,8 @@ type indexEntry struct {
 }
 
 // searchArgumentsHint is the hint of an invalid search_operations call.
-const searchArgumentsHint = "call search_operations again without arguments to list every operation, or with " +
-	"query, up to 128 characters of plain keywords separated by spaces"
+var searchArgumentsHint = "call search_operations again without arguments to list every operation, or with " +
+	"query, up to " + strconv.Itoa(maxQueryRunes) + " characters of plain keywords separated by spaces"
 
 // discovery serves the discovery tools from the catalog, honoring write mode.
 type discovery struct {
@@ -125,9 +132,9 @@ func (d discovery) listed(op catalog.Operation) bool { return d.writeMode || op.
 // toolFor names the tool that runs op.
 func toolFor(op catalog.Operation) string {
 	if op.IsRead() {
-		return "execute_read"
+		return toolExecuteRead
 	}
-	return "execute_write"
+	return toolExecuteWrite
 }
 
 func (d discovery) searchOperations(_ context.Context, req *mcp.CallToolRequest, _ *audit) (*mcp.CallToolResult, error) {
@@ -186,12 +193,17 @@ func indexResult(idx operationIndex, writeMode bool) (*mcp.CallToolResult, error
 			}
 		}
 	}
-	structured, err := json.Marshal(idx)
+	return textResult(b.String(), idx)
+}
+
+// textResult returns text for the model plus v as structuredContent.
+func textResult(text string, v any) (*mcp.CallToolResult, error) {
+	structured, err := json.Marshal(v)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("encode structuredContent: %w", err)
 	}
 	return &mcp.CallToolResult{
-		Content:           []mcp.Content{&mcp.TextContent{Text: b.String()}},
+		Content:           []mcp.Content{&mcp.TextContent{Text: text}},
 		StructuredContent: json.RawMessage(structured),
 	}, nil
 }
@@ -213,11 +225,8 @@ func decodeSearchInput(raw json.RawMessage, r sanitize.Redactor) (string, error)
 	if err := json.Unmarshal(q, &query); err != nil {
 		return "", errors.New("argument query: want a string of keywords")
 	}
-	switch {
-	case utf8.RuneCountInString(query) > maxQueryRunes:
-		return "", errors.New("argument query: longer than " + strconv.Itoa(maxQueryRunes) + " characters")
-	case sanitize.Text(query) != query || strings.ContainsAny(query, "\t\n\r"):
-		return "", errors.New("argument query: holds a control or invisible character")
+	if err := plainText("query", query, maxQueryRunes); err != nil {
+		return "", err
 	}
 	return query, nil
 }
@@ -284,7 +293,7 @@ func operationDescriptionSchema() map[string]any {
 			"tag":         map[string]any{"type": "string"},
 			"description": map[string]any{"type": "string", "description": "First line of the operation's description."},
 			"method":      map[string]any{"type": "string", "enum": []any{"GET", "POST", "PUT", "PATCH", "DELETE"}},
-			"tool":        map[string]any{"type": "string", "enum": []any{"execute_read", "execute_write"}},
+			"tool":        map[string]any{"type": "string", "enum": []any{toolExecuteRead, toolExecuteWrite}},
 			"parameters": map[string]any{
 				"type": "array",
 				"items": map[string]any{
@@ -397,14 +406,7 @@ func descriptionResult(od operationDescription) (*mcp.CallToolResult, error) {
 			b.WriteString("- " + p.Name + " (" + strings.Join(p.facts(), ", ") + ")\n")
 		}
 	}
-	structured, err := json.Marshal(od)
-	if err != nil {
-		return nil, err
-	}
-	return &mcp.CallToolResult{
-		Content:           []mcp.Content{&mcp.TextContent{Text: b.String()}},
-		StructuredContent: json.RawMessage(structured),
-	}, nil
+	return textResult(b.String(), od)
 }
 
 // facts lists what the text line of a parameter says about it.
@@ -469,11 +471,22 @@ func decodeDescribeInput(raw json.RawMessage, r sanitize.Redactor) (string, erro
 	if err := json.Unmarshal(v, &id); err != nil || id == "" {
 		return "", errors.New("argument operationId: want a non-empty string, e.g. trace_list")
 	}
-	switch {
-	case utf8.RuneCountInString(id) > maxOperationIDRunes:
-		return "", errors.New("argument operationId: longer than " + strconv.Itoa(maxOperationIDRunes) + " characters")
-	case sanitize.Text(id) != id || strings.ContainsAny(id, "\t\n\r"):
-		return "", errors.New("argument operationId: holds a control or invisible character")
+	if err := plainText("operationId", id, maxOperationIDRunes); err != nil {
+		return "", err
 	}
 	return r.Redact(id), nil
+}
+
+// plainText refuses a string argument longer than maxRunes or holding a
+// control character (tab and line breaks included) or an invisible or
+// bidirectional formatting character. The error names the argument, never
+// its value.
+func plainText(name, v string, maxRunes int) error {
+	switch {
+	case utf8.RuneCountInString(v) > maxRunes:
+		return errors.New("argument " + name + ": longer than " + strconv.Itoa(maxRunes) + " characters")
+	case sanitize.Text(v) != v || strings.ContainsAny(v, "\t\n\r"):
+		return errors.New("argument " + name + ": holds a control or invisible character")
+	}
+	return nil
 }
