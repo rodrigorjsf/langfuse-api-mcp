@@ -88,8 +88,8 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 			return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
 		}
 		if o.isListLimit(p) {
-			if n, err := strconv.Atoi(values[0]); err != nil || n < 1 || n > MaxLimit {
-				return Request{}, limitError{invalidf("parameter %s: want an integer from 1 to %d, got %s",
+			if _, ok := intInRange(values[0], MaxLimit); !ok {
+				return Request{}, rangeError{ErrLimitOutOfRange, invalidf("parameter %s: want an integer from 1 to %d, got %s",
 					p.Name, MaxLimit, values[0])}
 			}
 		}
@@ -153,12 +153,22 @@ func safePathValue(v string, folderName bool) error {
 	return nil
 }
 
-// limitError is a limit outside 1..MaxLimit; it matches ErrLimitOutOfRange
-// and, through the error it wraps, ErrInvalidParameter.
-type limitError struct{ error }
+// rangeError is a page size outside its range (limit or config.row_limit);
+// it matches its sentinel and, through the error it wraps,
+// ErrInvalidParameter.
+type rangeError struct {
+	sentinel error
+	error
+}
 
-func (e limitError) Unwrap() error      { return e.error }
-func (limitError) Is(target error) bool { return target == ErrLimitOutOfRange }
+func (e rangeError) Unwrap() error        { return e.error }
+func (e rangeError) Is(target error) bool { return target == e.sentinel }
+
+// intInRange parses s as a decimal integer from 1 to upper.
+func intInRange(s string, upper int) (int, bool) {
+	n, err := strconv.Atoi(s)
+	return n, err == nil && n >= 1 && n <= upper
+}
 
 // isListLimit reports whether p is the page size of a list operation: the
 // "limit" query parameter of a read. The metrics operations bound their page

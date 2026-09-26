@@ -24,13 +24,6 @@ const (
 // integer from 1 to MaxRowLimit; it also matches ErrInvalidParameter.
 var ErrRowLimitOutOfRange = errors.New("row_limit out of range")
 
-// rowLimitError is a row_limit outside 1..MaxRowLimit; it matches
-// ErrRowLimitOutOfRange and, through the error it wraps, ErrInvalidParameter.
-type rowLimitError struct{ error }
-
-func (e rowLimitError) Unwrap() error      { return e.error }
-func (rowLimitError) Is(target error) bool { return target == ErrRowLimitOutOfRange }
-
 // metricsOperations are the operations whose "query" parameter is a metrics
 // query JSON.
 var metricsOperations = map[string]bool{
@@ -140,10 +133,10 @@ func metricsQuery(raw string) (string, error) {
 		// Only an integer literal counts: a float such as 1000.0 or 1e3 is
 		// refused like 1.5, never rounded.
 		literal, _ := v.(json.Number)
-		n, err := strconv.Atoi(string(literal))
-		if err != nil || n < 1 || n > MaxRowLimit {
-			return "", rowLimitError{invalidf("parameter query: config.row_limit: want an integer from 1 to %d, got %s",
-				MaxRowLimit, kind(v))}
+		n, ok := intInRange(string(literal), MaxRowLimit)
+		if !ok {
+			return "", rangeError{ErrRowLimitOutOfRange,
+				invalidf("parameter query: config.row_limit: want an integer from 1 to %d, got %s", MaxRowLimit, kind(v))}
 		}
 		rowLimit = n
 	}
