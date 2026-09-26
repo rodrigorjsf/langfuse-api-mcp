@@ -126,7 +126,7 @@ Sources: `[sourced]` `/docs/api-and-data-platform/features/public-api#field-grou
     max is 1000 (`1001` → 400 zod `too_big`). `[verified]` §1.7
   - **Neither Langfuse Cloud nor self-hosted REST enforces it** (2026-09-26, both Langfuse **4.46.0**; Cloud = the
     US-region Hobby test project; issue #2 answered by #15). The integration test
-    `TestLiveLangfuseServesIOAndMetadataBeyondFourteenDaysAndFiftyRows` (`internal/server/iowindow_integration_test.go`,
+    `TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows` (`internal/server/iowindow_integration_test.go`,
     through `execute_read`) seeds back-dated spans over OTLP, probes, and deletes them. Every probe answered **HTTP 200**,
     no error body; rows returned, identical on both deployments:
 
@@ -137,6 +137,7 @@ Sources: `[sourced]` `/docs/api-and-data-platform/features/public-api#field-grou
     | `fields=core,io`, 15-day window (row 14.5 days old) | 1 of 1 | `input` |
     | `fields=core,io`, 30-day window (row 20 days old) | 1 of 1 | `output` |
     | `fields=core,io`, no window (row 20 days old) | 1 of 1 | `input` |
+    | `fields=core,metadata`, 15-day window (row 14.5 days old) | 1 of 1 | `metadata` |
     | `fields=core,metadata`, 30-day window | 1 of 1 | `metadata` |
     | `fields=core,io`, `traceId`, no window | 1 of 1 | `input` |
     | `fields=core,io`, `filter` on `id`, no window | 1 of 1 | `input` |
@@ -149,10 +150,12 @@ Sources: `[sourced]` `/docs/api-and-data-platform/features/public-api#field-grou
   - **Verdict: the 14-day / 50-row rule is the official MCP tool's own guard, not a REST limit.** Our workflow tools
     keep a guard of their own anyway (`.claude/rules/langfuse-api.md`, "Time windows"), for budget reasons. The probe
     stays as a weekly Cloud regression (`.github/workflows/integration.yml`), so a guard added upstream fails the suite.
-  - **Seeding limitation on Cloud.** Cloud accepts (200) an OTLP export of a span **40 days** old but never serves it
-    (the 1- and 20-day spans of the same export were queryable within 45 s); self-hosted serves it. The probe therefore
-    seeds nothing older than 20 days. Verbatim: `raw/2026-09-26-cloud-backdated-40d.txt`. `[verified]` Likely the Hobby
-    plan's 30-day data access window. `[sourced — unverified]`
+    That scheduled Cloud job has not run in CI yet (it needs the workflow on the default branch, #40); the Cloud
+    evidence above comes from the same test run locally with the Cloud test project's keys.
+  - **Seeding limitation on Cloud.** Cloud accepted (200) an OTLP export of a span **40 days** old but did not serve it
+    within 90 s (the 1- and 20-day spans of the same export were queryable within 45 s); self-hosted serves it. The probe therefore
+    seeds nothing older than 20 days. Verbatim: `raw/2026-09-26-cloud-backdated-40d.txt`. `[verified]` Hypothesis, not
+    tested: the Hobby plan's 30-day data access window. `[sourced — unverified]`
   - On Cloud, rows requested with `fields=core` came back without `name` (verbatim file above); the probe requests
     `core,basic` when it needs names. `[verified]`
   - `DELETE /api/public/traces` with `{"traceIds":[...]}` answers 200 `{"message":"Traces deleted successfully"}` on

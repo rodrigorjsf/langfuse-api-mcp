@@ -35,10 +35,11 @@ const (
 	envTestSecretKey = "LANGFUSE_TEST_SECRET_KEY" //nolint:gosec // G101: the variable's name, not a key
 )
 
-// liveLeakOptions lets TestMain tolerate the idle keep-alive connections (HTTP/1.1 and HTTP/2) the
-// live Langfuse client holds open after the tests, as it does in production;
-// the client has no way to close them. Only when a live Langfuse is configured:
-// without one, the integration build checks for leaks like the default build.
+// liveLeakOptions lets TestMain tolerate the idle keep-alive connections
+// (HTTP/1.1 and HTTP/2) the live Langfuse client holds open after the tests,
+// as it does in production; the client has no way to close them. Only when a
+// live Langfuse is configured: without one, the integration build checks for
+// leaks like the default build.
 // A client that can close its idle connections would remove this: see #41.
 func liveLeakOptions() []goleak.Option {
 	if os.Getenv(envTestBaseURL) == "" {
