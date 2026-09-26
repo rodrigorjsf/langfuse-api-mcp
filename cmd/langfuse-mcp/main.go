@@ -89,6 +89,7 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 	if err != nil {
 		return app{}, err
 	}
+	// The key pair leaves config.Secret as plain strings here; see #38.
 	keys := server.Secrets{PublicKey: cfg.Connection.PublicKey.Reveal(), SecretKey: cfg.Connection.SecretKey.Reveal()}
 	client := langfuse.New(langfuse.Options{
 		Host:      cfg.Connection.Host,

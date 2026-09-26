@@ -325,7 +325,7 @@ Designed against the OWASP Top 10 for LLM Applications (2025 and 2026), the OWAS
 | **No local system access** | No shell commands, no file access beyond reading the CA files you configured and the optional [config file](#config-file-non-secret-settings). |
 | **Verified TLS only** | OS store + your CAs, TLS 1.2+, no skip-verify option. |
 | **Untrusted data is labelled** | Trace and prompt content returned to the agent is marked as untrusted data and cleaned of hidden Unicode and control characters. |
-| **Bounded** | Timeouts, a default and maximum `limit` on list operations, at most 5 MiB read from Langfuse and 100 KiB returned per result (truncated with a marker). Langfuse's `Retry-After` is honored. Rate and concurrency limits are **Planned**. |
+| **Bounded** | Timeouts, a default and maximum `limit` on list operations, at most 5 MiB read from Langfuse and 100 KiB returned per result (truncated with a marker). Langfuse's `Retry-After` is honored. Rate and concurrency limits are **Planned** ([#37](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/37)). |
 | **HTTP mode is local-only** | Binds to `127.0.0.1` with a random bearer token and `Origin`/`Host` checks. |
 | **Auditable** | One log line per tool call on stderr (metadata only, no payloads). Open source (Apache-2.0). |
 
