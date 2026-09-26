@@ -144,8 +144,13 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest) (*
 		return toolError(errorInvalidArgument, err.Error(), "", in.OperationID)
 	}
 	op, ok := ex.catalog.Lookup(in.OperationID)
+	if !ok && catalog.IsExcluded(in.OperationID) {
+		return toolError(errorOperationNotFound, "operation "+in.OperationID+" is not exposed by this server: "+
+			"trace ingestion and organization admin changes are out of its scope",
+			"read the data with a read operation instead, e.g. trace_list or trace_get", in.OperationID)
+	}
 	if !ok {
-		return toolError(errorOperationNotFound, "unknown operation ID "+strconv.Quote(in.OperationID),
+		return toolError(errorOperationNotFound, "unknown operation ID "+strconv.Quote(truncate(in.OperationID)),
 			"use an operation ID of the Langfuse API reference: https://api.reference.langfuse.com", in.OperationID)
 	}
 	if !op.IsRead() {

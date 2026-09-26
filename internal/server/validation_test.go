@@ -200,6 +200,11 @@ func TestExecuteReadAnswersAnUnknownOrExcludedOperationWithOperationNotFound(t *
 			if got.Code != "operation_not_found" || got.OperationID != id || got.Hint == "" {
 				t.Errorf("error = %+v, want operation_not_found for %s with a hint", got, id)
 			}
+			// An excluded operation is in the Langfuse API reference: the
+			// message says it is out of this server's scope instead.
+			if excluded := name != "unknown"; excluded != strings.Contains(got.Message, "not exposed by this server") {
+				t.Errorf("message %q, want it to say whether %s is excluded (%v)", got.Message, id, excluded)
+			}
 			assertNoRequest(t, seen)
 		})
 	}
@@ -232,5 +237,19 @@ func TestExecuteReadRejectsInvalidArgumentsNamingTheField(t *testing.T) {
 			}
 			assertNoRequest(t, seen)
 		})
+	}
+}
+
+func TestExecuteReadBoundsTheCallersOperationIDInTheToolError(t *testing.T) {
+	t.Parallel()
+	fake, _ := fakeLangfuse(t, http.StatusOK, `{}`)
+	cs := connect(t, fake)
+	long := strings.Repeat("x", 10_000)
+
+	got := toolErrorOf(t, callExecuteRead(t, cs, map[string]any{"operationId": long}))
+
+	if len(got.OperationID) > 100 || len(got.Message) > 500 {
+		t.Errorf("operationId has %d bytes and message %d bytes, want both bounded (≤ 100, ≤ 500)",
+			len(got.OperationID), len(got.Message))
 	}
 }

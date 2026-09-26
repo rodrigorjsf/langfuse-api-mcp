@@ -176,7 +176,7 @@ func TestStartupFailsNamingTheMissingOrInvalidConnectionVariable(t *testing.T) {
 		"secret key":   {env: []string{"LANGFUSE_SECRET_KEY="}, want: "LANGFUSE_SECRET_KEY"},
 		"invalid host": {env: []string{"LANGFUSE_BASE_URL=cloud.langfuse.com"}, want: "LANGFUSE_BASE_URL"},
 		"plain http to a host that is not loopback": {
-			env: []string{"LANGFUSE_BASE_URL=http://langfuse.internal.example.com"}, want: "https",
+			env: []string{"LANGFUSE_BASE_URL=http://langfuse.internal.example.com"}, want: "LANGFUSE_BASE_URL: want an https URL",
 		},
 	}
 	for name, tc := range tests {

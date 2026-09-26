@@ -73,7 +73,7 @@ Every call is validated before anything is sent to Langfuse, and a bad call come
 | misses a required parameter, passes an unknown one, or a value of the wrong type or outside the allowed values | `invalid_argument` | `parameter limit: want an integer, got a string` |
 | names a write (POST, PUT, PATCH, DELETE) operation | `invalid_argument` | `… execute_read runs read (GET) operations only` |
 | names an unknown or excluded operation | `operation_not_found` | `unknown operation ID "trace_lst"` (with a hint) |
-| passes a path parameter holding `/`, `\`, `.`/`..`, an `http(s):` URL, a control character, or nothing | `invalid_argument` | `parameter traceId: must not contain "/" or "\"…` |
+| passes a path parameter holding `/`, `\`, `.`/`..`, an `http(s):` URL, a control character, or nothing (prompt names in folders are therefore refused for now: [#33](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/33)) | `invalid_argument` | `parameter traceId: must not contain "/" or "\"…` |
 | gets a redirect from Langfuse to another scheme, host or port | `redirect_refused` | not followed; the key pair never leaves the configured host |
 
 Path parameters are percent-encoded. The structured codes for Langfuse HTTP, TLS, network and timeout failures, the size limits, Unicode stripping and the audit line are still **Planned** (the remaining M1 tickets); until then those failures return `internal_error`.

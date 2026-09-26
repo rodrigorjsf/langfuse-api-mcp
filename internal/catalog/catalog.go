@@ -143,10 +143,12 @@ func resolve(s *Schema, components map[string]Schema) error {
 	}
 	name, ok := strings.CutPrefix(s.Ref, "#/components/schemas/")
 	target, found := components[name]
-	if !ok || !found || target.Ref != "" {
+	if !ok || !found || target.Ref != "" || target.Items != nil {
+		// Only scalar components (enums) are parameter types in the spec; any
+		// other shape fails loudly rather than validating half of it.
 		return fmt.Errorf("unresolvable schema reference %q", s.Ref)
 	}
-	s.Type, s.Enum, s.Ref = target.Type, target.Enum, ""
+	s.Type, s.Enum, s.Nullable, s.Ref = target.Type, target.Enum, s.Nullable || target.Nullable, ""
 	return nil
 }
 
@@ -155,6 +157,10 @@ func (c Catalog) Lookup(id string) (Operation, bool) {
 	op, ok := c.byID[id]
 	return op, ok
 }
+
+// IsExcluded reports whether id is an operation of the Langfuse API that the
+// catalog deliberately leaves out (ADR-0004).
+func IsExcluded(id string) bool { return slices.Contains(excluded, id) }
 
 // Operations returns every in-scope operation, sorted by ID.
 func (c Catalog) Operations() []Operation {

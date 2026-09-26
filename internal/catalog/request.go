@@ -84,14 +84,17 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 // resource is requested or where the request goes, even before it is
 // percent-encoded: an empty value, a path separator (which also covers "//"
 // and "scheme://host"), a "." or ".." segment, a control character, or a leading
-// http/https scheme.
+// http/https scheme. Other "name:" prefixes pass on purpose: IDs such as
+// "user:42" are legitimate, and after the "/" refusal and percent-encoding a
+// scheme cannot name a host.
 func safePathValue(v string) error {
 	lower := strings.ToLower(v)
 	switch {
 	case v == "":
 		return errors.New("must not be empty")
 	case strings.ContainsAny(v, `/\`):
-		return errors.New(`must not contain "/" or "\\": a path parameter is a single ID or name`)
+		// Prompt names in folders contain "/" and are refused for now (see #33).
+		return errors.New(`must not contain "/" or "\": a path parameter is a single ID or name`)
 	case v == ".", strings.Contains(v, ".."):
 		return errors.New(`must not be "." or contain "..": those are relative path segments`)
 	case strings.HasPrefix(lower, "http:") || strings.HasPrefix(lower, "https:"):

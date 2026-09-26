@@ -13,7 +13,7 @@ Full risk→control mapping with sources: `docs/research/security.md`. Cite OWAS
 
 **Requests to Langfuse** (SSRF / injection)
 - Base URL comes only from operator config; `https` required except loopback hosts.
-- Model input selects an operation ID + params; reject absolute URLs, schemes, hosts, `//`, `.`/`..` segments, `/` and `\` in path params; percent-encode path params.
+- Model input selects an operation ID + params; reject absolute URLs, schemes, hosts, `//`, `.`/`..` segments, `/` and `\` in path params (folder names that need `/`: #33); percent-encode path params.
 - Custom `CheckRedirect`: refuse any redirect that changes scheme, host, or port (Go forwards `Authorization` on same-host and subdomain redirects).
 - Timeouts, concurrency cap, rate limit, max response bytes read, max tool-result bytes returned (truncate with a marker + pagination hint); default and cap `limit` on list operations.
 
