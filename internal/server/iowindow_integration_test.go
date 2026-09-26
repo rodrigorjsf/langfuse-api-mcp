@@ -242,9 +242,9 @@ func TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows(t *testi
 		t.Fatal(err)
 	}
 
-	ioBy := func(label string) map[string]any { return map[string]any{"fields": "core,io", "name": s.name(label)} }
-	metadataBy := func(label string) map[string]any {
-		return map[string]any{"fields": "core,metadata", "name": s.name(label)}
+	// payloadBy selects one seeded span by name and requests the field group.
+	payloadBy := func(group, label string) map[string]any {
+		return map[string]any{"fields": "core," + group, "name": s.name(label)}
 	}
 	probes := []struct {
 		name     string
@@ -252,13 +252,13 @@ func TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows(t *testi
 		wantRows int
 		field    string // present on every row: the field group was served
 	}{
-		{"io, 13-day window", mergedParams(ioBy("d12_5"), s.window(13)), 1, "input"},
-		{"io, 14-day window", mergedParams(ioBy("d13_5"), s.window(14)), 1, "input"},
-		{"io, 15-day window", mergedParams(ioBy("d14_5"), s.window(15)), 1, "input"},
-		{"io, 30-day window", mergedParams(ioBy("d20"), s.window(30)), 1, "output"},
-		{"io, no window", ioBy("d20"), 1, "input"},
-		{"metadata, 15-day window", mergedParams(metadataBy("d14_5"), s.window(15)), 1, "metadata"},
-		{"metadata, 30-day window", mergedParams(metadataBy("d20"), s.window(30)), 1, "metadata"},
+		{"io, 13-day window", mergedParams(payloadBy("io", "d12_5"), s.window(13)), 1, "input"},
+		{"io, 14-day window", mergedParams(payloadBy("io", "d13_5"), s.window(14)), 1, "input"},
+		{"io, 15-day window", mergedParams(payloadBy("io", "d14_5"), s.window(15)), 1, "input"},
+		{"io, 30-day window", mergedParams(payloadBy("io", "d20"), s.window(30)), 1, "output"},
+		{"io, no window", payloadBy("io", "d20"), 1, "input"},
+		{"metadata, 15-day window", mergedParams(payloadBy("metadata", "d14_5"), s.window(15)), 1, "metadata"},
+		{"metadata, 30-day window", mergedParams(payloadBy("metadata", "d20"), s.window(30)), 1, "metadata"},
 		{"io, trace id, no window", map[string]any{"fields": "core,io", "traceId": s.traceIDs["d20"]}, 1, "input"},
 		{"io, id filter, no window", map[string]any{"fields": "core,io", "filter": string(idFilter)}, 1, "input"},
 		// The combination the official MCP caps at 50 rows: a date window, the io
