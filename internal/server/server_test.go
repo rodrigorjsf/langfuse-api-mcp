@@ -59,11 +59,19 @@ func testOptions(t *testing.T, rawURL string) langfuse.Options {
 // and returns a connected MCP client session.
 func connectClient(t *testing.T, client *langfuse.Client, log *slog.Logger) *mcp.ClientSession {
 	t.Helper()
+	return connectServer(t, client, log, server.Secrets{PublicKey: testPublicKey, SecretKey: testSecretKey})
+}
+
+// connectServer starts the server with the real catalog, the given Langfuse
+// client, logger and key pair to redact, and returns a connected MCP client
+// session.
+func connectServer(t *testing.T, client *langfuse.Client, log *slog.Logger, secrets server.Secrets) *mcp.ClientSession {
+	t.Helper()
 	cat, err := catalog.Load()
 	if err != nil {
 		t.Fatalf("load catalog: %v", err)
 	}
-	srv := server.New(cat, client, log, server.Secrets{PublicKey: testPublicKey, SecretKey: testSecretKey})
+	srv := server.New(cat, client, log, secrets)
 
 	ctx := context.Background()
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()

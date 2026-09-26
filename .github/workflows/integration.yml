@@ -1,0 +1,86 @@
+# Integration suite (build tag `integration`, .claude/rules/testing.md): the real generic executor
+# and Langfuse HTTP client against a live Langfuse.
+# - self-hosted: every pull request (and on manual dispatch) against a throwaway Langfuse started
+#   from the official docker compose setup with a fresh project and key pair
+#   (scripts/langfuse-selfhosted.sh; compose file and images pinned there).
+# - cloud: weekly and on manual dispatch against the dedicated Langfuse Cloud test project, whose
+#   keys scripts/setup-ci-langfuse-cloud.sh stored as repository secrets. Weekly only, to respect
+#   the Hobby plan's rate limits; the suite waits for Retry-After on 429.
+#   Until its first green run the Cloud leg is unproven: see #40.
+# Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current.
+name: Integration
+
+on:
+  pull_request:
+  schedule:
+    - cron: "41 5 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  self-hosted:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: integration-self-hosted-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.mod
+      - name: Start self-hosted Langfuse
+        run: scripts/langfuse-selfhosted.sh up "$RUNNER_TEMP/langfuse.env"
+      - name: Integration tests
+        run: |
+          set -a; . "$RUNNER_TEMP/langfuse.env"; set +a
+          # Without the variables the suite would skip every live test and the job would pass green.
+          for name in LANGFUSE_TEST_BASE_URL LANGFUSE_TEST_PUBLIC_KEY LANGFUSE_TEST_SECRET_KEY; do
+            [ -n "${!name:-}" ] || { echo "::error::$name missing from the self-hosted env file"; exit 1; }
+          done
+          go test -race -tags integration -count=1 -v ./internal/server/
+      - name: Langfuse logs
+        if: failure()
+        run: scripts/langfuse-selfhosted.sh logs 200
+      - name: Stop self-hosted Langfuse
+        if: always()
+        run: scripts/langfuse-selfhosted.sh down
+
+  cloud:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # One Cloud run at a time: two would share the test project's rate-limit window.
+    concurrency:
+      group: integration-cloud
+      cancel-in-progress: false
+    steps:
+      # Without the secrets the suite would skip every live test and the job would pass green.
+      - name: Require the Cloud test project's secrets
+        env: &cloud-secrets
+          LANGFUSE_TEST_BASE_URL: ${{ secrets.LANGFUSE_TEST_BASE_URL }}
+          LANGFUSE_TEST_PUBLIC_KEY: ${{ secrets.LANGFUSE_TEST_PUBLIC_KEY }}
+          LANGFUSE_TEST_SECRET_KEY: ${{ secrets.LANGFUSE_TEST_SECRET_KEY }}
+        run: |
+          for name in LANGFUSE_TEST_BASE_URL LANGFUSE_TEST_PUBLIC_KEY LANGFUSE_TEST_SECRET_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::secret $name is not set: run scripts/setup-ci-langfuse-cloud.sh"
+              exit 1
+            fi
+          done
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.mod
+      - name: Integration tests
+        env: *cloud-secrets
+        run: go test -race -tags integration -count=1 -v ./internal/server/

@@ -9,5 +9,5 @@ import (
 // TestMain fails the package's tests when a goroutine outlives them
 // (.claude/rules/go.md: every goroutine has an exit path).
 func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m)
+	goleak.VerifyTestMain(m, liveLeakOptions()...)
 }

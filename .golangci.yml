@@ -9,6 +9,11 @@
 # Requires a golangci-lint binary built with Go >= 1.27 (the module's go version).
 version: "2"
 
+run:
+  # Lint the integration suite too (.claude/rules/testing.md); it compiles only with this tag.
+  build-tags:
+    - integration
+
 linters:
   default: standard # errcheck, govet, ineffassign, staticcheck, unused
   enable:

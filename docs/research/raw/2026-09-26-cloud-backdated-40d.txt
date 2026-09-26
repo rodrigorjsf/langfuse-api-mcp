@@ -1,0 +1,14 @@
+# Langfuse Cloud (us.cloud.langfuse.com, 4.46.0, Hobby test project), 2026-09-26 02:03 UTC.
+# One OTLP/HTTP JSON export of three single-span traces aged 1, 20 and 40 days (environment it-dbg-*),
+# then GET /api/public/v2/observations?fields=core&environment=<env>&limit=100 every 15 s.
+# Printed tuples: (name, startTime, traceId[:6]); `name` is not in the `core` field group.
+otel 200 b'{"name":"otel-ingestion-job","data":{"id":"1f1e4f0d-2ebd-4b44-bcd7-ac4ded984479","timestamp":"2026-09-26T02:03:50.569Z","name":"otel-ingestion-job","payload":{"data":{"fileKey":"otel/cmuh3x6wg00liad0c'
+0 []
+1 []
+2 [(None, '2026-09-25T02:03:49.934Z', '7f02cd'), (None, '2026-09-06T02:03:49.934Z', 'b6825c')]
+3 [(None, '2026-09-25T02:03:49.934Z', '7f02cd'), (None, '2026-09-06T02:03:49.934Z', 'b6825c')]
+4 [(None, '2026-09-25T02:03:49.934Z', '7f02cd'), (None, '2026-09-06T02:03:49.934Z', 'b6825c')]
+5 [(None, '2026-09-25T02:03:49.934Z', '7f02cd'), (None, '2026-09-06T02:03:49.934Z', 'b6825c')]
+b'{"message":"Traces deleted successfully"}'
+# The 40-day span was accepted (200) but never became queryable within 90 s; the 1- and 20-day spans did.
+# The same export on self-hosted 4.46.0 serves 40-day spans (prototype/langfuse-io-window, probe-4.46.0.txt).

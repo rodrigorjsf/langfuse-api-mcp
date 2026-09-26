@@ -385,9 +385,24 @@ What you need installed:
 
 Dependencies stay current through [Dependabot](.github/dependabot.yml) (Go modules and GitHub Actions). Dependabot does not bump the `toolchain` line, so a weekly workflow ([`.github/workflows/go-toolchain.yml`](.github/workflows/go-toolchain.yml)) opens a pull request when a newer Go 1.27.x patch release exists.
 
-### Setup and reading order
+### Integration tests against a real Langfuse
 
-Integration-test setup (Langfuse Cloud project + CI secrets): run [`scripts/setup-ci-langfuse-cloud.sh`](scripts/setup-ci-langfuse-cloud.sh).
+The integration suite drives `execute_read` (the real executor and Langfuse HTTP client) against a live Langfuse. It compiles only with the build tag `integration`, so `go test ./...` never runs it, and each live test skips with a message naming what is missing when `LANGFUSE_TEST_BASE_URL`, `LANGFUSE_TEST_PUBLIC_KEY` or `LANGFUSE_TEST_SECRET_KEY` is unset. On a 429 it waits for `Retry-After` once and never retries blind.
+
+CI ([`.github/workflows/integration.yml`](.github/workflows/integration.yml)) runs it against a throwaway self-hosted Langfuse on every pull request, and against the dedicated Langfuse Cloud test project weekly and on manual dispatch.
+
+Run it locally against a self-hosted Langfuse (needs Docker with the compose plugin and about 3 GiB of free RAM; uses ports 3000 and 9090):
+
+```bash
+scripts/langfuse-selfhosted.sh up          # official compose, images pinned by digest; fresh project + keys
+set -a; . ./.env.integration.selfhosted; set +a
+go test -tags integration -count=1 ./internal/server/
+scripts/langfuse-selfhosted.sh down        # removes the containers and their volumes
+```
+
+Or against the Cloud test project: run [`scripts/setup-ci-langfuse-cloud.sh`](scripts/setup-ci-langfuse-cloud.sh) once (it creates the project's keys, writes `.env.integration` and sets the CI secrets), then `set -a; . ./.env.integration; set +a` and the same `go test` line. Never point the suite at a project with real data. Both env files are gitignored.
+
+### Setup and reading order
 
 Start with [CLAUDE.md](CLAUDE.md) (agent and contributor index), [CONTEXT.md](CONTEXT.md) (glossary), [docs/adr/](docs/adr/) (decisions) and [ROADMAP.md](ROADMAP.md).
 

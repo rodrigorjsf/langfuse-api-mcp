@@ -64,6 +64,9 @@ _Avoid_: truststore (Java/Python term), CA bundle (when you mean the whole pool)
 
 **Observation**: a timed step inside a trace — span, generation, event and newer typed variants; forms a tree via `parentObservationId`.
 
+**Payload query**: an observation query that requests the `io` or `metadata` field groups — the application's own content, not timing or cost data.
+_Avoid_: heavy query, io query
+
 **Session**: a group of traces sharing a `sessionId` (e.g. one chat conversation).
 
 **Score**: an evaluation value (numeric, categorical or boolean) attached to a trace, observation, session or experiment.
