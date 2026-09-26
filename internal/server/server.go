@@ -200,10 +200,7 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest) (*
 		if res, rerr := langfuseError(err, op.ID); res != nil || rerr != nil {
 			return res, rerr
 		}
-		// The error codes of #21 replace this catch-all; until then the
-		// cause goes to stderr, never to the agent.
-		ex.log.Error("execute_read failed", "operationId", op.ID, "error", err.Error())
-		return toolError(errorInternal, "the Langfuse request failed", "", op.ID)
+		return ex.failure(op.ID, err)
 	}
 	return jsonResult(sanitize.Wrap(op.ID, resp.Body), false)
 }

@@ -86,7 +86,7 @@ func hostString(u *url.URL) string {
 func New(opts Options) *Client {
 	transport := &http.Transport{
 		// No proxy until proxy settings exist (M2): nothing is sent through a
-		// proxy the operator did not configure for this server.
+		// proxy the operator did not configure for this server (see #32).
 		Proxy:                 nil,
 		TLSClientConfig:       opts.TLS,
 		ForceAttemptHTTP2:     true,
@@ -164,15 +164,18 @@ type Response struct {
 // Do sends a request: method, the escaped path below the host (e.g.
 // /api/public/traces/abc) and the query, with Basic auth, under the client's
 // per-call deadline. It returns the response JSON for a 2xx answer and an
-// *APIError otherwise. A GET is retried within the deadline: twice with
-// exponential backoff and jitter on a 5xx, once after Retry-After on a 429.
-// Other methods are never retried: they are not idempotent.
+// *APIError otherwise. A request that got no answer returns an error wrapping
+// ErrUntrustedCertificate, ErrCertificateRejected, ErrNetwork, ErrTimeout or
+// ErrCanceled. A GET is retried within the deadline: twice with exponential
+// backoff and jitter on a 5xx, once after Retry-After on a 429, and twice on a
+// network failure (see send). Other methods are never retried: they are not
+// idempotent.
 func (c *Client) Do(ctx context.Context, method, escapedPath string, query url.Values) (Response, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 	var r retries
 	for {
-		resp, err := c.send(ctx, method, escapedPath, query)
+		resp, err := c.attempt(ctx, method, escapedPath, query)
 		wait, retry := r.next(method, err)
 		if !retry || !fits(ctx, wait) || c.wait(ctx, wait) != nil {
 			return resp, err
@@ -180,8 +183,8 @@ func (c *Client) Do(ctx context.Context, method, escapedPath string, query url.V
 	}
 }
 
-// send makes one attempt of Do.
-func (c *Client) send(ctx context.Context, method, escapedPath string, query url.Values) (Response, error) {
+// attempt makes one attempt of Do.
+func (c *Client) attempt(ctx context.Context, method, escapedPath string, query url.Values) (Response, error) {
 	u := *c.host
 	u.RawPath = strings.TrimSuffix(c.host.EscapedPath(), "/") + escapedPath
 	path, err := url.PathUnescape(u.RawPath)
@@ -198,7 +201,7 @@ func (c *Client) send(ctx context.Context, method, escapedPath string, query url
 	req.SetBasicAuth(c.publicKey, c.secretKey)
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.send(ctx, req)
 	if err != nil {
 		return Response{}, fmt.Errorf("send request: %w", err)
 	}
@@ -215,7 +218,7 @@ func (c *Client) send(ctx context.Context, method, escapedPath string, query url
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err != nil {
-		return Response{}, fmt.Errorf("read response: %w", err)
+		return Response{}, fmt.Errorf("read response: %w", classify(err))
 	}
 	if len(body) > maxResponseBytes {
 		return Response{}, fmt.Errorf("response exceeds %d bytes", maxResponseBytes)
