@@ -216,18 +216,33 @@ var markdownLink = regexp.MustCompile(`!?\[([^\]]*)\]\([^)]*\)`)
 // the union catalog gives a deprecated operation (x-summary: what it does
 // and its replacement, #79), else the first line of its description. Either
 // is third-party text: hidden characters are removed, a Markdown link keeps
-// only its text, and a line over maxIndexLineRunes is cut with an ellipsis.
-// Instruction-like text shorter than that passes through (see #82).
+// only its text, emphasis markers (** and __) are removed, and a line over
+// maxIndexLineRunes is cut with an ellipsis. Backticks stay: they mark
+// parameter names. Instruction-like text shorter than that passes through;
+// search_operations and describe_operation frame the lines as third-party
+// text instead (#82).
 func indexLine(summary, description string) string {
 	line := summary
 	if strings.TrimSpace(line) == "" {
 		line, _, _ = strings.Cut(strings.TrimSpace(description), "\n")
 	}
-	line = strings.TrimSpace(markdownLink.ReplaceAllString(visible(line), "$1"))
+	line = strings.TrimSpace(withoutEmphasis(markdownLink.ReplaceAllString(visible(line), "$1")))
 	if r := []rune(line); len(r) > maxIndexLineRunes {
 		line = string(r[:maxIndexLineRunes-1]) + "…"
 	}
 	return line
+}
+
+// emphasisMarker matches a run of the Markdown bold markers * and _.
+var emphasisMarker = regexp.MustCompile(`\*\*+|__+`)
+
+// withoutEmphasis removes every ** and __ from s. Removing one run can join
+// two others ("*__*"), so it repeats until none is left; each pass shortens s.
+func withoutEmphasis(s string) string {
+	for emphasisMarker.MatchString(s) {
+		s = emphasisMarker.ReplaceAllString(s, "")
+	}
+	return s
 }
 
 // resolve replaces a component reference in s by the referenced schema's type
