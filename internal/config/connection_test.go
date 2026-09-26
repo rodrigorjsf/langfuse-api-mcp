@@ -63,7 +63,7 @@ func TestLoadReadsTheHostFromLangfuseBaseURLOrItsAliasLangfuseHost(t *testing.T)
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			cfg, err := config.Load(connectionEnv(tc.env), configFile(tc.file))
+			cfg, _, err := config.Load(connectionEnv(tc.env), configFile(tc.file))
 			if err != nil {
 				t.Fatalf("Load: %v", err)
 			}
@@ -87,7 +87,7 @@ func TestLoadFailsNamingTheMissingConnectionVariable(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			_, err := config.Load(connectionEnv(map[string]string{tc.unset: ""}), config.File{})
+			_, _, err := config.Load(connectionEnv(map[string]string{tc.unset: ""}), config.File{})
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("Load() error = %v, want one naming %s", err, tc.want)
 			}
@@ -116,7 +116,7 @@ func TestLoadFailsNamingTheVariableOfAKeyWithoutItsLangfusePrefix(t *testing.T) 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			_, err := config.Load(connectionEnv(tc.env), config.File{})
+			_, _, err := config.Load(connectionEnv(tc.env), config.File{})
 			if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), tc.wantHint) {
 				t.Fatalf("Load() error = %v, want one naming %s and saying %q", err, tc.want, tc.wantHint)
 			}
@@ -134,7 +134,7 @@ func TestLoadFailsNamingTheVariableOfAHostThatIsNotAnHTTPURL(t *testing.T) {
 	for _, host := range []string{"cloud.langfuse.com", "ftp://cloud.langfuse.com", "https://"} {
 		t.Run(host, func(t *testing.T) {
 			t.Parallel()
-			_, err := config.Load(connectionEnv(map[string]string{"LANGFUSE_BASE_URL": "", "LANGFUSE_HOST": host}), config.File{})
+			_, _, err := config.Load(connectionEnv(map[string]string{"LANGFUSE_BASE_URL": "", "LANGFUSE_HOST": host}), config.File{})
 			if err == nil || !strings.Contains(err.Error(), "LANGFUSE_HOST") {
 				t.Fatalf("Load() error = %v, want one naming LANGFUSE_HOST", err)
 			}
@@ -159,7 +159,7 @@ func TestLoadRequiresHTTPSExceptForALoopbackHost(t *testing.T) {
 	} {
 		t.Run(host, func(t *testing.T) {
 			t.Parallel()
-			_, err := config.Load(connectionEnv(map[string]string{"LANGFUSE_BASE_URL": host}), config.File{})
+			_, _, err := config.Load(connectionEnv(map[string]string{"LANGFUSE_BASE_URL": host}), config.File{})
 			switch {
 			case wantOK && err != nil:
 				t.Fatalf("Load() error = %v, want %s accepted", err, host)
@@ -172,7 +172,7 @@ func TestLoadRequiresHTTPSExceptForALoopbackHost(t *testing.T) {
 
 func TestTheLangfuseKeysNeverPrintTheirValue(t *testing.T) {
 	t.Parallel()
-	cfg, err := config.Load(connectionEnv(nil), config.File{})
+	cfg, _, err := config.Load(connectionEnv(nil), config.File{})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}

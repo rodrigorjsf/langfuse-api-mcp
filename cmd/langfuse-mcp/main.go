@@ -69,9 +69,13 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 	if err != nil {
 		return app{}, err
 	}
-	cfg, err := config.Load(envMap(environ), file)
+	cfg, ignored, err := config.Load(envMap(environ), file)
 	if err != nil {
 		return app{}, err
+	}
+	for _, k := range ignored {
+		// The key name only (config escaped it); the value may be a misfiled secret.
+		log.Warn("config file key ignored: not a known setting", "file", file.Path, "line", k.Line, "key", k.Name)
 	}
 
 	pool, report, err := trust.Build(trustSources(cfg, ambient))

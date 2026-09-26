@@ -135,11 +135,12 @@ func ReadFile() (File, error) {
 // environment in production, a literal map in tests), then from file for every
 // setting env leaves unset. An empty value counts as unset. It fails, naming
 // the variable, on a value it cannot parse and when the host or a key is
-// missing.
-func Load(env map[string]string, file File) (Config, error) {
-	fromFile, err := parseFile(file)
+// missing. It also returns the config file lines whose key is not a known
+// setting (#26), so the caller can warn about them; they never stop startup.
+func Load(env map[string]string, file File) (Config, []IgnoredKey, error) {
+	fromFile, ignored, err := parseFile(file)
 	if err != nil {
-		return Config{}, err
+		return Config{}, nil, err
 	}
 	setting := func(name string) Setting {
 		if v := env[name]; v != "" {
@@ -165,24 +166,48 @@ func Load(env map[string]string, file File) (Config, error) {
 		ignore, err := strconv.ParseBool(flag.Value)
 		if err != nil && flag.Origin == OriginConfigFile {
 			// File errors never quote content: the file may hold a secret by mistake.
-			return Config{}, fmt.Errorf("config file %s: %s: want true or false", file.Path, EnvIgnoreAmbientCA)
+			return Config{}, nil, fmt.Errorf("config file %s: %s: want true or false", file.Path, EnvIgnoreAmbientCA)
 		}
 		if err != nil {
-			return Config{}, fmt.Errorf("%s=%q: want true or false", EnvIgnoreAmbientCA, flag.Value)
+			return Config{}, nil, fmt.Errorf("%s=%q: want true or false", EnvIgnoreAmbientCA, flag.Value)
 		}
 		cfg.IgnoreAmbientCA = ignore
 	}
 	if cfg.Connection, err = loadConnection(env, fromFile); err != nil {
-		return Config{}, err
+		return Config{}, nil, err
 	}
-	return cfg, nil
+	return cfg, ignored, nil
 }
 
-// parseFile returns the KEY=VALUE settings of a config file. Unknown keys are
-// kept and ignored by Load, without a warning (see #26). Errors name the
-// file and line number but never quote the line, which could hold a secret.
-func parseFile(file File) (map[string]string, error) {
+// IgnoredKey is a config file line whose key is not a known setting, most
+// likely a misspelling: Load ignores it. It carries no value, which could be a
+// secret filed under a misspelled key name.
+type IgnoredKey struct {
+	// Line is the 1-based line number in the config file.
+	Line int
+	// Name is the key, with control, invisible and bidi characters escaped
+	// (Go string-literal escapes), so it cannot forge or hide text in a log.
+	Name string
+}
+
+// knownFileKeys are the settings the config file may hold: those Load reads
+// today and those the README documents as Planned, so a documented setting
+// never draws a warning. The Langfuse keys are absent: parseFile refuses them.
+var knownFileKeys = map[string]bool{
+	EnvCACert: true, EnvCACertsPath: true, EnvIgnoreAmbientCA: true,
+	EnvSSLCertFile: true, EnvSSLCertDir: true, EnvNodeExtraCACerts: true, EnvRequestsCABundle: true, EnvCurlCABundle: true,
+	EnvBaseURL: true, EnvHost: true,
+	// Planned (README "Certificates and proxy" and "Behavior").
+	"HTTPS_PROXY": true, "HTTP_PROXY": true, "NO_PROXY": true,
+	"LANGFUSE_MCP_ALLOW_WRITES": true, "LANGFUSE_MCP_TRANSPORT": true,
+}
+
+// parseFile returns the KEY=VALUE settings of a config file and the lines whose
+// key is not a known setting. Errors name the file and line number but never
+// quote the line, which could hold a secret.
+func parseFile(file File) (map[string]string, []IgnoredKey, error) {
 	settings := map[string]string{}
+	var ignored []IgnoredKey
 	n := 0
 	content := strings.TrimPrefix(string(file.Content), "\uFEFF") // byte order mark some Windows editors write
 	for line := range strings.Lines(content) {
@@ -193,17 +218,28 @@ func parseFile(file File) (map[string]string, error) {
 		}
 		k, v, ok := strings.Cut(line, "=")
 		if !ok || strings.TrimSpace(k) == "" {
-			return nil, fmt.Errorf("config file %s line %d: expected KEY=VALUE", file.Path, n)
+			return nil, nil, fmt.Errorf("config file %s line %d: expected KEY=VALUE", file.Path, n)
 		}
 		// Accept the dotenv "export KEY=VALUE" form, so it cannot hide a key either.
 		k = strings.TrimSpace(strings.TrimPrefix(k, "export "))
 		for _, secret := range []string{EnvPublicKey, EnvSecretKey} {
 			if strings.EqualFold(k, secret) { // any spelling: a key must never sit in the file
-				return nil, fmt.Errorf("config file %s line %d: %s is not allowed in the config file; "+
+				return nil, nil, fmt.Errorf("config file %s line %d: %s is not allowed in the config file; "+
 					"set it in the environment or in your MCP client's env block", file.Path, n, secret)
 			}
 		}
+		if !knownFileKeys[k] {
+			ignored = append(ignored, IgnoredKey{Line: n, Name: escape(k)})
+			continue
+		}
 		settings[k] = strings.TrimSpace(v)
 	}
-	return settings, nil
+	return settings, ignored, nil
+}
+
+// escape returns s with every non-printable rune (control, zero-width, bidi,
+// tag characters) and backslash written as a Go string-literal escape.
+func escape(s string) string {
+	quoted := strconv.Quote(s)
+	return quoted[1 : len(quoted)-1]
 }
