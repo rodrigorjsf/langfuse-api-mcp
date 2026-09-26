@@ -95,6 +95,7 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 	}
 	// Logged after the last startup step that returns an error: a failed startup logs one line only.
 	log.Info("rate limit", "perMinute", cfg.RateLimit, "source", cfg.RateLimitSource)
+	logProxy(log, cfg.Proxy)
 	// The key pair leaves config.Secret straight into a langfuse.KeyPair,
 	// which redacts itself as config.Secret does.
 	keys := langfuse.NewKeyPair(cfg.Connection.PublicKey.Reveal(), cfg.Connection.SecretKey.Reveal())
@@ -103,6 +104,9 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 		// Operator settings only (config resolves the rate limit's host-based
 		// default; zero concurrency keeps the client's); no tool argument reaches them.
 		RateLimit: cfg.RateLimit, MaxConcurrency: cfg.MaxConcurrency,
+		// The proxy variables config.Load validated and resolved over the
+		// environment and the config file; no tool argument reaches them.
+		Proxy: langfuse.ProxyFromSettings(cfg.ProxySettings.HTTPS.Reveal(), cfg.ProxySettings.HTTP.Reveal(), cfg.ProxySettings.NoProxy),
 	})
 	srv := server.New(cat, client, log, server.Secrets{Keys: keys})
 	serve := func(ctx context.Context) error {
@@ -114,7 +118,19 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 	return app{log: log, pool: pool, serve: serve}, nil
 }
 
+// logProxy logs the proxy in use as scheme://host:port with its variable and
+// source, never its credentials, or that none is set; and whether NO_PROXY is set.
+func logProxy(log *slog.Logger, p config.Proxy) {
+	if p.Endpoint == "" {
+		log.Info("proxy", "endpoint", "none", "noProxySet", p.NoProxy)
+		return
+	}
+	log.Info("proxy", "endpoint", p.Endpoint, "variable", p.Variable, "source", p.Origin, "noProxySet", p.NoProxy)
+}
+
 // envMap turns "KEY=value" entries into a map; the last entry for a key wins.
+// Keys keep their stored spelling, also on Windows, where names are
+// case-insensitive: see #62.
 func envMap(environ []string) map[string]string {
 	env := make(map[string]string, len(environ))
 	for _, kv := range environ {

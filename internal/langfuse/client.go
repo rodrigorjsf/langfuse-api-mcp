@@ -44,6 +44,11 @@ type Options struct {
 	// MaxConcurrency is the most requests in flight at once
 	// (LANGFUSE_MCP_MAX_CONCURRENCY); zero or less means DefaultMaxConcurrency.
 	MaxConcurrency int
+	// Proxy picks the proxy for each request, with the http.Transport.Proxy
+	// signature: the executable passes ProxyFromSettings, tests pass
+	// http.ProxyURL of a fake proxy (ADR-0006). Credentials in the proxy URL
+	// go out as Basic proxy authentication. Nil means no proxy.
+	Proxy func(*http.Request) (*url.URL, error)
 }
 
 // DefaultRequestTimeout is the deadline of one Do call when Options leaves it zero.
@@ -104,15 +109,18 @@ func hostString(u *url.URL) string {
 // New returns a client for the host in opts, with one shared, tuned transport.
 func New(opts Options) *Client {
 	transport := &http.Transport{
-		// No proxy until proxy settings exist (M2): nothing is sent through a
-		// proxy the operator did not configure for this server (see #32).
-		Proxy:                 nil,
-		TLSClientConfig:       opts.TLS,
-		ForceAttemptHTTP2:     true,
-		MaxIdleConnsPerHost:   4,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 30 * time.Second,
+		// Only the proxy the caller passes: nothing is sent through a proxy
+		// the operator did not configure for this server.
+		Proxy: opts.Proxy,
+		// A CONNECT refused by the proxy becomes a typed network failure,
+		// without the proxy's text.
+		OnProxyConnectResponse: checkProxyConnect,
+		TLSClientConfig:        opts.TLS,
+		ForceAttemptHTTP2:      true,
+		MaxIdleConnsPerHost:    4,
+		IdleConnTimeout:        90 * time.Second,
+		TLSHandshakeTimeout:    10 * time.Second,
+		ResponseHeaderTimeout:  30 * time.Second,
 	}
 	c := &Client{
 		host: opts.Host,

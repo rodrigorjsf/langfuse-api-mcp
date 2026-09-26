@@ -34,8 +34,15 @@ type stdioSession struct {
 }
 
 // startStdio starts the executable as a child with the extra environment
-// entries (later entries win) and returns the session.
+// entries (later entries win) and no config file, and returns the session.
 func startStdio(t *testing.T, env ...string) *stdioSession {
+	t.Helper()
+	return startStdioWithConfigFile(t, "", env...)
+}
+
+// startStdioWithConfigFile is startStdio with a config file holding content
+// at the documented location for the running OS; "" means no config file.
+func startStdioWithConfigFile(t *testing.T, content string, env ...string) *stdioSession {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
@@ -43,7 +50,10 @@ func startStdio(t *testing.T, env ...string) *stdioSession {
 	if err != nil {
 		t.Fatalf("locate test binary: %v", err)
 	}
-	configEnv, _ := userConfigLocation(t)
+	configEnv, path := userConfigLocation(t)
+	if content != "" {
+		writeConfigFile(t, path, content)
+	}
 	cmd := exec.CommandContext(ctx, exe, "-test.run=^$") //nolint:gosec // G204: exe is this test binary, not external input
 	cmd.Env = append(append(append(os.Environ(), runMainEnv+"=1"), hermeticEnv...), connectionEnv...)
 	cmd.Env = append(append(cmd.Env, configEnv...), env...)
@@ -103,6 +113,49 @@ func (s *stdioSession) send(method string, params any, request bool) json.RawMes
 	return resp.Result
 }
 
+// initialize runs the MCP initialization handshake.
+func (s *stdioSession) initialize() {
+	s.t.Helper()
+	s.send("initialize", map[string]any{
+		"protocolVersion": "2025-06-18", "capabilities": map[string]any{},
+		"clientInfo": map[string]any{"name": "s2-test", "version": "0"},
+	}, true)
+	s.send("notifications/initialized", map[string]any{}, false)
+}
+
+// toolCall is the part of a tools/call result the tests read.
+type toolCall struct {
+	IsError           bool           `json:"isError"`
+	StructuredContent map[string]any `json:"structuredContent"`
+}
+
+// callTraceGet calls execute_read for trace trace-1 on an initialized session.
+func (s *stdioSession) callTraceGet() toolCall {
+	s.t.Helper()
+	var call toolCall
+	if err := json.Unmarshal(s.send("tools/call", map[string]any{
+		"name": "execute_read", "arguments": map[string]any{
+			"operationId": "trace_get", "parameters": map[string]any{"traceId": "trace-1"},
+		},
+	}, true), &call); err != nil {
+		s.t.Fatalf("decode tools/call: %v", err)
+	}
+	return call
+}
+
+// stop closes stdin, which ends the session, runs each check on the closed
+// session, then waits for the executable to exit cleanly.
+func (s *stdioSession) stop(checks ...func()) {
+	s.t.Helper()
+	_ = s.stdin.Close() // the exit status below is what matters
+	for _, check := range checks {
+		check()
+	}
+	if err := s.cmd.Wait(); err != nil {
+		s.t.Fatalf("executable did not exit 0 after stdin closed: %v\nstderr:\n%s", err, s.stderr)
+	}
+}
+
 func TestExecutableServesExecuteReadOverStdio(t *testing.T) {
 	t.Parallel()
 	gotAuth := make(chan string, 1)
@@ -115,11 +168,7 @@ func TestExecutableServesExecuteReadOverStdio(t *testing.T) {
 	t.Cleanup(fake.Close)
 	s := startStdio(t, "LANGFUSE_BASE_URL="+fake.URL)
 
-	s.send("initialize", map[string]any{
-		"protocolVersion": "2025-06-18", "capabilities": map[string]any{},
-		"clientInfo": map[string]any{"name": "s2-test", "version": "0"},
-	}, true)
-	s.send("notifications/initialized", map[string]any{}, false)
+	s.initialize()
 
 	var list struct {
 		Tools []struct {
@@ -133,17 +182,7 @@ func TestExecutableServesExecuteReadOverStdio(t *testing.T) {
 		t.Fatalf("tools = %+v, want exactly execute_read", list.Tools)
 	}
 
-	var call struct {
-		IsError           bool           `json:"isError"`
-		StructuredContent map[string]any `json:"structuredContent"`
-	}
-	if err := json.Unmarshal(s.send("tools/call", map[string]any{
-		"name": "execute_read", "arguments": map[string]any{
-			"operationId": "trace_get", "parameters": map[string]any{"traceId": "trace-1"},
-		},
-	}, true), &call); err != nil {
-		t.Fatalf("decode tools/call: %v", err)
-	}
+	call := s.callTraceGet()
 	if call.IsError || call.StructuredContent["operationId"] != "trace_get" {
 		t.Fatalf("tools/call result = %+v, want the enveloped trace", call)
 	}
@@ -153,13 +192,11 @@ func TestExecutableServesExecuteReadOverStdio(t *testing.T) {
 
 	// Closing stdin ends the session: the executable exits cleanly and wrote
 	// nothing else to stdout.
-	_ = s.stdin.Close() // the exit status below is what matters
-	if s.stdout.Scan() {
-		t.Fatalf("unexpected stdout line after the last response: %q", s.stdout.Bytes())
-	}
-	if err := s.cmd.Wait(); err != nil {
-		t.Fatalf("executable did not exit 0 after stdin closed: %v\nstderr:\n%s", err, s.stderr)
-	}
+	s.stop(func() {
+		if s.stdout.Scan() {
+			t.Fatalf("unexpected stdout line after the last response: %q", s.stdout.Bytes())
+		}
+	})
 	if strings.Contains(s.stderr.String(), stdioSecretKey) {
 		t.Fatalf("stderr leaks the secret key:\n%s", s.stderr)
 	}

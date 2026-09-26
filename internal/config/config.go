@@ -62,6 +62,11 @@ type Config struct {
 	// MaxConcurrency is the most Langfuse requests in flight at once; 0 when
 	// unset, so the Langfuse client's default applies.
 	MaxConcurrency int
+	// Proxy is the proxy in use, for the startup log; its zero value means none.
+	Proxy Proxy
+	// ProxySettings are the proxy variables in effect, from the environment
+	// or the config file, for the Langfuse client's proxy function (ADR-0006, #45).
+	ProxySettings ProxySettings
 }
 
 // Ambient holds the values of the ambient CA source variables; "" when unset.
@@ -146,7 +151,7 @@ func ReadFile() (File, error) {
 // missing. It also returns the config file lines whose key is not a known
 // setting (#26), so the caller can warn about them; they never stop startup.
 func Load(env map[string]string, file File) (Config, []IgnoredKey, error) {
-	fromFile, ignored, err := parseFile(file)
+	fromFile, fileLines, ignored, err := parseFile(file)
 	if err != nil {
 		return Config{}, nil, err
 	}
@@ -193,6 +198,9 @@ func Load(env map[string]string, file File) (Config, []IgnoredKey, error) {
 		return Config{}, nil, err
 	}
 	cfg.RateLimit, cfg.RateLimitSource = resolveRateLimit(cfg.RateLimit, cfg.Connection.Host)
+	if cfg.Proxy, cfg.ProxySettings, err = loadProxy(env, fromFile, fileLines, file.Path); err != nil {
+		return Config{}, nil, err
+	}
 	return cfg, ignored, nil
 }
 
@@ -211,24 +219,27 @@ type IgnoredKey struct {
 // isKnownFileKey reports whether key is a setting the config file may hold:
 // one Load reads today or one the README documents as Planned, so a documented
 // setting never draws a warning. The Langfuse keys are not: parseFile refuses them.
+// Keys match exactly, except that the proxy variables are known in both
+// spellings, as Go reads them (#45).
 func isKnownFileKey(key string) bool {
 	switch key {
 	case EnvCACert, EnvCACertsPath, EnvIgnoreAmbientCA,
 		EnvSSLCertFile, EnvSSLCertDir, EnvNodeExtraCACerts, EnvRequestsCABundle, EnvCurlCABundle,
 		EnvBaseURL, EnvHost, EnvRateLimit, EnvMaxConcurrency,
-		// Planned (README "Certificates and proxy" and "Behavior"); no code reads them yet.
-		// Lower-case proxy spellings are decided with proxy support: see #45.
-		"HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "LANGFUSE_MCP_ALLOW_WRITES", "LANGFUSE_MCP_TRANSPORT":
+		EnvHTTPSProxy, EnvHTTPSProxyLower, EnvHTTPProxy, EnvHTTPProxyLower, EnvNoProxy, EnvNoProxyLower,
+		// Planned (README "Behavior"); no code reads them yet.
+		"LANGFUSE_MCP_ALLOW_WRITES", "LANGFUSE_MCP_TRANSPORT":
 		return true
 	}
 	return false
 }
 
-// parseFile returns the KEY=VALUE settings of a config file and the lines whose
-// key is not a known setting. Errors name the file and line number but never
-// quote the line, which could hold a secret.
-func parseFile(file File) (map[string]string, []IgnoredKey, error) {
-	settings := map[string]string{}
+// parseFile returns the KEY=VALUE settings of a config file, the line number
+// each setting was read from (the last one, when a key repeats), and the lines
+// whose key is not a known setting. Errors name the file and line number but
+// never quote the line, which could hold a secret.
+func parseFile(file File) (map[string]string, map[string]int, []IgnoredKey, error) {
+	settings, lines := map[string]string{}, map[string]int{}
 	var ignored []IgnoredKey
 	n := 0
 	content := strings.TrimPrefix(string(file.Content), "\uFEFF") // byte order mark some Windows editors write
@@ -240,13 +251,13 @@ func parseFile(file File) (map[string]string, []IgnoredKey, error) {
 		}
 		k, v, ok := strings.Cut(line, "=")
 		if !ok || strings.TrimSpace(k) == "" {
-			return nil, nil, fmt.Errorf("config file %s line %d: expected KEY=VALUE", file.Path, n)
+			return nil, nil, nil, fmt.Errorf("config file %s line %d: expected KEY=VALUE", file.Path, n)
 		}
 		// Accept the dotenv "export KEY=VALUE" form, so it cannot hide a key either.
 		k = strings.TrimSpace(strings.TrimPrefix(k, "export "))
 		for _, secret := range []string{EnvPublicKey, EnvSecretKey} {
 			if strings.EqualFold(k, secret) { // any spelling: a key must never sit in the file
-				return nil, nil, fmt.Errorf("config file %s line %d: %s is not allowed in the config file; "+
+				return nil, nil, nil, fmt.Errorf("config file %s line %d: %s is not allowed in the config file; "+
 					"set it in the environment or in your MCP client's env block", file.Path, n, secret)
 			}
 		}
@@ -254,9 +265,9 @@ func parseFile(file File) (map[string]string, []IgnoredKey, error) {
 			ignored = append(ignored, IgnoredKey{Line: n, Name: logSafeKeyName(k)})
 			continue
 		}
-		settings[k] = strings.TrimSpace(v)
+		settings[k], lines[k] = strings.TrimSpace(v), n
 	}
-	return settings, ignored, nil
+	return settings, lines, ignored, nil
 }
 
 // maxKeyNameRunes bounds the key name an IgnoredKey carries, so a huge line

@@ -36,6 +36,7 @@ func classify(err error) error {
 		verification     *tls.CertificateVerificationError
 		dnsErr           *net.DNSError
 		opErr            *net.OpError
+		proxyConnect     proxyConnectError
 		netErr           net.Error
 	)
 	switch {
@@ -55,7 +56,9 @@ func classify(err error) error {
 		return fmt.Errorf("%w: %w", ErrUntrustedCertificate, err)
 	case errors.As(err, &verification):
 		return fmt.Errorf("%w: %w", ErrCertificateRejected, err)
-	case errors.As(err, &opErr):
+	// A refused proxy dial is an OpError ("proxyconnect"); a proxy that
+	// answers the CONNECT with a status other than 200 is this one.
+	case errors.As(err, &opErr), errors.As(err, &proxyConnect):
 		return fmt.Errorf("%w: %w", ErrNetwork, err)
 	default:
 		return err

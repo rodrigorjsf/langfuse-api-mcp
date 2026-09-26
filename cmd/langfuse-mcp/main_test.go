@@ -55,13 +55,19 @@ func runExecutable(t *testing.T, env ...string) ([]byte, error) {
 func runExecutableWithConfigFile(t *testing.T, content string, env ...string) ([]byte, error) {
 	t.Helper()
 	configEnv, path := userConfigLocation(t)
+	writeConfigFile(t, path, content)
+	return runChild(t, append(configEnv, env...))
+}
+
+// writeConfigFile writes a config file holding content at path.
+func writeConfigFile(t *testing.T, path, content string) {
+	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatalf("create config directory: %v", err)
 	}
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("write config file: %v", err)
 	}
-	return runChild(t, append(configEnv, env...))
 }
 
 // userConfigLocation points the child's OS user config location at a fresh
@@ -110,11 +116,12 @@ func runChildOutput(t *testing.T, env []string) (stdout, stderr []byte, err erro
 	return out.Bytes(), errOut.Bytes(), err
 }
 
-// hermeticEnv clears the CA-related variables the developer's or runner's own
-// environment may hold, so each test sets exactly the sources it asserts on.
+// hermeticEnv clears the CA and proxy variables the developer's or runner's
+// own environment may hold, so each test sets exactly the sources it asserts on.
 var hermeticEnv = []string{
 	"LANGFUSE_CA_CERT=", "LANGFUSE_CA_CERTS_PATH=", "LANGFUSE_MCP_IGNORE_AMBIENT_CA=",
 	"SSL_CERT_FILE=", "SSL_CERT_DIR=", "NODE_EXTRA_CA_CERTS=", "REQUESTS_CA_BUNDLE=", "CURL_CA_BUNDLE=",
+	"HTTPS_PROXY=", "https_proxy=", "HTTP_PROXY=", "http_proxy=", "NO_PROXY=", "no_proxy=",
 }
 
 // connectionEnv is a valid Langfuse connection, so every child starts unless a
