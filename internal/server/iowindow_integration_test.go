@@ -56,7 +56,8 @@ const bulkSpans = 61
 type ioSeed struct {
 	run         string            // unique per run: names and environment carry it
 	environment string            // every seeded span's Langfuse environment
-	traceIDs    map[string]string // by age label, plus "bulk"
+	traceIDs    map[string]string // by age label
+	bulkTraceID string            // the trace holding the bulkSpans spans
 	spanIDs     map[string]string // by age label
 	now         time.Time         // the time the ages are counted from
 }
@@ -145,9 +146,9 @@ func seedIOWindow(t *testing.T, cs *mcp.ClientSession) ioSeed {
 		s.traceIDs[label], s.spanIDs[label] = randomHex(t, 16), randomHex(t, 8)
 		spans = append(spans, otlpSpan(s.traceIDs[label], s.spanIDs[label], s.name(label), s.environment, s.now.Add(-age)))
 	}
-	s.traceIDs["bulk"] = randomHex(t, 16)
+	s.bulkTraceID = randomHex(t, 16)
 	for i := range bulkSpans {
-		spans = append(spans, otlpSpan(s.traceIDs["bulk"], randomHex(t, 8), s.name("bulk"), s.environment,
+		spans = append(spans, otlpSpan(s.bulkTraceID, randomHex(t, 8), s.name("bulk"), s.environment,
 			s.now.Add(-2*probeDay+time.Duration(i)*time.Second)))
 	}
 
@@ -199,7 +200,7 @@ func waitSeeded(t *testing.T, cs *mcp.ClientSession, s ioSeed, want int) {
 // reported but does not fail the probe: the rows carry a unique run name.
 func deleteSeededTraces(t *testing.T, s ioSeed) {
 	t.Helper()
-	ids := make([]string, 0, len(s.traceIDs))
+	ids := []string{s.bulkTraceID}
 	for _, id := range s.traceIDs {
 		ids = append(ids, id)
 	}
