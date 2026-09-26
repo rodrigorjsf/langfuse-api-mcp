@@ -34,7 +34,7 @@ Measure before optimizing; never trade a security control for speed. Error handl
 - Goroutines only where they buy latency (e.g. a workflow tool fetching observations and scores in parallel). Always bounded: `errgroup.WithContext` + `SetLimit`, fed by the request `context.Context`.
 - Every goroutine has an owner and an exit path through `ctx.Done()`; no fire-and-forget. Tests use `goleak.VerifyNone`.
 - Outbound calls share one `rate.Limiter` and a concurrency cap (security.md); cancellation of the MCP request cancels every in-flight Langfuse call.
-- Prefer immutable data over mutexes; if a mutex is needed, keep it unexported next to the data it guards. `go test -race ./...` on linux, macOS and windows.
+- Prefer immutable data over mutexes; if a mutex is needed, keep it unexported next to the data it guards.
 - `context.Context` is the first parameter of every I/O function; every HTTP call has a deadline.
 
 ## Logging
