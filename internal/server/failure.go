@@ -76,6 +76,16 @@ func failureFields(err error) toolErrorFields {
 			Hint:      "check that the host in LANGFUSE_BASE_URL is right and reachable from this machine; behind a proxy, check HTTPS_PROXY and NO_PROXY",
 			Retryable: true,
 		}
+	// Before the timeout, which it wraps: the call never left this server.
+	case errors.Is(err, langfuse.ErrThrottled):
+		return toolErrorFields{
+			Code: errorTimeout,
+			Message: "the call waited for this server's rate limit or concurrency cap until its deadline passed; " +
+				"it was not sent to Langfuse",
+			Hint: "wait a few seconds, then call again, one call at a time; the operator sets the limits with " +
+				"LANGFUSE_MCP_RATE_LIMIT and LANGFUSE_MCP_MAX_CONCURRENCY",
+			Retryable: true,
+		}
 	case errors.Is(err, langfuse.ErrTimeout):
 		return toolErrorFields{
 			Code:    errorTimeout,

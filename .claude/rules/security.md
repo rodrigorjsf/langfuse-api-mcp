@@ -21,7 +21,7 @@ Full risk→control mapping with sources: `docs/research/security.md`. Cite OWAS
 - Base URL comes only from operator config; `https` required except loopback hosts.
 - Model input selects an operation ID + params; every value is checked against the operation schema and unknown params are rejected; reject absolute URLs, schemes, hosts, `//`, `.`/`..` segments, `/` and `\` in path params (folder names that need `/`: #33); percent-encode path params.
 - Custom `CheckRedirect`: refuse any redirect that changes scheme, host, or port (Go forwards `Authorization` on same-host and subdomain redirects).
-- Timeouts, concurrency cap, rate limit, max response bytes read, max tool-result bytes returned (truncate with a marker + pagination hint); default and cap `limit` on list operations.
+- Timeouts, concurrency cap and rate limit (one shared per process, retries included, set only by `LANGFUSE_MCP_RATE_LIMIT`/`LANGFUSE_MCP_MAX_CONCURRENCY`), max response bytes read, max tool-result bytes returned (truncate with a marker + pagination hint); default and cap `limit` on list operations.
 
 **Tool results** (LLM01:2025/2026, MCP06:2025)
 - Langfuse payloads are untrusted data: wrap them in a labelled envelope; strip invisible/bidi Unicode (U+E0000–E007F, zero-width, bidi overrides) and control chars; never render HTML/Markdown from them; never echo them unescaped into error text.

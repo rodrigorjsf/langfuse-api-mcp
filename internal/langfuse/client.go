@@ -15,6 +15,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 // Options configures a Client.
@@ -33,10 +35,26 @@ type Options struct {
 	// Wait pauses between retries until d has passed or ctx is done; nil
 	// uses a real timer. Tests replace it so backoff never sleeps.
 	Wait func(ctx context.Context, d time.Duration) error
+	// Now is the clock the rate limit reads; nil uses time.Now. Tests replace
+	// it, with Wait, so paced requests never sleep.
+	Now func() time.Time
+	// RateLimit is the most requests the client sends per minute, retries
+	// included (LANGFUSE_MCP_RATE_LIMIT); zero or less means DefaultRateLimit.
+	RateLimit int
+	// MaxConcurrency is the most requests in flight at once
+	// (LANGFUSE_MCP_MAX_CONCURRENCY); zero or less means DefaultMaxConcurrency.
+	MaxConcurrency int
 }
 
 // DefaultRequestTimeout is the deadline of one Do call when Options leaves it zero.
 const DefaultRequestTimeout = 60 * time.Second
+
+// Default limits when Options leaves them zero. 30 requests per minute is the
+// Langfuse Cloud Hobby General API limit, the lowest of the plans.
+const (
+	DefaultRateLimit      = 30
+	DefaultMaxConcurrency = 4
+)
 
 // String keeps the key pair out of %v and %s.
 func (o Options) String() string {
@@ -57,6 +75,11 @@ type Client struct {
 	httpClient *http.Client
 	timeout    time.Duration
 	wait       func(ctx context.Context, d time.Duration) error
+	now        func() time.Time
+	// limiter paces every request of the client, retries included.
+	limiter *rate.Limiter
+	// slots holds one token per request in flight; its capacity is the cap.
+	slots chan struct{}
 }
 
 // String keeps the key pair out of %v and %s.
@@ -105,6 +128,21 @@ func New(opts Options) *Client {
 	if c.wait == nil {
 		c.wait = sleep
 	}
+	c.now = opts.Now
+	if c.now == nil {
+		c.now = time.Now
+	}
+	perMinute, concurrency := opts.RateLimit, opts.MaxConcurrency
+	if perMinute <= 0 {
+		perMinute = DefaultRateLimit
+	}
+	if concurrency <= 0 {
+		concurrency = DefaultMaxConcurrency
+	}
+	// The burst equals the cap, so that a full set of parallel requests
+	// leaves at once; the rate then paces the rest.
+	c.limiter = rate.NewLimiter(rate.Limit(float64(perMinute)/60), concurrency)
+	c.slots = make(chan struct{}, concurrency)
 	return c
 }
 
@@ -182,8 +220,18 @@ func (c *Client) Do(ctx context.Context, method, escapedPath string, query url.V
 	}
 }
 
-// attempt makes one attempt of Do.
+// attempt makes one attempt of Do, within the client's limits.
 func (c *Client) attempt(ctx context.Context, method, escapedPath string, query url.Values) (Response, error) {
+	release, err := c.acquire(ctx)
+	if err != nil {
+		return Response{}, err
+	}
+	defer release()
+	return c.send(ctx, method, escapedPath, query)
+}
+
+// send sends one request and reads its answer.
+func (c *Client) send(ctx context.Context, method, escapedPath string, query url.Values) (Response, error) {
 	u := *c.host
 	u.RawPath = strings.TrimSuffix(c.host.EscapedPath(), "/") + escapedPath
 	path, err := url.PathUnescape(u.RawPath)

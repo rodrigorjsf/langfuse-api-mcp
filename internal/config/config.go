@@ -54,6 +54,12 @@ type Config struct {
 	AmbientInFile Ambient
 	// Connection is the Langfuse host and key pair.
 	Connection Connection
+	// RateLimit is the most Langfuse requests per minute; 0 when unset, so
+	// the Langfuse client's default applies.
+	RateLimit int
+	// MaxConcurrency is the most Langfuse requests in flight at once; 0 when
+	// unset, so the Langfuse client's default applies.
+	MaxConcurrency int
 }
 
 // Ambient holds the values of the ambient CA source variables; "" when unset.
@@ -173,6 +179,14 @@ func Load(env map[string]string, file File) (Config, []IgnoredKey, error) {
 		}
 		cfg.IgnoreAmbientCA = ignore
 	}
+	if cfg.RateLimit, err = loadLimit(setting(EnvRateLimit), EnvRateLimit, maxRateLimit,
+		"requests per minute", file.Path); err != nil {
+		return Config{}, nil, err
+	}
+	if cfg.MaxConcurrency, err = loadLimit(setting(EnvMaxConcurrency), EnvMaxConcurrency, maxMaxConcurrency,
+		"requests in flight", file.Path); err != nil {
+		return Config{}, nil, err
+	}
 	if cfg.Connection, err = loadConnection(env, fromFile); err != nil {
 		return Config{}, nil, err
 	}
@@ -198,7 +212,7 @@ func isKnownFileKey(key string) bool {
 	switch key {
 	case EnvCACert, EnvCACertsPath, EnvIgnoreAmbientCA,
 		EnvSSLCertFile, EnvSSLCertDir, EnvNodeExtraCACerts, EnvRequestsCABundle, EnvCurlCABundle,
-		EnvBaseURL, EnvHost,
+		EnvBaseURL, EnvHost, EnvRateLimit, EnvMaxConcurrency,
 		// Planned (README "Certificates and proxy" and "Behavior"); no code reads them yet.
 		// Lower-case proxy spellings are decided with proxy support: see #45.
 		"HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "LANGFUSE_MCP_ALLOW_WRITES", "LANGFUSE_MCP_TRANSPORT":

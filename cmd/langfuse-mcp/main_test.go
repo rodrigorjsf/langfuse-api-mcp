@@ -338,3 +338,22 @@ func TestStartupWarningAboutAnUnknownConfigFileKeyNeverHoldsItsValue(t *testing.
 		t.Fatalf("startup log quotes the config file value:\n%s", stderr)
 	}
 }
+
+func TestStartupFailsNamingAnInvalidRequestLimit(t *testing.T) {
+	t.Parallel()
+	for _, setting := range []string{"LANGFUSE_MCP_RATE_LIMIT=0", "LANGFUSE_MCP_MAX_CONCURRENCY=-1"} {
+		t.Run(setting, func(t *testing.T) {
+			t.Parallel()
+			variable, _, _ := strings.Cut(setting, "=")
+
+			stderr, err := runExecutable(t, setting)
+
+			if err == nil {
+				t.Fatalf("executable exited 0 with %s; stderr:\n%s", setting, stderr)
+			}
+			if !strings.Contains(string(stderr), variable) {
+				t.Fatalf("startup error does not name %s:\n%s", variable, stderr)
+			}
+		})
+	}
+}

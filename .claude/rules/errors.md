@@ -39,6 +39,7 @@ Protocol-level JSON-RPC errors are reserved for malformed requests and unknown t
 | redirect to another scheme, host or port | `redirect_refused` | the user points `LANGFUSE_BASE_URL` at the redirect target and restarts; never followed, so the keys stay on the configured host | no |
 | DNS/connect/proxy | `network_error` | check host, `HTTPS_PROXY`/`NO_PROXY` | GET only |
 | timeout / canceled | `timeout` / `canceled` | narrow the query | no |
+| held by the server's own rate limit or concurrency cap past the deadline (never sent) | `timeout`, `retryable: true` | call again later, fewer calls at once; operator raises `LANGFUSE_MCP_RATE_LIMIT`/`LANGFUSE_MCP_MAX_CONCURRENCY` | no |
 
 Writes are never retried automatically (not idempotent).
 
