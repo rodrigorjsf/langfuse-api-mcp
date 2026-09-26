@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"go.uber.org/goleak"
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/sanitize"
@@ -34,24 +33,6 @@ const (
 	envTestPublicKey = "LANGFUSE_TEST_PUBLIC_KEY"
 	envTestSecretKey = "LANGFUSE_TEST_SECRET_KEY" //nolint:gosec // G101: the variable's name, not a key
 )
-
-// liveLeakOptions lets TestMain tolerate the idle keep-alive connections
-// (HTTP/1.1 and HTTP/2) the live Langfuse client holds open after the tests,
-// as it does in production; the client has no way to close them. Only when a
-// live Langfuse is configured: without one, the integration build checks for
-// leaks like the default build.
-// A client that can close its idle connections would remove this: see #41.
-func liveLeakOptions() []goleak.Option {
-	if os.Getenv(envTestBaseURL) == "" {
-		return nil
-	}
-	return []goleak.Option{
-		goleak.IgnoreAnyFunction("net/http.(*persistConn).readLoop"),
-		goleak.IgnoreAnyFunction("net/http.(*persistConn).writeLoop"),
-		// Langfuse Cloud answers over HTTP/2, whose idle connection keeps a read loop.
-		goleak.IgnoreAnyFunction("net/http/internal/http2.(*ClientConn).readLoop"),
-	}
-}
 
 // liveSession connects an in-memory MCP client to the real server, built with
 // the real catalog, executor and Langfuse client, pointed at the live Langfuse
