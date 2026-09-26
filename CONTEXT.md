@@ -28,7 +28,8 @@ _Avoid_: exception, failure response
 **Host**: the base URL of a Langfuse deployment (`LANGFUSE_BASE_URL`, alias `LANGFUSE_HOST`); the API lives under `<host>/api/public`.
 _Avoid_: endpoint, server URL
 
-**Region preset**: one of the Langfuse Cloud hosts (EU, US, JP, HIPAA) selectable by name instead of URL.
+**Cloud host**: one of the four Langfuse Cloud region hosts (EU, US, JP, HIPAA); any other host is a self-hosted instance. Always given as a URL, never by region name.
+_Avoid_: region preset
 
 **Self-hosted instance**: a Langfuse deployment run by the user's organization at its own host.
 

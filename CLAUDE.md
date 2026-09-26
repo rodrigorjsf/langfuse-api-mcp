@@ -52,3 +52,4 @@ When something fails repeatedly, when User has to re-explain, or when a workarou
 - Windows Go test from WSL: `GOOS=windows` build, run `.exe` directly; WSL env not inherited.
 - Old Langfuse compose: pin postgres 17 and clickhouse 24.3; `latest` breaks.
 - `gh issue view --comments` fails (Projects-classic GraphQL); use `--json body,comments`.
+- `golangci-lint` not on bash PATH; run `~/go/bin/golangci-lint`.

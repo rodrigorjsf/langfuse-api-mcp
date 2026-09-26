@@ -158,7 +158,8 @@ Sources: `[sourced]` `/docs/api-and-data-platform/features/public-api#field-grou
     stays as a weekly Cloud regression (`.github/workflows/integration.yml`), so a guard added upstream fails the suite.
     The Cloud evidence above comes from the same test run locally with the Cloud test project's keys; the `cloud` job
     then passed on GitHub too (`workflow_dispatch` run 36239908860 on `main`, 2026-09-26, Langfuse **4.46.0**, every
-    live test `PASS`, none skipped; #40). `[verified]`
+    live test `PASS`, none skipped; #40). That run predates #41; the first green `cloud` run with the goleak ignores removed is
+    `workflow_dispatch` run 36244125560 on `main` at `988b3d2` (2026-09-26, #51). `[verified]`
   - **Seeding limitation on Cloud.** Cloud accepted (200) an OTLP export of a span **40 days** old but did not serve it
     within 90 s (the 1- and 20-day spans of the same export were queryable within 45 s); self-hosted serves it. The probe therefore
     seeds nothing older than 20 days. Verbatim: `raw/2026-09-26-cloud-backdated-40d.txt`. `[verified]` Hypothesis, not
