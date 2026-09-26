@@ -218,15 +218,9 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 	}
 	resp, err := ex.client.Do(ctx, request.Method, request.Path, request.Query)
 	a.status, a.bytes = resp.Status, len(resp.Body)
-	if errors.Is(err, langfuse.ErrRedirectRefused) {
-		return toolError(errorRedirectRefused, "Langfuse answered with a redirect to another scheme, host or port; "+
-			"it was not followed, so the key pair was not sent there",
-			"retrying will not help: the user sets LANGFUSE_BASE_URL to the URL the Langfuse host redirects to "+
-				"(for example https instead of http) and restarts the server", op.ID)
-	}
 	if err != nil {
-		if res, rerr := langfuseError(err, op.ID, a, ex.redact); res != nil || rerr != nil {
-			return res, rerr
+		if f, ok := langfuseErrorFields(err, op.ID, a, ex.redact); ok {
+			return errorResult(f)
 		}
 		return failure(op.ID, err, a)
 	}

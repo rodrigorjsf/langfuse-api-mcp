@@ -26,9 +26,10 @@ const caHint = "set LANGFUSE_CA_CERT " +
 	"(a PEM file) or LANGFUSE_CA_CERTS_PATH (a directory of PEM files) to the CA that signed it, " +
 	"then check the 'CA sources loaded' line of the server's startup log"
 
-// failure is the tool error for a failed Langfuse request. It is the one place
-// where client errors become tool errors; the cause goes to the audit line a
-// (stderr), never to the agent.
+// failure is the tool error for a Langfuse request that got no usable answer
+// (a transport failure, a refused redirect or an oversized body); a Langfuse
+// error answer goes through langfuseErrorFields instead. The cause goes to the
+// audit line a (stderr), never to the agent.
 func failure(operationID string, err error, a *audit) (*mcp.CallToolResult, error) {
 	fields := failureFields(err)
 	fields.OperationID = truncate(operationID)
@@ -40,6 +41,14 @@ func failure(operationID string, err error, a *audit) (*mcp.CallToolResult, erro
 // operation ID.
 func failureFields(err error) toolErrorFields {
 	switch {
+	case errors.Is(err, langfuse.ErrRedirectRefused):
+		return toolErrorFields{
+			Code: errorRedirectRefused,
+			Message: "Langfuse answered with a redirect to another scheme, host or port; " +
+				"it was not followed, so the key pair was not sent there",
+			Hint: "retrying will not help: the user sets LANGFUSE_BASE_URL to the URL the Langfuse host redirects to " +
+				"(for example https instead of http) and restarts the server",
+		}
 	case errors.Is(err, langfuse.ErrUntrustedCertificate):
 		return toolErrorFields{
 			Code:    errorTLSUntrustedCertificate,

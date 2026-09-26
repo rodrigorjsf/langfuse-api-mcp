@@ -128,14 +128,14 @@ func unavailableHint(why langfuse.Unavailability) string {
 	}
 }
 
-// langfuseError translates a failed Langfuse request into a tool error. It
-// returns a nil result when err is not a Langfuse answer. It records the
+// langfuseErrorFields translates a Langfuse error answer into the tool error
+// fields; ok is false when err is not a Langfuse answer. It records the
 // status in a. Langfuse's message is redacted by r before errorResult cuts it
 // to length: a secret cut short would no longer match.
-func langfuseError(err error, operationID string, a *audit, r sanitize.Redactor) (*mcp.CallToolResult, error) {
+func langfuseErrorFields(err error, operationID string, a *audit, r sanitize.Redactor) (toolErrorFields, bool) {
 	var apiErr *langfuse.APIError
 	if !errors.As(err, &apiErr) {
-		return nil, nil
+		return toolErrorFields{}, false
 	}
 	a.status = apiErr.Status
 	f := toolErrorFields{HTTPStatus: apiErr.Status, OperationID: operationID}
@@ -143,7 +143,7 @@ func langfuseError(err error, operationID string, a *audit, r sanitize.Redactor)
 		f.Code = errorUnavailableOperation
 		f.Message = "operation " + operationID + " is not served by the connected Langfuse deployment (HTTP 404)"
 		f.Hint = unavailableHint(apiErr.Unavailable)
-		return errorResult(f)
+		return f, true
 	}
 	se := statusErrorFor(apiErr.Status)
 	f.Code, f.Hint, f.Retryable = se.code, se.hint, se.retryable
@@ -152,7 +152,7 @@ func langfuseError(err error, operationID string, a *audit, r sanitize.Redactor)
 	if apiErr.Message != "" {
 		f.Message += ": " + r.Redact(apiErr.Message)
 	}
-	return errorResult(f)
+	return f, true
 }
 
 // jsonResult returns v as JSON text plus structuredContent.
