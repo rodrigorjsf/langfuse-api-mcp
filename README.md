@@ -379,7 +379,7 @@ Every failure reaches the agent as a structured error with a stable `code` (e.g.
 
 ### Run the checks locally
 
-CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the same five checks on Linux, macOS and Windows for every push and pull request. Run them from the repository root before you push:
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the same five checks on Linux, macOS and Windows for every push and pull request that changes more than docs (a change touching only Markdown files, `docs/`, `.claude/` or `LICENSE` starts no CI or integration run). Run them from the repository root before you push:
 
 | Check | Command | What it proves |
 |---|---|---|
