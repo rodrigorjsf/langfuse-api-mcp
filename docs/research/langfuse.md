@@ -127,8 +127,10 @@ Sources: `[sourced]` `/docs/api-and-data-platform/features/public-api#field-grou
   - **Neither Langfuse Cloud nor self-hosted REST enforces it** (2026-09-26, both Langfuse **4.46.0**; Cloud = the
     US-region Hobby test project; issue #2 answered by #15). The integration test
     `TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows` (`internal/server/iowindow_integration_test.go`,
-    through `execute_read`) seeds back-dated spans over OTLP, probes, and deletes them. Every probe answered **HTTP 200**,
-    no error body; rows returned, identical on both deployments:
+    through `execute_read`) seeds back-dated spans over OTLP, probes, and deletes them. Every probe succeeded (a **2xx**:
+    `execute_read` does not expose the status, and the Langfuse client turns any non-2xx into a tool error, so the
+    status is inferred, not captured; the raw files' `→ 200` lines are that inference, logged as `→ 2xx` since), no
+    error body; rows returned, identical on both deployments:
 
     | Probe (`GET /v2/observations`) | Rows | Field group served |
     |---|---|---|

@@ -282,7 +282,9 @@ func TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows(t *testi
 }
 
 // probeServes asserts that one probe answers with wantRows rows, each carrying
-// field, and logs the answer for the research notes.
+// field, and logs the answer for the research notes. execute_read does not
+// expose the HTTP status: a successful call means Langfuse answered 2xx (the
+// client turns any other status into a tool error), so the log says "2xx".
 func probeServes(t *testing.T, cs *mcp.ClientSession, params map[string]any, wantRows int, field string) {
 	t.Helper()
 	rows := probeRows(t, cs, params)
@@ -296,7 +298,7 @@ func probeServes(t *testing.T, cs *mcp.ClientSession, params map[string]any, wan
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("→ 200 rows=%d with %s=%d first=%.300s", len(rows), field, withField, first)
+	t.Logf("→ 2xx rows=%d with %s=%d first=%.300s", len(rows), field, withField, first)
 	if len(rows) != wantRows || withField != wantRows {
 		t.Errorf("%d rows, %d with %s; want %d, all with %s", len(rows), withField, field, wantRows, field)
 	}
