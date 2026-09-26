@@ -165,15 +165,16 @@ func TestExecutableServesExecuteReadOverStdio(t *testing.T) {
 	}
 }
 
-func TestStartupFailsNamingTheMissingConnectionVariable(t *testing.T) {
+func TestStartupFailsNamingTheMissingOrInvalidConnectionVariable(t *testing.T) {
 	t.Parallel()
 	tests := map[string]struct {
 		env  []string
 		want string
 	}{
-		"host":       {env: []string{"LANGFUSE_BASE_URL=", "LANGFUSE_HOST="}, want: "LANGFUSE_BASE_URL"},
-		"public key": {env: []string{"LANGFUSE_PUBLIC_KEY="}, want: "LANGFUSE_PUBLIC_KEY"},
-		"secret key": {env: []string{"LANGFUSE_SECRET_KEY="}, want: "LANGFUSE_SECRET_KEY"},
+		"host":         {env: []string{"LANGFUSE_BASE_URL=", "LANGFUSE_HOST="}, want: "LANGFUSE_BASE_URL"},
+		"public key":   {env: []string{"LANGFUSE_PUBLIC_KEY="}, want: "LANGFUSE_PUBLIC_KEY"},
+		"secret key":   {env: []string{"LANGFUSE_SECRET_KEY="}, want: "LANGFUSE_SECRET_KEY"},
+		"invalid host": {env: []string{"LANGFUSE_BASE_URL=cloud.langfuse.com"}, want: "LANGFUSE_BASE_URL"},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {

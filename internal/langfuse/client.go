@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -29,7 +30,22 @@ type Options struct {
 	TLS *tls.Config
 }
 
+// redacted replaces the key pair wherever Options or Client are printed.
+const redacted = "[REDACTED]"
+
+// String keeps the key pair out of %v and %s.
+func (o Options) String() string {
+	return "langfuse.Options{Host: " + hostString(o.Host) + ", keys: " + redacted + "}"
+}
+
+// GoString keeps the key pair out of %#v.
+func (o Options) GoString() string { return o.String() }
+
+// LogValue keeps the key pair out of slog.
+func (o Options) LogValue() slog.Value { return slog.StringValue(o.String()) }
+
 // Client sends requests to one Langfuse host. It is safe for concurrent use.
+// Printing it never shows the key pair.
 type Client struct {
 	host       *url.URL
 	publicKey  string
@@ -37,10 +53,30 @@ type Client struct {
 	httpClient *http.Client
 }
 
+// String keeps the key pair out of %v and %s.
+func (c Client) String() string {
+	return "langfuse.Client{Host: " + hostString(c.host) + ", keys: " + redacted + "}"
+}
+
+// GoString keeps the key pair out of %#v.
+func (c Client) GoString() string { return c.String() }
+
+// LogValue keeps the key pair out of slog.
+func (c Client) LogValue() slog.Value { return slog.StringValue(c.String()) }
+
+func hostString(u *url.URL) string {
+	if u == nil {
+		return "<nil>"
+	}
+	return u.Redacted()
+}
+
 // New returns a client for the host in opts, with one shared, tuned transport.
 func New(opts Options) *Client {
 	transport := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
+		// No proxy until proxy settings exist (M2): nothing is sent through a
+		// proxy the operator did not configure for this server.
+		Proxy:                 nil,
 		TLSClientConfig:       opts.TLS,
 		ForceAttemptHTTP2:     true,
 		MaxIdleConnsPerHost:   4,

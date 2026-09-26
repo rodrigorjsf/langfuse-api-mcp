@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -41,7 +42,7 @@ func connect(t *testing.T, fake *httptest.Server) *mcp.ClientSession {
 		t.Fatalf("parse fake Langfuse URL: %v", err)
 	}
 	client := langfuse.New(langfuse.Options{Host: host, PublicKey: testPublicKey, SecretKey: testSecretKey})
-	srv := server.New(cat, client)
+	srv := server.New(cat, client, slog.New(slog.DiscardHandler))
 
 	ctx := context.Background()
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()

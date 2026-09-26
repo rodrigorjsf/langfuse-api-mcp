@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"strconv"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -52,24 +53,28 @@ func executeReadSchema() map[string]any {
 	}
 }
 
+// executeReadTitle is the tool's display name.
+const executeReadTitle = "Run a Langfuse read operation"
+
 // New returns the MCP server exposing execute_read over the catalog. The tool
-// set is fixed here, at startup, and is the same for every client.
-func New(cat catalog.Catalog, client *langfuse.Client) *mcp.Server {
+// set is fixed here, at startup, and is the same for every client. log
+// receives the causes of failed calls; it must write to stderr.
+func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "langfuse-mcp", Version: "0.0.0-dev"}, nil)
-	x := executor{catalog: cat, client: client}
+	ex := executor{catalog: cat, client: client, log: log}
 	s.AddTool(&mcp.Tool{
 		Name:        "execute_read",
-		Title:       "Run a Langfuse read operation",
+		Title:       executeReadTitle,
 		Description: executeReadDescription,
 		InputSchema: executeReadSchema(),
 		Annotations: &mcp.ToolAnnotations{
-			Title:           "Run a Langfuse read operation",
+			Title:           executeReadTitle,
 			ReadOnlyHint:    true,
 			DestructiveHint: new(false),
 			IdempotentHint:  true,
 			OpenWorldHint:   new(true),
 		},
-	}, x.executeRead)
+	}, ex.executeRead)
 	return s
 }
 
@@ -77,6 +82,7 @@ func New(cat catalog.Catalog, client *langfuse.Client) *mcp.Server {
 type executor struct {
 	catalog catalog.Catalog
 	client  *langfuse.Client
+	log     *slog.Logger
 }
 
 // executeReadInput is the execute_read argument object (executeReadSchema).
@@ -85,7 +91,7 @@ type executeReadInput struct {
 	Parameters  map[string]any `json:"parameters"`
 }
 
-func (x executor) executeRead(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var in executeReadInput
 	dec := json.NewDecoder(bytes.NewReader(req.Params.Arguments))
 	dec.UseNumber() // keep integers exact: 10 stays "10", never "1e+01"
@@ -93,7 +99,7 @@ func (x executor) executeRead(ctx context.Context, req *mcp.CallToolRequest) (*m
 	if err := dec.Decode(&in); err != nil {
 		return toolError(errorInvalidArgument, "arguments: "+err.Error(), "", in.OperationID)
 	}
-	op, ok := x.catalog.Lookup(in.OperationID)
+	op, ok := ex.catalog.Lookup(in.OperationID)
 	if !ok {
 		return toolError(errorOperationNotFound, "unknown operation ID "+strconv.Quote(in.OperationID),
 			"use an operation ID of the Langfuse API reference: https://api.reference.langfuse.com", in.OperationID)
@@ -106,8 +112,11 @@ func (x executor) executeRead(ctx context.Context, req *mcp.CallToolRequest) (*m
 	if err != nil {
 		return toolError(errorInvalidArgument, err.Error(), "", op.ID)
 	}
-	resp, err := x.client.Do(ctx, r.Method, r.Path, r.Query)
+	resp, err := ex.client.Do(ctx, r.Method, r.Path, r.Query)
 	if err != nil {
+		// The error codes of #20/#21 replace this catch-all; until then the
+		// cause goes to stderr, never to the agent.
+		ex.log.Error("execute_read failed", "operationId", op.ID, "error", err.Error())
 		return toolError(errorInternal, "the Langfuse request failed", "", op.ID)
 	}
 	return jsonResult(sanitize.Wrap(op.ID, resp.Body), false)

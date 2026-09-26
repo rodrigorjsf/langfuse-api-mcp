@@ -95,7 +95,7 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 		SecretKey: cfg.Connection.SecretKey.Reveal(),
 		TLS:       pool.TLSConfig(),
 	})
-	srv := server.New(cat, client)
+	srv := server.New(cat, client, log)
 	serve := func(ctx context.Context) error { return transport.Stdio(ctx, srv) }
 	return app{log: log, pool: pool, serve: serve}, nil
 }

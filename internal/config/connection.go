@@ -69,9 +69,12 @@ func loadConnection(env, fromFile map[string]string) (Connection, error) {
 		return Connection{}, fmt.Errorf("%s: want an absolute http or https URL, e.g. https://cloud.langfuse.com", hostVar)
 	}
 	conn := Connection{Host: u, PublicKey: Secret{env[EnvPublicKey]}, SecretKey: Secret{env[EnvSecretKey]}}
-	for name, key := range map[string]Secret{EnvPublicKey: conn.PublicKey, EnvSecretKey: conn.SecretKey} {
-		if key.value == "" {
-			return Connection{}, fmt.Errorf("%s is not set: set it in the environment or in your MCP client's env block", name)
+	for _, key := range []struct {
+		name   string
+		secret Secret
+	}{{EnvPublicKey, conn.PublicKey}, {EnvSecretKey, conn.SecretKey}} {
+		if key.secret.value == "" {
+			return Connection{}, fmt.Errorf("%s is not set: set it in the environment or in your MCP client's env block", key.name)
 		}
 	}
 	return conn, nil
