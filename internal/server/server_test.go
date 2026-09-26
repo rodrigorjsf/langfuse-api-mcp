@@ -94,6 +94,15 @@ func startServer(t testing.TB, client *langfuse.Client, log *slog.Logger, secret
 	if err != nil {
 		t.Fatalf("load catalog: %v", err)
 	}
+	return startCatalog(t, cat, client, log, secrets, profile, opts...)
+}
+
+// startCatalog starts the server over the given catalog, as startServer does
+// over the real one, and returns a connected MCP client session.
+func startCatalog(t testing.TB, cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets server.Secrets,
+	profile langfuse.DeploymentProfile, opts ...server.Option,
+) *mcp.ClientSession {
+	t.Helper()
 	srv := server.New(cat, client, log, secrets, profile, opts...)
 
 	ctx := context.Background()

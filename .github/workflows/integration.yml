@@ -1,8 +1,14 @@
 # Integration suite (build tag `integration`, .claude/rules/testing.md): the real generic executor
 # and Langfuse HTTP client against a live Langfuse.
-# - self-hosted: every pull request (and on manual dispatch) against a throwaway Langfuse started
-#   from the official docker compose setup with a fresh project and key pair
+# - self-hosted: every pull request against a throwaway Langfuse 4.46.0 in `events_only` mode,
+#   started from the official docker compose setup with a fresh project and key pair
 #   (scripts/langfuse-selfhosted.sh; compose file and images pinned there).
+# - pinned-deployments: weekly and on manual dispatch, the same against each pinned deployment of
+#   ADR-0012 (3.80.0, the latest 3.x, 4.x `events_only`, 4.x `dual`), one runner each.
+#   TestLiveDeploymentAnswersEveryReadOperationOfItsResolvedCatalog proves there that startup
+#   detects the deployment's profile and that every read operation of the resolved catalog is
+#   reachable; a failure names the deployment and the operation ID. The payload-query probe seeds
+#   over OTLP/JSON and reads /v2/observations, so it runs on `events_only` only (#73).
 # - cloud: weekly and on manual dispatch against the dedicated Langfuse Cloud test project, whose
 #   keys scripts/setup-ci-langfuse-cloud.sh stored as repository secrets. Weekly only, to respect
 #   the Hobby plan's rate limits; the suite waits for Retry-After on 429.
@@ -29,7 +35,7 @@ permissions:
 
 jobs:
   self-hosted:
-    if: github.event_name != 'schedule'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:
@@ -49,7 +55,7 @@ jobs:
         run: |
           set -a; . "$RUNNER_TEMP/langfuse.env"; set +a
           # Without the variables the suite would skip every live test and the job would pass green.
-          for name in LANGFUSE_TEST_BASE_URL LANGFUSE_TEST_PUBLIC_KEY LANGFUSE_TEST_SECRET_KEY; do
+          for name in LANGFUSE_TEST_BASE_URL LANGFUSE_TEST_PUBLIC_KEY LANGFUSE_TEST_SECRET_KEY LANGFUSE_TEST_DEPLOYMENT; do
             [ -n "${!name:-}" ] || { echo "::error::$name missing from the self-hosted env file"; exit 1; }
           done
           go test -race -tags integration -count=1 -v ./internal/server/
@@ -58,6 +64,61 @@ jobs:
         run: scripts/langfuse-selfhosted.sh logs 200
       - name: Stop self-hosted Langfuse
         if: always()
+        run: scripts/langfuse-selfhosted.sh down
+
+  pinned-deployments:
+    if: github.event_name != 'pull_request'
+    name: pinned-deployments (${{ matrix.deployment }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - deployment: 3.80.0
+            skip: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows
+          - deployment: 3.225.11
+            skip: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows
+          - deployment: 4.46.0-events_only
+            skip: ""
+          - deployment: 4.46.0-dual
+            skip: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    concurrency:
+      group: integration-pinned-${{ matrix.deployment }}-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.mod
+      - name: Start self-hosted Langfuse ${{ matrix.deployment }}
+        env:
+          LANGFUSE_DEPLOYMENT: ${{ matrix.deployment }}
+        run: scripts/langfuse-selfhosted.sh up "$RUNNER_TEMP/langfuse.env"
+      - name: Integration tests
+        env:
+          SKIP_TESTS: ${{ matrix.skip }}
+        run: |
+          set -a; . "$RUNNER_TEMP/langfuse.env"; set +a
+          # Without the variables the suite would skip every live test and the job would pass green.
+          for name in LANGFUSE_TEST_BASE_URL LANGFUSE_TEST_PUBLIC_KEY LANGFUSE_TEST_SECRET_KEY LANGFUSE_TEST_DEPLOYMENT; do
+            [ -n "${!name:-}" ] || { echo "::error::$name missing from the self-hosted env file"; exit 1; }
+          done
+          skip=()
+          if [ -n "$SKIP_TESTS" ]; then skip=(-skip "$SKIP_TESTS"); fi
+          go test -race -tags integration -count=1 -v "${skip[@]}" ./internal/server/
+      - name: Langfuse logs
+        if: failure()
+        env:
+          LANGFUSE_DEPLOYMENT: ${{ matrix.deployment }}
+        run: scripts/langfuse-selfhosted.sh logs 200
+      - name: Stop self-hosted Langfuse
+        if: always()
+        env:
+          LANGFUSE_DEPLOYMENT: ${{ matrix.deployment }}
         run: scripts/langfuse-selfhosted.sh down
 
   cloud:

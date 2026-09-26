@@ -439,9 +439,9 @@ The embedded union catalog is generated, never edited by hand: [`scripts/gen-uni
 
 The integration suite drives `execute_read` (the real executor and Langfuse HTTP client) against a live Langfuse. It compiles only with the build tag `integration`, so `go test ./...` never runs it, and each live test skips with a message naming what is missing when `LANGFUSE_TEST_BASE_URL`, `LANGFUSE_TEST_PUBLIC_KEY` or `LANGFUSE_TEST_SECRET_KEY` is unset. On a 429 it waits for `Retry-After` once and never retries blind.
 
-CI ([`.github/workflows/integration.yml`](.github/workflows/integration.yml)) runs it against a throwaway self-hosted Langfuse on every pull request, and against the dedicated Langfuse Cloud test project weekly and on manual dispatch.
+CI ([`.github/workflows/integration.yml`](.github/workflows/integration.yml)) runs it against a throwaway self-hosted Langfuse 4.46.0 in `events_only` mode on every pull request. Weekly and on manual dispatch it runs against each pinned deployment of [ADR-0012](docs/adr/0012-version-aware-catalog.md) and against the dedicated Langfuse Cloud test project. The pinned deployments are 3.80.0, 3.225.11 (the latest 3.x), 4.46.0 `events_only` and 4.46.0 `dual`, one runner each. On each of them the per-deployment check detects the deployment profile, fails unless it is the one expected for that pin, and calls every read operation of the catalog resolved for it. A read passes on any Langfuse answer except `operation_unavailable`; a "not found" for its placeholder IDs is a pass. A failure names the deployment, the operation ID and the tool error code, never a payload or a key. The payload-query probe runs on `events_only` only.
 
-Run it locally against a self-hosted Langfuse (needs Docker with the compose plugin and about 3 GiB of free RAM; uses ports 3000 and 9090):
+Run it locally against a self-hosted Langfuse (needs Docker with the compose plugin and about 3 GiB of free RAM; uses ports 3000 and 9090). `LANGFUSE_DEPLOYMENT` picks the pinned deployment (`4.46.0-events_only` by default, `4.46.0-dual`, `3.225.11` or `3.80.0`), one at a time:
 
 ```bash
 scripts/langfuse-selfhosted.sh up          # official compose, images pinned by digest; fresh project + keys
