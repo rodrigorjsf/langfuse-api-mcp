@@ -8,6 +8,12 @@ _Avoid_: endpoint (when you mean a single method), route, action
 **Catalog**: the set of in-scope operations the server can execute for the connected deployment: the bundled union of Langfuse release specs, minus the exclusion list, filtered by the deployment profile.
 _Avoid_: registry, tool list
 
+**Operation index**: the compact listing `search_operations` returns — one line per catalog operation (its ID and the first line of its description), grouped by tag, optionally filtered by a query.
+_Avoid_: API list, endpoint list
+
+**Operation description**: what `describe_operation` returns for one operation — every parameter with its location, type, required flag, enum and bounds.
+_Avoid_: operation docs, spec (for this per-operation view)
+
 **Read operation**: an operation using HTTP GET; executable only through `execute_read`.
 
 **Write operation**: an operation using POST, PUT, PATCH or DELETE; executable only through `execute_write`.
@@ -68,6 +74,8 @@ _Avoid_: truststore (Java/Python term), CA bundle (when you mean the whole pool)
 **Trace**: one end-to-end execution of an instrumented LLM application; groups observations.
 
 **Observation**: a timed step inside a trace — span, generation, event and newer typed variants; forms a tree via `parentObservationId`.
+
+**Trace tree**: the observations of one trace in depth-first pre-order, each with its depth, the parent before its children; what `get_trace_tree` returns.
 
 **Payload query**: an observation query that requests the `io` or `metadata` field groups — the application's own content, not timing or cost data.
 _Avoid_: heavy query, io query

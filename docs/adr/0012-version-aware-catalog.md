@@ -61,3 +61,9 @@ Users on old and on new deployments must both get every operation their deployme
 - Startup costs one unauthenticated health call plus 2–3 authenticated GETs.
 - The startup log lists the detected version, the families and the operation count. It never lists payloads.
 - **When the migration modes go away** (planned by Langfuse for a future major), the probes still work; only the fixtures change.
+
+## Amendment: freshness, startup budget and test cadence (2026-09-26, M3 grilling)
+
+- **Freshness (replaces "CI fails if the committed catalog is stale" in §1).** Regenerating needs the spec of hundreds of release tags from GitHub, and a pull request of ours cannot change upstream. So every pull request checks offline only: the embedded catalog parses and the deployment-profile fixture test passes. A weekly job runs the generator and opens a pull request when the output changes, like the Go toolchain bump workflow. A new Langfuse operation stays unlisted for at most about a week; nothing breaks meanwhile.
+- **Startup budget (adds to §3).** The health call and the sentinel probes run in parallel within a total budget of about 5 seconds. A probe that has not answered by then counts as "anything else": its family stays on and one stderr warning is logged. A slow or down Langfuse never holds up the host's `initialize`.
+- **Integration cadence (changes Consequences).** Every pull request runs the integration suite against 4.x `events_only`, as today. The four pinned deployments (3.80.0, latest 3.x, 4.x `events_only`, 4.x `dual`) run in the weekly job next to the Cloud run. A v3-only regression can surface up to a week after merge.
