@@ -6,7 +6,7 @@ Full risk→control mapping with sources: `docs/research/security.md`. Cite OWAS
 - Langfuse keys come only from the server's environment/config — never from tool arguments, never forwarded from the MCP client (no token passthrough). Langfuse keys cannot be read-only, so the server is the only write gate.
 - The config file (ADR-0011) must never hold keys: reject `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` found there with a startup error; tests prove it.
 - An unknown config-file key only draws a startup warning naming file, line and key (escaped, cut to 64 runes), never its value (#26); tests prove it.
-- Redact `Authorization`, `sk-lf-…`, `pk-lf-…` and the HTTP bearer token from logs, errors and tool output.
+- Redact `Authorization`, `sk-lf-…`, `pk-lf-…`, the HTTP bearer token and proxy credentials (`user:password@` in a proxy URL; used only for Basic proxy auth, logged as `scheme://host:port`) from logs, errors, hints, the audit line and tool output. A startup error for an invalid proxy value names the variable and its source, never the value.
 - After startup the key pair travels only as `langfuse.KeyPair`, which renders `[REDACTED]` in fmt, JSON and slog; never copy the keys into plain `string` fields.
 
 **Write gating** (ADR-0003)

@@ -62,6 +62,8 @@ type Config struct {
 	// MaxConcurrency is the most Langfuse requests in flight at once; 0 when
 	// unset, so the Langfuse client's default applies.
 	MaxConcurrency int
+	// Proxy is the proxy in use, for the startup log; its zero value means none.
+	Proxy Proxy
 }
 
 // Ambient holds the values of the ambient CA source variables; "" when unset.
@@ -193,6 +195,9 @@ func Load(env map[string]string, file File) (Config, []IgnoredKey, error) {
 		return Config{}, nil, err
 	}
 	cfg.RateLimit, cfg.RateLimitSource = resolveRateLimit(cfg.RateLimit, cfg.Connection.Host)
+	if cfg.Proxy, err = loadProxy(env); err != nil {
+		return Config{}, nil, err
+	}
 	return cfg, ignored, nil
 }
 
