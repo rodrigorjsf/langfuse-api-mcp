@@ -75,5 +75,8 @@ _Avoid_: heavy query, io query
 
 **Dataset / dataset item**: a named collection of inputs (and expected outputs) used to run experiments.
 
+**Folder name**: a prompt or dataset name whose `/`-separated segments place it inside folders (e.g. `support/triage/system`).
+_Avoid_: path, directory, nested name — "path" is reserved for the URL path and its path parameters.
+
 **Experiment**: a run of an application over a dataset, producing experiment items linked to traces and scores.
 _Avoid_: dataset run (deprecated API name)

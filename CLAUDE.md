@@ -51,3 +51,4 @@ When something fails repeatedly, when User has to re-explain, or when a workarou
 - Langfuse compose: `docker compose pull` first; cached `:4` image silently stale.
 - Windows Go test from WSL: `GOOS=windows` build, run `.exe` directly; WSL env not inherited.
 - Old Langfuse compose: pin postgres 17 and clickhouse 24.3; `latest` breaks.
+- `gh issue view --comments` fails (Projects-classic GraphQL); use `--json body,comments`.
