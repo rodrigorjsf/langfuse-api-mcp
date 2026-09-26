@@ -13,6 +13,15 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 Infer the repo from `git remote -v` — `gh` does this automatically when run inside a clone.
 
+## Milestones
+
+Every open issue carries exactly one GitHub milestone matching a `ROADMAP.md` row (`M2 TLS & config`, `M3 Full read surface`, `M4 Gated writes`, `M5 Distribution & supply chain`, `M6 User skills`, `M7 1.0`).
+
+- **Creating an issue** (follow-up, bug, triage intake): set the milestone whose work closes it, `gh issue create --milestone "<title>"` or `gh issue edit <n> --milestone "<title>"`. Pick the milestone that builds the prerequisite, not the one where the gap was found. If none fits, ask the maintainer.
+- **Writing a spec for a milestone** (`/to-spec`, `/to-tickets`): first list `gh issue list --state open --milestone "<title>" --json number,title,body,comments`. Every issue there enters the spec: as its own ticket, or folded into a ticket's acceptance criteria with a link back (`Closes #n` in the PR that implements it). The spec lists which issues it absorbs.
+- **Triage**: a triaged issue has one category, one state and one milestone.
+- A new `ROADMAP.md` milestone gets a GitHub milestone with the same title in the same change.
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
