@@ -118,9 +118,10 @@ func loadConnection(env, fromFile map[string]string) (Connection, error) {
 
 // isLoopback reports whether host, a URL host name without port, is
 // "localhost" or a loopback IP address. Any other name, even one that
-// resolves to a loopback address, is not: resolution can change.
+// resolves to a loopback address, is not: resolution can change. Only ASCII
+// letters fold, as in isCloudHost: Unicode folding would match "localhoſt".
 func isLoopback(host string) bool {
-	if strings.EqualFold(host, "localhost") {
+	if asciiLower(host) == "localhost" {
 		return true
 	}
 	ip, err := netip.ParseAddr(host)

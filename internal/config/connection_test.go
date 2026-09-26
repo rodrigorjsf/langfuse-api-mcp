@@ -154,6 +154,7 @@ func TestLoadRequiresHTTPSExceptForALoopbackHost(t *testing.T) {
 		"http://langfuse.internal.example.com":  false,
 		"http://10.0.0.5:3000":                  false,
 		"http://localhost.evil.example":         false,
+		"http://localho\u017ft:3000":            false,
 		"http://127.0.0.1.evil.example":         false,
 		"http://[::ffff:10.0.0.5]:3000":         false,
 	} {
