@@ -111,7 +111,7 @@ Settings come from environment variables, then from an optional [config file](#c
 | `LANGFUSE_SECRET_KEY` | yes | — | Project secret key (`sk-lf-…`). Environment only; never logged and never returned to the agent. |
 | `LANGFUSE_BASE_URL` | yes | — | Langfuse host, an absolute `http`/`https` URL. `LANGFUSE_HOST` is accepted as an alias (`LANGFUSE_BASE_URL` wins when both are set). May also be set in the config file; the environment wins. Requiring `https` except for loopback hosts is **Planned**. |
 
-A missing host or key stops startup with one error naming the variable. Region presets (choosing a Cloud region by name) are **Planned** (M2).
+A missing host or key stops startup with one error naming the variable; whether a missing host should instead default to a Cloud region is open ([#31](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/31)). Region presets (choosing a Cloud region by name) are **Planned** (M2).
 
 Cloud regions: EU `https://cloud.langfuse.com` · US `https://us.cloud.langfuse.com` · JP `https://jp.cloud.langfuse.com` · HIPAA `https://hipaa.cloud.langfuse.com`. Keys only work in the region where they were created.
 
