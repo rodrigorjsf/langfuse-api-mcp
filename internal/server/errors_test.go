@@ -438,7 +438,7 @@ func TestA429WithoutRetryAfterIsNotRetriedAndReturnsLangfuseRateLimited(t *testi
 
 func TestA2xxThatIsNotJSONReturnsInternalErrorWithAHint(t *testing.T) {
 	t.Parallel()
-	fake, calls := scriptedLangfuse(t, answer{status: http.StatusOK, contentType: "text/html", body: "<html>login page</html>"})
+	fake, calls := scriptedLangfuse(t, answer{status: http.StatusOK, contentType: "text/html", body: "<html>Sign in to Acme SSO</html>"})
 	cs := connect(t, fake)
 
 	res := callExecuteRead(t, cs, traceList)
@@ -447,7 +447,7 @@ func TestA2xxThatIsNotJSONReturnsInternalErrorWithAHint(t *testing.T) {
 	if got.Code != "internal_error" || got.Hint == "" || got.OperationID != "trace_list" || calls.Load() != 1 {
 		t.Fatalf("tool error = %+v after %d requests, want internal_error with a hint, after 1 request", got, calls.Load())
 	}
-	if text := resultText(t, res); strings.Contains(text, "login page") {
+	if text := resultText(t, res); strings.Contains(text, "Acme SSO") {
 		t.Fatalf("the tool error echoes the Langfuse body: %s", text)
 	}
 }
