@@ -134,7 +134,11 @@ def deref(node, spec, seen=()):
 
 
 def operations(spec):
-    """{"METHOD path": operation} of one spec, parameters inlined."""
+    """{"METHOD path": operation} of one spec, parameters inlined.
+
+    Only what the read path uses is kept: request bodies and responses are
+    dropped, so execute_write (M4) has no body schema yet (see #81).
+    """
     out = {}
     for path, item in (spec.get("paths") or {}).items():
         shared = item.get("parameters") or []
