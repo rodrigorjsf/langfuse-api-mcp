@@ -8,6 +8,7 @@
 # Known limitation: the pull request is opened with GITHUB_TOKEN, and GitHub starts no workflow
 # for events that token creates, so CI does not run on the bump PR by itself. Close and reopen
 # the PR (or push to its branch) to run CI before merging. See #24 and README "For contributors".
+# The pull-request path has not run on GitHub yet (no newer 1.27.x so far); see #50.
 name: Go toolchain
 
 on:
