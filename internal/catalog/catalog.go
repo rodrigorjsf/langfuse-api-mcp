@@ -217,6 +217,7 @@ var markdownLink = regexp.MustCompile(`!?\[([^\]]*)\]\([^)]*\)`)
 // and its replacement, #79), else the first line of its description. Either
 // is third-party text: hidden characters are removed, a Markdown link keeps
 // only its text, and a line over maxIndexLineRunes is cut with an ellipsis.
+// Instruction-like text shorter than that passes through (see #82).
 func indexLine(summary, description string) string {
 	line := summary
 	if strings.TrimSpace(line) == "" {

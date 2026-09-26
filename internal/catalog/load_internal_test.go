@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // The embedded spec holds no hidden character today, so this proves the
@@ -75,6 +76,23 @@ func TestAnIndexLineIsTheSummaryCleanedOfHiddenCharactersLinksAndExcess(t *testi
 			}
 		})
 	}
+}
+
+// #79: whatever third-party text the union catalog holds, its index line
+// holds no hidden character and at most 200 runes.
+func FuzzIndexLine(f *testing.F) {
+	f.Add("Get an x (legacy: prefer y_get when it is available)", "")
+	f.Add("", "**Deprecated:** see [guide](https://x.example)\n\nGet an x")
+	f.Add("[a](b)\u202e"+strings.Repeat("é", 250), "")
+	f.Fuzz(func(t *testing.T, summary, description string) {
+		line := indexLine(summary, description)
+		if n := utf8.RuneCountInString(line); n > maxIndexLineRunes {
+			t.Fatalf("line has %d runes, want at most %d", n, maxIndexLineRunes)
+		}
+		if visible(line) != line {
+			t.Fatalf("line %q holds a hidden character", line)
+		}
+	})
 }
 
 // The embedded spec gives no bounds today; the union catalog may. The

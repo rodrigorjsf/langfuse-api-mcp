@@ -80,28 +80,41 @@ func TestALegacyOperationsLineSaysWhatItDoesAndNamesItsReplacement(t *testing.T)
 	}
 }
 
-// #79: every legacy read names an operation of the catalog as its
-// replacement, and no line of the embedded catalog carries a deprecation
-// notice or a Markdown link.
-func TestEveryLegacyReadNamesAReplacementAndNoLineCarriesANoticeOrALink(t *testing.T) {
+// #79: no index line of the embedded catalog carries a deprecation notice or
+// a Markdown link.
+func TestNoIndexLineCarriesADeprecationNoticeOrALink(t *testing.T) {
+	t.Parallel()
+	cat := mustLoad(t)
+
+	ops := append(cat.Operations(), cat.Resolve(catalog.Profile{Version: "3.0.0"}).Operations()...)
+	for _, op := range ops {
+		if strings.Contains(op.DescriptionLine, "Deprecated") || strings.Contains(op.DescriptionLine, "](") {
+			t.Errorf("%s: line %q carries a deprecation notice or a Markdown link", op.ID, op.DescriptionLine)
+		}
+	}
+}
+
+// #79: every read of the legacy family names its replacement, and every
+// read line naming a replacement names a read operation of the catalog
+// outside the legacy family.
+func TestEveryLegacyReadNamesANonLegacyReadOfTheCatalogAsItsReplacement(t *testing.T) {
 	t.Parallel()
 	cat := mustLoad(t)
 	legacy := regexp.MustCompile(`^\S.* \(legacy: prefer (\S+) when it is available\)$`)
 
 	for _, op := range cat.Operations() {
-		if strings.Contains(op.DescriptionLine, "Deprecated") || strings.Contains(op.DescriptionLine, "](") {
-			t.Errorf("%s: line %q carries a deprecation notice or a Markdown link", op.ID, op.DescriptionLine)
-		}
-		if op.Family != catalog.LegacyFamily || !op.IsRead() {
+		if !op.IsRead() {
 			continue
 		}
 		m := legacy.FindStringSubmatch(op.DescriptionLine)
 		if m == nil {
-			t.Errorf("%s: line %q does not name its replacement", op.ID, op.DescriptionLine)
+			if op.Family == catalog.LegacyFamily {
+				t.Errorf("%s: line %q does not name its replacement", op.ID, op.DescriptionLine)
+			}
 			continue
 		}
-		if r, ok := cat.Lookup(m[1]); !ok || r.Family == catalog.LegacyFamily {
-			t.Errorf("%s: replacement %s is not a non-legacy operation of the catalog", op.ID, m[1])
+		if r, ok := cat.Lookup(m[1]); !ok || !r.IsRead() || r.Family == catalog.LegacyFamily {
+			t.Errorf("%s: replacement %s is not a non-legacy read operation of the catalog", op.ID, m[1])
 		}
 	}
 }

@@ -262,7 +262,8 @@ def summarize(paths):
             children = [p for (m, p) in live if m == method.upper() and re.fullmatch(re.escape(target) + r"/\{[^/]+\}", p)]
             if path.endswith("}") and len(children) == 1:
                 target = children[0]
-            replacement = live.get((method.upper(), target)) or " ".join(filter(None, (verb, named.group(2))))
+            written = f"{verb} {named.group(2)}" if verb else named.group(2)
+            replacement = live.get((method.upper(), target)) or written
             op["x-summary"] = f"{what} (legacy: prefer {replacement} when it is available)"
 
 
