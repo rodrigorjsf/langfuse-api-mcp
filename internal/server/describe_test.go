@@ -224,8 +224,9 @@ func TestExecuteReadRefusingAParameterListsTheValidNamesAndNamesDescribeOperatio
 
 			got := toolErrorOf(t, res).Error
 			if got.Code != "invalid_argument" || !strings.Contains(got.Hint, validNames) ||
-				!strings.Contains(got.Hint, "describe_operation") {
-				t.Fatalf("error = %+v, want invalid_argument whose hint lists %q and names describe_operation", got, validNames)
+				!strings.Contains(got.Hint, "describe_operation") || strings.Contains(got.Hint, "http") {
+				t.Fatalf("error = %+v, want invalid_argument whose hint lists %q, names describe_operation and links no web page (#36)",
+					got, validNames)
 			}
 			if tc.unechoed != "" && strings.Contains(resultText(t, res), tc.unechoed) {
 				t.Errorf("tool error echoes the parameter value %q:\n%s", tc.unechoed, resultText(t, res))
