@@ -230,18 +230,8 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 			" operation; execute_read runs read (GET) operations only", writeRefusedHint, op.ID)
 	}
 	request, err := op.Request(in.Parameters)
-	if errors.Is(err, catalog.ErrLimitOutOfRange) {
-		return toolError(errorInvalidArgument, err.Error(), "use a limit from 1 to "+strconv.Itoa(catalog.MaxLimit)+
-			" and page through the rest (page, or cursor from meta.cursor); without a limit the server asks for "+
-			strconv.Itoa(catalog.DefaultLimit), op.ID)
-	}
-	if errors.Is(err, catalog.ErrRowLimitOutOfRange) {
-		return toolError(errorInvalidArgument, err.Error(), "set config.row_limit in the query JSON to an integer from 1 to "+
-			strconv.Itoa(catalog.MaxRowLimit)+", or leave it out and the server asks for "+
-			strconv.Itoa(catalog.DefaultRowLimit)+"; for fewer rows, narrow the time window or add filters", op.ID)
-	}
 	if err != nil {
-		return toolError(errorInvalidArgument, err.Error(), parametersHint, op.ID)
+		return toolError(errorInvalidArgument, err.Error(), parametersHintFor(err), op.ID)
 	}
 	resp, err := ex.client.Do(ctx, request.Method, request.Path, request.Query)
 	a.status, a.bytes = resp.Status, len(resp.Body)
@@ -262,4 +252,21 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 		return failure(op.ID, err) // unreachable: the client returns valid JSON only
 	}
 	return jsonResult(sanitize.Wrap(op.ID, payload), false)
+}
+
+// parametersHintFor is the hint for a parameter the catalog refused: a page
+// size out of range gets how to page instead, anything else the generic
+// parametersHint.
+func parametersHintFor(err error) string {
+	switch {
+	case errors.Is(err, catalog.ErrLimitOutOfRange):
+		return "use a limit from 1 to " + strconv.Itoa(catalog.MaxLimit) +
+			" and page through the rest (page, or cursor from meta.cursor); without a limit the server asks for " +
+			strconv.Itoa(catalog.DefaultLimit)
+	case errors.Is(err, catalog.ErrRowLimitOutOfRange):
+		return "set config.row_limit in the query JSON to an integer from 1 to " +
+			strconv.Itoa(catalog.MaxRowLimit) + ", or leave it out and the server asks for " +
+			strconv.Itoa(catalog.DefaultRowLimit) + "; for fewer rows, narrow the time window or add filters"
+	}
+	return parametersHint
 }
