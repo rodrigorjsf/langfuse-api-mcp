@@ -159,7 +159,8 @@ The Langfuse API has about 100 in-scope operations. One tool per operation would
 
 | Tool | What it does | Annotations | Available |
 |---|---|---|---|
-| `search_operations` | Finds the right Langfuse operation for an intent and returns its ID, parameters and docs link **(Planned)** | read-only | always |
+| `search_operations` | Lists the Langfuse operations you can run — one line each (ID and what it does), grouped by area — optionally filtered by keywords; write operations appear only when writes are enabled **(Planned)** | read-only, closed-world | always |
+| `describe_operation` | Returns the parameters of one operation: location, type, required, allowed values and bounds **(Planned)** | read-only, closed-world | always |
 | `execute_read` | Runs a **read** operation (HTTP GET) by its ID, with its path and query parameters; returns the Langfuse JSON inside an untrusted-data envelope. Works today over the bundled spec minus the excluded operations ([ADR-0004](docs/adr/0004-endpoint-scope.md)) | read-only, non-destructive, idempotent, open-world | always |
 | `execute_write` | Runs a **write** operation (POST/PUT/PATCH/DELETE) by its ID. The description says it is intended only for changes the user explicitly requested. Deletes ask for confirmation when your client supports it. **(Planned)** | destructive | only when writes are enabled |
 | Workflow tools, e.g. trace investigation | Ready-made read flows for the most common tasks (trace tree, errors, latency and cost spikes) **(Planned)** | read-only | when the deployment answers the v4 read APIs (Cloud, self-hosted v4); not on self-hosted v3 |
