@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strings"
 )
 
@@ -126,4 +127,30 @@ func isLoopback(host string) bool {
 	}
 	ip, err := netip.ParseAddr(host)
 	return err == nil && ip.IsLoopback()
+}
+
+// cloudHosts are the Cloud hosts (CONTEXT.md), the hosts of the region URLs
+// README "Cloud regions" lists: EU, US, JP, HIPAA.
+var cloudHosts = [...]string{"cloud.langfuse.com", "us.cloud.langfuse.com", "jp.cloud.langfuse.com", "hipaa.cloud.langfuse.com"}
+
+// isCloudHost reports whether u's host name, without port or userinfo, is
+// exactly one of cloudHosts, ignoring ASCII case. The match is exact, never by
+// suffix or substring, so cloud.langfuse.com.evil.example is not Cloud; a
+// trailing dot is not stripped either. Only ASCII letters fold: Unicode
+// folding (strings.EqualFold) would match "ſ" (U+017F) to "s".
+func isCloudHost(u *url.URL) bool {
+	name := asciiLower(u.Hostname())
+	return slices.Contains(cloudHosts[:], name)
+}
+
+// asciiLower returns s with the ASCII letters A-Z lowered and every other
+// byte unchanged.
+func asciiLower(s string) string {
+	b := []byte(s)
+	for i, c := range b {
+		if 'A' <= c && c <= 'Z' {
+			b[i] = c + ('a' - 'A')
+		}
+	}
+	return string(b)
 }

@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"net/url"
-	"slices"
 	"strconv"
 )
 
@@ -63,10 +62,6 @@ const (
 	selfHostedDefaultRateLimit = 1000
 )
 
-// cloudHosts are the Cloud hosts (CONTEXT.md), the hosts of the region URLs
-// README "Cloud regions" lists: EU, US, JP, HIPAA.
-var cloudHosts = [...]string{"cloud.langfuse.com", "us.cloud.langfuse.com", "jp.cloud.langfuse.com", "hipaa.cloud.langfuse.com"}
-
 // resolveRateLimit returns the effective rate limit and its source: the
 // explicit value when set (non-zero), else the default for host.
 func resolveRateLimit(explicit int, host *url.URL) (int, RateLimitSource) {
@@ -77,26 +72,4 @@ func resolveRateLimit(explicit int, host *url.URL) (int, RateLimitSource) {
 		return cloudDefaultRateLimit, RateLimitDefaultCloud
 	}
 	return selfHostedDefaultRateLimit, RateLimitDefaultSelfHosted
-}
-
-// isCloudHost reports whether u's host name, without port or userinfo, is
-// exactly one of cloudHosts, ignoring ASCII case. The match is exact, never by
-// suffix or substring, so cloud.langfuse.com.evil.example is not Cloud; a
-// trailing dot is not stripped either. Only ASCII letters fold: Unicode
-// folding (strings.EqualFold) would match "ſ" (U+017F) to "s".
-func isCloudHost(u *url.URL) bool {
-	name := asciiLower(u.Hostname())
-	return slices.Contains(cloudHosts[:], name)
-}
-
-// asciiLower returns s with the ASCII letters A-Z lowered and every other
-// byte unchanged.
-func asciiLower(s string) string {
-	b := []byte(s)
-	for i, c := range b {
-		if 'A' <= c && c <= 'Z' {
-			b[i] = c + ('a' - 'A')
-		}
-	}
-	return string(b)
 }
