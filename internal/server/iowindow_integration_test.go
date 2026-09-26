@@ -237,9 +237,13 @@ func TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows(t *testi
 	t.Parallel()
 	cs := liveSession(t)
 	s := seedIOWindow(t, cs)
-	idFilter, err := json.Marshal([]map[string]any{{"type": "string", "column": "id", "operator": "=", "value": s.spanIDs["d20"]}})
-	if err != nil {
-		t.Fatal(err)
+	// idFilter is the observations filter JSON selecting one seeded span by id.
+	idFilter := func(label string) string {
+		f, err := json.Marshal([]map[string]any{{"type": "string", "column": "id", "operator": "=", "value": s.spanIDs[label]}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(f)
 	}
 
 	// payloadBy selects one seeded span by name and requests the field group.
@@ -257,10 +261,14 @@ func TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows(t *testi
 		{"io, 15-day window", mergedParams(payloadBy("io", "d14_5"), s.window(15)), 1, "input"},
 		{"io, 30-day window", mergedParams(payloadBy("io", "d20"), s.window(30)), 1, "output"},
 		{"io, no window", payloadBy("io", "d20"), 1, "input"},
+		{"metadata, 13-day window", mergedParams(payloadBy("metadata", "d12_5"), s.window(13)), 1, "metadata"},
+		{"metadata, 14-day window", mergedParams(payloadBy("metadata", "d13_5"), s.window(14)), 1, "metadata"},
 		{"metadata, 15-day window", mergedParams(payloadBy("metadata", "d14_5"), s.window(15)), 1, "metadata"},
 		{"metadata, 30-day window", mergedParams(payloadBy("metadata", "d20"), s.window(30)), 1, "metadata"},
 		{"io, trace id, no window", map[string]any{"fields": "core,io", "traceId": s.traceIDs["d20"]}, 1, "input"},
-		{"io, id filter, no window", map[string]any{"fields": "core,io", "filter": string(idFilter)}, 1, "input"},
+		{"io, trace id, 15-day window", mergedParams(map[string]any{"fields": "core,io", "traceId": s.traceIDs["d14_5"]}, s.window(15)), 1, "input"},
+		{"io, id filter, no window", map[string]any{"fields": "core,io", "filter": idFilter("d20")}, 1, "input"},
+		{"io, id filter, 15-day window", mergedParams(map[string]any{"fields": "core,io", "filter": idFilter("d14_5")}, s.window(15)), 1, "input"},
 		// The combination the official MCP caps at 50 rows: a date window, the io
 		// group, and no trace id or id filter (nor any other filter).
 		{"io, 13-day window, limit 50", mergedParams(map[string]any{"fields": "core,io", "limit": 50}, s.window(13)), 50, "input"},

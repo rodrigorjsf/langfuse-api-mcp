@@ -137,10 +137,14 @@ Sources: `[sourced]` `/docs/api-and-data-platform/features/public-api#field-grou
     | `fields=core,io`, 15-day window (row 14.5 days old) | 1 of 1 | `input` |
     | `fields=core,io`, 30-day window (row 20 days old) | 1 of 1 | `output` |
     | `fields=core,io`, no window (row 20 days old) | 1 of 1 | `input` |
+    | `fields=core,metadata`, 13-day window | 1 of 1 | `metadata` |
+    | `fields=core,metadata`, 14-day window | 1 of 1 | `metadata` |
     | `fields=core,metadata`, 15-day window (row 14.5 days old) | 1 of 1 | `metadata` |
     | `fields=core,metadata`, 30-day window | 1 of 1 | `metadata` |
     | `fields=core,io`, `traceId`, no window | 1 of 1 | `input` |
+    | `fields=core,io`, `traceId`, 15-day window (row 14.5 days old) | 1 of 1 | `input` |
     | `fields=core,io`, `filter` on `id`, no window | 1 of 1 | `input` |
+    | `fields=core,io`, `filter` on `id`, 15-day window (row 14.5 days old) | 1 of 1 | `input` |
     | `fields=core,io`, 13-day window, no other filter, `limit=50` | 50 | `input` on all 50 |
     | `fields=core,io`, 13-day window, no other filter, `limit=51` | **51** | `input` on all 51 |
 

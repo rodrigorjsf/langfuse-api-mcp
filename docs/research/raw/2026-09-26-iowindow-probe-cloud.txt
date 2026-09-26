@@ -1,29 +1,37 @@
-# Sat Sep 26 02:13:01 UTC 2026 — go test -tags integration -count=1 -run 'PayloadQueries|HealthCheck' -v ./internal/server/  (deployment: cloud; first row truncated at 300 bytes by the test)
+# Sat Sep 26 02:20–02:23 UTC 2026 — go test -tags integration -count=1 -run 'PayloadQueries|HealthCheck' -v ./internal/server/  (deployment: cloud; review round 1 re-run with the trace-id/id-filter 15-day and metadata 13/14-day probes; lines cut at 160 columns)
     executor_integration_test.go:109: Langfuse 4.46.0 at https://us.cloud.langfuse.com
 --- PASS: TestLiveLangfuseAnswersTheHealthCheckThroughTheExecutor (0.55s)
-    iowindow_integration_test.go:269: → 200 rows=1 with input=1 first=[{"endTime":"2026-09-13T14:13:02.527Z","id":"8250ff11ee62b5f8","input":"{\"q\":\"it-io-a37623d4-d12_5\"}","inputPrice":null,"latency":0.5,"modelId":null,"output":"{\"a\":\"out-it-io-a37623d4-d12_5\"}","outputPrice":null,"parentObservationId":null,"projectId":"cmuh3x6wg00liad0cmpwuxx8j","startTime":"
-    iowindow_integration_test.go:269: → 200 rows=1 with input=1 first=[{"endTime":"2026-09-12T14:13:02.527Z","id":"944dd19fe7dde4c5","input":"{\"q\":\"it-io-a37623d4-d13_5\"}","inputPrice":null,"latency":0.5,"modelId":null,"output":"{\"a\":\"out-it-io-a37623d4-d13_5\"}","outputPrice":null,"parentObservationId":null,"projectId":"cmuh3x6wg00liad0cmpwuxx8j","startTime":"
-    iowindow_integration_test.go:269: → 200 rows=1 with input=1 first=[{"endTime":"2026-09-11T14:13:02.527Z","id":"db7817ca0103b0e7","input":"{\"q\":\"it-io-a37623d4-d14_5\"}","inputPrice":null,"latency":0.5,"modelId":null,"output":"{\"a\":\"out-it-io-a37623d4-d14_5\"}","outputPrice":null,"parentObservationId":null,"projectId":"cmuh3x6wg00liad0cmpwuxx8j","startTime":"
-    iowindow_integration_test.go:269: → 200 rows=1 with output=1 first=[{"endTime":"2026-09-06T02:13:02.527Z","id":"6ea5e8449adb3d40","input":"{\"q\":\"it-io-a37623d4-d20\"}","inputPrice":null,"latency":0.5,"modelId":null,"output":"{\"a\":\"out-it-io-a37623d4-d20\"}","outputPrice":null,"parentObservationId":null,"projectId":"cmuh3x6wg00liad0cmpwuxx8j","startTime":"2026
-    iowindow_integration_test.go:269: → 200 rows=1 with input=1 first=[{"endTime":"2026-09-06T02:13:02.527Z","id":"6ea5e8449adb3d40","input":"{\"q\":\"it-io-a37623d4-d20\"}","inputPrice":null,"latency":0.5,"modelId":null,"output":"{\"a\":\"out-it-io-a37623d4-d20\"}","outputPrice":null,"parentObservationId":null,"projectId":"cmuh3x6wg00liad0cmpwuxx8j","startTime":"2026
-    iowindow_integration_test.go:269: → 200 rows=1 with metadata=1 first=[{"endTime":"2026-09-11T14:13:02.527Z","id":"db7817ca0103b0e7","inputPrice":null,"latency":0.5,"metadata":{"attributes.langfuse.environment":"it-io-a37623d4","probe":"it-io-a37623d4-d14_5","resourceAttributes.service.name":"langfuse-mcp-integration","scope.name":"iowindow-probe"},"modelId":null,"out
-    iowindow_integration_test.go:269: → 200 rows=1 with metadata=1 first=[{"endTime":"2026-09-06T02:13:02.527Z","id":"6ea5e8449adb3d40","inputPrice":null,"latency":0.5,"metadata":{"attributes.langfuse.environment":"it-io-a37623d4","probe":"it-io-a37623d4-d20","resourceAttributes.service.name":"langfuse-mcp-integration","scope.name":"iowindow-probe"},"modelId":null,"outpu
-    iowindow_integration_test.go:269: → 200 rows=1 with input=1 first=[{"endTime":"2026-09-06T02:13:02.527Z","id":"6ea5e8449adb3d40","input":"{\"q\":\"it-io-a37623d4-d20\"}","inputPrice":null,"latency":0.5,"modelId":null,"output":"{\"a\":\"out-it-io-a37623d4-d20\"}","outputPrice":null,"parentObservationId":null,"projectId":"cmuh3x6wg00liad0cmpwuxx8j","startTime":"2026
-    iowindow_integration_test.go:269: → 200 rows=1 with input=1 first=[{"endTime":"2026-09-06T02:13:02.527Z","id":"6ea5e8449adb3d40","input":"{\"q\":\"it-io-a37623d4-d20\"}","inputPrice":null,"latency":0.5,"modelId":null,"output":"{\"a\":\"out-it-io-a37623d4-d20\"}","outputPrice":null,"parentObservationId":null,"projectId":"cmuh3x6wg00liad0cmpwuxx8j","startTime":"2026
-    iowindow_integration_test.go:269: → 200 rows=50 with input=50 first=[{"endTime":"2026-09-25T02:13:02.527Z","id":"8358c9d1dc1f1059","input":"{\"q\":\"it-io-a37623d4-d1\"}","inputPrice":null,"latency":0.5,"modelId":null,"output":"{\"a\":\"out-it-io-a37623d4-d1\"}","outputPrice":null,"parentObservationId":null,"projectId":"cmuh3x6wg00liad0cmpwuxx8j","startTime":"2026-0
-    iowindow_integration_test.go:269: → 200 rows=51 with input=51 first=[{"endTime":"2026-09-25T02:13:02.527Z","id":"8358c9d1dc1f1059","input":"{\"q\":\"it-io-a37623d4-d1\"}","inputPrice":null,"latency":0.5,"modelId":null,"output":"{\"a\":\"out-it-io-a37623d4-d1\"}","outputPrice":null,"parentObservationId":null,"projectId":"cmuh3x6wg00liad0cmpwuxx8j","startTime":"2026-0
-    iowindow_integration_test.go:154: cleanup: DELETE /api/public/traces (6 seeded traces) → 200 {"message":"Traces deleted successfully"}
---- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows (21.00s)
-    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_13-day_window (0.33s)
-    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_14-day_window (1.93s)
-    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_15-day_window (0.31s)
-    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_30-day_window (0.45s)
-    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_no_window (0.53s)
-    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/metadata,_15-day_window (0.28s)
-    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/metadata,_30-day_window (0.30s)
-    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_trace_id,_no_window (0.68s)
-    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_id_filter,_no_window (0.33s)
-    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_13-day_window,_limit_50 (0.93s)
-    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_13-day_window,_limit_51 (0.28s)
+    iowindow_integration_test.go:279: → 200 rows=1 with input=1 first=[{"endTime":"2026-09-13T14:22:33.469Z","id":"827cc4e3da3b74dc","input":"{\"q\":\"it-io-4
+    iowindow_integration_test.go:279: → 200 rows=1 with input=1 first=[{"endTime":"2026-09-12T14:22:33.469Z","id":"1ae0b334770dafb5","input":"{\"q\":\"it-io-4
+    iowindow_integration_test.go:279: → 200 rows=1 with input=1 first=[{"endTime":"2026-09-11T14:22:33.469Z","id":"4b5fa1bc107e377a","input":"{\"q\":\"it-io-4
+    iowindow_integration_test.go:279: → 200 rows=1 with output=1 first=[{"endTime":"2026-09-06T02:22:33.469Z","id":"b2e3838fc55460f4","input":"{\"q\":\"it-io-
+    iowindow_integration_test.go:279: → 200 rows=1 with input=1 first=[{"endTime":"2026-09-06T02:22:33.469Z","id":"b2e3838fc55460f4","input":"{\"q\":\"it-io-4
+    iowindow_integration_test.go:279: → 200 rows=1 with metadata=1 first=[{"endTime":"2026-09-13T14:22:33.469Z","id":"827cc4e3da3b74dc","inputPrice":null,"lat
+    iowindow_integration_test.go:279: → 200 rows=1 with metadata=1 first=[{"endTime":"2026-09-12T14:22:33.469Z","id":"1ae0b334770dafb5","inputPrice":null,"lat
+    iowindow_integration_test.go:279: → 200 rows=1 with metadata=1 first=[{"endTime":"2026-09-11T14:22:33.469Z","id":"4b5fa1bc107e377a","inputPrice":null,"lat
+    iowindow_integration_test.go:279: → 200 rows=1 with metadata=1 first=[{"endTime":"2026-09-06T02:22:33.469Z","id":"b2e3838fc55460f4","inputPrice":null,"lat
+    iowindow_integration_test.go:279: → 200 rows=1 with input=1 first=[{"endTime":"2026-09-06T02:22:33.469Z","id":"b2e3838fc55460f4","input":"{\"q\":\"it-io-4
+    iowindow_integration_test.go:279: → 200 rows=1 with input=1 first=[{"endTime":"2026-09-11T14:22:33.469Z","id":"4b5fa1bc107e377a","input":"{\"q\":\"it-io-4
+    iowindow_integration_test.go:279: → 200 rows=1 with input=1 first=[{"endTime":"2026-09-06T02:22:33.469Z","id":"b2e3838fc55460f4","input":"{\"q\":\"it-io-4
+    iowindow_integration_test.go:279: → 200 rows=1 with input=1 first=[{"endTime":"2026-09-11T14:22:33.469Z","id":"4b5fa1bc107e377a","input":"{\"q\":\"it-io-4
+    iowindow_integration_test.go:279: → 200 rows=50 with input=50 first=[{"endTime":"2026-09-25T02:22:33.469Z","id":"cd879f892c5b061c","input":"{\"q\":\"it-io
+    iowindow_integration_test.go:279: → 200 rows=51 with input=51 first=[{"endTime":"2026-09-25T02:22:33.469Z","id":"cd879f892c5b061c","input":"{\"q\":\"it-io
+    iowindow_integration_test.go:155: cleanup: DELETE /api/public/traces (6 seeded traces) → 200 {"message":"Traces deleted successfully"}
+--- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows (30.01s)
+    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_13-day_window (1.77s)
+    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_14-day_window (1.81s)
+    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_15-day_window (0.33s)
+    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_30-day_window (0.33s)
+    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_no_window (0.54s)
+    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/metadata,_13-day_window (0.22s)
+    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/metadata,_14-day_window (0.22s)
+    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/metadata,_15-day_window (0.62s)
+    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/metadata,_30-day_window (0.20s)
+    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_trace_id,_no_window (5.34s)
+    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_trace_id,_15-day_window (0.33s)
+    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_id_filter,_no_window (0.31s)
+    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_id_filter,_15-day_window (1.70s)
+    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_13-day_window,_limit_50 (0.97s)
+    --- PASS: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows/io,_13-day_window,_limit_51 (0.77s)
 PASS
-ok  	github.com/rodrigorjsf/langfuse-api-mcp/internal/server	21.003s
+ok  	github.com/rodrigorjsf/langfuse-api-mcp/internal/server	30.014s
