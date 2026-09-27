@@ -281,7 +281,7 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 		return toolError(errorInvalidArgument, err.Error(), parametersHintFor(err, op), op.ID)
 	}
 	resp, err := ex.client.Do(ctx, request.Method, request.Path, request.Query)
-	a.requests, a.status, a.bytes = 1, resp.Status, len(resp.Body)
+	a.requests, a.status, a.bytes = resp.Attempts, resp.Status, len(resp.Body)
 	if err != nil {
 		if f, ok := langfuseErrorFields(err, op, ex.redact, ex.profile); ok {
 			a.status = f.HTTPStatus

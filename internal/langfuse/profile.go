@@ -143,7 +143,7 @@ func (c *Client) DetectProfile(ctx context.Context, budget time.Duration) Detect
 // when it is a plain major.minor.patch version, and a warning reason
 // otherwise, or when the version is below the supported floor.
 func (c *Client) detectVersion(ctx context.Context) (version, reason string) {
-	resp, err := c.attempt(ctx, http.MethodGet, "/api/public/health", nil, false)
+	resp, _, err := c.attempt(ctx, http.MethodGet, "/api/public/health", nil, false)
 	switch {
 	case errors.Is(err, errNotJSON):
 		return "", "version unknown: the health answer is not JSON"
@@ -167,7 +167,7 @@ func (c *Client) detectVersion(ctx context.Context) (version, reason string) {
 // probe sends one family's sentinel and reports whether the family is on,
 // with a warning reason when the answer did not decide it.
 func (c *Client) probe(ctx context.Context, s sentinel) (on bool, reason string) {
-	_, err := c.attempt(ctx, http.MethodGet, s.path, s.query, true)
+	_, _, err := c.attempt(ctx, http.MethodGet, s.path, s.query, true)
 	var apiErr *APIError
 	switch {
 	case err == nil, errors.Is(err, ErrResponseTooLarge), errors.Is(err, errNotJSON):

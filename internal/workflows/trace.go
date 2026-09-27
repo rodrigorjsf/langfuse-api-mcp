@@ -73,7 +73,8 @@ type TraceTree struct {
 	Empty bool
 	// More is set when pages remain after MaxTracePages.
 	More bool
-	// Requests is the number of Langfuse requests made, the failed one included.
+	// Requests is the number of Langfuse requests made, retries and the
+	// failed one included.
 	Requests int
 	// Status is the HTTP status of the last Langfuse answer; 0 without one.
 	Status int
@@ -102,7 +103,7 @@ func GetTraceTree(ctx context.Context, client *langfuse.Client, r sanitize.Redac
 			query.Set("cursor", cursor)
 		}
 		resp, err := client.Do(ctx, http.MethodGet, observationsPath, query)
-		tree.Requests++
+		tree.Requests += resp.Attempts
 		tree.Status, tree.Bytes = resp.Status, tree.Bytes+len(resp.Body)
 		if err != nil {
 			return tree, fmt.Errorf("%s page %d: %w", ObservationsOperationID, page, err)
