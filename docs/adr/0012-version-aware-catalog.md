@@ -24,6 +24,7 @@ Users on old and on new deployments must both get every operation their deployme
    - Each operation keeps the schema from the last spec that contained it.
    - Each operation carries its version range: `introduced`, and `removed` if it left the spec.
    - Each operation may carry a gated **operation family**.
+   - An operation whose description opens with a deprecation notice carries `x-summary`, its operation index line: what it does plus "legacy: prefer <replacement> when it is available", the replacement being the operation at the path the notice names, or "(legacy)" alone when the notice names none (#79).
    - Where the docs state an earlier floor than the spec (OTLP 3.22.0, `/v3/scores` 3.179.0), the earlier floor wins.
    - CI fails if the committed catalog is stale against the script's output.
 2. **Families gated by write mode.** Each family has one sentinel probe:
@@ -54,7 +55,7 @@ Users on old and on new deployments must both get every operation their deployme
 - The catalog test changes. For a table of `(version, families)` fixtures, the resolved catalog must equal the expected operation set; the generated file is also checked for freshness.
 - Integration tests pin one deployment per family combination:
   - 3.80.0, legacy only;
-  - latest 3.x, legacy plus experiments;
+  - latest 3.x (3.225.11), legacy only (corrected 2026-09-27; see the amendment below);
   - 4.x `events_only`;
   - 4.x `dual`.
   Old v3 composes need `postgres:17` and `clickhouse-server:24.3`, and v3 seeding uses OTLP/protobuf.
@@ -67,3 +68,9 @@ Users on old and on new deployments must both get every operation their deployme
 - **Freshness (replaces "CI fails if the committed catalog is stale" in §1).** Regenerating needs the spec of hundreds of release tags from GitHub, and a pull request of ours cannot change upstream. So every pull request checks offline only: the embedded catalog parses and the deployment-profile fixture test passes. A weekly job runs the generator and opens a pull request when the output changes, like the Go toolchain bump workflow. A new Langfuse operation stays unlisted for at most about a week; nothing breaks meanwhile.
 - **Startup budget (adds to §3).** The health call and the sentinel probes run in parallel within a total budget of about 5 seconds. A probe that has not answered by then counts as "anything else": its family stays on and one stderr warning is logged. A slow or down Langfuse never holds up the host's `initialize`.
 - **Integration cadence (changes Consequences).** Every pull request runs the integration suite against 4.x `events_only`, as today. The four pinned deployments (3.80.0, latest 3.x, 4.x `events_only`, 4.x `dual`) run in the weekly job next to the Cloud run. A v3-only regression can surface up to a week after merge.
+
+## Amendment: the latest 3.x serves the legacy family only (2026-09-27, #84)
+
+- **Corrects Consequences.** This record first said the latest 3.x deployment serves the legacy family "plus experiments". A live 3.225.11 (the latest 3.x) serves the legacy family only: `/experiments` and `/experiment-items` are routed but answer 404 JSON "The experiments API is only available in a Langfuse v4 write mode", like `/v2/observations` (observed 2026-09-26, #73; `docs/research/langfuse-api-versions.md` §1). The earlier claim came from a prototype scan that counted every spec operation as routed and did not tell a gated 404 from an answer.
+- **Detection is unchanged.** The experiments sentinel reads that 404 as "family off", which is correct; the integration pin and the catalog fixture for 3.225.11 expect the legacy family only.
+- **The pins no longer cover one family combination each.** 3.80.0 and 3.225.11 are both legacy only; they differ by version range (operations added across 3.x), which is why both stay pinned. No 3.x release observed so far serves the experiments family.

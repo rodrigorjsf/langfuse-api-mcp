@@ -3,14 +3,12 @@
 package server_test
 
 import (
-	"context"
 	"encoding/json"
 	"log/slog"
 	"net/url"
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -39,6 +37,15 @@ const (
 // named by the LANGFUSE_TEST_* variables. It skips the test when any is unset.
 func liveSession(t *testing.T) *mcp.ClientSession {
 	t.Helper()
+	client, keys := liveClient(t, langfuse.Options{})
+	return connectServer(t, client, slog.New(slog.DiscardHandler), keys)
+}
+
+// liveClient returns the real Langfuse client for the live Langfuse named by
+// the LANGFUSE_TEST_* variables, built from opts with the host and key pair
+// set, and the key pair to redact. It skips the test when any is unset.
+func liveClient(t *testing.T, opts langfuse.Options) (*langfuse.Client, server.Secrets) {
+	t.Helper()
 	var missing []string
 	for _, name := range []string{envTestBaseURL, envTestPublicKey, envTestSecretKey} {
 		if os.Getenv(name) == "" {
@@ -54,11 +61,12 @@ func liveSession(t *testing.T) *mcp.ClientSession {
 		t.Fatalf("%s is not a URL: %v", envTestBaseURL, err)
 	}
 	keys := server.Secrets{Keys: langfuse.NewKeyPair(os.Getenv(envTestPublicKey), os.Getenv(envTestSecretKey))}
-	client := langfuse.New(langfuse.Options{Host: host, Keys: keys.Keys})
-	// Registered before connectServer's cleanups, so it runs after the session
+	opts.Host, opts.Keys = host, keys.Keys
+	client := langfuse.New(opts)
+	// Registered before the session's cleanups, so it runs after the session
 	// closes: no idle connection outlives the test to trip TestMain's leak check.
 	t.Cleanup(client.CloseIdleConnections)
-	return connectServer(t, client, slog.New(slog.DiscardHandler), keys)
+	return client, keys
 }
 
 // liveData decodes the Langfuse payload inside the untrusted-data envelope of
@@ -106,18 +114,5 @@ func TestLiveLangfuseAnswersAnAuthenticatedReadWithTheKeysProject(t *testing.T) 
 
 	if len(projects.Data) != 1 || projects.Data[0].ID == "" {
 		t.Fatalf("projects = %+v, want exactly the one project of the key pair", projects.Data)
-	}
-}
-
-// sleepCtx waits d or until ctx is done: readLive's Retry-After wait and the
-// seeding poll's interval against a live Langfuse.
-func sleepCtx(ctx context.Context, d time.Duration) error {
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
 	}
 }

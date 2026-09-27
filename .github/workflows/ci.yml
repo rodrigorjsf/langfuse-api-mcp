@@ -1,6 +1,7 @@
 # CI: build, vet, lint and race-enabled tests on Linux, macOS and Windows, plus govulncheck.
 # The test step also runs the cross-OS trust proof against a throwaway CA installed in each
 # runner's system trust store (spec #7).
+# The generator job runs the union catalog generator's offline unit tests (#89).
 # Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current.
 # A push or pull request that only changes docs (Markdown, docs/, .claude/, LICENSE) starts no run:
 # nothing in those paths is compiled or embedded (the only go:embed is internal/catalog/spec/*.json).
@@ -92,3 +93,26 @@ jobs:
           cache-dependency-path: go.mod
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+  # Offline unit tests of the union catalog generator (#81, #89): a cyclic, malformed or foreign
+  # $ref and a non-JSON request body must stop generation. Linux only; the tests fetch nothing.
+  # This job never regenerates the catalog: that needs every release spec over the network and
+  # stays in the weekly .github/workflows/union-catalog.yml (ADR-0012).
+  generator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Supply chain (security.md): PyYAML is the generator's only dependency (it parses the
+      # release specs), so the tests cannot import the generator without it. Pinned to the
+      # same version as union-catalog.yml; change both pins together (one shared file: #92).
+      - name: Install PyYAML
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet pyyaml==6.0.3
+      - name: Test the generator
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/venv/bin/python" scripts/test_gen_union_catalog.py

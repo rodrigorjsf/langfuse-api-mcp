@@ -131,17 +131,25 @@ func seedIOWindow(t *testing.T, cs *mcp.ClientSession) ioSeed {
 	}
 
 	t.Cleanup(func() { deleteSeededTraces(t, s) })
+	exportOTLPSpans(t, "iowindow-probe", spans)
+	waitSeeded(t, cs, s, len(spans))
+	return s
+}
+
+// exportOTLPSpans exports spans, under the instrumentation scope named scope,
+// through the deployment's OTLP/HTTP JSON endpoint, failing the test unless
+// Langfuse accepts them.
+func exportOTLPSpans(t *testing.T, scope string, spans []any) {
+	t.Helper()
 	status, body := langfuseDirect(t.Context(), t, http.MethodPost, "/api/public/otel/v1/traces", map[string]any{
 		"resourceSpans": []any{map[string]any{
 			"resource":   map[string]any{"attributes": []any{map[string]any{"key": "service.name", "value": map[string]any{"stringValue": "langfuse-mcp-integration"}}}},
-			"scopeSpans": []any{map[string]any{"scope": map[string]any{"name": "iowindow-probe"}, "spans": spans}},
+			"scopeSpans": []any{map[string]any{"scope": map[string]any{"name": scope}, "spans": spans}},
 		}},
 	})
 	if status != http.StatusOK {
 		t.Fatalf("OTLP export answered %d: %s", status, body)
 	}
-	waitSeeded(t, cs, s, len(spans))
-	return s
 }
 
 // waitSeeded polls, a few seconds apart, until every seeded span is

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -25,6 +26,11 @@ type audit struct {
 	bytes int
 	// cause is why a request that got no usable answer failed; never a payload.
 	cause string
+	// requests is the number of Langfuse requests the call made.
+	requests int
+	// operationID names the catalog operation a tool without an operationId
+	// argument runs, such as a workflow tool; "" uses the argument.
+	operationID string
 }
 
 // auditedHandler is a tool handler that records its call in a.
@@ -32,7 +38,8 @@ type auditedHandler func(ctx context.Context, req *mcp.CallToolRequest, a *audit
 
 // audited turns handler into a tool handler that logs exactly one structured
 // line per call to log (stderr): tool, operationId, method, status, latency,
-// bytes and the tool error code, never a payload. A panic in handler becomes an
+// bytes, the number of Langfuse requests and the tool error code, never a
+// payload. A panic in handler becomes an
 // internal_error tool result, so that a bug never breaks the session; the
 // stack goes to the audit line only. It is the last stop of every result and
 // log line, so it redacts the secrets of r from both.
@@ -58,11 +65,12 @@ func audited(log *slog.Logger, r sanitize.Redactor, handler auditedHandler) mcp.
 			}
 			attrs := []any{
 				"tool", req.Params.Name,
-				"operationId", truncate(operationID),
+				"operationId", truncate(cmp.Or(a.operationID, operationID)),
 				"method", a.method,
 				"status", a.status,
 				"latencyMs", time.Since(start).Milliseconds(),
 				"bytes", a.bytes,
+				"requests", a.requests,
 				"code", code,
 			}
 			if a.cause != "" {

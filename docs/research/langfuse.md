@@ -90,6 +90,17 @@ Sources: `[sourced]` local spec (script over every GET: `cursor` vs `page` param
 `/faq/all/deprecated-api-migration#dataset-runs`; `/docs/metrics/features/metrics-api#v2`.
 Observations v2 is **always sorted by `startTime` descending**. It has no `orderBy`. `[sourced]` public-api page.
 
+**Observations v2 cursor format (#93).** `meta.cursor` is base64 of a JSON keyset position: the sort key of the last row served, never an offset and never the page size. Two forms are documented; the first was also observed live:
+
+- `{"lastStartTimeTo":"2026-09-24T01:53:32.683Z","lastTraceId":"a15f…1457","lastId":"dbd1a6c259d1b876"}`: decoded from a live cursor, self-hosted 4.46.0 `events_only`, `GET /v2/observations?limit=2&fields=core`, 2026-09-27. `[verified]` The cookbook `/guides/cookbook/example_data_migration` shows the same form. `[sourced]`
+- `{"lastStartTime":"2025-12-15T10:30:00Z","lastId":"obs-100"}`: the example cursor of the Observations API docs page as quoted at triage of #93 (`/docs/api-and-data-platform/features/observations-api`, which then said "the cursor encodes only the read position, not your query"). `[sourced]` That path now redirects to the public-api page, whose pagination section says only "pass this cursor … to continue where you left off" and shows the truncated `eyJsYXN0...` (checked with the langfuse-docs MCP, 2026-09-27).
+
+Consequences:
+
+- The cursor holds no `limit`, so a cursor issued at one page size continues correctly at another. `[verified]` `TestLiveObservationsCursorContinuesAtADifferentLimitWithoutGapsOrRepeats` (`internal/server/cursor_integration_test.go`) seeds one trace of 5 spans, two of them with the same start time, and reads it through `execute_read` twice: at limit 2 throughout, and at limit 2 then limit 1 from the returned cursor. The second and third newest spans share a start time, so the first cursor falls inside a sort-key tie. Both reads return the same 5 IDs in the same order, with no gap and no repeat (self-hosted 4.46.0 `events_only`, 2026-09-27). This is what makes `get_trace_tree`'s continuation safe: its cursor comes from a page read at limit 1000, and `execute_read` continues it at a limit of at most 100.
+- The cursor does not encode the query, so every call must repeat the filters of the first request (`traceId`, `fields`, time window, `filter`). `[sourced]` triage quote above, and the decoded cursors hold no filter; the current public-api page only shows it by example (it repeats `fields` and `traceId` next to the cursor). Not tested live: the probe always repeats the filters.
+- The server treats the cursor as opaque: it never decodes it, sends it back as one query parameter, and returns it only inside the untrusted-data envelope.
+
 ### 1.5 Field projection (`fields`)
 
 | Endpoint | Groups | Default | Notes |
@@ -223,6 +234,35 @@ Same branch, `internal/workflows/prototype_iowindow/v3.80.0/`. Compose from tag 
   - The untagged `clickhouse-server` now pulls ClickHouse 26.9. With it, every timestamp is stored as
     `9999-12-31 23:59:59`. Pin `24.3`.
   - Any test matrix for old versions must pin every image.
+
+### 1.9 Union catalog: what the release specs show (generator, 2026-09-26) `[verified]`
+
+Source: `scripts/gen-union-catalog.py` (#71) over the OpenAPI spec of every plain `vX.Y.Z` release tag of
+`langfuse/langfuse` from v3.0.0 to v4.46.0; output `internal/catalog/spec/langfuse-union-catalog.json`.
+Per-family floors stay in `langfuse-api-versions.md`.
+
+- **Size.** 399 release tags, 116 distinct specs, **137 operations** ever listed (method + path); 13 are ADR-0004
+  exclusions. The 4.46.0 spec alone has 124.
+- **An operation ID can name two paths.** `promptVersion_update` is `PATCH /v2/prompts/{promptName}/version/{version}`
+  up to 3.17.x and `PATCH /v2/prompts/{name}/versions/{version}` from 3.18.0. The catalog keeps both, each with its
+  range; an ID resolves to the newest operation that carries it.
+- **Release specs are not monotonic.** `PATCH /v2/prompts/{name}/versions/{version}` is missing from the v3.28.2 spec
+  only, and back in v3.28.3. The union range ignores such gaps; the generator prints them.
+- **Operation IDs of operations that left the spec:** v1 `GET /scores` is `score_get` and `GET /scores/{scoreId}` is
+  `score_get-by-id` (both removed in 3.53.0); `GET /metrics/daily` is `metrics_daily` (removed in 3.62.0). In older
+  specs the v1 `GET /observations` was `observations_getMany`, the ID the v2 observations operation carries now; the
+  catalog keeps the newest spec's IDs (`legacy_observationsV1_getMany`).
+- **`deprecated: true` is not only the legacy family.** The 4.46.0 spec flags 15 operations: the 12 legacy
+  GETs, `datasetRunItems_create`, `datasets_deleteRun` and `ingestion_batch` (the v4.12 deprecation, §1.7); the
+  catalog puts them in the legacy family. `unstable/evaluators` and
+  `unstable/evaluation-rules` were flagged in v4.23 and removed in v4.31: they are bounded by their range, not gated
+  by a family.
+- **Spec ranges match 3.80.0 at runtime.** Every operation the union puts in range at 3.80.0 answered a live 3.80.0
+  (§1.8), and nothing out of range answered, except six paths that exist there for another method and answered 405:
+  `POST /annotation-queues`, `PUT /models/{id}`, `DELETE /organizations/memberships`,
+  `DELETE /projects/{projectId}/memberships`, `DELETE /v2/prompts/{promptName}`, `PATCH /score-configs/{configId}`.
+- **Every operation of the 4.46.0 spec is routed on 4.46.0 `dual`** (124 of 124, `langfuse-api-versions.md` §1), so
+  the 4.x `dual` profile resolves to all 111 non-excluded operations.
 ---
 
 ## 2. Deprecations
@@ -474,7 +514,7 @@ server should close with explicit `ca-file`/`proxy` config. `[sourced — unveri
 
 ---
 
-## 6. OpenAPI spec (`internal/catalog/spec/langfuse-openapi.json`) compared with the docs
+## 6. OpenAPI spec (the 4.31–4.45 spec once embedded as `internal/catalog/spec/langfuse-openapi.json`, replaced by the union catalog in #71) compared with the docs
 
 | # | Mismatch | Evidence |
 |---|---|---|

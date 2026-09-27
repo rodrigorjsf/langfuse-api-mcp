@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -49,7 +50,7 @@ func clientOptions(t *testing.T, fake *httptest.Server) langfuse.Options {
 
 // testOptions returns the client options for the fake Langfuse at rawURL,
 // with the test key pair.
-func testOptions(t *testing.T, rawURL string) langfuse.Options {
+func testOptions(t testing.TB, rawURL string) langfuse.Options {
 	t.Helper()
 	host, err := url.Parse(rawURL)
 	if err != nil {
@@ -66,15 +67,43 @@ func connectClient(t *testing.T, client *langfuse.Client, log *slog.Logger) *mcp
 }
 
 // connectServer starts the server with the real catalog, the given Langfuse
-// client, logger and key pair to redact, and returns a connected MCP client
-// session.
-func connectServer(t *testing.T, client *langfuse.Client, log *slog.Logger, secrets server.Secrets) *mcp.ClientSession {
+// client, logger, key pair to redact and construction options, and returns a
+// connected MCP client session.
+func connectServer(t testing.TB, client *langfuse.Client, log *slog.Logger, secrets server.Secrets,
+	opts ...server.Option,
+) *mcp.ClientSession {
+	t.Helper()
+	return startServer(t, client, log, secrets, langfuse.UnknownProfile(), opts...)
+}
+
+// connectProfile starts the server against the fake Langfuse as if startup
+// had detected the given deployment profile.
+func connectProfile(t testing.TB, fake *httptest.Server, profile langfuse.DeploymentProfile) *mcp.ClientSession {
+	t.Helper()
+	return startServer(t, langfuse.New(testOptions(t, fake.URL)), slog.New(slog.DiscardHandler), server.Secrets{Keys: testKeys()}, profile)
+}
+
+// startServer starts the server with the real catalog and the given Langfuse
+// client, logger, key pair to redact and deployment profile, and returns a
+// connected MCP client session. opts are the construction options.
+func startServer(t testing.TB, client *langfuse.Client, log *slog.Logger, secrets server.Secrets,
+	profile langfuse.DeploymentProfile, opts ...server.Option,
+) *mcp.ClientSession {
 	t.Helper()
 	cat, err := catalog.Load()
 	if err != nil {
 		t.Fatalf("load catalog: %v", err)
 	}
-	srv := server.New(cat, client, log, secrets)
+	return startCatalog(t, cat, client, log, secrets, profile, opts...)
+}
+
+// startCatalog starts the server over the given catalog, as startServer does
+// over the real one, and returns a connected MCP client session.
+func startCatalog(t testing.TB, cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets server.Secrets,
+	profile langfuse.DeploymentProfile, opts ...server.Option,
+) *mcp.ClientSession {
+	t.Helper()
+	srv := server.New(cat, client, log, secrets, profile, opts...)
 
 	ctx := context.Background()
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
@@ -91,7 +120,7 @@ func connectServer(t *testing.T, client *langfuse.Client, log *slog.Logger, secr
 	return cs
 }
 
-func TestExecuteReadIsTheOnlyToolAndIsAnnotatedReadOnlyAndNonDestructive(t *testing.T) {
+func TestTheToolSetWithEveryFamilyOnIsTheDiscoveryToolsExecuteReadAndGetTraceTree(t *testing.T) {
 	t.Parallel()
 	fake := httptest.NewServer(nil)
 	t.Cleanup(fake.Close)
@@ -102,21 +131,39 @@ func TestExecuteReadIsTheOnlyToolAndIsAnnotatedReadOnlyAndNonDestructive(t *test
 		t.Fatalf("list tools: %v", err)
 	}
 
-	if len(res.Tools) != 1 || res.Tools[0].Name != "execute_read" {
-		names := make([]string, 0, len(res.Tools))
-		for _, tool := range res.Tools {
-			names = append(names, tool.Name)
-		}
-		t.Fatalf("tools = %v, want exactly [execute_read]", names)
+	names := make([]string, 0, len(res.Tools))
+	for _, tool := range res.Tools {
+		names = append(names, tool.Name)
 	}
-	tool := res.Tools[0]
-	a := tool.Annotations
+	slices.Sort(names)
+	if want := []string{"describe_operation", "execute_read", "get_trace_tree", "search_operations"}; !slices.Equal(names, want) {
+		t.Fatalf("tools = %v, want exactly %v", names, want)
+	}
+}
+
+func TestExecuteReadIsAnnotatedReadOnlyAndNonDestructive(t *testing.T) {
+	t.Parallel()
+	fake := httptest.NewServer(nil)
+	t.Cleanup(fake.Close)
+
+	a := toolNamed(t, connect(t, fake), "execute_read").Annotations
+
 	if a == nil || !a.ReadOnlyHint || a.DestructiveHint == nil || *a.DestructiveHint ||
 		!a.IdempotentHint || a.OpenWorldHint == nil || !*a.OpenWorldHint || a.Title == "" {
 		t.Fatalf("annotations = %+v, want title, readOnly, idempotent, openWorld, not destructive, all explicit", a)
 	}
-	if !strings.Contains(tool.Description, "https://api.reference.langfuse.com") {
-		t.Fatalf("description does not link the Langfuse API reference:\n%s", tool.Description)
+}
+
+// #36: discovery stays inside the server.
+func TestExecuteReadDescriptionNamesSearchOperationsInsteadOfAnExternalPage(t *testing.T) {
+	t.Parallel()
+	fake := httptest.NewServer(nil)
+	t.Cleanup(fake.Close)
+
+	description := toolNamed(t, connect(t, fake), "execute_read").Description
+
+	if !strings.Contains(description, "search_operations") || strings.Contains(description, "http") {
+		t.Fatalf("description, want it to name search_operations and link no web page:\n%s", description)
 	}
 }
 

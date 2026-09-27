@@ -1,0 +1,72 @@
+# Keeps the embedded union catalog (ADR-0012) current with new Langfuse releases.
+# Weekly, it tests the generator offline (scripts/test_gen_union_catalog.py), then runs
+# scripts/gen-union-catalog.py, which rebuilds
+# internal/catalog/spec/langfuse-union-catalog.json from the OpenAPI spec of every
+# Langfuse release tag since v3.0.0, and opens a pull request when the output changed.
+# When nothing changed, it does nothing. Pull-request CI never regenerates the catalog: it
+# checks the committed file offline (internal/catalog tests) and runs the generator's
+# offline unit tests (ci.yml, job "generator", #89).
+# The PyYAML pin below is shared with ci.yml; change both together (one shared file: #92).
+#
+# A new or removed operation changes the deployment-profile fixtures in
+# internal/catalog/resolve_test.go ("newer than any known version"), and a new
+# operation must be triaged against ADR-0004: both are done by hand on the pull request.
+#
+# Relies on the repository setting "Allow GitHub Actions to create and approve pull requests"
+# (Settings > Actions > General), which is on; `gh pr create` fails if it is turned off.
+# Known limitation, as for .github/workflows/go-toolchain.yml: the pull request is opened
+# with GITHUB_TOKEN, so CI does not run on it by itself. Close and reopen the PR (or push
+# to its branch) to run CI before merging (#24).
+name: Union catalog
+
+on:
+  schedule:
+    - cron: "41 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install PyYAML
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet pyyaml==6.0.3
+      - name: Test the generator
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/venv/bin/python" scripts/test_gen_union_catalog.py
+      - name: Regenerate the union catalog
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/venv/bin/python" scripts/gen-union-catalog.py --repo "$RUNNER_TEMP/langfuse.git"
+      - name: Open a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          file=internal/catalog/spec/langfuse-union-catalog.json
+          if git diff --quiet -- "$file"; then
+            echo "union catalog unchanged"; exit 0
+          fi
+          newest=$(jq -r '."x-newest-version"' "$file")
+          branch="deps/union-catalog-$newest-$(sha256sum "$file" | cut -c1-12)"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            echo "branch $branch already exists"; exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -m "build(catalog): regenerate the union catalog up to Langfuse v$newest" -- "$file"
+          git push origin "$branch"
+          gh pr create --head "$branch" \
+            --title "build(catalog): regenerate the union catalog up to Langfuse v$newest" \
+            --body "Automated by .github/workflows/union-catalog.yml: scripts/gen-union-catalog.py rebuilt the union catalog from the Langfuse release specs since v3.0.0. Before merging: triage any new operation against ADR-0004, update the deployment-profile fixtures in internal/catalog/resolve_test.go when the operation set changed, and close and reopen this PR to run CI."

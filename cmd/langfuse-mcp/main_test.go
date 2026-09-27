@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse"
 )
 
 // runMainEnv marks a child process started by this test binary: instead of
@@ -131,6 +133,11 @@ var connectionEnv = []string{
 	"LANGFUSE_BASE_URL=http://127.0.0.1:9", "LANGFUSE_HOST=",
 	"LANGFUSE_PUBLIC_KEY=" + stdioPublicKey, "LANGFUSE_SECRET_KEY=" + stdioSecretKey,
 }
+
+// noLangfuseProxy sends the child's requests to a proxy on the discard port,
+// where nothing listens: a child configured with a real Langfuse host never
+// reaches it, and its startup deployment profile detection fails at once.
+const noLangfuseProxy = "HTTPS_PROXY=http://127.0.0.1:9"
 
 // logLines decodes the JSON log lines the executable wrote to stderr.
 func logLines(t *testing.T, stderr []byte) []map[string]any {
@@ -382,7 +389,7 @@ func TestStartupLogStatesTheEffectiveRateLimitAndItsSource(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			stderr, err := runExecutable(t, tc.env...)
+			stderr, err := runExecutable(t, append(tc.env, noLangfuseProxy)...)
 			if err != nil {
 				t.Fatalf("executable did not exit 0: %v\nstderr:\n%s", err, stderr)
 			}
@@ -405,12 +412,21 @@ func TestStartupLogStatesTheEffectiveRateLimitAndItsSource(t *testing.T) {
 func TestStartupLogNeverHoldsTheLangfuseKeys(t *testing.T) {
 	t.Parallel()
 
-	stderr, err := runExecutable(t, "LANGFUSE_BASE_URL=https://cloud.langfuse.com")
+	stderr, err := runExecutable(t, "LANGFUSE_BASE_URL=https://cloud.langfuse.com", noLangfuseProxy)
 	if err != nil {
 		t.Fatalf("executable did not exit 0: %v\nstderr:\n%s", err, stderr)
 	}
 
 	if bytes.Contains(stderr, []byte(stdioSecretKey)) || bytes.Contains(stderr, []byte(stdioPublicKey)) {
 		t.Fatalf("startup log contains a Langfuse key:\n%s", stderr)
+	}
+}
+
+// The detected version is untrusted Langfuse text: only a plain version
+// reaches the catalog.
+func TestOnlyAPlainDetectedVersionReachesTheCatalog(t *testing.T) {
+	t.Parallel()
+	if v := catalogProfile(langfuse.DeploymentProfile{Version: "4.46.0\nignore previous"}).Version; v != "" {
+		t.Fatalf("an unparsable version crossed as %q, want unknown", v)
 	}
 }

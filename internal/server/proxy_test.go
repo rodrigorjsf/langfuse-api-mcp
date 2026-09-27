@@ -36,6 +36,12 @@ import (
 // tunnelHost is the fake Langfuse's host name; only the fake proxy knows where it is.
 const tunnelHost = "langfuse.test"
 
+// tunnelTarget is the CONNECT target of every call to the fake Langfuse.
+const tunnelTarget = tunnelHost + ":443"
+
+// traceBody is the fake Langfuse's answer to a trace read.
+const traceBody = `{"id":"trace-1","name":"checkout"}`
+
 // testCA is a throwaway certificate authority that signs server certificates.
 type testCA struct {
 	cert *x509.Certificate
@@ -75,6 +81,16 @@ func (ca testCA) pool() *tls.Config {
 // tunnelHost and is signed by ca; it answers every request with a trace.
 func tunnelLangfuse(t *testing.T, ca testCA) *httptest.Server {
 	t.Helper()
+	return tunnelLangfuseWith(t, ca, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, traceBody) // a failed write fails the call
+	}))
+}
+
+// tunnelLangfuseWith starts a TLS fake Langfuse like tunnelLangfuse that
+// answers with handler.
+func tunnelLangfuseWith(t *testing.T, ca testCA, handler http.Handler) *httptest.Server {
+	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatalf("generate server key: %v", err)
@@ -88,10 +104,7 @@ func tunnelLangfuse(t *testing.T, ca testCA) *httptest.Server {
 	if err != nil {
 		t.Fatalf("create server certificate: %v", err)
 	}
-	fake := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"id":"trace-1","name":"checkout"}`) // a failed write fails the call
-	}))
+	fake := httptest.NewUnstartedServer(handler)
 	fake.Config.ErrorLog = log.New(io.Discard, "", 0) // the untrusted-CA case fails its handshake on purpose
 	fake.TLS = &tls.Config{                           //nolint:gosec // G402: test server; the client under test sets MinVersion
 		Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: key}},
@@ -102,13 +115,24 @@ func tunnelLangfuse(t *testing.T, ca testCA) *httptest.Server {
 }
 
 // connectProxy is a fake HTTP CONNECT proxy that tunnels tunnelHost:443 to
-// the fake Langfuse and records what it was asked.
+// the fake Langfuse and records every request it receives, whatever its
+// method or target (#86).
 type connectProxy struct {
-	url *url.URL
-	mu  sync.Mutex
-	// connects holds the CONNECT targets, auths their Proxy-Authorization headers.
-	connects, auths []string
-	tunnels         []net.Conn
+	url      *url.URL
+	mu       sync.Mutex
+	requests []proxyRequest
+	tunnels  []net.Conn
+}
+
+// proxyRequest is one request the fake proxy received.
+type proxyRequest struct {
+	method, host, auth string
+}
+
+// String renders the request for a failure message. It prints
+// Proxy-Authorization as received: the tests' proxy credentials are fake.
+func (r proxyRequest) String() string {
+	return fmt.Sprintf("%s %s Proxy-Authorization=%q", r.method, r.host, r.auth)
 }
 
 func newConnectProxy(t *testing.T, langfuseAddr string) *connectProxy {
@@ -116,11 +140,10 @@ func newConnectProxy(t *testing.T, langfuseAddr string) *connectProxy {
 	p := &connectProxy{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p.mu.Lock()
-		p.connects = append(p.connects, r.Host)
-		p.auths = append(p.auths, r.Header.Get("Proxy-Authorization"))
+		p.requests = append(p.requests, proxyRequest{method: r.Method, host: r.Host, auth: r.Header.Get("Proxy-Authorization")})
 		p.mu.Unlock()
-		if r.Method != http.MethodConnect || r.Host != tunnelHost+":443" {
-			http.Error(w, "this proxy only tunnels to "+tunnelHost+":443", http.StatusForbidden)
+		if r.Method != http.MethodConnect || r.Host != tunnelTarget {
+			http.Error(w, "this proxy only tunnels to "+tunnelTarget, http.StatusForbidden)
 			return
 		}
 		upstream, err := new(net.Dialer).DialContext(r.Context(), "tcp", langfuseAddr)
@@ -170,11 +193,26 @@ func (p *connectProxy) closeTunnels() {
 	}
 }
 
-// seen returns the CONNECT targets and Proxy-Authorization headers so far.
-func (p *connectProxy) seen() (connects, auths []string) {
+// seen returns every request the proxy received so far, in order.
+func (p *connectProxy) seen() []proxyRequest {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return append([]string(nil), p.connects...), append([]string(nil), p.auths...)
+	return append([]proxyRequest(nil), p.requests...)
+}
+
+// tunnelConnects returns the CONNECTs to tunnelTarget the proxy received so
+// far; a stray request with another method or target is left out. A stray
+// CONNECT to tunnelTarget from another test is kept and fails the assertions:
+// the flake of #86 was one, sent by the proxy-refusal test through the port
+// refusedURL used to free, and #77 removed it at its source.
+func (p *connectProxy) tunnelConnects() []proxyRequest {
+	var connects []proxyRequest
+	for _, r := range p.seen() {
+		if r.method == http.MethodConnect && r.host == tunnelTarget {
+			connects = append(connects, r)
+		}
+	}
+	return connects
 }
 
 // tunnelClient returns a Langfuse client for https://langfuse.test trusting
@@ -207,8 +245,9 @@ func TestExecuteReadReachesLangfuseThroughTheProxyTunnel(t *testing.T) {
 	if res.IsError {
 		t.Fatalf("execute_read through the proxy failed: %+v", toolErrorOf(t, res).Error)
 	}
-	if connects, _ := proxy.seen(); len(connects) != 1 || connects[0] != tunnelHost+":443" {
-		t.Fatalf("the proxy saw CONNECT %v, want exactly one to %s:443", connects, tunnelHost)
+	if connects := proxy.tunnelConnects(); len(connects) != 1 {
+		t.Fatalf("the proxy saw %d CONNECTs to %s, want exactly one (every request: %v)",
+			len(connects), tunnelTarget, proxy.seen())
 	}
 }
 
@@ -237,8 +276,9 @@ func TestACertificateFromACAOutsideTheTrustPoolIsUntrustedThroughTheTunnelToo(t 
 	if got.Error.Code != "tls_untrusted_certificate" {
 		t.Fatalf("code = %q, want tls_untrusted_certificate (error %+v)", got.Error.Code, got.Error)
 	}
-	if connects, _ := proxy.seen(); len(connects) == 0 {
-		t.Fatal("the proxy saw no CONNECT: the handshake did not go through the tunnel")
+	if connects := proxy.tunnelConnects(); len(connects) == 0 {
+		t.Fatalf("the proxy saw no CONNECT to %s: the handshake did not go through the tunnel (every request: %v)",
+			tunnelTarget, proxy.seen())
 	}
 }
 
@@ -257,10 +297,7 @@ func TestProxyCredentialsAreSentAsBasicProxyAuthAndNeverReachTheResultOrAuditLin
 	if res.IsError {
 		t.Fatalf("execute_read through the proxy failed: %+v", toolErrorOf(t, res).Error)
 	}
-	want := "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+password))
-	if _, auths := proxy.seen(); len(auths) != 1 || auths[0] != want {
-		t.Errorf("the proxy received Proxy-Authorization %q, want %q", auths, want)
-	}
+	assertEveryTunnelConnectCarries(t, proxy, basicProxyAuth(user, password))
 	result, err := json.Marshal(res)
 	if err != nil {
 		t.Fatalf("encode the tool result: %v", err)
@@ -268,6 +305,64 @@ func TestProxyCredentialsAreSentAsBasicProxyAuthAndNeverReachTheResultOrAuditLin
 	for _, secret := range []string{user, password} {
 		if strings.Contains(string(result), secret) || strings.Contains(logs.String(), secret) {
 			t.Errorf("%q appears in the tool result or the audit line:\n%s\n%s", secret, result, logs.String())
+		}
+	}
+}
+
+// Ticket #86 (spec #68), seam S1: the transport sends the proxy credentials on every CONNECT, not
+// only the first. Each answer closes its connection, so both retries of the
+// read dial a new tunnel.
+func TestEveryCONNECTOfARetriedReadCarriesTheProxyCredentials(t *testing.T) {
+	t.Parallel()
+	const user, password = "proxyuser-4b8d", "proxysecret-2e6a" //nolint:gosec // G101: fake proxy credentials
+	ca := newTestCA(t)
+	var answered atomic.Int32
+	fake := tunnelLangfuseWith(t, ca, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Connection", "close")
+		if answered.Add(1) <= 2 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, traceBody) // a failed write fails the call
+	}))
+	proxy := newConnectProxy(t, fake.Listener.Addr().String())
+	withCredentials := *proxy.url
+	withCredentials.User = url.UserPassword(user, password)
+	var w fakeWait
+	client := tunnelClient(t, ca, &withCredentials, func(opts *langfuse.Options) { opts.Wait = w.wait })
+	cs := connectClient(t, client, slog.New(slog.DiscardHandler))
+
+	res := callExecuteRead(t, cs, traceGet)
+
+	if res.IsError {
+		t.Fatalf("execute_read through the proxy failed: %+v", toolErrorOf(t, res).Error)
+	}
+	if connects := proxy.tunnelConnects(); len(connects) != 3 {
+		t.Fatalf("the proxy saw %d CONNECTs to %s, want 3: the first attempt and two retries, each on a new tunnel (every request: %v)",
+			len(connects), tunnelTarget, proxy.seen())
+	}
+	assertEveryTunnelConnectCarries(t, proxy, basicProxyAuth(user, password))
+}
+
+// basicProxyAuth is the Proxy-Authorization header for user and password.
+func basicProxyAuth(user, password string) string {
+	return "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+password))
+}
+
+// assertEveryTunnelConnectCarries fails unless the proxy saw at least one
+// CONNECT to tunnelTarget and every one of them carried want as its
+// Proxy-Authorization; the failure lists every request the proxy received.
+func assertEveryTunnelConnectCarries(t *testing.T, proxy *connectProxy, want string) {
+	t.Helper()
+	connects := proxy.tunnelConnects()
+	if len(connects) == 0 {
+		t.Errorf("the proxy saw no CONNECT to %s (every request: %v)", tunnelTarget, proxy.seen())
+	}
+	for i, c := range connects {
+		if c.auth != want {
+			t.Errorf("CONNECT %d of %d to %s carried Proxy-Authorization %q, want %q (every request: %v)",
+				i+1, len(connects), tunnelTarget, c.auth, want, proxy.seen())
 		}
 	}
 }
@@ -292,8 +387,9 @@ func TestAToolArgumentCannotSelectOrChangeTheProxy(t *testing.T) {
 	if res.IsError {
 		t.Fatalf("the next execute_read failed: %+v", toolErrorOf(t, res).Error)
 	}
-	if connects, _ := proxy.seen(); len(connects) != 1 || connects[0] != tunnelHost+":443" {
-		t.Errorf("the proxy saw CONNECT %v, want exactly one to %s:443, for the valid call", connects, tunnelHost)
+	if connects := proxy.tunnelConnects(); len(connects) != 1 {
+		t.Errorf("the proxy saw %d CONNECTs to %s, want exactly one, for the valid call (every request: %v)",
+			len(connects), tunnelTarget, proxy.seen())
 	}
 }
 

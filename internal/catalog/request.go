@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // Request is what the executor sends for one operation: the method, the
@@ -49,7 +50,8 @@ const maxNameInMessage = 64
 // Request builds the operation's request from the caller's parameters, a map
 // of parameter name to value, after validating them against the operation:
 // every parameter must be one of the operation's, every required one must be
-// present, and every value must have the parameter's type. A value is a
+// present, and every value must have the parameter's type and lie within
+// the numeric and length bounds its schema gives. A value is a
 // string, a number (float64 or json.Number), a bool, or, for a repeated query
 // parameter, a list of those; JSON null omits a nullable parameter. Path
 // parameters are percent-encoded into the path; the others go to the query.
@@ -89,9 +91,12 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 		}
 		if o.isListLimit(p) {
 			if _, ok := parsePageSize(values[0], MaxLimit); !ok {
-				return Request{}, rangeError{ErrLimitOutOfRange, invalidf("parameter %s: want an integer from 1 to %d, got %s",
-					p.Name, MaxLimit, values[0])}
+				return Request{}, rangeError{ErrLimitOutOfRange, invalidf("parameter %s: want an integer from 1 to %d",
+					p.Name, MaxLimit)}
 			}
+		}
+		if err := p.inBounds(v, values); err != nil {
+			return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
 		}
 		if o.isMetricsQuery(p) {
 			q, err := metricsQuery(values[0])
@@ -208,10 +213,7 @@ func (p Param) values(v any) ([]string, error) {
 		}
 		return []string{s}, nil
 	}
-	items, ok := v.([]any)
-	if !ok {
-		items = []any{v}
-	}
+	items := listItems(v)
 	item := Schema{}
 	if p.Schema.Items != nil {
 		item = *p.Schema.Items
@@ -225,6 +227,16 @@ func (p Param) values(v any) ([]string, error) {
 		out = append(out, s)
 	}
 	return out, nil
+}
+
+// listItems returns the items of a repeated parameter's value: the list, or
+// a list of one for a single value. values and inBounds both walk it, so the
+// rendered values and the raw items line up.
+func listItems(v any) []any {
+	if items, ok := v.([]any); ok {
+		return items
+	}
+	return []any{v}
 }
 
 // scalar checks one value against the schema's type and allowed values and
@@ -268,6 +280,85 @@ func (s Schema) scalar(v any) (string, error) {
 	}
 	return out, nil
 }
+
+// inBounds checks the parameter's rendered values against the bounds its
+// spec gives (#80): Minimum and Maximum for a number, MinLength and MaxLength,
+// in runes, for a string; the items' bounds for a repeated parameter. v is the
+// caller's value the values were rendered from: a schema without a type
+// bounds each value by its JSON kind (#83). It runs after the list limit
+// check, so a limit keeps its own error. The message names the bound, never
+// the value.
+func (p Param) inBounds(v any, values []string) error {
+	s := p.Schema
+	raw := []any{v}
+	if s.Type == "array" {
+		if s.Items == nil {
+			return nil
+		}
+		s = *s.Items
+		raw = listItems(v)
+	}
+	for i, value := range values {
+		err := s.withinBounds(value, raw[i])
+		if err == nil {
+			continue
+		}
+		if p.Schema.Type == "array" {
+			return fmt.Errorf("item %d: %w", i, err)
+		}
+		return err
+	}
+	return nil
+}
+
+// withinBounds checks one rendered value against the schema's bounds. A
+// schema without a type takes the kind of raw, the value before rendering:
+// a JSON number meets the numeric bounds, a string the length bounds, and a
+// boolean none.
+func (s Schema) withinBounds(v string, raw any) error {
+	kind := s.Type
+	if kind == "" {
+		if _, ok := raw.(string); ok {
+			kind = "string"
+		} else if _, ok := number(raw); ok {
+			kind = "number"
+		}
+	}
+	switch kind {
+	case "integer", "number":
+		n, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return errors.New("want a number") // unreachable: scalar renders finite numbers only
+		}
+		if (s.Minimum == nil || n >= *s.Minimum) && (s.Maximum == nil || n <= *s.Maximum) {
+			return nil
+		}
+		return errors.New("want a value " + boundText(s.Minimum, s.Maximum, formatBound))
+	case "string":
+		n := utf8.RuneCountInString(v)
+		if (s.MinLength == nil || n >= *s.MinLength) && (s.MaxLength == nil || n <= *s.MaxLength) {
+			return nil
+		}
+		return errors.New("want a length " + boundText(s.MinLength, s.MaxLength, strconv.Itoa) + " characters")
+	}
+	return nil
+}
+
+// boundText renders a closed or half-open range: "from lo to hi", "of at
+// least lo" or "of at most hi" ("of any size" without bounds).
+func boundText[T any](lo, hi *T, format func(T) string) string {
+	switch {
+	case lo != nil && hi != nil:
+		return "from " + format(*lo) + " to " + format(*hi)
+	case lo != nil:
+		return "of at least " + format(*lo)
+	case hi != nil:
+		return "of at most " + format(*hi)
+	}
+	return "of any size"
+}
+
+func formatBound(f float64) string { return strconv.FormatFloat(f, 'f', -1, 64) }
 
 // number returns the value of a JSON number.
 func number(v any) (float64, bool) {

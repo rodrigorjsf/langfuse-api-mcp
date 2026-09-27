@@ -63,7 +63,9 @@ func start() (app, bool) {
 
 // startWith is start after the capture: it never touches the process
 // environment, only the given entries ("KEY=value") and the ambient CA sources
-// captured at process start, and returns the started server.
+// captured at process start, and returns the started server. It detects the
+// deployment profile of the Langfuse it is configured for, which takes at most
+// langfuse.DefaultDetectionBudget.
 func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app, error) {
 	file, err := config.ReadFile()
 	if err != nil {
@@ -108,7 +110,13 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 		// environment and the config file; no tool argument reaches them.
 		Proxy: langfuse.ProxyFromSettings(cfg.ProxySettings.HTTPS.Reveal(), cfg.ProxySettings.HTTP.Reveal(), cfg.ProxySettings.NoProxy),
 	})
-	srv := server.New(cat, client, log, server.Secrets{Keys: keys})
+	// The deployment profile (ADR-0012 §3), detected once: the tool set and
+	// the operation set are then fixed until the process exits.
+	detection := detectProfile(log, client)
+	profile := detection.Profile
+	resolved := cat.Resolve(catalogProfile(profile))
+	logProfile(log, detection, len(resolved.Operations()))
+	srv := server.New(resolved, client, log, server.Secrets{Keys: keys}, profile)
 	serve := func(ctx context.Context) error {
 		// On shutdown, close the keep-alive connections to Langfuse instead of
 		// leaving them to the process exit.
@@ -116,6 +124,57 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 		return transport.Stdio(ctx, srv)
 	}
 	return app{log: log, pool: pool, serve: serve}, nil
+}
+
+// detectProfile detects the deployment profile within
+// langfuse.DefaultDetectionBudget, logs a version below the supported floor as
+// unsupported, and logs one warning per probe that could not decide. The
+// warnings hold fixed text only, never a Langfuse answer.
+func detectProfile(log *slog.Logger, client *langfuse.Client) langfuse.Detection {
+	d := client.DetectProfile(context.Background(), langfuse.DefaultDetectionBudget)
+	if version, ok := d.Profile.KnownVersion(); ok && d.Unsupported {
+		log.Warn("unsupported Langfuse version", "version", version,
+			"reason", "below the supported floor 3.0.0: operations are filtered by version range alone; families are ignored")
+	}
+	for _, w := range d.Warnings {
+		log.Warn("deployment profile probe undecided", "probe", w.Probe, "reason", w.Reason)
+	}
+	return d
+}
+
+// logProfile logs the detected version, the families on, those of them kept on
+// without a deciding answer, whether the version is unsupported, and the number
+// of operations the resolved catalog offers. An unsupported version lists no
+// family: the catalog ignores them. The version is untrusted Langfuse text:
+// only a plain version is logged.
+func logProfile(log *slog.Logger, d langfuse.Detection, operations int) {
+	p := d.Profile
+	version, ok := p.KnownVersion()
+	if !ok {
+		version = "unknown"
+	}
+	var on, kept []catalog.Family
+	if !d.Unsupported {
+		for _, f := range catalog.AllFamilies() {
+			if p.On(f) {
+				on = append(on, f)
+			}
+		}
+		kept = d.Undecided
+	}
+	families, undecided := familyNames(on), familyNames(kept)
+	log.Info("deployment profile", "version", version, "families", families, "undecided", undecided,
+		"unsupported", d.Unsupported, "operations", operations)
+}
+
+// familyNames returns the families' names in order, never nil, so an empty
+// list logs as [].
+func familyNames(families []catalog.Family) []string {
+	names := make([]string, 0, len(families))
+	for _, f := range families {
+		names = append(names, string(f))
+	}
+	return names
 }
 
 // logProxy logs the proxy in use as scheme://host:port with its variable and
@@ -183,4 +242,12 @@ func trustSources(cfg config.Config, ambient []trust.Source) trust.Sources {
 	}
 	src.Explicit = append(src.Explicit, ambientInFile(cfg, ambient)...)
 	return src
+}
+
+// catalogProfile is the deployment profile as the catalog reads it. Both share
+// the catalog's family type; only the version needs checking on the way.
+func catalogProfile(p langfuse.DeploymentProfile) catalog.Profile {
+	// Version is untrusted Langfuse text: only a plain version crosses.
+	version, _ := p.KnownVersion()
+	return catalog.Profile{Version: version, Families: p.Families}
 }

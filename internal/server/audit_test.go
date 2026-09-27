@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse"
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/server"
 )
 
 // Seam S1: the audit line an operator reads on stderr for every tool call.
@@ -90,5 +91,45 @@ func TestAPanickingToolCallStillLogsExactlyOneAuditLine(t *testing.T) {
 	lines := auditLines(t, &logs)
 	if len(lines) != 1 || lines[0]["code"] != "internal_error" || lines[0]["operationId"] != "trace_list" {
 		t.Fatalf("logged %d lines, want exactly 1 audit line with code internal_error:\n%s", len(lines), logs.String())
+	}
+}
+
+// security.md Audit: requests counts every Langfuse request the call made, so
+// a read the client retried counts each attempt that left.
+func TestTheAuditLineCountsEveryRetriedLangfuseRequest(t *testing.T) {
+	t.Parallel()
+	const page = `{"data":[{"id":"a","startTime":"2026-09-25T10:00:00.000Z"}],"meta":{}}`
+	unavailable := answer{status: http.StatusServiceUnavailable, body: `{"message":"busy"}`}
+	tests := map[string]struct {
+		tool         string
+		args         map[string]any
+		answers      []answer
+		wantRequests float64
+	}{
+		"execute_read retried once, then answered": {tool: "execute_read", args: traceList,
+			answers: []answer{unavailable, {status: http.StatusOK, body: page}}, wantRequests: 2},
+		"execute_read failing after every retry": {tool: "execute_read", args: traceList,
+			answers: []answer{unavailable}, wantRequests: 3},
+		"get_trace_tree retried once, then answered": {tool: "get_trace_tree", args: map[string]any{"traceId": "t-1"},
+			answers: []answer{unavailable, {status: http.StatusOK, body: page}}, wantRequests: 2},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			fake, calls := scriptedLangfuse(t, tc.answers...)
+			var logs syncBuffer
+			cs := startServer(t, langfuse.New(testOptions(t, fake.URL)), slog.New(slog.NewJSONHandler(&logs, nil)),
+				server.Secrets{Keys: testKeys()}, v4Profile)
+
+			callTool(t, cs, tc.tool, tc.args)
+
+			lines := auditLines(t, &logs)
+			if len(lines) != 1 {
+				t.Fatalf("logged %d lines, want exactly 1:\n%s", len(lines), logs.String())
+			}
+			if got := lines[0]["requests"]; got != tc.wantRequests || float64(calls.Load()) != tc.wantRequests {
+				t.Errorf("audit requests = %v, Langfuse received %d, want both %v", got, calls.Load(), tc.wantRequests)
+			}
+		})
 	}
 }

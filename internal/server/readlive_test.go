@@ -24,6 +24,19 @@ import (
 // on every call: parallel tests share no mutable map.
 func healthRead() map[string]any { return map[string]any{"operationId": "health_health"} }
 
+// sleepCtx waits d or until ctx is done: readLive's Retry-After wait and the
+// seeding poll's interval against a live Langfuse.
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
 // maxRetryAfterWait bounds the one wait readLive makes on a Retry-After: a
 // Langfuse Cloud rate-limit window is one minute on the Hobby plan.
 const maxRetryAfterWait = 2 * time.Minute
