@@ -181,8 +181,9 @@ type executor struct {
 	confirmer confirmer
 }
 
-// executeReadInput is the execute_read argument object (executeReadSchema).
-type executeReadInput struct {
+// operationArguments are the operationId and parameters arguments of an
+// execute_* tool: the whole execute_read argument object (executeReadSchema).
+type operationArguments struct {
 	OperationID string         `json:"operationId"`
 	Parameters  map[string]any `json:"parameters"`
 }
@@ -195,10 +196,10 @@ type executeReadInput struct {
 // The operation ID and the parameter names are echoed in errors and cut to a
 // bounded length there, so secrets are redacted from them first: a secret cut
 // short would no longer match. Parameter values are sent as given.
-func decodeExecuteReadInput(raw json.RawMessage, r sanitize.Redactor) (executeReadInput, error) {
+func decodeExecuteReadInput(raw json.RawMessage, r sanitize.Redactor) (operationArguments, error) {
 	fields, err := argumentFields(raw, r, toolExecuteRead, "operationId", "parameters")
 	if err != nil {
-		return executeReadInput{}, err
+		return operationArguments{}, err
 	}
 	return decodeOperationArguments(fields, r, "trace_list")
 }
@@ -207,14 +208,14 @@ func decodeExecuteReadInput(raw json.RawMessage, r sanitize.Redactor) (executeRe
 // of an execute_* tool from its argument fields; example is an operation ID
 // the tool runs, named when the ID is missing or not a string.
 func decodeOperationArguments(fields map[string]json.RawMessage, r sanitize.Redactor, example string,
-) (executeReadInput, error) {
-	var in executeReadInput
+) (operationArguments, error) {
+	var in operationArguments
 	id, ok := fields["operationId"]
 	if !ok {
 		return in, errors.New("argument operationId: required argument is missing")
 	}
 	if err := json.Unmarshal(id, &in.OperationID); err != nil || in.OperationID == "" {
-		return executeReadInput{}, errors.New("argument operationId: want a non-empty string, e.g. " + example)
+		return operationArguments{}, errors.New("argument operationId: want a non-empty string, e.g. " + example)
 	}
 	in.OperationID = r.Redact(in.OperationID)
 	if params, ok := fields["parameters"]; ok && string(params) != "null" {

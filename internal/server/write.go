@@ -88,7 +88,7 @@ const (
 
 // executeWriteInput is the execute_write argument object (executeWriteSchema).
 type executeWriteInput struct {
-	executeReadInput
+	operationArguments
 	Body json.RawMessage
 }
 
@@ -100,7 +100,7 @@ func decodeExecuteWriteInput(raw json.RawMessage, r sanitize.Redactor) (executeW
 		return executeWriteInput{}, err
 	}
 	in, err := decodeOperationArguments(fields, r, "scores_create")
-	return executeWriteInput{executeReadInput: in, Body: fields["body"]}, err
+	return executeWriteInput{operationArguments: in, Body: fields["body"]}, err
 }
 
 func (ex executor) executeWrite(ctx context.Context, req *mcp.CallToolRequest, a *audit) (*mcp.CallToolResult, error) {

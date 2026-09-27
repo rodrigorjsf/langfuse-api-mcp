@@ -289,7 +289,7 @@ func TestExecuteReadRejectsInvalidArgumentsNamingTheField(t *testing.T) {
 			if got.Hint == "" {
 				t.Errorf("error = %+v, want a hint naming the next useful action", got)
 			}
-			if strings.Contains(got.Message, "Go struct") || strings.Contains(got.Message, "executeReadInput") {
+			if strings.Contains(got.Message, "Go struct") || strings.Contains(got.Message, "operationArguments") {
 				t.Errorf("message %q exposes Go internals", got.Message)
 			}
 			assertNoRequest(t, seen)
