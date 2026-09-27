@@ -48,8 +48,12 @@ MODEL=${SMALL_MODEL:-qwen3:8b}
 BASE_URL=http://127.0.0.1:11434
 READY_TIMEOUT_SECONDS=${READY_TIMEOUT_SECONDS:-120}
 # MemAvailable required before the stack starts: the container's mem_limit
-# (4 GiB) plus 2 GiB for the server, the eval, the Go build cache and WSL itself.
-MIN_MEM_MIB=6144
+# (4 GiB) plus 1 GiB for the server, the eval and WSL itself. It was 6144 (2 GiB
+# headroom) until the host shrank to 7.8 GiB, where that refused even at idle
+# (~6000 MiB available); no run of the 2026-09-27 model comparison took
+# MemAvailable under 4340 MiB (docs/research/raw/
+# 2026-09-27-small-model-eval-local-model-vram.md).
+MIN_MEM_MIB=5120
 
 compose() { docker compose -f "$COMPOSE_FILE" "$@"; }
 

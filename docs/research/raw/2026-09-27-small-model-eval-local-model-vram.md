@@ -13,7 +13,8 @@ pass more intents on the maintainer's RTX 3060 12 GB?
   of swap and `NVIDIA GeForce RTX 3060, 12288 MiB, 617.14`, GPU visible inside containers; `nvidia-smi` then showed
   11249 MiB of 12288 MiB VRAM free before the runs (the Windows desktop holds the rest). The preflight minimum of 6144 MiB `MemAvailable` refused to start
   (6044 MiB available), so every run used `MIN_MEM_AVAILABLE_MIB=5120`, a one-off override the maintainer
-  approved; the container caps were unchanged.
+  approved; the container caps were unchanged. After these runs the maintainer lowered the default minimum to 5120
+  MiB.
 - **The only server knob changed:** `OLLAMA_KV_CACHE_TYPE` (`f16`, Ollama's default, or `q8_0`). Ollama started
   llama-server with `--cache-type-k q8_0 --cache-type-v q8_0 --flash-attn auto`, and the log said
   `flash_attn = enabled` and `KV buffer size = 1224.00 MiB` for qwen3:8b at 16384 cells (about 2304 MiB at
@@ -61,6 +62,9 @@ and `PASS 06` (peak 10942 MiB). The preflight refused the default minimum (`only
 needs 6144 MiB`). `go build ./...`, `go test -race ./...`, `golangci-lint run` (0 issues),
 `python3 scripts/test_small_model_eval.py` (7 tests OK) and the new CI compose check passed; no Go code changed, so
 the integration suite was not rerun.
+
+With the minimum lowered to 5120 MiB, the default flow ran with no override: `MemAvailable 5865 MiB; the Ollama
+eval stack needs at least 5120 MiB`, then `PASS 06` (peak 8206 MiB, `MemAvailable` never under 4629 MiB).
 
 ## Baseline: `qwen3:8b` Q4_K_M, KV `f16`
 
