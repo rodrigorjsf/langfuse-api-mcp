@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -88,7 +87,10 @@ func TestAServerCertificateThatFailsVerificationIsReportedAsTLSUntrustedCertific
 // refusedURL returns a loopback URL where nothing listens: connecting to it is
 // refused. Its port stays owned by the test until the test ends, so a
 // parallel test's server can never receive it (#77): the port is the local
-// end of an open client connection, which no listener holds.
+// end of an open client connection, and no OS hands a port in use to a
+// listener asking for port 0, as every httptest.Server does. Only Linux also
+// refuses an explicit bind to it; macOS and Windows allow that bind, which no
+// test does (network_linux_test.go).
 func refusedURL(t *testing.T) string {
 	t.Helper()
 	ln, err := new(net.ListenConfig).Listen(t.Context(), "tcp", "127.0.0.1:0")
@@ -274,22 +276,5 @@ func TestARequestTheClientCancelsIsReportedAsCanceled(t *testing.T) {
 			t.Fatalf("no execute_read failure with code canceled was logged:\n%s", logs.String())
 		}
 		time.Sleep(10 * time.Millisecond)
-	}
-}
-
-// TestARefusedHostKeepsItsPortForTheWholeTest proves a parallel test can never
-// receive the address refusedURL handed out (#77).
-func TestARefusedHostKeepsItsPortForTheWholeTest(t *testing.T) {
-	t.Parallel()
-	u, err := url.Parse(refusedURL(t))
-	if err != nil {
-		t.Fatalf("parse URL: %v", err)
-	}
-
-	ln, err := new(net.ListenConfig).Listen(t.Context(), "tcp", u.Host)
-
-	if err == nil {
-		_ = ln.Close()
-		t.Fatalf("listening on %s succeeded: the helper freed a port another test can receive", u.Host)
 	}
 }
