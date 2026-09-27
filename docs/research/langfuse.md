@@ -417,12 +417,13 @@ Send it as the URL-encoded `query` param of `GET /api/public/v2/metrics`.
 `[sourced]` spec `/v2/metrics` description; `/docs/metrics/features/metrics-api#v2`.
 
 Worked example, the total cost per day of the observations of traces named `checkout` (the server's static metrics
-query guidance on `describe_operation metrics_metrics`, #104):
+query guidance on `describe_operation metrics_metrics`, #104; its dates lie in January 2025 so a model never
+mistakes them for "the last 7 days" of a run, #105):
 
 ```json
 {"view":"observations","metrics":[{"measure":"totalCost","aggregation":"sum"}],
  "filters":[{"column":"traceName","operator":"=","value":"checkout","type":"string"}],
- "timeDimension":{"granularity":"day"},"fromTimestamp":"2026-09-20T00:00:00Z","toTimestamp":"2026-09-27T00:00:00Z"}
+ "timeDimension":{"granularity":"day"},"fromTimestamp":"2025-01-01T00:00:00Z","toTimestamp":"2025-01-08T00:00:00Z"}
 ```
 
 - Required keys: `view`, `metrics`, `fromTimestamp`, `toTimestamp`; `dimensions` and `filters` default to `[]`,
