@@ -133,7 +133,8 @@ func TestAHostThatCannotBeReachedIsReportedAsANetworkError(t *testing.T) {
 }
 
 // resettingListener accepts connections and resets each one at once, like a
-// host whose connections drop; it counts the connections.
+// host whose connections drop; it counts the connections. Under heavy load a
+// reset may surface as internal_error instead of network_error (see #91).
 func resettingListener(t *testing.T) (string, *atomic.Int32) {
 	t.Helper()
 	ln, err := new(net.ListenConfig).Listen(t.Context(), "tcp", "127.0.0.1:0")
@@ -244,8 +245,8 @@ func TestARequestTheClientCancelsIsReportedAsCanceled(t *testing.T) {
 	}
 }
 
-// A parallel test must never receive the address refusedURL handed out
-// (#77): the helper keeps its port for the whole test.
+// TestARefusedHostKeepsItsPortForTheWholeTest proves a parallel test can never
+// receive the address refusedURL handed out (#77).
 func TestARefusedHostKeepsItsPortForTheWholeTest(t *testing.T) {
 	t.Parallel()
 	u, err := url.Parse(refusedURL(t))
