@@ -230,15 +230,20 @@ func TestEveryWriteBodySchemaOfTheUnionCatalogCompilesAsJSONSchema202012(t *test
 		}
 	}
 	// The union catalog (v3.0.0 to v4.46.0) has 49 operations with a body, 10
-	// of them excluded: 39 are checked. A floor, not the count, so that a new
-	// exclusion does not break this test.
-	if bodies < 30 {
+	// of them excluded: 39 are checked. The four ADR-0004 amendment exclusions
+	// (#110: media_getUploadUrl, media_patch, llmConnections_upsert,
+	// blobStorageIntegrations_upsertBlobStorageIntegration) each take a body,
+	// leaving 35: the floor, so either branch merging first keeps this green.
+	if bodies < 35 {
 		t.Fatalf("checked %d body schemas, want the whole catalog's", bodies)
 	}
 }
 
 // unknownKeywords returns the location of the first schema under s holding a
-// keyword jsonschema-go does not know, and those keywords.
+// keyword jsonschema-go does not know, and those keywords. It walks the
+// subschema keywords the generator emits and converts (SCHEMA_MAPS,
+// SCHEMA_VALUES and SCHEMA_LISTS in scripts/gen-union-catalog.py); a schema
+// under another keyword is not walked.
 func unknownKeywords(s *jsonschema.Schema, at string) (string, []string) {
 	if s == nil {
 		return "", nil
