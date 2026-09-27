@@ -394,7 +394,7 @@ Recommendations: create a dedicated Langfuse key for the agent, set an expiry da
 
 ### Verify what you run **(Planned)**
 
-Releases will ship with checksums, an SBOM, cosign keyless signatures and GitHub build provenance (`gh attestation verify`).
+Releases will ship with checksums, an SBOM, cosign keyless signatures and GitHub build provenance (`gh attestation verify`). The one Python dependency of the maintainer tooling (PyYAML, used by the union catalog generator in CI only) is pinned with hashes in [`scripts/requirements.txt`](scripts/requirements.txt), installed with `--require-hashes` and kept current by Dependabot.
 
 ## Stack
 

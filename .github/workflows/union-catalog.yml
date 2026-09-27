@@ -37,7 +37,6 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Hash-checked, shared with the ci.yml "generator" job (#92).
       - name: Install the generator's dependencies
         run: |
           set -euo pipefail
