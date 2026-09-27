@@ -112,7 +112,7 @@ A call that never gets a Langfuse answer returns a structured tool error ([ADR-0
 | Code | When | Retryable |
 |---|---|---|
 | `tls_untrusted_certificate` | the Langfuse server's certificate is signed by a CA the server does not trust, or fails verification (host name, validity, usage). The hint names `LANGFUSE_CA_CERT` / `LANGFUSE_CA_CERTS_PATH` and the "CA sources loaded" startup log line | no |
-| `network_error` | DNS failure, connection refused or reset, or a proxy failure: the proxy refuses the connection or answers the CONNECT with a non-200 status (its text is never echoed). The server itself retries a read twice (exponential backoff with jitter, within the deadline) before it reports this; writes are never retried. The hint names the host in `LANGFUSE_BASE_URL` and `HTTPS_PROXY`/`NO_PROXY` | yes |
+| `network_error` | DNS failure, connection refused, reset or dropped before any answer, or a proxy failure: the proxy refuses the connection or answers the CONNECT with a non-200 status (its text is never echoed). The server itself retries a read twice (exponential backoff with jitter, within the deadline) before it reports this; writes are never retried. The hint names the host in `LANGFUSE_BASE_URL` and `HTTPS_PROXY`/`NO_PROXY` | yes |
 | `timeout` | no answer within the request deadline (60 s, retries included). The hint suggests narrowing the query | no |
 | `canceled` | the MCP client canceled the call | no |
 

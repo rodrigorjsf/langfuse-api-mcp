@@ -280,7 +280,7 @@ func (c *Client) send(ctx context.Context, method, escapedPath string, query url
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return Response{}, fmt.Errorf("send request: %w", classify(err))
+		return Response{}, fmt.Errorf("send request: %w", classifySend(err))
 	}
 	defer func() {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, MaxResponseBytes)) // drain so the connection is reused
