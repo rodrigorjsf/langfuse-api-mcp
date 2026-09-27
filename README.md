@@ -275,13 +275,57 @@ Get your company's root CA in PEM format:
 | macOS | Keychain Access → System Roots / System → select the certificate → File → Export → `.pem` |
 | Linux | usually `/usr/local/share/ca-certificates/` or `/etc/pki/ca-trust/source/anchors/` |
 
-## Install and run **(Planned)**
+## Install and run
 
-| Channel | Command |
+Every build reports the version it was built with: `initialize` returns it as the server version, and the startup log line `server started` names it. A build without an injected version (`go build`, `go install`) reports `0.0.0-dev`.
+
+| Channel | Status |
 |---|---|
-| Release binary (Linux / macOS / Windows, amd64 / arm64) | download from GitHub Releases, then verify the signature (see [Verify what you run](#verify-what-you-run)) |
-| Docker | `docker run -i --rm -e LANGFUSE_PUBLIC_KEY -e LANGFUSE_SECRET_KEY -e LANGFUSE_BASE_URL -e LANGFUSE_CA_CERT=/certs/corp.pem -v /path/to/corp.pem:/certs/corp.pem:ro ghcr.io/rodrigorjsf/langfuse-api-mcp` |
-| Claude Desktop | `.mcpb` bundle (double-click install) |
+| [Release archive](#release-archive) (Linux, macOS, Windows × amd64, arm64) | built and smoke-tested on every change to packaging or the executable; **publishing Planned**: the first release is cut in M7, after the repository goes public |
+| [`go install`](#go-install) | **Planned**: works once the repository is public (M7); `@<version>` once a release tag exists |
+| Docker | **Planned**: `docker run -i --rm -e LANGFUSE_PUBLIC_KEY -e LANGFUSE_SECRET_KEY -e LANGFUSE_BASE_URL -e LANGFUSE_CA_CERT=/certs/corp.pem -v /path/to/corp.pem:/certs/corp.pem:ro ghcr.io/rodrigorjsf/langfuse-api-mcp` |
+| Claude Desktop | **Planned**: `.mcpb` bundle (double-click install) |
+| npm | **Planned**: `npx -y langfuse-api-mcp` |
+
+### Release archive
+
+**Planned until the first release** (M7): the release pipeline already builds these archives for every change to packaging or the executable and proves each one on a clean runner, but nothing is published yet.
+
+One archive per target: `langfuse-mcp_<version>_<os>_<arch>.tar.gz` (`.zip` on Windows), with `os` one of `linux`, `darwin`, `windows` and `arch` one of `amd64`, `arm64`. Each holds the `langfuse-mcp` binary (`langfuse-mcp.exe` on Windows), `LICENSE` and this README. Next to them: `checksums.txt` (SHA-256 of every file) and one SPDX JSON SBOM per archive (`<archive>.sbom.json`). `windows/arm64` is **built, not CI-tested**: no runner proves it; on Windows on Arm you can also run the `windows/amd64` build under emulation.
+
+Download with `gh` or `curl`, check the archive against `checksums.txt`, then extract it (Linux on amd64 shown; `<version>` is the release without the leading `v`):
+
+```bash
+version=<version>
+archive="langfuse-mcp_${version}_linux_amd64.tar.gz"
+gh release download "v$version" -R rodrigorjsf/langfuse-api-mcp -p "$archive" -p checksums.txt
+# or: curl -fsSLO "https://github.com/rodrigorjsf/langfuse-api-mcp/releases/download/v$version/$archive"
+#     curl -fsSLO "https://github.com/rodrigorjsf/langfuse-api-mcp/releases/download/v$version/checksums.txt"
+awk -v f="$archive" '$2 == f' checksums.txt | sha256sum -c -   # macOS: … | shasum -a 256 -c -
+tar -xzf "$archive"
+```
+
+On Windows (PowerShell), compare the hash and extract the zip:
+
+```powershell
+$archive = "langfuse-mcp_<version>_windows_amd64.zip"
+(Get-FileHash $archive -Algorithm SHA256).Hash.ToLower()   # must equal the line for $archive in checksums.txt
+Expand-Archive $archive -DestinationPath langfuse-mcp
+```
+
+Then point your MCP client at the extracted binary (see [Client configuration](#client-configuration)).
+
+**Downloaded in a browser?** The binaries are not notarized by Apple nor Authenticode-signed, so macOS Gatekeeper blocks a binary downloaded in a browser ("cannot be opened because the developer cannot be verified") and Windows SmartScreen may warn about it. Download with `curl` or `gh` as above (neither marks the file as downloaded from the internet), or use another channel. If you already downloaded it in a browser, check the checksum first, then on macOS remove the mark with `xattr -d com.apple.quarantine langfuse-mcp`, or on Windows choose "More info" → "Run anyway" (or `Unblock-File langfuse-mcp.exe`).
+
+### go install
+
+**Planned until the repository is public** (M7). With Go 1.21 or later (the module's `toolchain` directive fetches the Go 1.27 toolchain it needs):
+
+```bash
+go install github.com/rodrigorjsf/langfuse-api-mcp/cmd/langfuse-mcp@<version>
+```
+
+The binary lands in `$(go env GOPATH)/bin`. A `go install` build carries no injected version, so it reports `0.0.0-dev`; use a release archive when you need the version in bug reports.
 
 ### Client configuration
 
@@ -449,6 +493,16 @@ Dependencies stay current through [Dependabot](.github/dependabot.yml) (Go modul
 The embedded union catalog is generated, never edited by hand: [`scripts/gen-union-catalog.py`](scripts/gen-union-catalog.py) rebuilds it from the OpenAPI spec of every Langfuse release tag since v3.0.0 (needs git, network and PyYAML; `python3 scripts/test_gen_union_catalog.py` tests it offline), and a weekly workflow ([`.github/workflows/union-catalog.yml`](.github/workflows/union-catalog.yml)) runs it and opens a pull request when the output changed. Pull-request CI never fetches release specs: it runs those generator tests, and the `internal/catalog` tests check the committed file offline, including the operation set each deployment-profile fixture resolves to. When a regeneration adds or drops an operation, triage it against [ADR-0004](docs/adr/0004-endpoint-scope.md) and update those fixtures in the same pull request.
 
 The small-model discovery eval, [`scripts/small-model-eval.py`](scripts/small-model-eval.py), checks that Haiku 4.5 reaches the right operation from a plain-language intent using only `search_operations`, `describe_operation`, `execute_read` and `get_trace_tree`. It runs 11 intents covering traces, observations, scores, prompts, datasets and metrics, and prints one PASS/FAIL line per intent and the total. An intent passes when the model makes the expected call and the server accepts it. The system prompt names the run date (UTC), as agent hosts do, and the metrics intent passes only when its query's time window is the last 7 days before that date; `python3 scripts/test_small_model_eval.py` checks that matcher offline, in CI too. The expected operation IDs and key parameters are literals in the script. The server runs against a fake Langfuse on `127.0.0.1` that answers as 4.46.0 `events_only` with no data, so no real Langfuse key or project is involved. Run it by hand with `ANTHROPIC_API_KEY` set (standard library only; it builds the server with `go build` unless you pass `--server`). The key is read only from the environment and never printed or passed to the server. Paste the output into the pull request, and file every failing intent as a follow-up issue on M3 or M6 (the first recorded run is tracked in [#88](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/88)). It is not a CI gate: it costs API tokens and a model's answers can vary. Without an API key, [`scripts/small-model-eval-local.sh`](scripts/small-model-eval-local.sh) runs it against a local `qwen3:8b` through Ollama (see "Container stacks"); `--only 2,5` reruns chosen intents. The first recorded run used that local model instead of Haiku 4.5, because the maintainer chose not to use a paid API: 7/11 passed on 2026-09-27 ([output](docs/research/raw/2026-09-27-small-model-eval-qwen3-8b.md); failing intents filed as #97, #98, #99, #100). A later full run at the current code passes 8/11 (02 and 03 still fail, #97 and #98; 08 now fails, #114), and a comparison of local models on the same 12 GB GPU keeps `qwen3:8b` Q4_K_M as the default: `qwen3:14b` passes 9/11 but fails intent 11, which the default passes, and needs a quantized KV cache to fit ([output](docs/research/raw/2026-09-27-small-model-eval-local-model-vram.md)).
+
+**The release pipeline runs in snapshot mode.** [`.github/workflows/release.yml`](.github/workflows/release.yml) runs on pull requests that touch `packaging/`, `cmd/langfuse-mcp/`, `go.mod`/`go.sum` or the workflow itself, on every push to `main` and weekly. GoReleaser ([`packaging/.goreleaser.yaml`](packaging/.goreleaser.yaml)) builds the six archives with the version `0.0.0-SNAPSHOT-<short commit>`, the checksums file and one SPDX JSON SBOM per archive (syft); then the installed-artifact smoke checks the archive for its runner against `checksums.txt`, extracts it on Linux, macOS and Windows, and runs `TestInstalledArtifact` (build tag `smoke`, `cmd/langfuse-mcp/installed_test.go`) against the extracted binary: `initialize` reports the snapshot's version, `tools/list` returns the read tool set, one `execute_read` against a fake TLS Langfuse trusted only through `LANGFUSE_CA_CERT` returns its payload stripped of hidden and bidi characters inside the untrusted-data envelope, and an invalid `LANGFUSE_BASE_URL` stops startup naming the variable, never the value. The same assertions run in `go test ./...` against a binary built with an injected version. To run the pipeline locally, install GoReleaser v2.18.2 and syft v1.52.0 (the versions the workflow pins), then:
+
+```bash
+goreleaser release --snapshot --clean --config packaging/.goreleaser.yaml
+mkdir -p /tmp/lfmcp && tar -xzf dist/langfuse-mcp_*_linux_amd64.tar.gz -C /tmp/lfmcp
+LANGFUSE_MCP_SMOKE_COMMAND='["/tmp/lfmcp/langfuse-mcp"]' \
+LANGFUSE_MCP_SMOKE_VERSION="$(jq -r .version dist/metadata.json)" \
+  go test -tags smoke -count=1 -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
+```
 
 **A toolchain bump PR shows no CI until you re-trigger it.** The workflow opens its pull request with the repository's `GITHUB_TOKEN`, and GitHub does not start workflows for events that token creates, so `CI` does not run on the PR by itself. The same holds for the union catalog PR (`deps/union-catalog-*`). Close and reopen the PR (or push a commit to its `deps/toolchain-*` or `deps/union-catalog-*` branch) to run CI, and merge only once it is green. The workflow also relies on the repository setting "Allow GitHub Actions to create and approve pull requests" (Settings → Actions → General); without it the PR is not created. See [#24](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/24).
 

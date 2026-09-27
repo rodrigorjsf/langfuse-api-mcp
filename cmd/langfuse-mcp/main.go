@@ -21,6 +21,12 @@ import (
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/trust"
 )
 
+// version is the version this executable was built with, reported in
+// initialize and in the startup log. Release builds set it through the linker
+// (-X main.version=…, packaging/.goreleaser.yaml); it is never changed at run
+// time.
+var version = server.DevVersion
+
 func main() {
 	// Nothing may run here before start: see start.
 	app, ok := start()
@@ -117,7 +123,7 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 	profile := detection.Profile
 	resolved := cat.Resolve(catalogProfile(profile))
 	logProfile(log, detection, len(resolved.Operations()))
-	var opts []server.Option
+	opts := []server.Option{server.WithVersion(version)}
 	if cfg.AllowWrites.On {
 		opts = append(opts, server.WithWriteMode())
 	}
@@ -128,6 +134,7 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 		defer client.CloseIdleConnections()
 		return transport.Stdio(ctx, srv)
 	}
+	log.Info("server started", "version", version, "transport", "stdio")
 	return app{log: log, pool: pool, serve: serve}, nil
 }
 
