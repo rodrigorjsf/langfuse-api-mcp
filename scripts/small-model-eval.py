@@ -348,24 +348,23 @@ def metrics_query_matches(raw, want, today):
 
 
 def in_last_days(query, days, today):
-    """Whether the query's window is the given number of days before today (a
-    UTC date). fromTimestamp must start `days` days back, counting today or not
-    (so on 2026-10-15 with 7 days, on 2026-10-08 or 2026-10-09); toTimestamp,
-    when given, must fall on today, or be the end of today. A copied example
-    window or a window a model guessed without the date does not pass (#105).
-    This is stricter than "fromTimestamp within the 7 days before the run
-    date" on purpose: a window starting yesterday is not the last 7 days."""
+    """Whether the query's window lies in the given number of days before
+    today (a UTC date), as #105 asks: fromTimestamp falls within those days,
+    from the start of the day `days` days back to the end of today (so on
+    2026-10-15 with 7 days, from 2026-10-08T00:00:00Z up to but not including
+    2026-10-16T00:00:00Z); toTimestamp is absent or no later than the end of
+    today. A copied example window or a window a model guessed without the
+    date does not pass."""
     today_start = datetime.datetime.combine(today, datetime.time(), datetime.timezone.utc)
     day = datetime.timedelta(days=1)
-    earliest_from = today_start - days * day        # counting whole days before today
-    latest_from = today_start - (days - 1) * day    # counting today: up to its day's end
+    today_end = today_start + day
     window_from = timestamp(query.get("fromTimestamp"))
-    if window_from is None or not earliest_from <= window_from < latest_from + day:
+    if window_from is None or not today_start - days * day <= window_from < today_end:
         return False
     if "toTimestamp" not in query:
         return True
     window_to = timestamp(query.get("toTimestamp"))
-    return window_to is not None and today_start <= window_to <= today_start + day
+    return window_to is not None and window_to <= today_end
 
 
 def timestamp(value):

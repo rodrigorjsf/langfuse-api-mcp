@@ -70,9 +70,8 @@ class MetricsWindowTest(unittest.TestCase):
         today = datetime.date(2026, 10, 15)
         for name, from_ts, to_ts in [
             ("starts 8 days back", "2026-10-07T00:00:00Z", "2026-10-15T00:00:00Z"),
-            ("starts yesterday", "2026-10-14T00:00:00Z", "2026-10-15T00:00:00Z"),
+            ("starts after the run date", "2026-10-16T00:00:00Z", None),
             ("ends after the run date", "2026-10-08T00:00:00Z", "2026-10-16T00:00:01Z"),
-            ("ends days before the run date", "2026-10-08T00:00:00Z", "2026-10-12T00:00:00Z"),
             ("no fromTimestamp", None, "2026-10-15T00:00:00Z"),
             ("fromTimestamp is not a date-time", "last week", "2026-10-15T00:00:00Z"),
             ("fromTimestamp is a number", 1760486400, "2026-10-15T00:00:00Z"),
@@ -81,7 +80,7 @@ class MetricsWindowTest(unittest.TestCase):
             with self.subTest(name):
                 self.assertFalse(self.matches(query(from_ts, to_ts), today))
 
-    def test_the_last_7_days_before_the_run_date_are_accepted(self):
+    def test_windows_starting_in_the_7_days_before_the_run_date_are_accepted(self):
         today = datetime.date(2026, 10, 15)
         for name, from_ts, to_ts in [
             ("7 whole days to the start of today", "2026-10-08T00:00:00Z", "2026-10-15T00:00:00Z"),
@@ -90,6 +89,9 @@ class MetricsWindowTest(unittest.TestCase):
             ("with milliseconds", "2026-10-08T00:00:00.000Z", "2026-10-15T00:00:00.000Z"),
             ("with an offset", "2026-10-08T02:00:00+02:00", "2026-10-15T00:00:00+00:00"),
             ("without toTimestamp", "2026-10-08T00:00:00Z", None),
+            ("starts yesterday", "2026-10-14T00:00:00Z", "2026-10-15T00:00:00Z"),
+            ("starts today", "2026-10-15T00:00:00Z", "2026-10-15T23:59:59Z"),
+            ("ends days before the run date", "2026-10-08T00:00:00Z", "2026-10-12T00:00:00Z"),
         ]:
             with self.subTest(name):
                 self.assertTrue(self.matches(query(from_ts, to_ts), today))

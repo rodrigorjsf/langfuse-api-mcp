@@ -10,7 +10,10 @@ What changed since the [#104 runs](2026-09-27-small-model-eval-intent-11-metrics
 
 - the eval's system prompt names the run date ("Today is 2026-09-27 (UTC).");
 - the intent-11 matcher also checks the time window: `fromTimestamp` 6 or 7 days before the run date,
-  `toTimestamp` (when given) on the run date; offline tests in `scripts/test_small_model_eval.py`;
+  `toTimestamp` (when given) on the run date; offline tests in `scripts/test_small_model_eval.py`
+  (the review of #68 later relaxed it to #105's own rule: `fromTimestamp` within the 7 days before the run
+  date, `toTimestamp` absent or no later than the end of the run date; the runs below fail on the query's
+  encoding, not its window, so their result stands);
 - the `describe_operation metrics_metrics` example window moved to `2025-01-01`…`2025-01-08`.
 
 - **Result:** FAIL, twice, identical output. The model computes the right window from the run date
