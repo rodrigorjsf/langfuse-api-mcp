@@ -166,7 +166,10 @@ Sources: `[sourced]` `/docs/api-and-data-platform/features/public-api#field-grou
     `raw/2026-09-26-iowindow-probe-selfhosted.txt`. `[verified]`
   - **Verdict: the 14-day / 50-row rule is the official MCP tool's own guard, not a REST limit.** Our workflow tools
     keep a guard of their own anyway (`.claude/rules/langfuse-api.md`, "Time windows"), for budget reasons. The probe
-    stays as a weekly Cloud regression (`.github/workflows/integration.yml`), so a guard added upstream fails the suite.
+    stays as a weekly regression on Cloud and on self-hosted 4.46.0 `events_only` and `dual`
+    (`.github/workflows/integration.yml`), so a guard added upstream fails the suite. It does not run on 3.x (§1.8:
+    no `/v2/observations`, OTLP/JSON `traceId` bug), and no v3 variant is planned: Cloud retires v3 on 2026-11-16,
+    and seeding v3 needs OTLP/protobuf (#85).
     The Cloud evidence above comes from the same test run locally with the Cloud test project's keys; the `cloud` job
     then passed on GitHub too (`workflow_dispatch` run 36239908860 on `main`, 2026-09-26, Langfuse **4.46.0**, every
     live test `PASS`, none skipped; #40). That run predates #41; the first green `cloud` run with the goleak ignores removed is

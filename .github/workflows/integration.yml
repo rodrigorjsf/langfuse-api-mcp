@@ -10,7 +10,12 @@
 #   detects the deployment's profile and that every read operation of the resolved catalog is
 #   reachable; a failure names the deployment and the operation ID. The payload-query probe and the
 #   cursor page-size probe (#93) seed over OTLP/JSON and read /v2/observations, so they run on
-#   `events_only` only (see #85).
+#   4.x only (`events_only` and `dual`, #85). They are skipped on 3.x for verified reasons:
+#   /v2/observations is missing on 3.80.0 (HTML 404) and gated behind a v4 write mode on 3.225.11,
+#   and OTLP/JSON stores a hex traceId wrongly on 3.80.0 (docs/research/langfuse.md §1.8).
+#   Decision (#85): no v3 variant of the payload-query probe. Langfuse Cloud retires v3 on
+#   2026-11-16; seeding v3 correctly needs OTLP/protobuf (hand-written protobuf or a new test-only
+#   dependency); the io/metadata window facts stay proven weekly on 4.46.0 and Cloud.
 # - cloud: weekly and on manual dispatch against the dedicated Langfuse Cloud test project, whose
 #   keys scripts/setup-ci-langfuse-cloud.sh stored as repository secrets. Weekly only, to respect
 #   the Hobby plan's rate limits; the suite waits for Retry-After on 429.
@@ -82,7 +87,7 @@ jobs:
           - deployment: 4.46.0-events_only
             skip: ""
           - deployment: 4.46.0-dual
-            skip: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows|TestLiveObservationsCursorContinuesAtADifferentLimitWithoutGapsOrRepeats
+            skip: ""
     runs-on: ubuntu-latest
     timeout-minutes: 25
     concurrency:
