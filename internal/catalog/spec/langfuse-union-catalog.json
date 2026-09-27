@@ -39,8 +39,10 @@
        "schema": {
         "properties": {
          "description": {
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "name": {
           "type": "string"
@@ -250,11 +252,14 @@
           "description": "Defaults to PENDING for new queue items",
           "enum": [
            "PENDING",
-           "COMPLETED"
+           "COMPLETED",
+           null
           ],
-          "nullable": true,
           "title": "AnnotationQueueStatus",
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          }
         },
         "required": [
@@ -356,11 +361,14 @@
          "status": {
           "enum": [
            "PENDING",
-           "COMPLETED"
+           "COMPLETED",
+           null
           ],
-          "nullable": true,
           "title": "AnnotationQueueStatus",
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          }
         },
         "title": "UpdateAnnotationQueueItemRequest",
@@ -443,8 +451,10 @@
         "properties": {
          "authorUserId": {
           "description": "The id of the user who created the comment. Must be a member of the organization that owns the project, otherwise an error will be thrown.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "content": {
           "description": "The content of the comment. May include markdown. Currently limited to 5000 characters.",
@@ -457,8 +467,10 @@
          "objectStartTime": {
           "description": "The start time of the referenced object (for observations, the observation's start time). Optional performance hint - when provided, Langfuse narrows the lookup to validate the reference faster. It only affects speed - an incorrect or omitted value never changes the result.",
           "format": "date-time",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "objectType": {
           "description": "The type of the object to attach the comment to (trace, observation, session, prompt).",
@@ -586,37 +598,40 @@
          "datasetName": {
           "type": "string"
          },
-         "expectedOutput": {
-          "nullable": true
-         },
+         "expectedOutput": {},
          "id": {
           "description": "Dataset items are upserted on their id. Id needs to be unique (project-level), cannot be reused across datasets, and must be at most 255 characters.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
-         "input": {
-          "nullable": true
-         },
-         "metadata": {
-          "nullable": true
-         },
+         "input": {},
+         "metadata": {},
          "sourceObservationId": {
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "sourceTraceId": {
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "status": {
           "description": "Defaults to ACTIVE for newly created items",
           "enum": [
            "ACTIVE",
-           "ARCHIVED"
+           "ARCHIVED",
+           null
           ],
-          "nullable": true,
           "title": "DatasetStatus",
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          }
         },
         "required": [
@@ -732,8 +747,10 @@
          "createdAt": {
           "description": "Optional timestamp to set the createdAt field of the dataset run item. If not provided or null, defaults to current timestamp.",
           "format": "date-time",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "datasetItemId": {
           "type": "string"
@@ -741,29 +758,36 @@
          "datasetVersion": {
           "description": "ISO 8601 timestamp (RFC 3339, Section 5.6) in UTC (e.g., \"2026-01-21T14:35:42Z\").\nSpecifies the dataset version to use for this experiment run.\nIf provided, the experiment will use dataset items as they existed at or before this timestamp.\nIf not provided, uses the latest version of dataset items.",
           "format": "date-time",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "metadata": {
-          "description": "Metadata of the dataset run, updates run if run already exists",
-          "nullable": true
+          "description": "Metadata of the dataset run, updates run if run already exists"
          },
          "observationId": {
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "runDescription": {
           "description": "Description of the run. If run exists, description will be updated.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "runName": {
           "type": "string"
          },
          "traceId": {
           "description": "traceId should always be provided. For compatibility with older SDK versions it can also be inferred from the provided observationId.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          }
         },
         "required": [
@@ -1116,13 +1140,17 @@
          },
          "goal": {
           "description": "Optional user-approved goal or use case they were trying to achieve. Must be between 1 and 1500 characters when provided. Do not include secrets, customer data, trace payloads, or broad unrelated context.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "referenceUrl": {
           "description": "Optional HTTP(S) reference URL. Langfuse stores it as text for triage and does not fetch it.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "target": {
           "description": "The specific instance within targetType: the skill name, MCP tool name, CLI command, API endpoint path, or docs page path (e.g. 'queryMetrics', '/docs/mcp'). An identifier, not a sentence. Must be between 1 and 200 characters.",
@@ -1207,8 +1235,7 @@
                    "type": "string"
                   },
                   "metadata": {
-                   "description": "Optional. Metadata field used by the Langfuse SDKs for debugging.",
-                   "nullable": true
+                   "description": "Optional. Metadata field used by the Langfuse SDKs for debugging."
                   },
                   "timestamp": {
                    "description": "Datetime (ISO 8601) of event creation in client. Should be as close to actual event creation in client as possible, this timestamp will be used for ordering of events in future release. Resolution: milliseconds (required), microseconds (optimal).",
@@ -1228,58 +1255,72 @@
                 "body": {
                  "properties": {
                   "environment": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "id": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
-                  "input": {
-                   "nullable": true
-                  },
-                  "metadata": {
-                   "nullable": true
-                  },
+                  "input": {},
+                  "metadata": {},
                   "name": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
-                  "output": {
-                   "nullable": true
-                  },
+                  "output": {},
                   "public": {
                    "description": "Make trace publicly accessible via url",
-                   "nullable": true,
-                   "type": "boolean"
+                   "type": [
+                    "boolean",
+                    "null"
+                   ]
                   },
                   "release": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "sessionId": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "tags": {
                    "items": {
                     "type": "string"
                    },
-                   "nullable": true,
-                   "type": "array"
+                   "type": [
+                    "array",
+                    "null"
+                   ]
                   },
                   "timestamp": {
                    "format": "date-time",
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "userId": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "version": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   }
                  },
                  "title": "TraceBody",
@@ -1321,8 +1362,7 @@
                    "type": "string"
                   },
                   "metadata": {
-                   "description": "Optional. Metadata field used by the Langfuse SDKs for debugging.",
-                   "nullable": true
+                   "description": "Optional. Metadata field used by the Langfuse SDKs for debugging."
                   },
                   "timestamp": {
                    "description": "Datetime (ISO 8601) of event creation in client. Should be as close to actual event creation in client as possible, this timestamp will be used for ordering of events in future release. Resolution: milliseconds (required), microseconds (optimal).",
@@ -1341,13 +1381,17 @@
                 "body": {
                  "properties": {
                   "comment": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "configId": {
                    "description": "Reference a score config on a score. When set, the score name must equal the config name and scores must comply with the config's range and data type. For categorical scores, the value must map to a config category. Numeric scores might be constrained by the score config's max and min values",
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "dataType": {
                    "description": "When set, must match the score value's type. If not set, will be inferred from the score value or config",
@@ -1356,47 +1400,62 @@
                     "BOOLEAN",
                     "CATEGORICAL",
                     "CORRECTION",
-                    "TEXT"
+                    "TEXT",
+                    null
                    ],
-                   "nullable": true,
                    "title": "ScoreDataType",
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "datasetRunId": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "environment": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "id": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
-                  "metadata": {
-                   "nullable": true
-                  },
+                  "metadata": {},
                   "name": {
                    "description": "The name of the score. Always overrides \"output\" for correction scores.",
                    "type": "string"
                   },
                   "observationId": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "queueId": {
                    "description": "The annotation queue referenced by the score. Indicates if score was initially created while processing annotation queue.",
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "sessionId": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "traceId": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "value": {
                    "description": "The value of the score. Must be passed as string for categorical and text scores, and numeric for boolean and numeric scores. Boolean score values must equal either 1 or 0 (true or false). Text score values must be between 1 and 500 characters.",
@@ -1457,8 +1516,7 @@
                    "type": "string"
                   },
                   "metadata": {
-                   "description": "Optional. Metadata field used by the Langfuse SDKs for debugging.",
-                   "nullable": true
+                   "description": "Optional. Metadata field used by the Langfuse SDKs for debugging."
                   },
                   "timestamp": {
                    "description": "Datetime (ISO 8601) of event creation in client. Should be as close to actual event creation in client as possible, this timestamp will be used for ordering of events in future release. Resolution: milliseconds (required), microseconds (optimal).",
@@ -1482,53 +1540,64 @@
                     {
                      "properties": {
                       "environment": {
-                       "nullable": true,
-                       "type": "string"
+                       "type": [
+                        "string",
+                        "null"
+                       ]
                       },
-                      "input": {
-                       "nullable": true
-                      },
+                      "input": {},
                       "level": {
                        "enum": [
                         "DEBUG",
                         "DEFAULT",
                         "WARNING",
-                        "ERROR"
+                        "ERROR",
+                        null
                        ],
-                       "nullable": true,
                        "title": "ObservationLevel",
-                       "type": "string"
+                       "type": [
+                        "string",
+                        "null"
+                       ]
                       },
-                      "metadata": {
-                       "nullable": true
-                      },
+                      "metadata": {},
                       "name": {
-                       "nullable": true,
-                       "type": "string"
+                       "type": [
+                        "string",
+                        "null"
+                       ]
                       },
-                      "output": {
-                       "nullable": true
-                      },
+                      "output": {},
                       "parentObservationId": {
-                       "nullable": true,
-                       "type": "string"
+                       "type": [
+                        "string",
+                        "null"
+                       ]
                       },
                       "startTime": {
                        "format": "date-time",
-                       "nullable": true,
-                       "type": "string"
+                       "type": [
+                        "string",
+                        "null"
+                       ]
                       },
                       "statusMessage": {
-                       "nullable": true,
-                       "type": "string"
+                       "type": [
+                        "string",
+                        "null"
+                       ]
                       },
                       "traceId": {
-                       "nullable": true,
-                       "type": "string"
+                       "type": [
+                        "string",
+                        "null"
+                       ]
                       },
                       "version": {
-                       "nullable": true,
-                       "type": "string"
+                       "type": [
+                        "string",
+                        "null"
+                       ]
                       }
                      },
                      "title": "OptionalObservationBody",
@@ -1537,8 +1606,10 @@
                    ],
                    "properties": {
                     "id": {
-                     "nullable": true,
-                     "type": "string"
+                     "type": [
+                      "string",
+                      "null"
+                     ]
                     }
                    },
                    "title": "CreateEventBody",
@@ -1548,8 +1619,10 @@
                  "properties": {
                   "endTime": {
                    "format": "date-time",
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   }
                  },
                  "title": "CreateSpanBody",
@@ -1591,8 +1664,7 @@
                    "type": "string"
                   },
                   "metadata": {
-                   "description": "Optional. Metadata field used by the Langfuse SDKs for debugging.",
-                   "nullable": true
+                   "description": "Optional. Metadata field used by the Langfuse SDKs for debugging."
                   },
                   "timestamp": {
                    "description": "Datetime (ISO 8601) of event creation in client. Should be as close to actual event creation in client as possible, this timestamp will be used for ordering of events in future release. Resolution: milliseconds (required), microseconds (optimal).",
@@ -1616,53 +1688,64 @@
                     {
                      "properties": {
                       "environment": {
-                       "nullable": true,
-                       "type": "string"
+                       "type": [
+                        "string",
+                        "null"
+                       ]
                       },
-                      "input": {
-                       "nullable": true
-                      },
+                      "input": {},
                       "level": {
                        "enum": [
                         "DEBUG",
                         "DEFAULT",
                         "WARNING",
-                        "ERROR"
+                        "ERROR",
+                        null
                        ],
-                       "nullable": true,
                        "title": "ObservationLevel",
-                       "type": "string"
+                       "type": [
+                        "string",
+                        "null"
+                       ]
                       },
-                      "metadata": {
-                       "nullable": true
-                      },
+                      "metadata": {},
                       "name": {
-                       "nullable": true,
-                       "type": "string"
+                       "type": [
+                        "string",
+                        "null"
+                       ]
                       },
-                      "output": {
-                       "nullable": true
-                      },
+                      "output": {},
                       "parentObservationId": {
-                       "nullable": true,
-                       "type": "string"
+                       "type": [
+                        "string",
+                        "null"
+                       ]
                       },
                       "startTime": {
                        "format": "date-time",
-                       "nullable": true,
-                       "type": "string"
+                       "type": [
+                        "string",
+                        "null"
+                       ]
                       },
                       "statusMessage": {
-                       "nullable": true,
-                       "type": "string"
+                       "type": [
+                        "string",
+                        "null"
+                       ]
                       },
                       "traceId": {
-                       "nullable": true,
-                       "type": "string"
+                       "type": [
+                        "string",
+                        "null"
+                       ]
                       },
                       "version": {
-                       "nullable": true,
-                       "type": "string"
+                       "type": [
+                        "string",
+                        "null"
+                       ]
                       }
                      },
                      "title": "OptionalObservationBody",
@@ -1684,8 +1767,10 @@
                  "properties": {
                   "endTime": {
                    "format": "date-time",
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   }
                  },
                  "title": "UpdateSpanBody",
@@ -1727,8 +1812,7 @@
                    "type": "string"
                   },
                   "metadata": {
-                   "description": "Optional. Metadata field used by the Langfuse SDKs for debugging.",
-                   "nullable": true
+                   "description": "Optional. Metadata field used by the Langfuse SDKs for debugging."
                   },
                   "timestamp": {
                    "description": "Datetime (ISO 8601) of event creation in client. Should be as close to actual event creation in client as possible, this timestamp will be used for ordering of events in future release. Resolution: milliseconds (required), microseconds (optimal).",
@@ -1754,53 +1838,64 @@
                       {
                        "properties": {
                         "environment": {
-                         "nullable": true,
-                         "type": "string"
+                         "type": [
+                          "string",
+                          "null"
+                         ]
                         },
-                        "input": {
-                         "nullable": true
-                        },
+                        "input": {},
                         "level": {
                          "enum": [
                           "DEBUG",
                           "DEFAULT",
                           "WARNING",
-                          "ERROR"
+                          "ERROR",
+                          null
                          ],
-                         "nullable": true,
                          "title": "ObservationLevel",
-                         "type": "string"
+                         "type": [
+                          "string",
+                          "null"
+                         ]
                         },
-                        "metadata": {
-                         "nullable": true
-                        },
+                        "metadata": {},
                         "name": {
-                         "nullable": true,
-                         "type": "string"
+                         "type": [
+                          "string",
+                          "null"
+                         ]
                         },
-                        "output": {
-                         "nullable": true
-                        },
+                        "output": {},
                         "parentObservationId": {
-                         "nullable": true,
-                         "type": "string"
+                         "type": [
+                          "string",
+                          "null"
+                         ]
                         },
                         "startTime": {
                          "format": "date-time",
-                         "nullable": true,
-                         "type": "string"
+                         "type": [
+                          "string",
+                          "null"
+                         ]
                         },
                         "statusMessage": {
-                         "nullable": true,
-                         "type": "string"
+                         "type": [
+                          "string",
+                          "null"
+                         ]
                         },
                         "traceId": {
-                         "nullable": true,
-                         "type": "string"
+                         "type": [
+                          "string",
+                          "null"
+                         ]
                         },
                         "version": {
-                         "nullable": true,
-                         "type": "string"
+                         "type": [
+                          "string",
+                          "null"
+                         ]
                         }
                        },
                        "title": "OptionalObservationBody",
@@ -1809,8 +1904,10 @@
                      ],
                      "properties": {
                       "id": {
-                       "nullable": true,
-                       "type": "string"
+                       "type": [
+                        "string",
+                        "null"
+                       ]
                       }
                      },
                      "title": "CreateEventBody",
@@ -1820,8 +1917,10 @@
                    "properties": {
                     "endTime": {
                      "format": "date-time",
-                     "nullable": true,
-                     "type": "string"
+                     "type": [
+                      "string",
+                      "null"
+                     ]
                     }
                    },
                    "title": "CreateSpanBody",
@@ -1831,223 +1930,287 @@
                  "properties": {
                   "completionStartTime": {
                    "format": "date-time",
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "costDetails": {
                    "additionalProperties": {
                     "format": "double",
                     "type": "number"
                    },
-                   "nullable": true,
-                   "type": "object"
+                   "type": [
+                    "object",
+                    "null"
+                   ]
                   },
                   "model": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "modelParameters": {
                    "additionalProperties": {
                     "oneOf": [
                      {
-                      "nullable": true,
                       "title": "String",
-                      "type": "string"
+                      "type": [
+                       "string",
+                       "null"
+                      ]
                      },
                      {
-                      "nullable": true,
                       "title": "Integer",
-                      "type": "integer"
+                      "type": [
+                       "integer",
+                       "null"
+                      ]
                      },
                      {
                       "format": "float",
-                      "nullable": true,
                       "title": "FloatNumber",
-                      "type": "number"
+                      "type": [
+                       "number",
+                       "null"
+                      ]
                      },
                      {
-                      "nullable": true,
                       "title": "Boolean",
-                      "type": "boolean"
+                      "type": [
+                       "boolean",
+                       "null"
+                      ]
                      },
                      {
                       "items": {
                        "type": "string"
                       },
-                      "nullable": true,
                       "title": "Array",
-                      "type": "array"
+                      "type": [
+                       "array",
+                       "null"
+                      ]
                      }
                     ],
                     "title": "MapValue"
                    },
-                   "nullable": true,
-                   "type": "object"
+                   "type": [
+                    "object",
+                    "null"
+                   ]
                   },
                   "promptName": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "promptVersion": {
-                   "nullable": true,
-                   "type": "integer"
+                   "type": [
+                    "integer",
+                    "null"
+                   ]
                   },
                   "usage": {
-                   "nullable": true,
-                   "oneOf": [
+                   "anyOf": [
                     {
-                     "description": "(Deprecated. Use usageDetails and costDetails instead.) Standard interface for usage and cost",
-                     "properties": {
-                      "input": {
-                       "description": "Number of input units (e.g. tokens)",
-                       "type": "integer"
+                     "oneOf": [
+                      {
+                       "description": "(Deprecated. Use usageDetails and costDetails instead.) Standard interface for usage and cost",
+                       "properties": {
+                        "input": {
+                         "description": "Number of input units (e.g. tokens)",
+                         "type": "integer"
+                        },
+                        "inputCost": {
+                         "description": "USD input cost",
+                         "format": "double",
+                         "type": [
+                          "number",
+                          "null"
+                         ]
+                        },
+                        "output": {
+                         "description": "Number of output units (e.g. tokens)",
+                         "type": "integer"
+                        },
+                        "outputCost": {
+                         "description": "USD output cost",
+                         "format": "double",
+                         "type": [
+                          "number",
+                          "null"
+                         ]
+                        },
+                        "total": {
+                         "description": "Defaults to input+output if not set",
+                         "type": "integer"
+                        },
+                        "totalCost": {
+                         "description": "USD total cost, defaults to input+output",
+                         "format": "double",
+                         "type": [
+                          "number",
+                          "null"
+                         ]
+                        },
+                        "unit": {
+                         "description": "Unit of measurement",
+                         "type": [
+                          "string",
+                          "null"
+                         ]
+                        }
+                       },
+                       "required": [
+                        "input",
+                        "output",
+                        "total",
+                        "unit"
+                       ],
+                       "title": "Usage",
+                       "type": "object"
                       },
-                      "inputCost": {
-                       "description": "USD input cost",
-                       "format": "double",
-                       "nullable": true,
-                       "type": "number"
-                      },
-                      "output": {
-                       "description": "Number of output units (e.g. tokens)",
-                       "type": "integer"
-                      },
-                      "outputCost": {
-                       "description": "USD output cost",
-                       "format": "double",
-                       "nullable": true,
-                       "type": "number"
-                      },
-                      "total": {
-                       "description": "Defaults to input+output if not set",
-                       "type": "integer"
-                      },
-                      "totalCost": {
-                       "description": "USD total cost, defaults to input+output",
-                       "format": "double",
-                       "nullable": true,
-                       "type": "number"
-                      },
-                      "unit": {
-                       "description": "Unit of measurement",
-                       "nullable": true,
-                       "type": "string"
+                      {
+                       "description": "Usage interface of OpenAI for improved compatibility.",
+                       "properties": {
+                        "completionTokens": {
+                         "type": [
+                          "integer",
+                          "null"
+                         ]
+                        },
+                        "promptTokens": {
+                         "type": [
+                          "integer",
+                          "null"
+                         ]
+                        },
+                        "totalTokens": {
+                         "type": [
+                          "integer",
+                          "null"
+                         ]
+                        }
+                       },
+                       "title": "OpenAIUsage",
+                       "type": "object"
                       }
-                     },
-                     "required": [
-                      "input",
-                      "output",
-                      "total",
-                      "unit"
-                     ],
-                     "title": "Usage",
-                     "type": "object"
+                     ]
                     },
                     {
-                     "description": "Usage interface of OpenAI for improved compatibility.",
-                     "properties": {
-                      "completionTokens": {
-                       "nullable": true,
-                       "type": "integer"
-                      },
-                      "promptTokens": {
-                       "nullable": true,
-                       "type": "integer"
-                      },
-                      "totalTokens": {
-                       "nullable": true,
-                       "type": "integer"
-                      }
-                     },
-                     "title": "OpenAIUsage",
-                     "type": "object"
+                     "type": "null"
                     }
                    ],
                    "title": "IngestionUsage"
                   },
                   "usageDetails": {
-                   "nullable": true,
-                   "oneOf": [
+                   "anyOf": [
                     {
-                     "additionalProperties": {
-                      "type": "integer"
-                     },
-                     "title": "Object",
-                     "type": "object"
+                     "oneOf": [
+                      {
+                       "additionalProperties": {
+                        "type": "integer"
+                       },
+                       "title": "Object",
+                       "type": "object"
+                      },
+                      {
+                       "description": "OpenAI Usage schema from (Chat-)Completion APIs",
+                       "properties": {
+                        "completion_tokens": {
+                         "type": "integer"
+                        },
+                        "completion_tokens_details": {
+                         "additionalProperties": {
+                          "type": [
+                           "integer",
+                           "null"
+                          ]
+                         },
+                         "type": [
+                          "object",
+                          "null"
+                         ]
+                        },
+                        "prompt_tokens": {
+                         "type": "integer"
+                        },
+                        "prompt_tokens_details": {
+                         "additionalProperties": {
+                          "type": [
+                           "integer",
+                           "null"
+                          ]
+                         },
+                         "type": [
+                          "object",
+                          "null"
+                         ]
+                        },
+                        "total_tokens": {
+                         "type": "integer"
+                        }
+                       },
+                       "required": [
+                        "prompt_tokens",
+                        "completion_tokens",
+                        "total_tokens"
+                       ],
+                       "title": "OpenAICompletionUsageSchema",
+                       "type": "object"
+                      },
+                      {
+                       "description": "OpenAI Usage schema from Response API",
+                       "properties": {
+                        "input_tokens": {
+                         "type": "integer"
+                        },
+                        "input_tokens_details": {
+                         "additionalProperties": {
+                          "type": [
+                           "integer",
+                           "null"
+                          ]
+                         },
+                         "type": [
+                          "object",
+                          "null"
+                         ]
+                        },
+                        "output_tokens": {
+                         "type": "integer"
+                        },
+                        "output_tokens_details": {
+                         "additionalProperties": {
+                          "type": [
+                           "integer",
+                           "null"
+                          ]
+                         },
+                         "type": [
+                          "object",
+                          "null"
+                         ]
+                        },
+                        "total_tokens": {
+                         "type": "integer"
+                        }
+                       },
+                       "required": [
+                        "input_tokens",
+                        "output_tokens",
+                        "total_tokens"
+                       ],
+                       "title": "OpenAIResponseUsageSchema",
+                       "type": "object"
+                      }
+                     ]
                     },
                     {
-                     "description": "OpenAI Usage schema from (Chat-)Completion APIs",
-                     "properties": {
-                      "completion_tokens": {
-                       "type": "integer"
-                      },
-                      "completion_tokens_details": {
-                       "additionalProperties": {
-                        "nullable": true,
-                        "type": "integer"
-                       },
-                       "nullable": true,
-                       "type": "object"
-                      },
-                      "prompt_tokens": {
-                       "type": "integer"
-                      },
-                      "prompt_tokens_details": {
-                       "additionalProperties": {
-                        "nullable": true,
-                        "type": "integer"
-                       },
-                       "nullable": true,
-                       "type": "object"
-                      },
-                      "total_tokens": {
-                       "type": "integer"
-                      }
-                     },
-                     "required": [
-                      "prompt_tokens",
-                      "completion_tokens",
-                      "total_tokens"
-                     ],
-                     "title": "OpenAICompletionUsageSchema",
-                     "type": "object"
-                    },
-                    {
-                     "description": "OpenAI Usage schema from Response API",
-                     "properties": {
-                      "input_tokens": {
-                       "type": "integer"
-                      },
-                      "input_tokens_details": {
-                       "additionalProperties": {
-                        "nullable": true,
-                        "type": "integer"
-                       },
-                       "nullable": true,
-                       "type": "object"
-                      },
-                      "output_tokens": {
-                       "type": "integer"
-                      },
-                      "output_tokens_details": {
-                       "additionalProperties": {
-                        "nullable": true,
-                        "type": "integer"
-                       },
-                       "nullable": true,
-                       "type": "object"
-                      },
-                      "total_tokens": {
-                       "type": "integer"
-                      }
-                     },
-                     "required": [
-                      "input_tokens",
-                      "output_tokens",
-                      "total_tokens"
-                     ],
-                     "title": "OpenAIResponseUsageSchema",
-                     "type": "object"
+                     "type": "null"
                     }
                    ],
                    "title": "UsageDetails"
@@ -2092,8 +2255,7 @@
                    "type": "string"
                   },
                   "metadata": {
-                   "description": "Optional. Metadata field used by the Langfuse SDKs for debugging.",
-                   "nullable": true
+                   "description": "Optional. Metadata field used by the Langfuse SDKs for debugging."
                   },
                   "timestamp": {
                    "description": "Datetime (ISO 8601) of event creation in client. Should be as close to actual event creation in client as possible, this timestamp will be used for ordering of events in future release. Resolution: milliseconds (required), microseconds (optimal).",
@@ -2119,53 +2281,64 @@
                       {
                        "properties": {
                         "environment": {
-                         "nullable": true,
-                         "type": "string"
+                         "type": [
+                          "string",
+                          "null"
+                         ]
                         },
-                        "input": {
-                         "nullable": true
-                        },
+                        "input": {},
                         "level": {
                          "enum": [
                           "DEBUG",
                           "DEFAULT",
                           "WARNING",
-                          "ERROR"
+                          "ERROR",
+                          null
                          ],
-                         "nullable": true,
                          "title": "ObservationLevel",
-                         "type": "string"
+                         "type": [
+                          "string",
+                          "null"
+                         ]
                         },
-                        "metadata": {
-                         "nullable": true
-                        },
+                        "metadata": {},
                         "name": {
-                         "nullable": true,
-                         "type": "string"
+                         "type": [
+                          "string",
+                          "null"
+                         ]
                         },
-                        "output": {
-                         "nullable": true
-                        },
+                        "output": {},
                         "parentObservationId": {
-                         "nullable": true,
-                         "type": "string"
+                         "type": [
+                          "string",
+                          "null"
+                         ]
                         },
                         "startTime": {
                          "format": "date-time",
-                         "nullable": true,
-                         "type": "string"
+                         "type": [
+                          "string",
+                          "null"
+                         ]
                         },
                         "statusMessage": {
-                         "nullable": true,
-                         "type": "string"
+                         "type": [
+                          "string",
+                          "null"
+                         ]
                         },
                         "traceId": {
-                         "nullable": true,
-                         "type": "string"
+                         "type": [
+                          "string",
+                          "null"
+                         ]
                         },
                         "version": {
-                         "nullable": true,
-                         "type": "string"
+                         "type": [
+                          "string",
+                          "null"
+                         ]
                         }
                        },
                        "title": "OptionalObservationBody",
@@ -2187,8 +2360,10 @@
                    "properties": {
                     "endTime": {
                      "format": "date-time",
-                     "nullable": true,
-                     "type": "string"
+                     "type": [
+                      "string",
+                      "null"
+                     ]
                     }
                    },
                    "title": "UpdateSpanBody",
@@ -2198,223 +2373,287 @@
                  "properties": {
                   "completionStartTime": {
                    "format": "date-time",
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "costDetails": {
                    "additionalProperties": {
                     "format": "double",
                     "type": "number"
                    },
-                   "nullable": true,
-                   "type": "object"
+                   "type": [
+                    "object",
+                    "null"
+                   ]
                   },
                   "model": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "modelParameters": {
                    "additionalProperties": {
                     "oneOf": [
                      {
-                      "nullable": true,
                       "title": "String",
-                      "type": "string"
+                      "type": [
+                       "string",
+                       "null"
+                      ]
                      },
                      {
-                      "nullable": true,
                       "title": "Integer",
-                      "type": "integer"
+                      "type": [
+                       "integer",
+                       "null"
+                      ]
                      },
                      {
                       "format": "float",
-                      "nullable": true,
                       "title": "FloatNumber",
-                      "type": "number"
+                      "type": [
+                       "number",
+                       "null"
+                      ]
                      },
                      {
-                      "nullable": true,
                       "title": "Boolean",
-                      "type": "boolean"
+                      "type": [
+                       "boolean",
+                       "null"
+                      ]
                      },
                      {
                       "items": {
                        "type": "string"
                       },
-                      "nullable": true,
                       "title": "Array",
-                      "type": "array"
+                      "type": [
+                       "array",
+                       "null"
+                      ]
                      }
                     ],
                     "title": "MapValue"
                    },
-                   "nullable": true,
-                   "type": "object"
+                   "type": [
+                    "object",
+                    "null"
+                   ]
                   },
                   "promptName": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "promptVersion": {
-                   "nullable": true,
-                   "type": "integer"
+                   "type": [
+                    "integer",
+                    "null"
+                   ]
                   },
                   "usage": {
-                   "nullable": true,
-                   "oneOf": [
+                   "anyOf": [
                     {
-                     "description": "(Deprecated. Use usageDetails and costDetails instead.) Standard interface for usage and cost",
-                     "properties": {
-                      "input": {
-                       "description": "Number of input units (e.g. tokens)",
-                       "type": "integer"
+                     "oneOf": [
+                      {
+                       "description": "(Deprecated. Use usageDetails and costDetails instead.) Standard interface for usage and cost",
+                       "properties": {
+                        "input": {
+                         "description": "Number of input units (e.g. tokens)",
+                         "type": "integer"
+                        },
+                        "inputCost": {
+                         "description": "USD input cost",
+                         "format": "double",
+                         "type": [
+                          "number",
+                          "null"
+                         ]
+                        },
+                        "output": {
+                         "description": "Number of output units (e.g. tokens)",
+                         "type": "integer"
+                        },
+                        "outputCost": {
+                         "description": "USD output cost",
+                         "format": "double",
+                         "type": [
+                          "number",
+                          "null"
+                         ]
+                        },
+                        "total": {
+                         "description": "Defaults to input+output if not set",
+                         "type": "integer"
+                        },
+                        "totalCost": {
+                         "description": "USD total cost, defaults to input+output",
+                         "format": "double",
+                         "type": [
+                          "number",
+                          "null"
+                         ]
+                        },
+                        "unit": {
+                         "description": "Unit of measurement",
+                         "type": [
+                          "string",
+                          "null"
+                         ]
+                        }
+                       },
+                       "required": [
+                        "input",
+                        "output",
+                        "total",
+                        "unit"
+                       ],
+                       "title": "Usage",
+                       "type": "object"
                       },
-                      "inputCost": {
-                       "description": "USD input cost",
-                       "format": "double",
-                       "nullable": true,
-                       "type": "number"
-                      },
-                      "output": {
-                       "description": "Number of output units (e.g. tokens)",
-                       "type": "integer"
-                      },
-                      "outputCost": {
-                       "description": "USD output cost",
-                       "format": "double",
-                       "nullable": true,
-                       "type": "number"
-                      },
-                      "total": {
-                       "description": "Defaults to input+output if not set",
-                       "type": "integer"
-                      },
-                      "totalCost": {
-                       "description": "USD total cost, defaults to input+output",
-                       "format": "double",
-                       "nullable": true,
-                       "type": "number"
-                      },
-                      "unit": {
-                       "description": "Unit of measurement",
-                       "nullable": true,
-                       "type": "string"
+                      {
+                       "description": "Usage interface of OpenAI for improved compatibility.",
+                       "properties": {
+                        "completionTokens": {
+                         "type": [
+                          "integer",
+                          "null"
+                         ]
+                        },
+                        "promptTokens": {
+                         "type": [
+                          "integer",
+                          "null"
+                         ]
+                        },
+                        "totalTokens": {
+                         "type": [
+                          "integer",
+                          "null"
+                         ]
+                        }
+                       },
+                       "title": "OpenAIUsage",
+                       "type": "object"
                       }
-                     },
-                     "required": [
-                      "input",
-                      "output",
-                      "total",
-                      "unit"
-                     ],
-                     "title": "Usage",
-                     "type": "object"
+                     ]
                     },
                     {
-                     "description": "Usage interface of OpenAI for improved compatibility.",
-                     "properties": {
-                      "completionTokens": {
-                       "nullable": true,
-                       "type": "integer"
-                      },
-                      "promptTokens": {
-                       "nullable": true,
-                       "type": "integer"
-                      },
-                      "totalTokens": {
-                       "nullable": true,
-                       "type": "integer"
-                      }
-                     },
-                     "title": "OpenAIUsage",
-                     "type": "object"
+                     "type": "null"
                     }
                    ],
                    "title": "IngestionUsage"
                   },
                   "usageDetails": {
-                   "nullable": true,
-                   "oneOf": [
+                   "anyOf": [
                     {
-                     "additionalProperties": {
-                      "type": "integer"
-                     },
-                     "title": "Object",
-                     "type": "object"
+                     "oneOf": [
+                      {
+                       "additionalProperties": {
+                        "type": "integer"
+                       },
+                       "title": "Object",
+                       "type": "object"
+                      },
+                      {
+                       "description": "OpenAI Usage schema from (Chat-)Completion APIs",
+                       "properties": {
+                        "completion_tokens": {
+                         "type": "integer"
+                        },
+                        "completion_tokens_details": {
+                         "additionalProperties": {
+                          "type": [
+                           "integer",
+                           "null"
+                          ]
+                         },
+                         "type": [
+                          "object",
+                          "null"
+                         ]
+                        },
+                        "prompt_tokens": {
+                         "type": "integer"
+                        },
+                        "prompt_tokens_details": {
+                         "additionalProperties": {
+                          "type": [
+                           "integer",
+                           "null"
+                          ]
+                         },
+                         "type": [
+                          "object",
+                          "null"
+                         ]
+                        },
+                        "total_tokens": {
+                         "type": "integer"
+                        }
+                       },
+                       "required": [
+                        "prompt_tokens",
+                        "completion_tokens",
+                        "total_tokens"
+                       ],
+                       "title": "OpenAICompletionUsageSchema",
+                       "type": "object"
+                      },
+                      {
+                       "description": "OpenAI Usage schema from Response API",
+                       "properties": {
+                        "input_tokens": {
+                         "type": "integer"
+                        },
+                        "input_tokens_details": {
+                         "additionalProperties": {
+                          "type": [
+                           "integer",
+                           "null"
+                          ]
+                         },
+                         "type": [
+                          "object",
+                          "null"
+                         ]
+                        },
+                        "output_tokens": {
+                         "type": "integer"
+                        },
+                        "output_tokens_details": {
+                         "additionalProperties": {
+                          "type": [
+                           "integer",
+                           "null"
+                          ]
+                         },
+                         "type": [
+                          "object",
+                          "null"
+                         ]
+                        },
+                        "total_tokens": {
+                         "type": "integer"
+                        }
+                       },
+                       "required": [
+                        "input_tokens",
+                        "output_tokens",
+                        "total_tokens"
+                       ],
+                       "title": "OpenAIResponseUsageSchema",
+                       "type": "object"
+                      }
+                     ]
                     },
                     {
-                     "description": "OpenAI Usage schema from (Chat-)Completion APIs",
-                     "properties": {
-                      "completion_tokens": {
-                       "type": "integer"
-                      },
-                      "completion_tokens_details": {
-                       "additionalProperties": {
-                        "nullable": true,
-                        "type": "integer"
-                       },
-                       "nullable": true,
-                       "type": "object"
-                      },
-                      "prompt_tokens": {
-                       "type": "integer"
-                      },
-                      "prompt_tokens_details": {
-                       "additionalProperties": {
-                        "nullable": true,
-                        "type": "integer"
-                       },
-                       "nullable": true,
-                       "type": "object"
-                      },
-                      "total_tokens": {
-                       "type": "integer"
-                      }
-                     },
-                     "required": [
-                      "prompt_tokens",
-                      "completion_tokens",
-                      "total_tokens"
-                     ],
-                     "title": "OpenAICompletionUsageSchema",
-                     "type": "object"
-                    },
-                    {
-                     "description": "OpenAI Usage schema from Response API",
-                     "properties": {
-                      "input_tokens": {
-                       "type": "integer"
-                      },
-                      "input_tokens_details": {
-                       "additionalProperties": {
-                        "nullable": true,
-                        "type": "integer"
-                       },
-                       "nullable": true,
-                       "type": "object"
-                      },
-                      "output_tokens": {
-                       "type": "integer"
-                      },
-                      "output_tokens_details": {
-                       "additionalProperties": {
-                        "nullable": true,
-                        "type": "integer"
-                       },
-                       "nullable": true,
-                       "type": "object"
-                      },
-                      "total_tokens": {
-                       "type": "integer"
-                      }
-                     },
-                     "required": [
-                      "input_tokens",
-                      "output_tokens",
-                      "total_tokens"
-                     ],
-                     "title": "OpenAIResponseUsageSchema",
-                     "type": "object"
+                     "type": "null"
                     }
                    ],
                    "title": "UsageDetails"
@@ -2459,8 +2698,7 @@
                    "type": "string"
                   },
                   "metadata": {
-                   "description": "Optional. Metadata field used by the Langfuse SDKs for debugging.",
-                   "nullable": true
+                   "description": "Optional. Metadata field used by the Langfuse SDKs for debugging."
                   },
                   "timestamp": {
                    "description": "Datetime (ISO 8601) of event creation in client. Should be as close to actual event creation in client as possible, this timestamp will be used for ordering of events in future release. Resolution: milliseconds (required), microseconds (optimal).",
@@ -2482,53 +2720,64 @@
                   {
                    "properties": {
                     "environment": {
-                     "nullable": true,
-                     "type": "string"
+                     "type": [
+                      "string",
+                      "null"
+                     ]
                     },
-                    "input": {
-                     "nullable": true
-                    },
+                    "input": {},
                     "level": {
                      "enum": [
                       "DEBUG",
                       "DEFAULT",
                       "WARNING",
-                      "ERROR"
+                      "ERROR",
+                      null
                      ],
-                     "nullable": true,
                      "title": "ObservationLevel",
-                     "type": "string"
+                     "type": [
+                      "string",
+                      "null"
+                     ]
                     },
-                    "metadata": {
-                     "nullable": true
-                    },
+                    "metadata": {},
                     "name": {
-                     "nullable": true,
-                     "type": "string"
+                     "type": [
+                      "string",
+                      "null"
+                     ]
                     },
-                    "output": {
-                     "nullable": true
-                    },
+                    "output": {},
                     "parentObservationId": {
-                     "nullable": true,
-                     "type": "string"
+                     "type": [
+                      "string",
+                      "null"
+                     ]
                     },
                     "startTime": {
                      "format": "date-time",
-                     "nullable": true,
-                     "type": "string"
+                     "type": [
+                      "string",
+                      "null"
+                     ]
                     },
                     "statusMessage": {
-                     "nullable": true,
-                     "type": "string"
+                     "type": [
+                      "string",
+                      "null"
+                     ]
                     },
                     "traceId": {
-                     "nullable": true,
-                     "type": "string"
+                     "type": [
+                      "string",
+                      "null"
+                     ]
                     },
                     "version": {
-                     "nullable": true,
-                     "type": "string"
+                     "type": [
+                      "string",
+                      "null"
+                     ]
                     }
                    },
                    "title": "OptionalObservationBody",
@@ -2537,8 +2786,10 @@
                  ],
                  "properties": {
                   "id": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   }
                  },
                  "title": "CreateEventBody",
@@ -2580,8 +2831,7 @@
                    "type": "string"
                   },
                   "metadata": {
-                   "description": "Optional. Metadata field used by the Langfuse SDKs for debugging.",
-                   "nullable": true
+                   "description": "Optional. Metadata field used by the Langfuse SDKs for debugging."
                   },
                   "timestamp": {
                    "description": "Datetime (ISO 8601) of event creation in client. Should be as close to actual event creation in client as possible, this timestamp will be used for ordering of events in future release. Resolution: milliseconds (required), microseconds (optimal).",
@@ -2602,104 +2852,133 @@
                  "properties": {
                   "completionStartTime": {
                    "format": "date-time",
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "endTime": {
                    "format": "date-time",
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "environment": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "id": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
-                  "input": {
-                   "nullable": true
-                  },
+                  "input": {},
                   "level": {
                    "enum": [
                     "DEBUG",
                     "DEFAULT",
                     "WARNING",
-                    "ERROR"
+                    "ERROR",
+                    null
                    ],
-                   "nullable": true,
                    "title": "ObservationLevel",
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
-                  "metadata": {
-                   "nullable": true
-                  },
+                  "metadata": {},
                   "model": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "modelParameters": {
                    "additionalProperties": {
                     "oneOf": [
                      {
-                      "nullable": true,
                       "title": "String",
-                      "type": "string"
+                      "type": [
+                       "string",
+                       "null"
+                      ]
                      },
                      {
-                      "nullable": true,
                       "title": "Integer",
-                      "type": "integer"
+                      "type": [
+                       "integer",
+                       "null"
+                      ]
                      },
                      {
                       "format": "float",
-                      "nullable": true,
                       "title": "FloatNumber",
-                      "type": "number"
+                      "type": [
+                       "number",
+                       "null"
+                      ]
                      },
                      {
-                      "nullable": true,
                       "title": "Boolean",
-                      "type": "boolean"
+                      "type": [
+                       "boolean",
+                       "null"
+                      ]
                      },
                      {
                       "items": {
                        "type": "string"
                       },
-                      "nullable": true,
                       "title": "Array",
-                      "type": "array"
+                      "type": [
+                       "array",
+                       "null"
+                      ]
                      }
                     ],
                     "title": "MapValue"
                    },
-                   "nullable": true,
-                   "type": "object"
+                   "type": [
+                    "object",
+                    "null"
+                   ]
                   },
                   "name": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
-                  "output": {
-                   "nullable": true
-                  },
+                  "output": {},
                   "parentObservationId": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "startTime": {
                    "format": "date-time",
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "statusMessage": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "traceId": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "type": {
                    "enum": [
@@ -2719,7 +2998,6 @@
                   },
                   "usage": {
                    "description": "(Deprecated. Use usageDetails and costDetails instead.) Standard interface for usage and cost",
-                   "nullable": true,
                    "properties": {
                     "input": {
                      "description": "Number of input units (e.g. tokens)",
@@ -2728,8 +3006,10 @@
                     "inputCost": {
                      "description": "USD input cost",
                      "format": "double",
-                     "nullable": true,
-                     "type": "number"
+                     "type": [
+                      "number",
+                      "null"
+                     ]
                     },
                     "output": {
                      "description": "Number of output units (e.g. tokens)",
@@ -2738,8 +3018,10 @@
                     "outputCost": {
                      "description": "USD output cost",
                      "format": "double",
-                     "nullable": true,
-                     "type": "number"
+                     "type": [
+                      "number",
+                      "null"
+                     ]
                     },
                     "total": {
                      "description": "Defaults to input+output if not set",
@@ -2748,13 +3030,17 @@
                     "totalCost": {
                      "description": "USD total cost, defaults to input+output",
                      "format": "double",
-                     "nullable": true,
-                     "type": "number"
+                     "type": [
+                      "number",
+                      "null"
+                     ]
                     },
                     "unit": {
                      "description": "Unit of measurement",
-                     "nullable": true,
-                     "type": "string"
+                     "type": [
+                      "string",
+                      "null"
+                     ]
                     }
                    },
                    "required": [
@@ -2764,11 +3050,16 @@
                     "unit"
                    ],
                    "title": "Usage",
-                   "type": "object"
+                   "type": [
+                    "object",
+                    "null"
+                   ]
                   },
                   "version": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   }
                  },
                  "required": [
@@ -2813,8 +3104,7 @@
                    "type": "string"
                   },
                   "metadata": {
-                   "description": "Optional. Metadata field used by the Langfuse SDKs for debugging.",
-                   "nullable": true
+                   "description": "Optional. Metadata field used by the Langfuse SDKs for debugging."
                   },
                   "timestamp": {
                    "description": "Datetime (ISO 8601) of event creation in client. Should be as close to actual event creation in client as possible, this timestamp will be used for ordering of events in future release. Resolution: milliseconds (required), microseconds (optimal).",
@@ -2835,104 +3125,133 @@
                  "properties": {
                   "completionStartTime": {
                    "format": "date-time",
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "endTime": {
                    "format": "date-time",
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "environment": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "id": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
-                  "input": {
-                   "nullable": true
-                  },
+                  "input": {},
                   "level": {
                    "enum": [
                     "DEBUG",
                     "DEFAULT",
                     "WARNING",
-                    "ERROR"
+                    "ERROR",
+                    null
                    ],
-                   "nullable": true,
                    "title": "ObservationLevel",
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
-                  "metadata": {
-                   "nullable": true
-                  },
+                  "metadata": {},
                   "model": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "modelParameters": {
                    "additionalProperties": {
                     "oneOf": [
                      {
-                      "nullable": true,
                       "title": "String",
-                      "type": "string"
+                      "type": [
+                       "string",
+                       "null"
+                      ]
                      },
                      {
-                      "nullable": true,
                       "title": "Integer",
-                      "type": "integer"
+                      "type": [
+                       "integer",
+                       "null"
+                      ]
                      },
                      {
                       "format": "float",
-                      "nullable": true,
                       "title": "FloatNumber",
-                      "type": "number"
+                      "type": [
+                       "number",
+                       "null"
+                      ]
                      },
                      {
-                      "nullable": true,
                       "title": "Boolean",
-                      "type": "boolean"
+                      "type": [
+                       "boolean",
+                       "null"
+                      ]
                      },
                      {
                       "items": {
                        "type": "string"
                       },
-                      "nullable": true,
                       "title": "Array",
-                      "type": "array"
+                      "type": [
+                       "array",
+                       "null"
+                      ]
                      }
                     ],
                     "title": "MapValue"
                    },
-                   "nullable": true,
-                   "type": "object"
+                   "type": [
+                    "object",
+                    "null"
+                   ]
                   },
                   "name": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
-                  "output": {
-                   "nullable": true
-                  },
+                  "output": {},
                   "parentObservationId": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "startTime": {
                    "format": "date-time",
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "statusMessage": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "traceId": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "type": {
                    "enum": [
@@ -2952,7 +3271,6 @@
                   },
                   "usage": {
                    "description": "(Deprecated. Use usageDetails and costDetails instead.) Standard interface for usage and cost",
-                   "nullable": true,
                    "properties": {
                     "input": {
                      "description": "Number of input units (e.g. tokens)",
@@ -2961,8 +3279,10 @@
                     "inputCost": {
                      "description": "USD input cost",
                      "format": "double",
-                     "nullable": true,
-                     "type": "number"
+                     "type": [
+                      "number",
+                      "null"
+                     ]
                     },
                     "output": {
                      "description": "Number of output units (e.g. tokens)",
@@ -2971,8 +3291,10 @@
                     "outputCost": {
                      "description": "USD output cost",
                      "format": "double",
-                     "nullable": true,
-                     "type": "number"
+                     "type": [
+                      "number",
+                      "null"
+                     ]
                     },
                     "total": {
                      "description": "Defaults to input+output if not set",
@@ -2981,13 +3303,17 @@
                     "totalCost": {
                      "description": "USD total cost, defaults to input+output",
                      "format": "double",
-                     "nullable": true,
-                     "type": "number"
+                     "type": [
+                      "number",
+                      "null"
+                     ]
                     },
                     "unit": {
                      "description": "Unit of measurement",
-                     "nullable": true,
-                     "type": "string"
+                     "type": [
+                      "string",
+                      "null"
+                     ]
                     }
                    },
                    "required": [
@@ -2997,11 +3323,16 @@
                     "unit"
                    ],
                    "title": "Usage",
-                   "type": "object"
+                   "type": [
+                    "object",
+                    "null"
+                   ]
                   },
                   "version": {
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   }
                  },
                  "required": [
@@ -3030,8 +3361,7 @@
           "type": "array"
          },
          "metadata": {
-          "description": "Optional. Metadata field used by the Langfuse SDKs for debugging.",
-          "nullable": true
+          "description": "Optional. Metadata field used by the Langfuse SDKs for debugging."
          }
         },
         "required": [
@@ -3072,8 +3402,10 @@
         "properties": {
          "accessKeyId": {
           "description": "Access key ID for authentication",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "bucketName": {
           "description": "Name of the storage bucket. For AZURE_BLOB_STORAGE, must be a valid Azure container name (3-63 chars, lowercase letters, numbers, and hyphens only, must start and end with a letter or number, no consecutive hyphens).",
@@ -3081,8 +3413,10 @@
          },
          "compressed": {
           "description": "Enable gzip compression for exported files (.csv.gz, .json.gz, .jsonl.gz). Defaults to true.",
-          "nullable": true,
-          "type": "boolean"
+          "type": [
+           "boolean",
+           "null"
+          ]
          },
          "enabled": {
           "description": "Whether the integration is active",
@@ -3090,8 +3424,10 @@
          },
          "endpoint": {
           "description": "Custom endpoint URL (required for S3_COMPATIBLE type)",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "exportFieldGroups": {
           "description": "Field groups to include in each exported observation row. Applies to all export sources; must include `core` if provided. When omitted on create, the column default (all groups) applies. When omitted on update, the existing value is preserved.\n\n`exportFieldGroups` requires `exportSource` to be provided in the same request.",
@@ -3113,8 +3449,10 @@
            "title": "BlobStorageExportFieldGroup",
            "type": "string"
           },
-          "nullable": true,
-          "type": "array"
+          "type": [
+           "array",
+           "null"
+          ]
          },
          "exportFrequency": {
           "enum": [
@@ -3140,17 +3478,22 @@
           "enum": [
            "LEGACY_TRACES_OBSERVATIONS",
            "OBSERVATIONS_V2",
-           "LEGACY_TRACES_AND_ENRICHED_OBSERVATIONS"
+           "LEGACY_TRACES_AND_ENRICHED_OBSERVATIONS",
+           null
           ],
-          "nullable": true,
           "title": "BlobStorageExportSource",
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "exportStartDate": {
           "description": "Custom start date for exports (required when exportMode is FROM_CUSTOM_DATE). Must not be in the future (27 h tolerance for timezone differences).",
           "format": "date-time",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "fileType": {
           "description": "File format for exported data. `PARQUET` is a columnar binary format encoded and compressed by the storage engine; gzip compression does not apply to it. Note that the model-price columns (`input_price`, `output_price`, `total_price`) are not included in Parquet observation exports.",
@@ -3169,8 +3512,10 @@
          },
          "prefix": {
           "description": "Path prefix for exported files (must end with forward slash if provided)",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "projectId": {
           "description": "ID of the project in which to configure the blob storage integration",
@@ -3182,8 +3527,10 @@
          },
          "secretAccessKey": {
           "description": "Secret access key for authentication (will be encrypted when stored)",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "type": {
           "enum": [
@@ -3311,30 +3658,38 @@
          },
          "baseURL": {
           "description": "Custom base URL for the LLM API",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "config": {
           "additionalProperties": true,
           "description": "Adapter-specific configuration. Validation rules: - **Bedrock**: Required. Must be `{\"region\": \"<aws-region>\"}` (e.g., `{\"region\":\"us-east-1\"}`) - **OpenAI**: Optional. If provided, must be `{\"useResponsesApi\": <boolean>}` to control whether Langfuse routes calls through OpenAI's Responses API. - **VertexAI**: Optional. If provided, must be `{\"location\": \"<gcp-location>\"}` (e.g., `{\"location\":\"us-central1\"}`) - **Other adapters**: Not supported. Omit this field or set to null.",
-          "nullable": true,
-          "type": "object"
+          "type": [
+           "object",
+           "null"
+          ]
          },
          "customModels": {
           "description": "List of custom model names",
           "items": {
            "type": "string"
           },
-          "nullable": true,
-          "type": "array"
+          "type": [
+           "array",
+           "null"
+          ]
          },
          "extraHeaders": {
           "additionalProperties": {
            "type": "string"
           },
           "description": "Extra headers to send with requests",
-          "nullable": true,
-          "type": "object"
+          "type": [
+           "object",
+           "null"
+          ]
          },
          "provider": {
           "description": "Provider name (e.g., 'openai', 'my-gateway'). Must be unique in project, used for upserting.",
@@ -3346,8 +3701,10 @@
          },
          "withDefaultModels": {
           "description": "Whether to include default models. Default is true.",
-          "nullable": true,
-          "type": "boolean"
+          "type": [
+           "boolean",
+           "null"
+          ]
          }
         },
         "required": [
@@ -3464,13 +3821,17 @@
          },
          "datasetId": {
           "description": "The dataset the media belongs to. Null for trace/observation media uploads.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "datasetItemId": {
           "description": "The dataset item the media is associated with (need not exist yet). Null for trace/observation media uploads.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "field": {
           "description": "The item field the media is in: `input`/`output`/`metadata` (trace) or `input`/`expectedOutput`/`metadata` (dataset item).",
@@ -3478,8 +3839,10 @@
          },
          "observationId": {
           "description": "The observation ID associated with the media record. If the media record is associated directly with a trace, this will be null.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "sha256Hash": {
           "description": "The SHA-256 hash of the media record",
@@ -3487,8 +3850,10 @@
          },
          "traceId": {
           "description": "The trace the media is associated with. Null for dataset item media uploads.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          }
         },
         "required": [
@@ -3549,8 +3914,10 @@
         "properties": {
          "uploadHttpError": {
           "description": "The HTTP error message of the upload",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "uploadHttpStatus": {
           "description": "The HTTP status code of the upload",
@@ -3558,8 +3925,10 @@
          },
          "uploadTimeMs": {
           "description": "The time in milliseconds it took to upload the media record",
-          "nullable": true,
-          "type": "integer"
+          "type": [
+           "integer",
+           "null"
+          ]
          },
          "uploadedAt": {
           "description": "The date and time when the media record was uploaded",
@@ -3740,8 +4109,10 @@
          "inputPrice": {
           "description": "Deprecated. Use 'pricingTiers' instead. Price (USD) per input unit. Creates a default tier if pricingTiers not provided.",
           "format": "double",
-          "nullable": true,
-          "type": "number"
+          "type": [
+           "number",
+           "null"
+          ]
          },
          "matchPattern": {
           "description": "Regex pattern which matches this model definition to generation.model. Useful in case of fine-tuned models. If you want to exact match, use `(?i)^modelname$`",
@@ -3754,8 +4125,10 @@
          "outputPrice": {
           "description": "Deprecated. Use 'pricingTiers' instead. Price (USD) per output unit. Creates a default tier if pricingTiers not provided.",
           "format": "double",
-          "nullable": true,
-          "type": "number"
+          "type": [
+           "number",
+           "null"
+          ]
          },
          "pricingTiers": {
           "description": "Optional. Array of pricing tiers for this model.\n\nUse pricing tiers for all models - both those with threshold-based pricing variations and those with simple flat pricing:\n\n- For models with standard flat pricing: Create a single default tier with your prices\n  (e.g., one tier with isDefault=true, priority=0, conditions=[], and your standard prices)\n\n- For models with threshold-based pricing: Create a default tier plus additional conditional tiers\n  (e.g., default tier for standard usage + high-volume tier for usage above certain thresholds)\n\nRequirements:\n- Cannot be provided with flat prices (inputPrice/outputPrice/totalPrice) - use one approach or the other\n- Must include exactly one default tier with isDefault=true, priority=0, and conditions=[]\n- All tier names and priorities must be unique within the model\n- Each tier must define at least one price\n\nIf omitted, you must provide flat prices instead (inputPrice/outputPrice/totalPrice),\nwhich will automatically create a single default tier named \"Standard\".",
@@ -3772,8 +4145,10 @@
                 "properties": {
                  "caseSensitive": {
                   "description": "Whether the usage-detail regex is case-sensitive. Defaults to false.",
-                  "nullable": true,
-                  "type": "boolean"
+                  "type": [
+                   "boolean",
+                   "null"
+                  ]
                  },
                  "operator": {
                   "description": "Comparison operators for pricing tier conditions",
@@ -3851,8 +4226,10 @@
             },
             "isDefault": {
              "description": "Whether this is the default tier. Exactly one tier per model must be marked as default.\n\nRequirements for default tier:\n- Must have isDefault=true\n- Must have priority=0\n- Must have empty conditions array (conditions=[])\n\nThe default tier acts as a fallback when no conditional tiers match. Defaults to false when omitted.",
-             "nullable": true,
-             "type": "boolean"
+             "type": [
+              "boolean",
+              "null"
+             ]
             },
             "name": {
              "description": "Name of the pricing tier for display and identification purposes.\n\nMust be unique within the model. Common patterns: \"Standard\", \"High Volume Tier\", \"Extended Context\"",
@@ -3880,34 +4257,42 @@
            "title": "PricingTierInput",
            "type": "object"
           },
-          "nullable": true,
-          "type": "array"
+          "type": [
+           "array",
+           "null"
+          ]
          },
          "startDate": {
           "description": "Apply only to generations which are newer than this ISO date.",
           "format": "date-time",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "tokenizerConfig": {
-          "description": "Optional. Configuration for the selected tokenizer. Needs to be JSON. See docs for more details.",
-          "nullable": true
+          "description": "Optional. Configuration for the selected tokenizer. Needs to be JSON. See docs for more details."
          },
          "tokenizerId": {
           "description": "Optional. Tokenizer to be applied to observations which match to this model. See docs for more details.",
           "enum": [
            "openai",
-           "claude"
+           "claude",
+           null
           ],
-          "nullable": true,
           "title": "ModelTokenizerId",
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "totalPrice": {
           "description": "Deprecated. Use 'pricingTiers' instead. Price (USD) per total units. Cannot be set if input or output price is set. Creates a default tier if pricingTiers not provided.",
           "format": "double",
-          "nullable": true,
-          "type": "number"
+          "type": [
+           "number",
+           "null"
+          ]
          },
          "unit": {
           "description": "Unit used by this model.",
@@ -3999,8 +4384,10 @@
          "inputPrice": {
           "description": "Deprecated. Use 'pricingTiers' instead. Price (USD) per input unit. Creates a default tier if pricingTiers not provided.",
           "format": "double",
-          "nullable": true,
-          "type": "number"
+          "type": [
+           "number",
+           "null"
+          ]
          },
          "matchPattern": {
           "description": "Regex pattern which matches this model definition to generation.model. Useful in case of fine-tuned models. If you want to exact match, use `(?i)^modelname$`",
@@ -4013,8 +4400,10 @@
          "outputPrice": {
           "description": "Deprecated. Use 'pricingTiers' instead. Price (USD) per output unit. Creates a default tier if pricingTiers not provided.",
           "format": "double",
-          "nullable": true,
-          "type": "number"
+          "type": [
+           "number",
+           "null"
+          ]
          },
          "pricingTiers": {
           "description": "Optional. Array of pricing tiers for this model.\n\nUse pricing tiers for all models - both those with threshold-based pricing variations and those with simple flat pricing:\n\n- For models with standard flat pricing: Create a single default tier with your prices\n  (e.g., one tier with isDefault=true, priority=0, conditions=[], and your standard prices)\n\n- For models with threshold-based pricing: Create a default tier plus additional conditional tiers\n  (e.g., default tier for standard usage + high-volume tier for usage above certain thresholds)\n\nRequirements:\n- Cannot be provided with flat prices (inputPrice/outputPrice/totalPrice) - use one approach or the other\n- Must include exactly one default tier with isDefault=true, priority=0, and conditions=[]\n- All tier names and priorities must be unique within the model\n- Each tier must define at least one price\n\nIf omitted, you must provide flat prices instead (inputPrice/outputPrice/totalPrice),\nwhich will automatically create a single default tier named \"Standard\".",
@@ -4031,8 +4420,10 @@
                 "properties": {
                  "caseSensitive": {
                   "description": "Whether the usage-detail regex is case-sensitive. Defaults to false.",
-                  "nullable": true,
-                  "type": "boolean"
+                  "type": [
+                   "boolean",
+                   "null"
+                  ]
                  },
                  "operator": {
                   "description": "Comparison operators for pricing tier conditions",
@@ -4110,8 +4501,10 @@
             },
             "isDefault": {
              "description": "Whether this is the default tier. Exactly one tier per model must be marked as default.\n\nRequirements for default tier:\n- Must have isDefault=true\n- Must have priority=0\n- Must have empty conditions array (conditions=[])\n\nThe default tier acts as a fallback when no conditional tiers match. Defaults to false when omitted.",
-             "nullable": true,
-             "type": "boolean"
+             "type": [
+              "boolean",
+              "null"
+             ]
             },
             "name": {
              "description": "Name of the pricing tier for display and identification purposes.\n\nMust be unique within the model. Common patterns: \"Standard\", \"High Volume Tier\", \"Extended Context\"",
@@ -4139,34 +4532,42 @@
            "title": "PricingTierInput",
            "type": "object"
           },
-          "nullable": true,
-          "type": "array"
+          "type": [
+           "array",
+           "null"
+          ]
          },
          "startDate": {
           "description": "Apply only to generations which are newer than this ISO date.",
           "format": "date-time",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "tokenizerConfig": {
-          "description": "Optional. Configuration for the selected tokenizer. Needs to be JSON. See docs for more details.",
-          "nullable": true
+          "description": "Optional. Configuration for the selected tokenizer. Needs to be JSON. See docs for more details."
          },
          "tokenizerId": {
           "description": "Optional. Tokenizer to be applied to observations which match to this model. See docs for more details.",
           "enum": [
            "openai",
-           "claude"
+           "claude",
+           null
           ],
-          "nullable": true,
           "title": "ModelTokenizerId",
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "totalPrice": {
           "description": "Deprecated. Use 'pricingTiers' instead. Price (USD) per total units. Cannot be set if input or output price is set. Creates a default tier if pricingTiers not provided.",
           "format": "double",
-          "nullable": true,
-          "type": "number"
+          "type": [
+           "number",
+           "null"
+          ]
          },
          "unit": {
           "description": "Unit used by this model.",
@@ -4492,7 +4893,6 @@
            "properties": {
             "resource": {
              "description": "Resource information",
-             "nullable": true,
              "properties": {
               "attributes": {
                "description": "Resource attributes like service.name, service.version, etc.",
@@ -4501,48 +4901,65 @@
                 "properties": {
                  "key": {
                   "description": "Attribute key (e.g., \"service.name\", \"langfuse.observation.type\")",
-                  "nullable": true,
-                  "type": "string"
+                  "type": [
+                   "string",
+                   "null"
+                  ]
                  },
                  "value": {
                   "description": "Attribute value",
-                  "nullable": true,
                   "properties": {
                    "boolValue": {
                     "description": "Boolean value",
-                    "nullable": true,
-                    "type": "boolean"
+                    "type": [
+                     "boolean",
+                     "null"
+                    ]
                    },
                    "doubleValue": {
                     "description": "Double value",
                     "format": "double",
-                    "nullable": true,
-                    "type": "number"
+                    "type": [
+                     "number",
+                     "null"
+                    ]
                    },
                    "intValue": {
                     "description": "Integer value",
-                    "nullable": true,
-                    "type": "integer"
+                    "type": [
+                     "integer",
+                     "null"
+                    ]
                    },
                    "stringValue": {
                     "description": "String value",
-                    "nullable": true,
-                    "type": "string"
+                    "type": [
+                     "string",
+                     "null"
+                    ]
                    }
                   },
                   "title": "OtelAttributeValue",
-                  "type": "object"
+                  "type": [
+                   "object",
+                   "null"
+                  ]
                  }
                 },
                 "title": "OtelAttribute",
                 "type": "object"
                },
-               "nullable": true,
-               "type": "array"
+               "type": [
+                "array",
+                "null"
+               ]
               }
              },
              "title": "OtelResource",
-             "type": "object"
+             "type": [
+              "object",
+              "null"
+             ]
             },
             "scopeSpans": {
              "description": "Array of scope spans",
@@ -4551,7 +4968,6 @@
               "properties": {
                "scope": {
                 "description": "Instrumentation scope information",
-                "nullable": true,
                 "properties": {
                  "attributes": {
                   "description": "Additional scope attributes",
@@ -4560,58 +4976,79 @@
                    "properties": {
                     "key": {
                      "description": "Attribute key (e.g., \"service.name\", \"langfuse.observation.type\")",
-                     "nullable": true,
-                     "type": "string"
+                     "type": [
+                      "string",
+                      "null"
+                     ]
                     },
                     "value": {
                      "description": "Attribute value",
-                     "nullable": true,
                      "properties": {
                       "boolValue": {
                        "description": "Boolean value",
-                       "nullable": true,
-                       "type": "boolean"
+                       "type": [
+                        "boolean",
+                        "null"
+                       ]
                       },
                       "doubleValue": {
                        "description": "Double value",
                        "format": "double",
-                       "nullable": true,
-                       "type": "number"
+                       "type": [
+                        "number",
+                        "null"
+                       ]
                       },
                       "intValue": {
                        "description": "Integer value",
-                       "nullable": true,
-                       "type": "integer"
+                       "type": [
+                        "integer",
+                        "null"
+                       ]
                       },
                       "stringValue": {
                        "description": "String value",
-                       "nullable": true,
-                       "type": "string"
+                       "type": [
+                        "string",
+                        "null"
+                       ]
                       }
                      },
                      "title": "OtelAttributeValue",
-                     "type": "object"
+                     "type": [
+                      "object",
+                      "null"
+                     ]
                     }
                    },
                    "title": "OtelAttribute",
                    "type": "object"
                   },
-                  "nullable": true,
-                  "type": "array"
+                  "type": [
+                   "array",
+                   "null"
+                  ]
                  },
                  "name": {
                   "description": "Instrumentation scope name",
-                  "nullable": true,
-                  "type": "string"
+                  "type": [
+                   "string",
+                   "null"
+                  ]
                  },
                  "version": {
                   "description": "Instrumentation scope version",
-                  "nullable": true,
-                  "type": "string"
+                  "type": [
+                   "string",
+                   "null"
+                  ]
                  }
                 },
                 "title": "OtelScope",
-                "type": "object"
+                "type": [
+                 "object",
+                 "null"
+                ]
                },
                "spans": {
                 "description": "Array of spans",
@@ -4625,94 +5062,113 @@
                     "properties": {
                      "key": {
                       "description": "Attribute key (e.g., \"service.name\", \"langfuse.observation.type\")",
-                      "nullable": true,
-                      "type": "string"
+                      "type": [
+                       "string",
+                       "null"
+                      ]
                      },
                      "value": {
                       "description": "Attribute value",
-                      "nullable": true,
                       "properties": {
                        "boolValue": {
                         "description": "Boolean value",
-                        "nullable": true,
-                        "type": "boolean"
+                        "type": [
+                         "boolean",
+                         "null"
+                        ]
                        },
                        "doubleValue": {
                         "description": "Double value",
                         "format": "double",
-                        "nullable": true,
-                        "type": "number"
+                        "type": [
+                         "number",
+                         "null"
+                        ]
                        },
                        "intValue": {
                         "description": "Integer value",
-                        "nullable": true,
-                        "type": "integer"
+                        "type": [
+                         "integer",
+                         "null"
+                        ]
                        },
                        "stringValue": {
                         "description": "String value",
-                        "nullable": true,
-                        "type": "string"
+                        "type": [
+                         "string",
+                         "null"
+                        ]
                        }
                       },
                       "title": "OtelAttributeValue",
-                      "type": "object"
+                      "type": [
+                       "object",
+                       "null"
+                      ]
                      }
                     },
                     "title": "OtelAttribute",
                     "type": "object"
                    },
-                   "nullable": true,
-                   "type": "array"
+                   "type": [
+                    "array",
+                    "null"
+                   ]
                   },
                   "endTimeUnixNano": {
-                   "description": "End time in nanoseconds since Unix epoch",
-                   "nullable": true
+                   "description": "End time in nanoseconds since Unix epoch"
                   },
                   "kind": {
                    "description": "Span kind (1=INTERNAL, 2=SERVER, 3=CLIENT, 4=PRODUCER, 5=CONSUMER)",
-                   "nullable": true,
-                   "type": "integer"
+                   "type": [
+                    "integer",
+                    "null"
+                   ]
                   },
                   "name": {
                    "description": "Span name describing the operation",
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   },
                   "parentSpanId": {
-                   "description": "Parent span ID if this is a child span",
-                   "nullable": true
+                   "description": "Parent span ID if this is a child span"
                   },
                   "spanId": {
-                   "description": "Span ID (8 bytes, hex-encoded string in JSON or Buffer in binary)",
-                   "nullable": true
+                   "description": "Span ID (8 bytes, hex-encoded string in JSON or Buffer in binary)"
                   },
                   "startTimeUnixNano": {
-                   "description": "Start time in nanoseconds since Unix epoch",
-                   "nullable": true
+                   "description": "Start time in nanoseconds since Unix epoch"
                   },
                   "status": {
                    "additionalProperties": true,
                    "description": "Span status object",
-                   "nullable": true,
-                   "type": "object"
+                   "type": [
+                    "object",
+                    "null"
+                   ]
                   },
                   "traceId": {
-                   "description": "Trace ID (16 bytes, hex-encoded string in JSON or Buffer in binary)",
-                   "nullable": true
+                   "description": "Trace ID (16 bytes, hex-encoded string in JSON or Buffer in binary)"
                   }
                  },
                  "title": "OtelSpan",
                  "type": "object"
                 },
-                "nullable": true,
-                "type": "array"
+                "type": [
+                 "array",
+                 "null"
+                ]
                }
               },
               "title": "OtelScopeSpan",
               "type": "object"
              },
-             "nullable": true,
-             "type": "array"
+             "type": [
+              "array",
+              "null"
+             ]
             }
            },
            "title": "OtelResourceSpan",
@@ -4758,8 +5214,10 @@
          "metadata": {
           "additionalProperties": true,
           "description": "Optional metadata for the project",
-          "nullable": true,
-          "type": "object"
+          "type": [
+           "object",
+           "null"
+          ]
          },
          "name": {
           "type": "string"
@@ -4825,16 +5283,20 @@
          "metadata": {
           "additionalProperties": true,
           "description": "Optional metadata for the project",
-          "nullable": true,
-          "type": "object"
+          "type": [
+           "object",
+           "null"
+          ]
          },
          "name": {
           "type": "string"
          },
          "retention": {
           "description": "Number of days to retain data.\nMust be 0 or at least 3 days.\nRequires data-retention entitlement for non-zero values.\nOptional. Will retain existing retention setting if omitted.",
-          "nullable": true,
-          "type": "integer"
+          "type": [
+           "integer",
+           "null"
+          ]
          }
         },
         "required": [
@@ -4891,18 +5353,24 @@
         "properties": {
          "note": {
           "description": "Optional note for the API key",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "publicKey": {
           "description": "Optional predefined public key. Must start with 'pk-lf-'. If provided, secretKey must also be provided.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "secretKey": {
           "description": "Optional predefined secret key. Must start with 'sk-lf-'. If provided, publicKey must also be provided.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          }
         },
         "type": "object"
@@ -5132,8 +5600,10 @@
         "properties": {
          "active": {
           "description": "Whether the user is active",
-          "nullable": true,
-          "type": "boolean"
+          "type": [
+           "boolean",
+           "null"
+          ]
          },
          "emails": {
           "description": "User's email addresses",
@@ -5157,15 +5627,19 @@
            "title": "ScimEmail",
            "type": "object"
           },
-          "nullable": true,
-          "type": "array"
+          "type": [
+           "array",
+           "null"
+          ]
          },
          "name": {
           "description": "User's name information",
           "properties": {
            "formatted": {
-            "nullable": true,
-            "type": "string"
+            "type": [
+             "string",
+             "null"
+            ]
            }
           },
           "title": "ScimName",
@@ -5173,8 +5647,10 @@
          },
          "password": {
           "description": "Ignored. Accepted only for compatibility with identity providers that always send a password on user creation (Okta sends a placeholder value even when password sync is disabled). No credential is created for the user; provisioned users authenticate via SSO or set a password themselves through the password reset flow.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "userName": {
           "description": "User's email address (required)",
@@ -5292,8 +5768,10 @@
            "title": "ConfigCategory",
            "type": "object"
           },
-          "nullable": true,
-          "type": "array"
+          "type": [
+           "array",
+           "null"
+          ]
          },
          "dataType": {
           "enum": [
@@ -5307,20 +5785,26 @@
          },
          "description": {
           "description": "Description is shown across the Langfuse UI and can be used to e.g. explain the config categories in detail, why a numeric range was set, or provide additional context on config name or usage",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "maxValue": {
           "description": "Configure a maximum value for numerical scores. If not set, the maximum value defaults to +∞",
           "format": "double",
-          "nullable": true,
-          "type": "number"
+          "type": [
+           "number",
+           "null"
+          ]
          },
          "minValue": {
           "description": "Configure a minimum value for numerical scores. If not set, the minimum value defaults to -∞",
           "format": "double",
-          "nullable": true,
-          "type": "number"
+          "type": [
+           "number",
+           "null"
+          ]
          },
          "name": {
           "description": "Name of the score config. Max 35 characters. Only letters, numbers, underscores, spaces, periods, parentheses, and hyphens are allowed.",
@@ -5400,35 +5884,47 @@
            "title": "ConfigCategory",
            "type": "object"
           },
-          "nullable": true,
-          "type": "array"
+          "type": [
+           "array",
+           "null"
+          ]
          },
          "description": {
           "description": "Description is shown across the Langfuse UI and can be used to e.g. explain the config categories in detail, why a numeric range was set, or provide additional context on config name or usage",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "isArchived": {
           "description": "The status of the score config showing if it is archived or not",
-          "nullable": true,
-          "type": "boolean"
+          "type": [
+           "boolean",
+           "null"
+          ]
          },
          "maxValue": {
           "description": "Configure a maximum value for numerical scores. If not set, the maximum value defaults to +∞",
           "format": "double",
-          "nullable": true,
-          "type": "number"
+          "type": [
+           "number",
+           "null"
+          ]
          },
          "minValue": {
           "description": "Configure a minimum value for numerical scores. If not set, the minimum value defaults to -∞",
           "format": "double",
-          "nullable": true,
-          "type": "number"
+          "type": [
+           "number",
+           "null"
+          ]
          },
          "name": {
           "description": "Name of the score config. Max 35 characters. Only letters, numbers, underscores, spaces, periods, parentheses, and hyphens are allowed.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          }
         },
         "title": "UpdateScoreConfigRequest",
@@ -5622,13 +6118,17 @@
        "schema": {
         "properties": {
          "comment": {
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "configId": {
           "description": "Reference a score config on a score. The unique langfuse identifier of a score config. When passing this field, the dataType and stringValue fields are automatically populated.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "dataType": {
           "description": "The data type of the score. When passing a configId this field is inferred. Otherwise, this field must be passed or will default to numeric.",
@@ -5637,59 +6137,81 @@
            "BOOLEAN",
            "CATEGORICAL",
            "CORRECTION",
-           "TEXT"
+           "TEXT",
+           null
           ],
-          "nullable": true,
           "title": "ScoreDataType",
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "datasetRunId": {
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "environment": {
           "description": "The environment of the score. Can be any lowercase alphanumeric string with hyphens and underscores that does not start with 'langfuse'.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "id": {
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "metadata": {
           "additionalProperties": true,
-          "nullable": true,
-          "type": "object"
+          "type": [
+           "object",
+           "null"
+          ]
          },
          "name": {
           "type": "string"
          },
          "observationId": {
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "queueId": {
           "description": "The annotation queue referenced by the score. Indicates if score was initially created while processing annotation queue.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "sessionId": {
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "source": {
           "description": "The source of the score. Defaults to API. Set to ANNOTATION to prefill scores (e.g. from an LLM) for a human reviewer to verify in an annotation queue. When source is ANNOTATION, a configId is required unless dataType is CORRECTION. EVAL is reserved for internal evaluator outputs and is not accepted on this endpoint.",
           "enum": [
            "API",
-           "ANNOTATION"
+           "ANNOTATION",
+           null
           ],
-          "nullable": true,
           "title": "CreateScoreSource",
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "traceId": {
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "value": {
           "description": "The value of the score. Must be passed as string for categorical and text scores, and numeric for boolean and numeric scores. Boolean score values must equal either 1 or 0 (true or false). Text score values must be between 1 and 500 characters.",
@@ -6117,14 +6639,14 @@
         "properties": {
          "chartConfig": {
           "description": "Defaults to the plain config for `chartType`.",
-          "nullable": true,
           "properties": {
            "bins": {
-            "nullable": true,
-            "type": "integer"
+            "type": [
+             "integer",
+             "null"
+            ]
            },
            "defaultSort": {
-            "nullable": true,
             "properties": {
              "column": {
               "type": "string"
@@ -6143,15 +6665,22 @@
              "order"
             ],
             "title": "unstableDashboardWidgetDefaultSort",
-            "type": "object"
+            "type": [
+             "object",
+             "null"
+            ]
            },
            "row_limit": {
-            "nullable": true,
-            "type": "integer"
+            "type": [
+             "integer",
+             "null"
+            ]
            },
            "show_value_labels": {
-            "nullable": true,
-            "type": "boolean"
+            "type": [
+             "boolean",
+             "null"
+            ]
            },
            "type": {
             "enum": [
@@ -6163,15 +6692,21 @@
              "PIE",
              "NUMBER",
              "HISTOGRAM",
-             "PIVOT_TABLE"
+             "PIVOT_TABLE",
+             null
             ],
-            "nullable": true,
             "title": "unstableDashboardWidgetChartType",
-            "type": "string"
+            "type": [
+             "string",
+             "null"
+            ]
            }
           },
           "title": "unstableDashboardWidgetChartConfigInput",
-          "type": "object"
+          "type": [
+           "object",
+           "null"
+          ]
          },
          "chartType": {
           "enum": [
@@ -6190,8 +6725,10 @@
          },
          "description": {
           "description": "Defaults to an empty string.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "dimensions": {
           "items": {
@@ -6216,8 +6753,10 @@
              "type": "string"
             },
             "key": {
-             "nullable": true,
-             "type": "string"
+             "type": [
+              "string",
+              "null"
+             ]
             },
             "operator": {
              "type": "string"
@@ -6225,9 +6764,7 @@
             "type": {
              "type": "string"
             },
-            "value": {
-             "nullable": true
-            }
+            "value": {}
            },
            "required": [
             "column",
@@ -6365,14 +6902,14 @@
         "properties": {
          "chartConfig": {
           "description": "Input-side chart config. `type` is optional and defaults to the\nwidget's `chartType`; when given it must match.",
-          "nullable": true,
           "properties": {
            "bins": {
-            "nullable": true,
-            "type": "integer"
+            "type": [
+             "integer",
+             "null"
+            ]
            },
            "defaultSort": {
-            "nullable": true,
             "properties": {
              "column": {
               "type": "string"
@@ -6391,15 +6928,22 @@
              "order"
             ],
             "title": "unstableDashboardWidgetDefaultSort",
-            "type": "object"
+            "type": [
+             "object",
+             "null"
+            ]
            },
            "row_limit": {
-            "nullable": true,
-            "type": "integer"
+            "type": [
+             "integer",
+             "null"
+            ]
            },
            "show_value_labels": {
-            "nullable": true,
-            "type": "boolean"
+            "type": [
+             "boolean",
+             "null"
+            ]
            },
            "type": {
             "enum": [
@@ -6411,15 +6955,21 @@
              "PIE",
              "NUMBER",
              "HISTOGRAM",
-             "PIVOT_TABLE"
+             "PIVOT_TABLE",
+             null
             ],
-            "nullable": true,
             "title": "unstableDashboardWidgetChartType",
-            "type": "string"
+            "type": [
+             "string",
+             "null"
+            ]
            }
           },
           "title": "unstableDashboardWidgetChartConfigInput",
-          "type": "object"
+          "type": [
+           "object",
+           "null"
+          ]
          },
          "chartType": {
           "enum": [
@@ -6431,15 +6981,20 @@
            "PIE",
            "NUMBER",
            "HISTOGRAM",
-           "PIVOT_TABLE"
+           "PIVOT_TABLE",
+           null
           ],
-          "nullable": true,
           "title": "unstableDashboardWidgetChartType",
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "description": {
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "dimensions": {
           "items": {
@@ -6454,8 +7009,10 @@
            "title": "unstableDashboardWidgetDimension",
            "type": "object"
           },
-          "nullable": true,
-          "type": "array"
+          "type": [
+           "array",
+           "null"
+          ]
          },
          "filters": {
           "items": {
@@ -6465,8 +7022,10 @@
              "type": "string"
             },
             "key": {
-             "nullable": true,
-             "type": "string"
+             "type": [
+              "string",
+              "null"
+             ]
             },
             "operator": {
              "type": "string"
@@ -6474,9 +7033,7 @@
             "type": {
              "type": "string"
             },
-            "value": {
-             "nullable": true
-            }
+            "value": {}
            },
            "required": [
             "column",
@@ -6486,8 +7043,10 @@
            "title": "unstableDashboardWidgetFilter",
            "type": "object"
           },
-          "nullable": true,
-          "type": "array"
+          "type": [
+           "array",
+           "null"
+          ]
          },
          "metrics": {
           "items": {
@@ -6521,23 +7080,30 @@
            "title": "unstableDashboardWidgetMetric",
            "type": "object"
           },
-          "nullable": true,
-          "type": "array"
+          "type": [
+           "array",
+           "null"
+          ]
          },
          "name": {
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "view": {
           "enum": [
            "observations",
            "scores-numeric",
            "scores-boolean",
-           "scores-categorical"
+           "scores-categorical",
+           null
           ],
-          "nullable": true,
           "title": "unstableDashboardWidgetView",
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          }
         },
         "title": "unstableUpdateDashboardWidgetRequest",
@@ -6592,7 +7158,6 @@
        "schema": {
         "properties": {
          "definition": {
-          "nullable": true,
           "properties": {
            "widgets": {
             "items": {
@@ -6712,11 +7277,16 @@
            "widgets"
           ],
           "title": "unstableDashboardDefinition",
-          "type": "object"
+          "type": [
+           "object",
+           "null"
+          ]
          },
          "description": {
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "filters": {
           "items": {
@@ -6726,8 +7296,10 @@
              "type": "string"
             },
             "key": {
-             "nullable": true,
-             "type": "string"
+             "type": [
+              "string",
+              "null"
+             ]
             },
             "operator": {
              "type": "string"
@@ -6735,9 +7307,7 @@
             "type": {
              "type": "string"
             },
-            "value": {
-             "nullable": true
-            }
+            "value": {}
            },
            "required": [
             "column",
@@ -6747,8 +7317,10 @@
            "title": "unstableDashboardWidgetFilter",
            "type": "object"
           },
-          "nullable": true,
-          "type": "array"
+          "type": [
+           "array",
+           "null"
+          ]
          },
          "name": {
           "type": "string"
@@ -6826,7 +7398,6 @@
        "schema": {
         "properties": {
          "definition": {
-          "nullable": true,
           "properties": {
            "widgets": {
             "items": {
@@ -6946,11 +7517,16 @@
            "widgets"
           ],
           "title": "unstableDashboardDefinition",
-          "type": "object"
+          "type": [
+           "object",
+           "null"
+          ]
          },
          "description": {
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "filters": {
           "items": {
@@ -6960,8 +7536,10 @@
              "type": "string"
             },
             "key": {
-             "nullable": true,
-             "type": "string"
+             "type": [
+              "string",
+              "null"
+             ]
             },
             "operator": {
              "type": "string"
@@ -6969,9 +7547,7 @@
             "type": {
              "type": "string"
             },
-            "value": {
-             "nullable": true
-            }
+            "value": {}
            },
            "required": [
             "column",
@@ -6981,12 +7557,16 @@
            "title": "unstableDashboardWidgetFilter",
            "type": "object"
           },
-          "nullable": true,
-          "type": "array"
+          "type": [
+           "array",
+           "null"
+          ]
          },
          "name": {
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          }
         },
         "title": "unstableUpdateDashboardRequest",
@@ -7038,31 +7618,41 @@
             "properties": {
              "height": {
               "description": "Height in grid rows. Defaults to `6`.",
-              "nullable": true,
-              "type": "integer"
+              "type": [
+               "integer",
+               "null"
+              ]
              },
              "id": {
               "description": "Server-generated when omitted.",
-              "nullable": true,
-              "type": "string"
+              "type": [
+               "string",
+               "null"
+              ]
              },
              "widgetId": {
               "type": "string"
              },
              "width": {
               "description": "Width in grid columns. Defaults to `6`.",
-              "nullable": true,
-              "type": "integer"
+              "type": [
+               "integer",
+               "null"
+              ]
              },
              "x": {
               "description": "Grid column (12-column grid). Defaults to `0`.",
-              "nullable": true,
-              "type": "integer"
+              "type": [
+               "integer",
+               "null"
+              ]
              },
              "y": {
               "description": "Grid row. Defaults to the first row below all existing tiles.",
-              "nullable": true,
-              "type": "integer"
+              "type": [
+               "integer",
+               "null"
+              ]
              }
             },
             "required": [
@@ -7095,31 +7685,41 @@
             "properties": {
              "height": {
               "description": "Height in grid rows. Defaults to `6`.",
-              "nullable": true,
-              "type": "integer"
+              "type": [
+               "integer",
+               "null"
+              ]
              },
              "id": {
               "description": "Server-generated when omitted.",
-              "nullable": true,
-              "type": "string"
+              "type": [
+               "string",
+               "null"
+              ]
              },
              "presetId": {
               "type": "string"
              },
              "width": {
               "description": "Width in grid columns. Defaults to `6`.",
-              "nullable": true,
-              "type": "integer"
+              "type": [
+               "integer",
+               "null"
+              ]
              },
              "x": {
               "description": "Grid column (12-column grid). Defaults to `0`.",
-              "nullable": true,
-              "type": "integer"
+              "type": [
+               "integer",
+               "null"
+              ]
              },
              "y": {
               "description": "Grid row. Defaults to the first row below all existing tiles.",
-              "nullable": true,
-              "type": "integer"
+              "type": [
+               "integer",
+               "null"
+              ]
              }
             },
             "required": [
@@ -7203,23 +7803,31 @@
         "properties": {
          "height": {
           "description": "Height in grid rows.",
-          "nullable": true,
-          "type": "integer"
+          "type": [
+           "integer",
+           "null"
+          ]
          },
          "width": {
           "description": "Width in grid columns.",
-          "nullable": true,
-          "type": "integer"
+          "type": [
+           "integer",
+           "null"
+          ]
          },
          "x": {
           "description": "Grid column (12-column grid).",
-          "nullable": true,
-          "type": "integer"
+          "type": [
+           "integer",
+           "null"
+          ]
          },
          "y": {
           "description": "Grid row.",
-          "nullable": true,
-          "type": "integer"
+          "type": [
+           "integer",
+           "null"
+          ]
          }
         },
         "title": "unstableUpdateDashboardPlacementRequest",
@@ -7292,11 +7900,14 @@
              "type": {
               "description": "Evaluator type. Defaults to `llm_as_judge` when omitted.",
               "enum": [
-               "llm_as_judge"
+               "llm_as_judge",
+               null
               ],
-              "nullable": true,
               "title": "unstableLlmAsJudgeEvaluatorType",
-              "type": "string"
+              "type": [
+               "string",
+               "null"
+              ]
              }
             },
             "required": [
@@ -7800,8 +8411,10 @@
                   },
                   "value": {
                    "description": "Ignored placeholder value. Clients may omit it or send an empty string.",
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   }
                  },
                  "required": [
@@ -7821,8 +8434,10 @@
              ],
              "title": "unstableEvaluationRuleFilter"
             },
-            "nullable": true,
-            "type": "array"
+            "type": [
+             "array",
+             "null"
+            ]
            },
            "mapping": {
             "description": "LLM-as-judge variable mappings.\n\nEvery prompt variable must appear exactly once.\nBuild this list from the evaluator's `variables` array.",
@@ -7831,8 +8446,10 @@
              "properties": {
               "jsonPath": {
                "description": "Optional JSONPath selector applied to the selected source before it is passed to the evaluator prompt.\n\nRequirements:\n- Must start with `$`\n- Must be a syntactically valid JSONPath expression\n- Most useful with `source=metadata`",
-               "nullable": true,
-               "type": "string"
+               "type": [
+                "string",
+                "null"
+               ]
               },
               "source": {
                "description": "Source field that should populate the prompt variable.\n\nQuick reference:\n- `target=observation`: `input`, `output`, `metadata`, `tool_calls`\n- `target=experiment`: `input`, `output`, `metadata`, `tool_calls`, `expected_output`, `experiment_item_metadata`",
@@ -7868,8 +8485,10 @@
            "sampling": {
             "description": "Optional sampling fraction. Defaults to `1`.",
             "format": "double",
-            "nullable": true,
-            "type": "number"
+            "type": [
+             "number",
+             "null"
+            ]
            },
            "target": {
             "description": "Target object type to evaluate.",
@@ -8412,8 +9031,10 @@
                   },
                   "value": {
                    "description": "Ignored placeholder value. Clients may omit it or send an empty string.",
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   }
                  },
                  "required": [
@@ -8433,8 +9054,10 @@
              ],
              "title": "unstableEvaluationRuleFilter"
             },
-            "nullable": true,
-            "type": "array"
+            "type": [
+             "array",
+             "null"
+            ]
            },
            "name": {
             "description": "Human-readable deployment name.",
@@ -8443,8 +9066,10 @@
            "sampling": {
             "description": "Optional sampling fraction. Defaults to `1`.",
             "format": "double",
-            "nullable": true,
-            "type": "number"
+            "type": [
+             "number",
+             "null"
+            ]
            },
            "target": {
             "description": "Target object type to evaluate.",
@@ -8483,11 +9108,14 @@
                  "description": "Defaults to `llm_as_judge`.",
                  "enum": [
                   "llm_as_judge",
-                  "code"
+                  "code",
+                  null
                  ],
-                 "nullable": true,
                  "title": "unstableEvaluatorType",
-                 "type": "string"
+                 "type": [
+                  "string",
+                  "null"
+                 ]
                 }
                },
                "required": [
@@ -8503,8 +9131,10 @@
                 "properties": {
                  "jsonPath": {
                   "description": "Optional JSONPath selector applied to the selected source before it is passed to the evaluator prompt.\n\nRequirements:\n- Must start with `$`\n- Must be a syntactically valid JSONPath expression\n- Most useful with `source=metadata`",
-                  "nullable": true,
-                  "type": "string"
+                  "type": [
+                   "string",
+                   "null"
+                  ]
                  },
                  "source": {
                   "description": "Source field that should populate the prompt variable.\n\nQuick reference:\n- `target=observation`: `input`, `output`, `metadata`, `tool_calls`\n- `target=experiment`: `input`, `output`, `metadata`, `tool_calls`, `expected_output`, `experiment_item_metadata`",
@@ -8531,8 +9161,10 @@
                 "title": "unstablePromptVariableMappingInput",
                 "type": "object"
                },
-               "nullable": true,
-               "type": "array"
+               "type": [
+                "array",
+                "null"
+               ]
               }
              },
              "required": [
@@ -9037,8 +9669,10 @@
                   },
                   "value": {
                    "description": "Ignored placeholder value. Clients may omit it or send an empty string.",
-                   "nullable": true,
-                   "type": "string"
+                   "type": [
+                    "string",
+                    "null"
+                   ]
                   }
                  },
                  "required": [
@@ -9058,8 +9692,10 @@
              ],
              "title": "unstableEvaluationRuleFilter"
             },
-            "nullable": true,
-            "type": "array"
+            "type": [
+             "array",
+             "null"
+            ]
            },
            "name": {
             "description": "Human-readable deployment name.",
@@ -9067,8 +9703,10 @@
            },
            "sampling": {
             "format": "double",
-            "nullable": true,
-            "type": "number"
+            "type": [
+             "number",
+             "null"
+            ]
            },
            "target": {
             "description": "The ingestion object type that should trigger evaluation runs.\n\nChoose the target first, because it changes both the valid filter columns and the valid variable-mapping sources:\n- `observation` evaluates live-ingested observations such as generations, spans, and events.\n  It supports mapping from `input`, `output`, `metadata`, and `tool_calls`.\n- `experiment` evaluates live experiment executions and can additionally map `expected_output` and `experiment_item_metadata`.\n  It currently supports filtering by `datasetId`.\n  Discover valid dataset IDs with `GET /api/public/v2/datasets`, then use the returned dataset `id` values in your filter.",
@@ -9166,12 +9804,13 @@
         "properties": {
          "enabled": {
           "description": "Updated desired enabled state.",
-          "nullable": true,
-          "type": "boolean"
+          "type": [
+           "boolean",
+           "null"
+          ]
          },
          "evaluator": {
           "description": "Deprecated single-evaluator alias: updates the first assignment only. Prefer `evaluators`.\n\nLangfuse resolves the provided evaluator family to its latest version before saving the rule.\nA rule's evaluator type cannot be changed: provide `name` for an evaluator family of the rule's current type. To use a different evaluator type, create a new rule.",
-          "nullable": true,
           "properties": {
            "name": {
             "description": "Evaluator family name.",
@@ -9182,7 +9821,10 @@
            "name"
           ],
           "title": "unstableEvaluationRuleEvaluatorReference",
-          "type": "object"
+          "type": [
+           "object",
+           "null"
+          ]
          },
          "evaluators": {
           "description": "Full replacement of the rule's evaluator assignments: entries that are\nnot listed are detached.\n\nMutually exclusive with the deprecated `evaluator` and `mapping` fields.",
@@ -9197,11 +9839,14 @@
                "description": "Defaults to `llm_as_judge`.",
                "enum": [
                 "llm_as_judge",
-                "code"
+                "code",
+                null
                ],
-               "nullable": true,
                "title": "unstableEvaluatorType",
-               "type": "string"
+               "type": [
+                "string",
+                "null"
+               ]
               }
              },
              "required": [
@@ -9217,8 +9862,10 @@
               "properties": {
                "jsonPath": {
                 "description": "Optional JSONPath selector applied to the selected source before it is passed to the evaluator prompt.\n\nRequirements:\n- Must start with `$`\n- Must be a syntactically valid JSONPath expression\n- Most useful with `source=metadata`",
-                "nullable": true,
-                "type": "string"
+                "type": [
+                 "string",
+                 "null"
+                ]
                },
                "source": {
                 "description": "Source field that should populate the prompt variable.\n\nQuick reference:\n- `target=observation`: `input`, `output`, `metadata`, `tool_calls`\n- `target=experiment`: `input`, `output`, `metadata`, `tool_calls`, `expected_output`, `experiment_item_metadata`",
@@ -9245,8 +9892,10 @@
               "title": "unstablePromptVariableMappingInput",
               "type": "object"
              },
-             "nullable": true,
-             "type": "array"
+             "type": [
+              "array",
+              "null"
+             ]
             }
            },
            "required": [
@@ -9255,8 +9904,10 @@
            "title": "unstableCreateEvaluationRuleEvaluatorAssignment",
            "type": "object"
           },
-          "nullable": true,
-          "type": "array"
+          "type": [
+           "array",
+           "null"
+          ]
          },
          "filter": {
           "description": "Updated filter list.\n\nFor `target=experiment`, `column=datasetId` expects dataset `id` values from `GET /api/public/v2/datasets`, not dataset names.",
@@ -9753,8 +10404,10 @@
                 },
                 "value": {
                  "description": "Ignored placeholder value. Clients may omit it or send an empty string.",
-                 "nullable": true,
-                 "type": "string"
+                 "type": [
+                  "string",
+                  "null"
+                 ]
                 }
                },
                "required": [
@@ -9774,8 +10427,10 @@
            ],
            "title": "unstableEvaluationRuleFilter"
           },
-          "nullable": true,
-          "type": "array"
+          "type": [
+           "array",
+           "null"
+          ]
          },
          "mapping": {
           "description": "Updated LLM-as-judge variable mappings.\n\nDo not send this field for code evaluator rules. Langfuse stores the fixed code runtime mapping automatically and returns it in the response.",
@@ -9784,8 +10439,10 @@
            "properties": {
             "jsonPath": {
              "description": "Optional JSONPath selector applied to the selected source before it is passed to the evaluator prompt.\n\nRequirements:\n- Must start with `$`\n- Must be a syntactically valid JSONPath expression\n- Most useful with `source=metadata`",
-             "nullable": true,
-             "type": "string"
+             "type": [
+              "string",
+              "null"
+             ]
             },
             "source": {
              "description": "Source field that should populate the prompt variable.\n\nQuick reference:\n- `target=observation`: `input`, `output`, `metadata`, `tool_calls`\n- `target=experiment`: `input`, `output`, `metadata`, `tool_calls`, `expected_output`, `experiment_item_metadata`",
@@ -9812,29 +10469,38 @@
            "title": "unstablePromptVariableMappingInput",
            "type": "object"
           },
-          "nullable": true,
-          "type": "array"
+          "type": [
+           "array",
+           "null"
+          ]
          },
          "name": {
           "description": "Updated deployment name.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "sampling": {
           "description": "Updated sampling fraction.",
           "format": "double",
-          "nullable": true,
-          "type": "number"
+          "type": [
+           "number",
+           "null"
+          ]
          },
          "target": {
           "description": "Updated target object type.",
           "enum": [
            "observation",
-           "experiment"
+           "experiment",
+           null
           ],
-          "nullable": true,
           "title": "unstableEvaluationRuleTarget",
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          }
         },
         "title": "unstableUpdateEvaluationRuleRequest",
@@ -9915,8 +10581,10 @@
                "properties": {
                 "jsonPath": {
                  "description": "Optional JSONPath selector applied to the selected source before it is passed to the evaluator prompt.\n\nRequirements:\n- Must start with `$`\n- Must be a syntactically valid JSONPath expression\n- Most useful with `source=metadata`",
-                 "nullable": true,
-                 "type": "string"
+                 "type": [
+                  "string",
+                  "null"
+                 ]
                 },
                 "source": {
                  "description": "Source field that should populate the prompt variable.\n\nQuick reference:\n- `target=observation`: `input`, `output`, `metadata`, `tool_calls`\n- `target=experiment`: `input`, `output`, `metadata`, `tool_calls`, `expected_output`, `experiment_item_metadata`",
@@ -9943,12 +10611,13 @@
                "title": "unstablePromptVariableMappingInput",
                "type": "object"
               },
-              "nullable": true,
-              "type": "array"
+              "type": [
+               "array",
+               "null"
+              ]
              },
              "modelConfig": {
               "description": "Optional explicit model configuration. Omit or set to `null` to use the project default evaluation model.",
-              "nullable": true,
               "properties": {
                "model": {
                 "description": "Model identifier exposed by the provider, for example `gpt-4.1-mini`.",
@@ -9964,7 +10633,10 @@
                "model"
               ],
               "title": "unstableEvaluatorModelConfig",
-              "type": "object"
+              "type": [
+               "object",
+               "null"
+              ]
              },
              "name": {
               "description": "Evaluator name within the authenticated project.",
@@ -10019,14 +10691,18 @@
                      "maxValue": {
                       "description": "Inclusive maximum value for numeric evaluator scores.",
                       "format": "double",
-                      "nullable": true,
-                      "type": "number"
+                      "type": [
+                       "number",
+                       "null"
+                      ]
                      },
                      "minValue": {
                       "description": "Inclusive minimum value for numeric evaluator scores.",
                       "format": "double",
-                      "nullable": true,
-                      "type": "number"
+                      "type": [
+                       "number",
+                       "null"
+                      ]
                      }
                     },
                     "required": [
@@ -10409,8 +11085,10 @@
        "schema": {
         "properties": {
          "commitMessage": {
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "files": {
           "items": {
@@ -10686,24 +11364,28 @@
        "schema": {
         "properties": {
          "description": {
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "expectedOutputSchema": {
           "additionalProperties": true,
           "description": "JSON Schema for validating dataset item expected outputs. When set, all new and existing dataset items will be validated against this schema.",
-          "nullable": true,
-          "type": "object"
+          "type": [
+           "object",
+           "null"
+          ]
          },
          "inputSchema": {
           "additionalProperties": true,
           "description": "JSON Schema for validating dataset item inputs. When set, all new and existing dataset items will be validated against this schema.",
-          "nullable": true,
-          "type": "object"
+          "type": [
+           "object",
+           "null"
+          ]
          },
-         "metadata": {
-          "nullable": true
-         },
+         "metadata": {},
          "name": {
           "type": "string"
          }
@@ -10801,8 +11483,10 @@
               "properties": {
                "jsonPath": {
                 "description": "Optional JSONPath selector applied to the selected source before it is passed to the evaluator prompt.\n\nRequirements:\n- Must start with `$`\n- Must be a syntactically valid JSONPath expression\n- Most useful with `source=metadata`",
-                "nullable": true,
-                "type": "string"
+                "type": [
+                 "string",
+                 "null"
+                ]
                },
                "source": {
                 "description": "Source field that should populate the prompt variable.\n\nAvailable sources are `input`, `output`, `metadata`, `tool_calls`, `expected_output`, and `experiment_item_metadata`.",
@@ -10829,8 +11513,10 @@
               "title": "PromptVariableMappingInput",
               "type": "object"
              },
-             "nullable": true,
-             "type": "array"
+             "type": [
+              "array",
+              "null"
+             ]
             }
            },
            "required": [
@@ -11358,8 +12044,10 @@
            ],
            "title": "EvaluationRuleFilter"
           },
-          "nullable": true,
-          "type": "array"
+          "type": [
+           "array",
+           "null"
+          ]
          },
          "name": {
           "description": "Human-readable rule name. Names are not identifiers and do not need to be unique.",
@@ -11368,8 +12056,10 @@
          "sampling": {
           "description": "Fraction of matching observations to evaluate. Omit this field to use the default of `1`, which evaluates every match. `null` is not accepted.",
           "format": "double",
-          "nullable": true,
-          "type": "number"
+          "type": [
+           "number",
+           "null"
+          ]
          }
         },
         "required": [
@@ -11448,8 +12138,10 @@
         "properties": {
          "enabled": {
           "description": "New desired live-execution state.",
-          "nullable": true,
-          "type": "boolean"
+          "type": [
+           "boolean",
+           "null"
+          ]
          },
          "evaluatorAssignments": {
           "description": "Complete replacement assignment list. An empty list disables the rule.",
@@ -11466,8 +12158,10 @@
               "properties": {
                "jsonPath": {
                 "description": "Optional JSONPath selector applied to the selected source before it is passed to the evaluator prompt.\n\nRequirements:\n- Must start with `$`\n- Must be a syntactically valid JSONPath expression\n- Most useful with `source=metadata`",
-                "nullable": true,
-                "type": "string"
+                "type": [
+                 "string",
+                 "null"
+                ]
                },
                "source": {
                 "description": "Source field that should populate the prompt variable.\n\nAvailable sources are `input`, `output`, `metadata`, `tool_calls`, `expected_output`, and `experiment_item_metadata`.",
@@ -11494,8 +12188,10 @@
               "title": "PromptVariableMappingInput",
               "type": "object"
              },
-             "nullable": true,
-             "type": "array"
+             "type": [
+              "array",
+              "null"
+             ]
             }
            },
            "required": [
@@ -11504,8 +12200,10 @@
            "title": "EvaluationRuleEvaluatorAssignmentInput",
            "type": "object"
           },
-          "nullable": true,
-          "type": "array"
+          "type": [
+           "array",
+           "null"
+          ]
          },
          "filter": {
           "description": "Complete replacement filter list. An empty list matches every incoming observation.",
@@ -12024,19 +12722,25 @@
            ],
            "title": "EvaluationRuleFilter"
           },
-          "nullable": true,
-          "type": "array"
+          "type": [
+           "array",
+           "null"
+          ]
          },
          "name": {
           "description": "New human-readable rule name.",
-          "nullable": true,
-          "type": "string"
+          "type": [
+           "string",
+           "null"
+          ]
          },
          "sampling": {
           "description": "New fraction of matching observations to evaluate. Omit to keep the current value.",
           "format": "double",
-          "nullable": true,
-          "type": "number"
+          "type": [
+           "number",
+           "null"
+          ]
          }
         },
         "title": "UpdateEvaluationRuleRequest",
@@ -12108,12 +12812,13 @@
             "properties": {
              "description": {
               "description": "Optional human-readable evaluator description.",
-              "nullable": true,
-              "type": "string"
+              "type": [
+               "string",
+               "null"
+              ]
              },
              "modelConfig": {
               "description": "Explicit model configuration. Set to `null` or omit to use the project's default evaluation model.",
-              "nullable": true,
               "properties": {
                "model": {
                 "description": "Model identifier exposed by the provider, for example `gpt-4.1-mini`.",
@@ -12129,7 +12834,10 @@
                "model"
               ],
               "title": "EvaluatorModelConfig",
-              "type": "object"
+              "type": [
+               "object",
+               "null"
+              ]
              },
              "name": {
               "description": "Human-readable evaluator name. Names are not identifiers and do not need to be unique.",
@@ -12157,13 +12865,17 @@
                     "properties": {
                      "scoreReasoningInstructions": {
                       "description": "Optional instructions for deriving the reasoning returned with the score.",
-                      "nullable": true,
-                      "type": "string"
+                      "type": [
+                       "string",
+                       "null"
+                      ]
                      },
                      "scoreValueInstructions": {
                       "description": "Optional instructions for deriving the score value.",
-                      "nullable": true,
-                      "type": "string"
+                      "type": [
+                       "string",
+                       "null"
+                      ]
                      }
                     },
                     "title": "EvaluatorOutputDefinitionBase",
@@ -12179,14 +12891,18 @@
                    "maxValue": {
                     "description": "Optional inclusive maximum value.",
                     "format": "double",
-                    "nullable": true,
-                    "type": "number"
+                    "type": [
+                     "number",
+                     "null"
+                    ]
                    },
                    "minValue": {
                     "description": "Optional inclusive minimum value.",
                     "format": "double",
-                    "nullable": true,
-                    "type": "number"
+                    "type": [
+                     "number",
+                     "null"
+                    ]
                    }
                   },
                   "required": [
@@ -12221,13 +12937,17 @@
                     "properties": {
                      "scoreReasoningInstructions": {
                       "description": "Optional instructions for deriving the reasoning returned with the score.",
-                      "nullable": true,
-                      "type": "string"
+                      "type": [
+                       "string",
+                       "null"
+                      ]
                      },
                      "scoreValueInstructions": {
                       "description": "Optional instructions for deriving the score value.",
-                      "nullable": true,
-                      "type": "string"
+                      "type": [
+                       "string",
+                       "null"
+                      ]
                      }
                     },
                     "title": "EvaluatorOutputDefinitionBase",
@@ -12273,13 +12993,17 @@
                     "properties": {
                      "scoreReasoningInstructions": {
                       "description": "Optional instructions for deriving the reasoning returned with the score.",
-                      "nullable": true,
-                      "type": "string"
+                      "type": [
+                       "string",
+                       "null"
+                      ]
                      },
                      "scoreValueInstructions": {
                       "description": "Optional instructions for deriving the score value.",
-                      "nullable": true,
-                      "type": "string"
+                      "type": [
+                       "string",
+                       "null"
+                      ]
                      }
                     },
                     "title": "EvaluatorOutputDefinitionBase",
@@ -12374,8 +13098,10 @@
                "properties": {
                 "jsonPath": {
                  "description": "Optional JSONPath selector applied to the selected source before it is passed to the evaluator prompt.\n\nRequirements:\n- Must start with `$`\n- Must be a syntactically valid JSONPath expression\n- Most useful with `source=metadata`",
-                 "nullable": true,
-                 "type": "string"
+                 "type": [
+                  "string",
+                  "null"
+                 ]
                 },
                 "source": {
                  "description": "Source field that should populate the prompt variable.\n\nAvailable sources are `input`, `output`, `metadata`, `tool_calls`, `expected_output`, and `experiment_item_metadata`.",
@@ -12402,8 +13128,10 @@
                "title": "PromptVariableMappingInput",
                "type": "object"
               },
-              "nullable": true,
-              "type": "array"
+              "type": [
+               "array",
+               "null"
+              ]
              }
             },
             "required": [
@@ -12439,8 +13167,10 @@
             "properties": {
              "description": {
               "description": "Optional human-readable evaluator description.",
-              "nullable": true,
-              "type": "string"
+              "type": [
+               "string",
+               "null"
+              ]
              },
              "name": {
               "description": "Human-readable evaluator name. Names are not identifiers and do not need to be unique.",
@@ -12555,13 +13285,17 @@
           "properties": {
            "description": {
             "description": "New description. Set to `null` to clear it.",
-            "nullable": true,
-            "type": "string"
+            "type": [
+             "string",
+             "null"
+            ]
            },
            "name": {
             "description": "New human-readable evaluator name.",
-            "nullable": true,
-            "type": "string"
+            "type": [
+             "string",
+             "null"
+            ]
            }
           },
           "title": "UpdateEvaluatorMetadataRequest",
@@ -12571,12 +13305,13 @@
           "properties": {
            "description": {
             "description": "New description. Set to `null` to clear it.",
-            "nullable": true,
-            "type": "string"
+            "type": [
+             "string",
+             "null"
+            ]
            },
            "modelConfig": {
             "description": "Explicit model configuration. Set to `null` or omit to use the project's default evaluation model.",
-            "nullable": true,
             "properties": {
              "model": {
               "description": "Model identifier exposed by the provider, for example `gpt-4.1-mini`.",
@@ -12592,12 +13327,17 @@
              "model"
             ],
             "title": "EvaluatorModelConfig",
-            "type": "object"
+            "type": [
+             "object",
+             "null"
+            ]
            },
            "name": {
             "description": "New human-readable evaluator name.",
-            "nullable": true,
-            "type": "string"
+            "type": [
+             "string",
+             "null"
+            ]
            },
            "outputDefinition": {
             "description": "Complete replacement output schema. Do not include an internal persistence version.",
@@ -12621,13 +13361,17 @@
                   "properties": {
                    "scoreReasoningInstructions": {
                     "description": "Optional instructions for deriving the reasoning returned with the score.",
-                    "nullable": true,
-                    "type": "string"
+                    "type": [
+                     "string",
+                     "null"
+                    ]
                    },
                    "scoreValueInstructions": {
                     "description": "Optional instructions for deriving the score value.",
-                    "nullable": true,
-                    "type": "string"
+                    "type": [
+                     "string",
+                     "null"
+                    ]
                    }
                   },
                   "title": "EvaluatorOutputDefinitionBase",
@@ -12643,14 +13387,18 @@
                  "maxValue": {
                   "description": "Optional inclusive maximum value.",
                   "format": "double",
-                  "nullable": true,
-                  "type": "number"
+                  "type": [
+                   "number",
+                   "null"
+                  ]
                  },
                  "minValue": {
                   "description": "Optional inclusive minimum value.",
                   "format": "double",
-                  "nullable": true,
-                  "type": "number"
+                  "type": [
+                   "number",
+                   "null"
+                  ]
                  }
                 },
                 "required": [
@@ -12685,13 +13433,17 @@
                   "properties": {
                    "scoreReasoningInstructions": {
                     "description": "Optional instructions for deriving the reasoning returned with the score.",
-                    "nullable": true,
-                    "type": "string"
+                    "type": [
+                     "string",
+                     "null"
+                    ]
                    },
                    "scoreValueInstructions": {
                     "description": "Optional instructions for deriving the score value.",
-                    "nullable": true,
-                    "type": "string"
+                    "type": [
+                     "string",
+                     "null"
+                    ]
                    }
                   },
                   "title": "EvaluatorOutputDefinitionBase",
@@ -12737,13 +13489,17 @@
                   "properties": {
                    "scoreReasoningInstructions": {
                     "description": "Optional instructions for deriving the reasoning returned with the score.",
-                    "nullable": true,
-                    "type": "string"
+                    "type": [
+                     "string",
+                     "null"
+                    ]
                    },
                    "scoreValueInstructions": {
                     "description": "Optional instructions for deriving the score value.",
-                    "nullable": true,
-                    "type": "string"
+                    "type": [
+                     "string",
+                     "null"
+                    ]
                    }
                   },
                   "title": "EvaluatorOutputDefinitionBase",
@@ -12838,8 +13594,10 @@
              "properties": {
               "jsonPath": {
                "description": "Optional JSONPath selector applied to the selected source before it is passed to the evaluator prompt.\n\nRequirements:\n- Must start with `$`\n- Must be a syntactically valid JSONPath expression\n- Most useful with `source=metadata`",
-               "nullable": true,
-               "type": "string"
+               "type": [
+                "string",
+                "null"
+               ]
               },
               "source": {
                "description": "Source field that should populate the prompt variable.\n\nAvailable sources are `input`, `output`, `metadata`, `tool_calls`, `expected_output`, and `experiment_item_metadata`.",
@@ -12866,8 +13624,10 @@
              "title": "PromptVariableMappingInput",
              "type": "object"
             },
-            "nullable": true,
-            "type": "array"
+            "type": [
+             "array",
+             "null"
+            ]
            }
           },
           "required": [
@@ -12882,13 +13642,17 @@
           "properties": {
            "description": {
             "description": "New description. Set to `null` to clear it.",
-            "nullable": true,
-            "type": "string"
+            "type": [
+             "string",
+             "null"
+            ]
            },
            "name": {
             "description": "New human-readable evaluator name.",
-            "nullable": true,
-            "type": "string"
+            "type": [
+             "string",
+             "null"
+            ]
            },
            "sourceCode": {
             "description": "Complete replacement source code.",
@@ -13274,19 +14038,21 @@
           "properties": {
            "commitMessage": {
             "description": "Commit message for this prompt version.",
-            "nullable": true,
-            "type": "string"
+            "type": [
+             "string",
+             "null"
+            ]
            },
-           "config": {
-            "nullable": true
-           },
+           "config": {},
            "labels": {
             "description": "List of deployment labels of this prompt version.",
             "items": {
              "type": "string"
             },
-            "nullable": true,
-            "type": "array"
+            "type": [
+             "array",
+             "null"
+            ]
            },
            "name": {
             "type": "string"
@@ -13304,11 +14070,14 @@
                 },
                 "type": {
                  "enum": [
-                  "chatmessage"
+                  "chatmessage",
+                  null
                  ],
-                 "nullable": true,
                  "title": "ChatMessageType",
-                 "type": "string"
+                 "type": [
+                  "string",
+                  "null"
+                 ]
                 }
                },
                "required": [
@@ -13325,11 +14094,14 @@
                 },
                 "type": {
                  "enum": [
-                  "placeholder"
+                  "placeholder",
+                  null
                  ],
-                 "nullable": true,
                  "title": "PlaceholderMessageType",
-                 "type": "string"
+                 "type": [
+                  "string",
+                  "null"
+                 ]
                 }
                },
                "required": [
@@ -13348,8 +14120,10 @@
             "items": {
              "type": "string"
             },
-            "nullable": true,
-            "type": "array"
+            "type": [
+             "array",
+             "null"
+            ]
            },
            "type": {
             "enum": [
@@ -13371,19 +14145,21 @@
           "properties": {
            "commitMessage": {
             "description": "Commit message for this prompt version.",
-            "nullable": true,
-            "type": "string"
+            "type": [
+             "string",
+             "null"
+            ]
            },
-           "config": {
-            "nullable": true
-           },
+           "config": {},
            "labels": {
             "description": "List of deployment labels of this prompt version.",
             "items": {
              "type": "string"
             },
-            "nullable": true,
-            "type": "array"
+            "type": [
+             "array",
+             "null"
+            ]
            },
            "name": {
             "type": "string"
@@ -13396,16 +14172,21 @@
             "items": {
              "type": "string"
             },
-            "nullable": true,
-            "type": "array"
+            "type": [
+             "array",
+             "null"
+            ]
            },
            "type": {
             "enum": [
-             "text"
+             "text",
+             null
             ],
-            "nullable": true,
             "title": "CreateTextPromptType",
-            "type": "string"
+            "type": [
+             "string",
+             "null"
+            ]
            }
           },
           "required": [

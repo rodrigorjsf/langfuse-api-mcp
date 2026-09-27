@@ -102,8 +102,9 @@ type Operation struct {
 type RequestBody struct {
 	// Required reports whether the operation needs a body.
 	Required bool
-	// Schema is the body's JSON schema, $refs inlined. It is third-party
-	// text, so every string in it is cleaned of hidden characters.
+	// Schema is the body's JSON Schema 2020-12 document, $refs inlined; the
+	// generator converts the release spec's OpenAPI 3.0 dialect (#111). It is
+	// third-party text, so every string in it is cleaned of hidden characters.
 	Schema json.RawMessage
 }
 

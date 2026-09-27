@@ -5,7 +5,10 @@
 #       internal/catalog/spec/langfuse-union-catalog.json, which the server embeds.
 #       Each operation (method + path) keeps its definition from the last spec
 #       that contained it: its path and query parameters and its JSON request
-#       body, with $refs inlined from that same spec (#81). It also carries
+#       body, with $refs inlined from that same spec (#81) and converted from
+#       the OpenAPI 3.0 schema dialect to JSON Schema 2020-12 (#111:
+#       nullable, boolean exclusive bounds), so the server can compile it
+#       with jsonschema-go. It also carries
 #       its version range (x-introduced, plus x-removed when it left the spec)
 #       and its operation family (x-family: legacy, v4 read or experiments)
 #       where a write mode gates it. An operation whose description opens
@@ -193,6 +196,76 @@ def request_body(key, body, spec):
             "content": {"application/json": {"schema": content["application/json"]["schema"]}}}
 
 
+def body_2020_12(key, body):
+    """body, a request body of operations(), with its schema in JSON Schema
+    2020-12 (to_2020_12). build converts only the body the catalog keeps: an
+    older spec's body of the same operation is discarded unconverted, so a
+    keyword only a replaced release used never stops generation."""
+    try:
+        schema = to_2020_12(body["content"]["application/json"]["schema"])
+    except ValueError as e:
+        sys.exit(f"{key}: request body schema: {e}")
+    return {**body, "content": {"application/json": {"schema": schema}}}
+
+
+# Keywords whose value is a map of property name to schema, a schema, or a list
+# of schemas. Every other keyword's value is data (enum, const, default), never
+# walked: a property named "nullable" or an enum value "nullable" stays.
+SCHEMA_MAPS = ("properties",)
+SCHEMA_VALUES = ("items", "additionalProperties", "not")
+SCHEMA_LISTS = ("allOf", "anyOf", "oneOf")
+ANNOTATIONS = ("title", "description")
+# The OpenAPI 3.0 Schema Object keywords JSON Schema 2020-12 does not have,
+# other than nullable and the boolean exclusive bounds, which to_2020_12
+# converts. No release spec's body schema holds one (v3.0.0 to v4.46.0); one
+# that appears stops generation, so its conversion is a decision, not a guess.
+UNCONVERTED = ("discriminator", "example", "xml", "externalDocs")
+
+
+def to_2020_12(schema):
+    """schema, an OpenAPI 3.0 schema object, as a JSON Schema 2020-12 one (#111).
+
+    nullable: true adds null to the schema's type, and to its enum values. A
+    schema with no single type, or whose const or combinator would still refuse
+    null, becomes the alternative of itself and null, its title and description
+    kept outside; one that constrains nothing already accepts null and only
+    loses the keyword.
+    A boolean exclusiveMinimum/exclusiveMaximum becomes the numeric form: true
+    moves the minimum/maximum into it, false is dropped. A schema the
+    conversion cannot express, or one holding an UNCONVERTED keyword, raises
+    ValueError.
+    """
+    out = {}
+    for k, v in schema.items():
+        if k in UNCONVERTED:
+            raise ValueError(f"OpenAPI 3.0 keyword {k} has no conversion; add one to to_2020_12")
+        if k in SCHEMA_MAPS:
+            v = {name: to_2020_12(s) for name, s in v.items()}
+        elif k in SCHEMA_VALUES and isinstance(v, dict):
+            v = to_2020_12(v)
+        elif k in SCHEMA_LISTS:
+            v = [to_2020_12(s) for s in v]
+        out[k] = v
+    for flag, bound in (("exclusiveMinimum", "minimum"), ("exclusiveMaximum", "maximum")):
+        if isinstance(out.get(flag), bool):
+            if out.pop(flag):
+                if bound not in out:
+                    raise ValueError(f"{flag} is true with no {bound}")
+                out[flag] = out.pop(bound)
+    if out.pop("nullable", False) is not True:
+        return out
+    if isinstance(out.get("type"), str) and not any(k in out for k in ("const", "not") + SCHEMA_LISTS):
+        out["type"] = [out["type"], "null"]
+        if "enum" in out and None not in out["enum"]:
+            out["enum"] = out["enum"] + [None]
+        return out
+    notes = {k: v for k, v in out.items() if k in ANNOTATIONS}
+    rest = {k: v for k, v in out.items() if k not in ANNOTATIONS}
+    if not rest:
+        return out  # it accepts anything, null included
+    return {**notes, "anyOf": [rest, {"type": "null"}]}
+
+
 def family(key, op, removed):
     path = key.split(" ", 1)[1]
     for prefix, fam in FAMILY_PREFIXES:
@@ -227,6 +300,8 @@ def build(repo):
         if len(span) != len(h["present"]):
             gaps.append(f"{key} absent from {len(span) - len(h['present'])} tags between {first} and {last}")
         op = dict(h["op"])
+        if "requestBody" in op:
+            op["requestBody"] = body_2020_12(key, op["requestBody"])
         if not op["operationId"]:
             sys.exit(f"{key} has no operationId in {last}")
         introduced = version(first)

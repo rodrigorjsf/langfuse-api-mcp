@@ -1,10 +1,16 @@
 package catalog
 
 import (
+	"cmp"
 	"encoding/json"
+	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 // The embedded spec holds no hidden character today, so this proves the
@@ -188,4 +194,85 @@ func TestTheEmbeddedUnionCatalogStaysUnderItsSizeBudget(t *testing.T) {
 	if n := len(unionCatalog); n > budget {
 		t.Fatalf("embedded union catalog is %d bytes, over its budget of %d", n, budget)
 	}
+}
+
+// #111: every write body schema of the embedded union catalog, the operations
+// of older releases included, is a JSON Schema 2020-12 document that
+// jsonschema-go compiles, with no keyword it does not know (the OpenAPI 3.0
+// dialect's nullable would compile silently and never be enforced). The
+// generator converts the dialect; a regeneration that brings a schema it
+// cannot convert fails here, naming the operation.
+func TestEveryWriteBodySchemaOfTheUnionCatalogCompilesAsJSONSchema202012(t *testing.T) {
+	t.Parallel()
+	cat, err := Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	ops := slices.Clone(cat.union.ops)
+	slices.SortFunc(ops, func(a, b rangedOperation) int {
+		return cmp.Or(cmp.Compare(a.ID, b.ID), cmp.Compare(a.Path, b.Path))
+	})
+	bodies := 0
+	for _, op := range ops {
+		if op.Body == nil {
+			continue
+		}
+		bodies++
+		var schema jsonschema.Schema
+		if err := json.Unmarshal(op.Body.Schema, &schema); err != nil {
+			t.Fatalf("%s %s: body schema does not parse as JSON Schema: %v", op.ID, op.Path, err)
+		}
+		if _, err := schema.Resolve(nil); err != nil {
+			t.Fatalf("%s %s: body schema does not compile: %v", op.ID, op.Path, err)
+		}
+		if at, keys := unknownKeywords(&schema, "#"); len(keys) > 0 {
+			t.Fatalf("%s %s: body schema keeps keywords JSON Schema 2020-12 does not know at %s: %v", op.ID, op.Path, at, keys)
+		}
+	}
+	// The union catalog (v3.0.0 to v4.46.0) has 49 operations with a body, 10
+	// of them excluded: 39 are checked. The four ADR-0004 amendment exclusions
+	// (#110: media_getUploadUrl, media_patch, llmConnections_upsert,
+	// blobStorageIntegrations_upsertBlobStorageIntegration) each take a body,
+	// leaving 35: the floor, so either branch merging first keeps this green.
+	if bodies < 35 {
+		t.Fatalf("checked %d body schemas, want the whole catalog's", bodies)
+	}
+}
+
+// unknownKeywords returns the location of the first schema under s holding a
+// keyword jsonschema-go does not know, and those keywords. It walks the
+// subschema keywords the generator emits and converts (SCHEMA_MAPS,
+// SCHEMA_VALUES and SCHEMA_LISTS in scripts/gen-union-catalog.py); a schema
+// under another keyword is not walked.
+func unknownKeywords(s *jsonschema.Schema, at string) (string, []string) {
+	if s == nil {
+		return "", nil
+	}
+	if len(s.Extra) > 0 {
+		return at, slices.Sorted(maps.Keys(s.Extra))
+	}
+	type child struct {
+		at string
+		s  *jsonschema.Schema
+	}
+	var children []child
+	for _, name := range slices.Sorted(maps.Keys(s.Properties)) {
+		children = append(children, child{at + "/properties/" + name, s.Properties[name]})
+	}
+	children = append(children, child{at + "/items", s.Items}, child{at + "/additionalProperties", s.AdditionalProperties},
+		child{at + "/not", s.Not})
+	for _, kw := range []struct {
+		name string
+		list []*jsonschema.Schema
+	}{{"allOf", s.AllOf}, {"anyOf", s.AnyOf}, {"oneOf", s.OneOf}} {
+		for i, c := range kw.list {
+			children = append(children, child{fmt.Sprintf("%s/%s/%d", at, kw.name, i), c})
+		}
+	}
+	for _, c := range children {
+		if at, keys := unknownKeywords(c.s, c.at); len(keys) > 0 {
+			return at, keys
+		}
+	}
+	return "", nil
 }
