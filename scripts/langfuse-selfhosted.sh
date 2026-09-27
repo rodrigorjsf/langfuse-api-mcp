@@ -27,9 +27,14 @@
 #   3.80.0              legacy only; the v4 read routes do not exist
 # One deployment at a time: they all bind the same ports.
 #
-# Needs docker with the compose plugin, curl and ~3 GiB of free RAM; the stack
-# binds port 3000 (Langfuse) and 9090 (MinIO). Cold start is about a minute
-# once the images are pulled.
+# Needs docker with the compose plugin, curl and about 3 GiB of RAM (an
+# estimate: ClickHouse, Postgres, Redis, MinIO, langfuse-web and -worker); the
+# stack binds port 3000 (Langfuse) and 9090 (MinIO). Cold start is about a
+# minute once the images are pulled.
+# `up` first runs the preflight guard of scripts/container-preflight.sh: it
+# refuses to start while any other container is running
+# (ALLOW_OTHER_CONTAINERS=1 overrides) or with less than 4096 MiB MemAvailable
+# (the stack's ~3 GiB plus 1 GiB headroom; MIN_MEM_AVAILABLE_MIB overrides).
 #
 # The whole stack lives in the repository (internal/server/testdata/langfuse-selfhosted/),
 # nothing is downloaded at run time: compose-<version>.yml is the upstream
@@ -47,12 +52,17 @@
 set -euo pipefail
 
 DEPLOYMENT=${LANGFUSE_DEPLOYMENT:-4.46.0-events_only}
+SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/container-preflight.sh
+. "$SCRIPTS_DIR/container-preflight.sh"
+# MemAvailable `up` requires: the stack's estimated ~3 GiB plus 1 GiB headroom.
+MIN_MEM_MIB=4096
 
 # The committed stack. Every override pins postgres to 17: the v3 composes leave
 # its version floating, and `latest` (18) rejects their data mount
 # (docs/research/langfuse.md §1.8). The 4.46.0-dual override also sets the v4
 # migration modes (docs/research/langfuse-api-versions.md §1: every family answers).
-STACK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/internal/server/testdata/langfuse-selfhosted"
+STACK_DIR="$SCRIPTS_DIR/../internal/server/testdata/langfuse-selfhosted"
 
 case "$DEPLOYMENT" in
   4.46.0-events_only | 4.46.0-dual)
@@ -93,6 +103,7 @@ random_hex() { od -An -N"$1" -tx1 /dev/urandom | tr -d ' \n'; }
 
 up() {
   local env_file="${1:-.env.integration.selfhosted}"
+  container_preflight "Langfuse $DEPLOYMENT" "$MIN_MEM_MIB"
   mkdir -p "$WORK_DIR"
   # A copy, so `down` and `logs` stop the stack that was started whatever
   # LANGFUSE_DEPLOYMENT says then. $COMPOSE_COMMIT names the upstream source.

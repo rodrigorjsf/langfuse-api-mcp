@@ -16,11 +16,23 @@
 #       hints or the operation index; paste the output into the pull request.
 #       It is not a CI gate: it costs API tokens and a model answer can vary.
 # HOW:  ANTHROPIC_API_KEY=... python3 scripts/small-model-eval.py [--server BIN]
-#           [--model ID] [--max-turns N]
+#           [--model ID] [--max-turns N] [--max-tokens N] [--timeout S]
 #       --server     prebuilt langfuse-mcp binary (default: go build from this
 #                    checkout into a temporary directory)
 #       --model      default claude-haiku-4-5
 #       --max-turns  model turns per intent (default 8)
+#       --max-tokens output tokens per model turn (default 1024); a thinking
+#                    model spends them on thinking first, so give it more
+#       --timeout    seconds to wait for one model turn (default 120)
+#       --only       comma-separated intent numbers to run (default: all), to
+#                    rerun a failing intent once before calling it a failure
+#
+#       First recorded run (2026-09-27, #88): the local qwen3:8b instead of Haiku
+#       4.5, by the maintainer's choice (no paid API), 7/11 passed; output in
+#       docs/research/raw/2026-09-27-small-model-eval-qwen3-8b.md.
+#       Against a local model: scripts/small-model-eval-local.sh starts the
+#       Ollama stack of scripts/small-model-eval-ollama.yml, runs this script
+#       with qwen3:8b through Ollama's Messages API, and stops the stack.
 #
 # The Anthropic key is read only from the ANTHROPIC_API_KEY environment
 # variable, sent only in the x-api-key header, and never printed, logged or
@@ -264,14 +276,14 @@ def is_loopback(host):
         return False
 
 
-def create_message(endpoint, key, body):
+def create_message(endpoint, key, body, timeout):
     request = urllib.request.Request(endpoint, data=json.dumps(body).encode(), method="POST", headers={
         "x-api-key": key,
         "anthropic-version": ANTHROPIC_VERSION,
         "content-type": "application/json",
     })
     try:
-        with urllib.request.urlopen(request, timeout=120) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.load(response)
     except urllib.error.HTTPError as err:
         # Only the status and the API's error type: never the request.
@@ -282,6 +294,8 @@ def create_message(endpoint, key, body):
         raise SetupError(f"Messages API answered {err.code} ({kind})") from None
     except urllib.error.URLError as err:
         raise SetupError(f"Messages API unreachable: {err.reason}") from None
+    except TimeoutError:
+        raise SetupError(f"Messages API did not answer within {timeout} s") from None
 
 
 # --- the eval -----------------------------------------------------------------
@@ -343,22 +357,24 @@ def describe_expected(expected):
     return line
 
 
-def run_intent(server, tools, endpoint, key, model, max_turns, item):
-    """Runs one conversation; returns (passed, the calls the model made)."""
+def run_intent(server, tools, endpoint, key, args, item):
+    """Runs one conversation; returns (passed, the calls the model made, how it ended)."""
     messages = [{"role": "user", "content": item["intent"]}]
     calls = []
-    for _ in range(max_turns):
+    ended = f"max turns ({args.max_turns})"
+    for _ in range(args.max_turns):
         reply = create_message(endpoint, key, {
-            "model": model,
-            "max_tokens": 1024,
+            "model": args.model,
+            "max_tokens": args.max_tokens,
             "temperature": 0,
             "system": SYSTEM_PROMPT,
             "tools": tools,
             "messages": messages,
-        })
+        }, args.timeout)
         messages.append({"role": "assistant", "content": reply["content"]})
         uses = [block for block in reply["content"] if block.get("type") == "tool_use"]
         if not uses:
+            ended = f"no tool call; stop_reason {reply.get('stop_reason')}"
             break
         results = []
         for use in uses:
@@ -367,12 +383,12 @@ def run_intent(server, tools, endpoint, key, model, max_turns, item):
             result = server.request("tools/call", {"name": use["name"], "arguments": use.get("input", {})})
             # A pass is the expected call that the server also accepts.
             if not result.get("isError") and any(matches(call, e) for e in item["expect"]):
-                return True, calls
+                return True, calls, "expected call"
             text = "\n".join(c.get("text", "") for c in result.get("content", []) if c.get("type") == "text")
             results.append({"type": "tool_result", "tool_use_id": use["id"],
                             "content": text, "is_error": bool(result.get("isError"))})
         messages.append({"role": "user", "content": results})
-    return False, calls
+    return False, calls, ended
 
 
 def build_server(workdir):
@@ -391,7 +407,18 @@ def main():
     parser.add_argument("--server", help="prebuilt langfuse-mcp binary")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--max-turns", type=int, default=8)
+    parser.add_argument("--max-tokens", type=int, default=1024)
+    parser.add_argument("--timeout", type=float, default=120)
+    parser.add_argument("--only", help="comma-separated intent numbers to run (default: all)")
     args = parser.parse_args()
+    selected = list(range(1, len(INTENTS) + 1))
+    if args.only:
+        try:
+            selected = sorted({int(n) for n in args.only.split(",")})
+        except ValueError:
+            parser.error("--only takes comma-separated intent numbers")
+        if not all(1 <= n <= len(INTENTS) for n in selected):
+            parser.error(f"--only takes intent numbers from 1 to {len(INTENTS)}")
 
     key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not key:
@@ -412,19 +439,21 @@ def main():
             tools = [{"name": t["name"], "description": t.get("description", ""),
                       "input_schema": t["inputSchema"]} for t in listed]
 
-            print(f"model {args.model}; fake Langfuse {FAKE_VERSION} events_only; "
+            print(f"model {args.model}; max tokens {args.max_tokens}; fake Langfuse {FAKE_VERSION} events_only; "
                   f"tools {', '.join(sorted(names))}")
             passed = 0
-            for number, item in enumerate(INTENTS, 1):
-                ok, calls = run_intent(server, tools, endpoint, key, args.model, args.max_turns, item)
+            for number in selected:
+                item = INTENTS[number - 1]
+                ok, calls, ended = run_intent(server, tools, endpoint, key, args, item)
                 passed += ok
                 print(f"{'PASS' if ok else 'FAIL'} {number:02d} [{item['area']}] {item['intent']}")
                 for call in calls:
                     print(f"       {describe(call)}")
                 if not ok:
+                    print(f"       ended: {ended}")
                     print(f"       want: {' | '.join(describe_expected(e) for e in item['expect'])}")
-            print(f"TOTAL {passed}/{len(INTENTS)} passed")
-            return 0 if passed == len(INTENTS) else 1
+            print(f"TOTAL {passed}/{len(selected)} passed")
+            return 0 if passed == len(selected) else 1
         except SetupError as err:
             print(f"eval aborted: {err}", file=sys.stderr)
             return 2

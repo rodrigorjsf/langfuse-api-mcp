@@ -10,3 +10,6 @@ docs/architecture/*.visual-check.*
 /langfuse-mcp
 /langfuse-mcp.exe
 /dist/
+
+# Python bytecode (scripts/*.py)
+__pycache__/

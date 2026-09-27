@@ -1,0 +1,52 @@
+# The local-model stack of the small-model discovery eval: one Ollama server
+# on the NVIDIA GPU, serving the Anthropic Messages API on 127.0.0.1:11434.
+# Started and stopped by scripts/small-model-eval-local.sh; never left running.
+#
+# The image is pinned by digest (the ollama/ollama build of 2026-09-27, Ollama
+# 0.34.4): a floating tag would silently change the server under the eval.
+# OLLAMA_CONTEXT_LENGTH=16384: Ollama's default context (4096) is smaller than
+# one intent's conversation (tool schemas plus echoed thinking), and Ollama
+# drops the start of an over-long prompt without an error.
+# Resource caps, so a heavy run fails instead of freezing a small host (WSL
+# with 10 GB of RAM; README "Container stacks"): mem_limit with an equal
+# memswap_limit (no swap; the container is OOM-killed at the cap), 2 CPUs, one
+# request and one loaded model at a time. The model weights live in VRAM;
+# host memory holds the runner and the page cache of the model file.
+# Ollama runs the model in llama.cpp's llama-server, which reads LLAMA_ARG_*
+# from the environment it inherits: LLAMA_ARG_N_GPU_LAYERS=999 puts every
+# layer on the GPU (llama.cpp's automatic fit only changes options left
+# unset, so a model that does not fit fails to load instead of spilling into
+# host memory), and LLAMA_ARG_CACHE_RAM=0 turns off llama-server's prompt
+# cache in host RAM (8192 MiB by default): on 2026-09-27 that cache grew
+# the container past its 4 GiB cap mid-eval and it was OOM-killed.
+# The volume is named `ollama` on purpose, so an existing model cache is reused
+# instead of a fresh <project>_ollama volume; `down -v` deletes the models.
+name: langfuse-mcp-small-model-eval
+
+services:
+  ollama:
+    image: ollama/ollama@sha256:8262851b2846b87c649eddf3e76beb270c52f4d1bc94559f47efde16b0841551
+    environment:
+      OLLAMA_CONTEXT_LENGTH: "16384"
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      LLAMA_ARG_N_GPU_LAYERS: "999"
+      LLAMA_ARG_CACHE_RAM: "0"
+    mem_limit: 4g
+    memswap_limit: 4g
+    cpus: 2
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  ollama:
+    name: ollama
