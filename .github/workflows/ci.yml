@@ -131,3 +131,8 @@ jobs:
         run: |
           set -euo pipefail
           "$RUNNER_TEMP/venv/bin/python" scripts/test_gen_union_catalog.py
+      # The small-model eval's offline matcher tests (#105): standard library only, no model.
+      - name: Test the small-model eval matcher
+        run: |
+          set -euo pipefail
+          python3 scripts/test_small_model_eval.py

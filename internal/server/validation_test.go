@@ -33,6 +33,10 @@ func TestExecuteReadRejectsInvalidParametersNamingTheFieldAndTheReason(t *testin
 			operationID: "metrics_metrics", params: nil,
 			wantField: "query", wantReason: "required",
 		},
+		"object where the metrics query JSON string is expected": {
+			operationID: "metrics_metrics", params: map[string]any{"query": map[string]any{"view": "observations"}},
+			wantField: "query", wantReason: "string",
+		},
 		"unknown parameter": {
 			operationID: "trace_list", params: map[string]any{"userID": "u-42"},
 			wantField: "userID", wantReason: "unknown parameter",

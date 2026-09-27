@@ -102,7 +102,8 @@ func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets
 	s := mcp.NewServer(&mcp.Implementation{Name: "langfuse-mcp", Version: "0.0.0-dev"}, nil)
 	redact := secrets.redactor()
 	ex := executor{catalog: cat, client: client, redact: redact, profile: profile}
-	d := discovery{catalog: cat, writeMode: o.writeMode, redact: redact}
+	traceTree := profile.On(catalog.V4ReadFamily)
+	d := discovery{catalog: cat, writeMode: o.writeMode, offersTraceTree: traceTree, redact: redact}
 	s.AddTool(&mcp.Tool{
 		Name:         "search_operations",
 		Title:        searchOperationsTitle,
@@ -112,7 +113,7 @@ func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets
 		Annotations:  closedWorldReadOnly(searchOperationsTitle),
 	}, audited(log, redact, d.searchOperations))
 	s.AddTool(&mcp.Tool{
-		Name:         "describe_operation",
+		Name:         toolDescribeOperation,
 		Title:        describeOperationTitle,
 		Description:  describeOperationDescription,
 		InputSchema:  describeOperationSchema(),
@@ -132,7 +133,7 @@ func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets
 			OpenWorldHint:   new(true),
 		},
 	}, audited(log, redact, ex.executeRead))
-	if profile.On(catalog.V4ReadFamily) {
+	if traceTree {
 		s.AddTool(traceTreeTool(), audited(log, redact, ex.getTraceTree))
 	}
 	return s
@@ -301,11 +302,28 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 	return jsonResult(sanitize.Wrap(op.ID, payload), false)
 }
 
-// parametersHintFor is the hint for a parameter the catalog refused: a page
-// size out of range gets how to page instead, anything else the generic
-// parametersHint. Both go on with the operation's valid parameter names and
-// describe_operation, so one more call fixes the parameters.
+// metricsQueryHint is the hint for a malformed metrics query (#104): how the
+// query is sent as a string (#106), its top-level keys, from the validator's
+// own list, and where the rest of its shape is described. Static text: it
+// never holds the caller's query.
+func metricsQueryHint(op catalog.Operation) string {
+	describes := "its parameters"
+	if op.HasGuidance() {
+		describes = "the query's shape and a worked example"
+	}
+	return "send query as " + catalog.MetricsQueryEncoding + "; its top-level keys are only " + catalog.MetricsQueryKeys() +
+		"; " + toolDescribeOperation + " with operationId " + op.ID + " returns " + describes
+}
+
+// parametersHintFor is the hint for a parameter the catalog refused: a
+// malformed metrics query gets metricsQueryHint; a page size out of range gets
+// how to page instead, anything else the generic parametersHint. Those two
+// go on with the operation's valid parameter names and describe_operation, so
+// one more call fixes the parameters.
 func parametersHintFor(err error, op catalog.Operation) string {
+	if errors.Is(err, catalog.ErrMetricsQuery) {
+		return metricsQueryHint(op)
+	}
 	hint := parametersHint
 	switch {
 	case errors.Is(err, catalog.ErrLimitOutOfRange):
@@ -325,6 +343,6 @@ func parametersHintFor(err error, op catalog.Operation) string {
 	if len(names) > 0 {
 		valid = "its parameters are " + strings.Join(names, ", ")
 	}
-	return hint + "; " + valid + "; describe_operation with operationId " + op.ID +
+	return hint + "; " + valid + "; " + toolDescribeOperation + " with operationId " + op.ID +
 		" returns their location, type, allowed values and bounds"
 }

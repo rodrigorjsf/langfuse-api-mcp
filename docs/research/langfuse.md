@@ -416,6 +416,27 @@ Send it as the URL-encoded `query` param of `GET /api/public/v2/metrics`.
 
 `[sourced]` spec `/v2/metrics` description; `/docs/metrics/features/metrics-api#v2`.
 
+Worked example, the total cost per day of the observations of traces named `checkout` (the server's static metrics
+query guidance on `describe_operation metrics_metrics`, #104; its dates lie in January 2025 so a model never
+mistakes them for "the last 7 days" of a run, #105):
+
+```json
+{"view":"observations","metrics":[{"measure":"totalCost","aggregation":"sum"}],
+ "filters":[{"column":"traceName","operator":"=","value":"checkout","type":"string"}],
+ "timeDimension":{"granularity":"day"},"fromTimestamp":"2025-01-01T00:00:00Z","toTimestamp":"2025-01-08T00:00:00Z"}
+```
+
+- Required keys: `view`, `metrics`, `fromTimestamp`, `toTimestamp`; `dimensions` and `filters` default to `[]`,
+  `timeDimension` and `orderBy` to null.
+- A filter item is `{column, operator, value, type}` (`key` only for `stringObject`/`numberObject`); a `string` filter
+  takes `=`, `contains`, `does not contain`, `starts with`, `ends with`.
+- `traceName` stays a backwards-compatible column of the `observations` view in v2, usable in `filters` and
+  `dimensions`.
+
+`[sourced]` checked on 2026-09-27 with the `langfuse-docs` MCP: API reference `GET /api/public/v2/metrics` (`query`
+parameter structure); `/docs/metrics/features/metrics-api#v2`; `/guides/cookbook/example_metrics_api_v2` (daily
+`timeDimension`); `/faq/all/deprecated-api-migration#metrics` (`traceName` as a filter column).
+
 ### 4.6 Session replay
 
 `GET /v2/observations?sessionId=S&isRootObservation=true&fields=core,basic,io&fromStartTime&toStartTime`, paginated.

@@ -8,12 +8,14 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/sanitize"
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/workflows"
 )
 
 // Operation discovery (ADR-0002 amendment): search_operations lists the
@@ -26,7 +28,9 @@ const searchOperationsDescription = "Lists the Langfuse operations this server c
 	"what it does and the operation to prefer), grouped by tag " +
 	"(the API area: Trace, Prompts, Datasets…).\n\n" +
 	"With query, keeps only the operations where every whitespace-separated keyword appears, ignoring case, " +
-	"in the operation ID, the tag or the description line. Without query, lists every operation.\n\n" +
+	"in the operation ID, the tag or the description line. Without query, lists every operation. " +
+	"When nothing matches, or the query asks about traces, a hint names how trace data is read on this " +
+	"deployment: one trace, filtered lists, aggregates such as cost per day.\n\n" +
 	"Reads the server's built-in catalog only: it does not call Langfuse and does not run any operation. " +
 	"describe_operation returns one operation's parameters; execute_read runs a read operation."
 
@@ -47,6 +51,10 @@ const (
 	toolExecuteRead  = "execute_read"
 	toolExecuteWrite = "execute_write"
 )
+
+// toolDescribeOperation is the tool that returns an operation's parameters;
+// hints name it.
+const toolDescribeOperation = "describe_operation"
 
 // searchOperationsSchema returns the search_operations input schema.
 func searchOperationsSchema() map[string]any {
@@ -99,6 +107,11 @@ func operationIndexSchema() map[string]any {
 				"items":       map[string]any{"type": "string"},
 				"description": "Every tag that has operations; present only when nothing matched the query.",
 			},
+			"hint": map[string]any{
+				"type": "string",
+				"description": "How trace data is read on this deployment; present only when nothing matched the query " +
+					"or the query asks about traces.",
+			},
 		},
 	}
 }
@@ -108,6 +121,7 @@ type operationIndex struct {
 	Count  int          `json:"count"`
 	Groups []indexGroup `json:"groups"`
 	Tags   []string     `json:"tags,omitempty"`
+	Hint   string       `json:"hint,omitempty"`
 }
 
 type indexGroup struct {
@@ -132,7 +146,9 @@ func searchArgumentsHint() string {
 type discovery struct {
 	catalog   catalog.Catalog
 	writeMode bool
-	redact    sanitize.Redactor
+	// offersTraceTree reports whether get_trace_tree is registered.
+	offersTraceTree bool
+	redact          sanitize.Redactor
 }
 
 // listed reports whether op is in the operation index: a read operation, or
@@ -167,7 +183,51 @@ func (d discovery) searchOperations(_ context.Context, req *mcp.CallToolRequest,
 	if idx.Count == 0 {
 		idx.Tags = d.tags()
 	}
+	if idx.Count == 0 || asksAboutTraces(query) {
+		idx.Hint = d.traceReadsHint()
+	}
 	return indexResult(idx, d.writeMode)
+}
+
+// asksAboutTraces reports whether query holds the word trace or traces,
+// ignoring case. Words are split on whitespace, as the search's keywords are,
+// and lose only leading and trailing punctuation ("traces?"), so an operation
+// ID such as trace_list is not the word trace.
+func asksAboutTraces(query string) bool {
+	return slices.ContainsFunc(strings.Fields(query), func(w string) bool {
+		w = strings.TrimFunc(w, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+		return strings.EqualFold(w, "trace") || strings.EqualFold(w, "traces")
+	})
+}
+
+// traceReadsHint returns the hint of a search that matched nothing or asks
+// about traces (#100): a v4 deployment has no Trace tag, so it names how trace
+// data is read instead. It is static text naming only the tools and
+// operations this deployment offers, never the query, and "" when it offers
+// none of them.
+func (d discovery) traceReadsHint() string {
+	var reads []string
+	if d.offersTraceTree {
+		reads = append(reads, "one trace by its ID: "+toolGetTraceTree)
+	}
+	if d.offers(workflows.ObservationsOperationID) {
+		reads = append(reads, "a filtered list of observations: "+toolExecuteRead+" with "+workflows.ObservationsOperationID)
+	}
+	if d.offers(catalog.MetricsOperationID) {
+		reads = append(reads, "aggregates such as cost or latency per day, e.g. for a trace name: "+
+			toolExecuteRead+" with "+catalog.MetricsOperationID)
+	}
+	if len(reads) == 0 {
+		return ""
+	}
+	return "Trace data is read with: " + strings.Join(reads, "; ") +
+		". " + toolDescribeOperation + " returns an operation's parameters."
+}
+
+// offers reports whether the operation index lists the operation id.
+func (d discovery) offers(id string) bool {
+	op, ok := d.catalog.Lookup(id)
+	return ok && d.listed(op)
 }
 
 // tags returns every tag of the listed operations, in order.
@@ -203,6 +263,9 @@ func indexResult(idx operationIndex, writeMode bool) (*mcp.CallToolResult, error
 				b.WriteString("\n")
 			}
 		}
+	}
+	if idx.Hint != "" {
+		b.WriteString("\n\n" + idx.Hint)
 	}
 	return textResult(b.String(), idx)
 }
@@ -323,6 +386,9 @@ func operationDescriptionSchema() map[string]any {
 						"minLength": map[string]any{"type": "integer"},
 						"maxLength": map[string]any{"type": "integer"},
 						"default":   map[string]any{},
+						"guidance": map[string]any{"type": "string", "description": "How to fill the parameter: static text " +
+							"written by this server, not from the Langfuse spec; present only where the spec's type " +
+							"does not say it, e.g. the metrics query JSON."},
 					},
 				},
 			},
@@ -354,6 +420,7 @@ type paramDescription struct {
 	MinLength *int     `json:"minLength,omitempty"`
 	MaxLength *int     `json:"maxLength,omitempty"`
 	Default   any      `json:"default,omitempty"`
+	Guidance  string   `json:"guidance,omitempty"`
 }
 
 // describeArgumentsHint is the hint of an invalid describe_operation call.
@@ -384,7 +451,7 @@ func describe(op catalog.Operation) operationDescription {
 	}
 	for _, p := range op.Params {
 		s := p.Schema
-		pd := paramDescription{Name: p.Name, In: p.In, Required: p.Required}
+		pd := paramDescription{Name: p.Name, In: p.In, Required: p.Required, Guidance: op.ParamGuidance(p)}
 		if s.Type == "array" {
 			pd.Repeated = true
 			if s.Items != nil {
@@ -416,6 +483,9 @@ func descriptionResult(od operationDescription) (*mcp.CallToolResult, error) {
 		b.WriteString("Parameters:\n")
 		for _, p := range od.Parameters {
 			b.WriteString("- " + p.Name + " (" + strings.Join(p.facts(), ", ") + ")\n")
+			if p.Guidance != "" {
+				b.WriteString("  " + p.Guidance + "\n")
+			}
 		}
 	}
 	return textResult(b.String(), od)
@@ -471,7 +541,7 @@ func formatNumber(f float64) string { return strconv.FormatFloat(f, 'f', -1, 64)
 // missing, not a string, empty, longer than maxOperationIDRunes, or holding a
 // control or invisible character; the refused ID is never repeated.
 func decodeDescribeInput(raw json.RawMessage, r sanitize.Redactor) (string, error) {
-	fields, err := argumentFields(raw, r, "describe_operation", "operationId")
+	fields, err := argumentFields(raw, r, toolDescribeOperation, "operationId")
 	if err != nil {
 		return "", err
 	}

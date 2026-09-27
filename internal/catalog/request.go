@@ -87,11 +87,17 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 		}
 		values, err := p.values(v)
 		if err != nil {
+			if o.isMetricsQuery(p) {
+				// A metrics query that is not a string (an object, a list, a
+				// number) gets the metrics query refusal, whose hint says how
+				// the query is sent as a string (#106).
+				return Request{}, queryInvalidf("parameter %s: %s", p.Name, err.Error())
+			}
 			return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
 		}
 		if o.isListLimit(p) {
 			if _, ok := parsePageSize(values[0], MaxLimit); !ok {
-				return Request{}, rangeError{ErrLimitOutOfRange, invalidf("parameter %s: want an integer from 1 to %d",
+				return Request{}, sentinelError{ErrLimitOutOfRange, invalidf("parameter %s: want an integer from 1 to %d",
 					p.Name, MaxLimit)}
 			}
 		}
@@ -158,16 +164,17 @@ func safePathValue(v string, folderName bool) error {
 	return nil
 }
 
-// rangeError is a page size outside its range (limit or config.row_limit);
-// it matches its sentinel and, through the error it wraps,
+// sentinelError is a refusal that also matches a more specific sentinel: a page
+// size outside its range (limit or config.row_limit) or a malformed metrics
+// query. It matches its sentinel and, through the error it wraps,
 // ErrInvalidParameter.
-type rangeError struct {
+type sentinelError struct {
 	sentinel error
 	error
 }
 
-func (e rangeError) Unwrap() error        { return e.error }
-func (e rangeError) Is(target error) bool { return target == e.sentinel }
+func (e sentinelError) Unwrap() error        { return e.error }
+func (e sentinelError) Is(target error) bool { return target == e.sentinel }
 
 // parsePageSize parses s as a page size: a decimal integer from 1 to upper.
 func parsePageSize(s string, upper int) (int, bool) {
