@@ -38,6 +38,7 @@ func UnknownProfile() DeploymentProfile {
 }
 
 // versionPattern accepts a plain major.minor.patch version, such as "3.80.0".
+// It duplicates the catalog's version parser: see #94.
 var versionPattern = regexp.MustCompile(`^[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}$`)
 
 // KnownVersion returns the version and true when it is a plain
