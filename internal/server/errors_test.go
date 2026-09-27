@@ -252,8 +252,26 @@ func TestAnUnavailableOperationReturnsOperationUnavailableWithoutEchoingTheBody(
 			if text := resultText(t, res); strings.Contains(text, tc.bodyText) {
 				t.Fatalf("the tool error echoes the Langfuse body (%q): %s", tc.bodyText, text)
 			}
-			// mcp-tool-design.md: a hint about operation IDs points at
-			// search_operations, never at an external page.
+		})
+	}
+}
+
+// mcp-tool-design.md: a hint about operation IDs points at search_operations,
+// never at an external page.
+func TestAnUnavailableOperationHintPointsAtSearchOperationsNotAnExternalPage(t *testing.T) {
+	t.Parallel()
+	tests := map[string]answer{
+		"HTML body":               htmlNotFound,
+		"JSON naming events_only": eventsOnlyNotFound,
+	}
+	for name, a := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			fake, _ := scriptedLangfuse(t, a)
+			cs := connect(t, fake)
+
+			got := toolErrorOf(t, callExecuteRead(t, cs, traceList)).Error
+
 			if !strings.Contains(got.Hint, "search_operations") || strings.Contains(got.Hint, "http") {
 				t.Errorf("hint %q, want it to point at search_operations and at no external page", got.Hint)
 			}
