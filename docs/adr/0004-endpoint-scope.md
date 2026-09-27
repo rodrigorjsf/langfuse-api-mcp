@@ -13,11 +13,11 @@ Organization **read** operations are exposed when an organization key is configu
 
 - A test asserts the union catalog contains no excluded operation (ingestion, OTLP, org admin mutations), and ADR-0012's fixture test asserts the resolved set per deployment, so a spec update that adds an operation fails CI until it is triaged.
 
-## Amendment: three write operations an agent cannot use safely (2026-09-27, M4 grilling)
+## Amendment: four write operations an agent cannot use safely (2026-09-27, M4 grilling)
 
 Also excluded on every deployment, even in write mode:
 
 - `media_getUploadUrl` and `media_patch`: a media upload is a PUT of the bytes straight to the presigned storage URL, which this server never makes; without it the two calls only leave half-registered media behind.
-- `llmConnections_upsert`: its body carries the LLM provider's API key, which would pass through the model's context and the chat transcript as a tool argument — the same exposure the rule "keys never come from tool arguments" forbids for Langfuse keys. `llmConnections_delete` stays.
+- `llmConnections_upsert` and `blobStorageIntegrations_upsertBlobStorageIntegration`: their bodies carry a third-party credential (the LLM provider's `secretKey`; the storage `accessKeyId`/`secretAccessKey`), which would pass through the model's context and the chat transcript as a tool argument — the same exposure the rule "keys never come from tool arguments" forbids for Langfuse keys. Their deletes stay. The rule is the credential, not the operation: any write whose request body schema has a property whose name contains `secret`, `password` or `accessKey` (case-insensitive) is excluded, and a catalog test fails when a regenerated spec adds one. `token` and `key` alone are not in the pattern: `models_create` has `tokenizerId`.
 
-The catalog test that asserts no excluded operation is present covers these three.
+The catalog test that asserts no excluded operation is present covers these four.
