@@ -136,3 +136,12 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/test_small_model_eval.py
+      # The eval's Ollama stack takes OLLAMA_KV_CACHE_TYPE from the caller's environment; a typo in
+      # the compose file or its interpolation fails here, not at the next hand-run eval. Parse only:
+      # nothing is pulled or started (the stack needs an NVIDIA GPU that runners lack).
+      - name: Validate the small-model eval compose file
+        run: |
+          set -euo pipefail
+          docker compose -f scripts/small-model-eval-ollama.yml config --quiet
+          OLLAMA_KV_CACHE_TYPE=q8_0 docker compose -f scripts/small-model-eval-ollama.yml config \
+            | grep -q 'OLLAMA_KV_CACHE_TYPE: q8_0'

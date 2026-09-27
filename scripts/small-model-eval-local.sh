@@ -12,6 +12,10 @@
 #       change to tool descriptions, hints or the operation index.
 # HOW:  scripts/small-model-eval-local.sh [extra small-model-eval.py flags]
 #       SMALL_MODEL=<ollama model> overrides the model (default qwen3:8b).
+#       OLLAMA_KV_CACHE_TYPE=q8_0 halves the KV cache (default f16), which
+#                   qwen3:14b needs to fit 12 GB of VRAM. Why qwen3:8b with
+#                   f16 stays the default: docs/research/raw/
+#                   2026-09-27-small-model-eval-local-model-vram.md.
 #       docker compose -f scripts/small-model-eval-ollama.yml down -v
 #                   also deletes the model cache (about 5 GB for qwen3:8b).
 #
@@ -44,8 +48,12 @@ MODEL=${SMALL_MODEL:-qwen3:8b}
 BASE_URL=http://127.0.0.1:11434
 READY_TIMEOUT_SECONDS=${READY_TIMEOUT_SECONDS:-120}
 # MemAvailable required before the stack starts: the container's mem_limit
-# (4 GiB) plus 2 GiB for the server, the eval, the Go build cache and WSL itself.
-MIN_MEM_MIB=6144
+# (4 GiB) plus 1 GiB for the server, the eval and WSL itself. It was 6144 (2 GiB
+# headroom) until the host shrank to 7.8 GiB, where that refused even at idle
+# (~6000 MiB available); no run of the 2026-09-27 model comparison took
+# MemAvailable under 4340 MiB (docs/research/raw/
+# 2026-09-27-small-model-eval-local-model-vram.md).
+MIN_MEM_MIB=5120
 
 compose() { docker compose -f "$COMPOSE_FILE" "$@"; }
 
@@ -73,7 +81,7 @@ until curl -fsS -o /dev/null "$BASE_URL/api/version"; do
   sleep 2
   waited=$((waited + 2))
 done
-echo "ollama $(curl -fsS "$BASE_URL/api/version")"
+echo "ollama $(curl -fsS "$BASE_URL/api/version"); KV cache ${OLLAMA_KV_CACHE_TYPE:-f16}"
 
 compose exec -T ollama ollama pull "$MODEL"
 
