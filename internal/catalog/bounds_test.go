@@ -183,3 +183,24 @@ func TestAListLimitOutsideTheCapKeepsItsOwnRefusalWhenTheSpecBoundsItToo(t *test
 		t.Fatalf("Request(limit 1001) error = %v, want ErrLimitOutOfRange", err)
 	}
 }
+
+// #109: "a limit or bound out of range on a write query parameter" has no
+// write-specific case because no write operation's query parameter carries a
+// bound today; the bound check is the one Request runs for every operation.
+// This test fails the day a release spec bounds one, so that case gets its
+// test at the server seam.
+func TestNoWriteQueryParameterCarriesABoundToday(t *testing.T) {
+	t.Parallel()
+	for _, op := range mustLoad(t).Operations() {
+		if op.IsRead() {
+			continue
+		}
+		for _, p := range op.Params {
+			s := p.Schema
+			if p.In == "query" && (s.Minimum != nil || s.Maximum != nil || s.MinLength != nil || s.MaxLength != nil) {
+				t.Errorf("%s query parameter %s carries a bound: add its out-of-range case to execute_write's tests",
+					op.ID, p.Name)
+			}
+		}
+	}
+}
