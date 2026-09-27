@@ -152,9 +152,12 @@ func TestExecuteReadSendsAContinuationCursorToLangfuseUnchangedAsOneQueryParamet
 		t.Fatalf("execute_read returned a tool error: %s", resultText(t, res))
 	}
 	got := receivedOne(t, seen).query
-	if got.Get("cursor") != cursor || len(got["cursor"]) != 1 || len(got["limit"]) != 1 || got.Get("limit") != "100" {
-		t.Errorf("Langfuse received cursor %q and limit %q, want cursor %q unchanged and limit [100]",
-			got["cursor"], got["limit"], cursor)
+	if len(got["cursor"]) != 1 || got.Get("cursor") != cursor {
+		t.Errorf("Langfuse received cursor %q, want exactly [%q], unchanged", got["cursor"], cursor)
+	}
+	// The "&limit=1000" inside the cursor must not become a second limit.
+	if len(got["limit"]) != 1 || got.Get("limit") != "100" {
+		t.Errorf("Langfuse received limit %q, want exactly [100]", got["limit"])
 	}
 }
 

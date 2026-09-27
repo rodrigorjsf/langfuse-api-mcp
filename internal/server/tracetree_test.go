@@ -275,8 +275,8 @@ func TestGetTraceTreeReadsAtMostFivePagesThenReturnsTheNextCursorWithAHint(t *te
 }
 
 // The continuation cursor is Langfuse's data (#93): get_trace_tree hands it
-// back only inside the untrusted-data envelope, as data.meta.cursor, never in
-// its hint or its audit line, and never decodes it.
+// back unchanged, only inside the untrusted-data envelope as data.meta.cursor,
+// never in its hint or its audit line.
 func TestGetTraceTreeHandsBackTheContinuationCursorOnlyInsideTheEnvelope(t *testing.T) {
 	t.Parallel()
 	// Instruction-like text, as a hostile or broken Langfuse could send it.
