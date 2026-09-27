@@ -26,7 +26,8 @@
 # MIN_MEM_MIB MemAvailable (MIN_MEM_AVAILABLE_MIB overrides); the server is
 # built before the model loads, so `go build` never runs beside it; the
 # container is capped in memory and CPUs (scripts/small-model-eval-ollama.yml)
-# and is OOM-killed instead of freezing the host.
+# and is OOM-killed instead of freezing the host; every model layer goes to
+# the GPU, and the run stops before the eval unless `ollama ps` says 100% GPU.
 #
 # qwen3:8b is a thinking model: it spends output tokens on thinking before a
 # tool call, and one turn can take minutes, so the eval runs with
@@ -75,6 +76,19 @@ done
 echo "ollama $(curl -fsS "$BASE_URL/api/version")"
 
 compose exec -T ollama ollama pull "$MODEL"
+
+# Load the model now and refuse to run unless every layer is on the GPU: a
+# partial offload would put the rest of the model in the capped host memory.
+curl -fsS -o /dev/null "$BASE_URL/api/generate" \
+  -d "{\"model\": \"$MODEL\", \"prompt\": \"\", \"keep_alive\": \"30m\"}"
+loaded=$(compose exec -T ollama ollama ps)
+echo "$loaded"
+if ! grep -q "100% GPU" <<<"$loaded"; then
+  echo "$MODEL is not fully on the GPU; refusing to run the eval" >&2
+  compose logs --tail 50 | grep -E "offloaded|layers" >&2 || true
+  exit 1
+fi
+compose logs | grep -E "offloaded [0-9]+/[0-9]+ layers" | tail -1
 
 ANTHROPIC_BASE_URL=$BASE_URL ANTHROPIC_API_KEY=ollama \
   python3 "$ROOT/scripts/small-model-eval.py" --model "$MODEL" \
