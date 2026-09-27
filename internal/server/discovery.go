@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -26,7 +27,9 @@ const searchOperationsDescription = "Lists the Langfuse operations this server c
 	"what it does and the operation to prefer), grouped by tag " +
 	"(the API area: Trace, Prompts, Datasets…).\n\n" +
 	"With query, keeps only the operations where every whitespace-separated keyword appears, ignoring case, " +
-	"in the operation ID, the tag or the description line. Without query, lists every operation.\n\n" +
+	"in the operation ID, the tag or the description line. Without query, lists every operation. " +
+	"When nothing matches, or the query asks about traces, a hint names where trace data is read on this " +
+	"deployment: one trace, filtered lists, aggregates such as cost per day.\n\n" +
 	"Reads the server's built-in catalog only: it does not call Langfuse and does not run any operation. " +
 	"describe_operation returns one operation's parameters; execute_read runs a read operation."
 
@@ -99,6 +102,11 @@ func operationIndexSchema() map[string]any {
 				"items":       map[string]any{"type": "string"},
 				"description": "Every tag that has operations; present only when nothing matched the query.",
 			},
+			"hint": map[string]any{
+				"type": "string",
+				"description": "Where trace data is read on this deployment; present only when nothing matched the query " +
+					"or the query asks about traces.",
+			},
 		},
 	}
 }
@@ -108,6 +116,7 @@ type operationIndex struct {
 	Count  int          `json:"count"`
 	Groups []indexGroup `json:"groups"`
 	Tags   []string     `json:"tags,omitempty"`
+	Hint   string       `json:"hint,omitempty"`
 }
 
 type indexGroup struct {
@@ -129,9 +138,11 @@ func searchArgumentsHint() string {
 }
 
 // discovery serves the discovery tools from the catalog, honoring write mode.
+// traceTree reports whether get_trace_tree is registered.
 type discovery struct {
 	catalog   catalog.Catalog
 	writeMode bool
+	traceTree bool
 	redact    sanitize.Redactor
 }
 
@@ -167,7 +178,48 @@ func (d discovery) searchOperations(_ context.Context, req *mcp.CallToolRequest,
 	if idx.Count == 0 {
 		idx.Tags = d.tags()
 	}
+	if idx.Count == 0 || asksAboutTraces(query) {
+		idx.Hint = d.traceRouteHint()
+	}
 	return indexResult(idx, d.writeMode)
+}
+
+// asksAboutTraces reports whether query holds the word trace or traces,
+// ignoring case.
+func asksAboutTraces(query string) bool {
+	words := strings.FieldsFunc(query, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+	return slices.ContainsFunc(words, func(w string) bool {
+		return strings.EqualFold(w, "trace") || strings.EqualFold(w, "traces")
+	})
+}
+
+// traceRouteHint returns the routing hint of a search that matched nothing or
+// asks about traces (#100): a v4 deployment has no Trace tag, so it names
+// where trace data is read instead. It is static text naming only the routes
+// this deployment offers, never the query, and "" when it offers none.
+func (d discovery) traceRouteHint() string {
+	var routes []string
+	if d.traceTree {
+		routes = append(routes, "one trace by its ID: "+toolGetTraceTree)
+	}
+	if d.offers("observations_getMany") {
+		routes = append(routes, "a filtered list of observations: execute_read with observations_getMany")
+	}
+	if d.offers("metrics_metrics") {
+		routes = append(routes, "aggregates such as cost or latency per day, e.g. for a trace name: "+
+			"execute_read with metrics_metrics")
+	}
+	if len(routes) == 0 {
+		return ""
+	}
+	return "Trace data is read through these routes: " + strings.Join(routes, "; ") +
+		". describe_operation returns an operation's parameters."
+}
+
+// offers reports whether the operation index lists the operation id.
+func (d discovery) offers(id string) bool {
+	op, ok := d.catalog.Lookup(id)
+	return ok && d.listed(op)
 }
 
 // tags returns every tag of the listed operations, in order.
@@ -203,6 +255,9 @@ func indexResult(idx operationIndex, writeMode bool) (*mcp.CallToolResult, error
 				b.WriteString("\n")
 			}
 		}
+	}
+	if idx.Hint != "" {
+		b.WriteString("\n\n" + idx.Hint)
 	}
 	return textResult(b.String(), idx)
 }
