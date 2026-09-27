@@ -81,7 +81,10 @@ func TestEachDeploymentProfileResolvesToExactlyItsOperations(t *testing.T) {
 			"scim_getUser", "scim_listUsers", "scores_get-by-id", "scores_get-many", "sessions_get", "sessions_list",
 			"trace_delete", "trace_deleteMultiple", "trace_get", "trace_list",
 		}},
-		{"latest 3.x, legacy and experiments", catalog.Profile{Version: "3.225.11", Families: []catalog.Family{legacy, experiments}}, []string{
+		// 3.225.11, the latest 3.x, serves the legacy family only: its
+		// experiments routes answer 404 "only available in a Langfuse v4
+		// write mode" (observed 2026-09-26, #73; ADR-0012 amendment, #84).
+		{"latest 3.x (3.225.11), legacy only", catalog.Profile{Version: "3.225.11", Families: []catalog.Family{legacy}}, []string{
 			"annotationQueues_createQueue", "annotationQueues_createQueueAssignment",
 			"annotationQueues_createQueueItem", "annotationQueues_deleteQueueAssignment",
 			"annotationQueues_deleteQueueItem", "annotationQueues_getQueue", "annotationQueues_getQueueItem",
@@ -90,9 +93,9 @@ func TestEachDeploymentProfileResolvesToExactlyItsOperations(t *testing.T) {
 			"blobStorageIntegrations_getBlobStorageIntegrationStatus",
 			"blobStorageIntegrations_getBlobStorageIntegrations",
 			"blobStorageIntegrations_upsertBlobStorageIntegration", "datasetItems_delete", "datasetRunItems_create",
-			"datasetRunItems_list", "datasets_deleteRun", "datasets_getRun", "datasets_getRuns", "experiments_list",
-			"experiments_listItems", "legacy_metricsV1_metrics", "legacy_observationsV1_get",
-			"legacy_observationsV1_getMany", "llmConnections_delete", "llmConnections_list", "llmConnections_upsert",
+			"datasetRunItems_list", "datasets_deleteRun", "datasets_getRun", "datasets_getRuns",
+			"legacy_metricsV1_metrics", "legacy_observationsV1_get", "legacy_observationsV1_getMany",
+			"llmConnections_delete", "llmConnections_list", "llmConnections_upsert",
 			"organizations_getOrganizationApiKeys", "organizations_getOrganizationMemberships",
 			"organizations_getOrganizationProjects", "organizations_getProjectMemberships", "projects_getApiKeys",
 			"promptVersion_update", "prompts_delete", "scim_getResourceTypes", "scim_getSchemas",

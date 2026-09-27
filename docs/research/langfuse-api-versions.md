@@ -13,7 +13,7 @@ The version alone does not decide which operations answer.
 | Deployment | Legacy read family | v4 read family (`/v2/observations`, `/v2/metrics`) |
 |---|---|---|
 | self-hosted before 3.141 (e.g. 3.80.0) | answers | **absent**: HTML 404 `[runtime]` |
-| self-hosted 3.141 to 3.x (e.g. 3.225.11) | answers | routed, but returns 404 JSON *"The observations v2 API is only available in a Langfuse v4 write mode"* `[runtime]`. The experiments family is off too: `/experiments` and `/experiment-items` return 404 JSON *"The experiments API is only available in a Langfuse v4 write mode"* (3.225.11, 2026-09-26, #73), so its deployment profile is legacy only, not ADR-0012's "legacy plus experiments" (#84) `[runtime]` |
+| self-hosted 3.141 to 3.x (e.g. 3.225.11) | answers | routed, but returns 404 JSON *"The observations v2 API is only available in a Langfuse v4 write mode"* `[runtime]`. The experiments family is off too: `/experiments` and `/experiment-items` return 404 JSON *"The experiments API is only available in a Langfuse v4 write mode"* (3.225.11, 2026-09-26, #73), so its deployment profile is legacy only, as the ADR-0012 amendment of 2026-09-27 records (#84) `[runtime]` |
 | v4, `LANGFUSE_MIGRATION_V4_WRITE_MODE=legacy` | answers | returns no data; turned off when `ALLOW_PREVIEW_OPT_IN=false` `[docs]` |
 | v4, `dual` | answers | answers; all 124 spec operations are routed on 4.46.0 `[runtime]` |
 | v4, `events_only` (the default, and every fresh install) | 404 JSON *"not available on deployments running in Langfuse v4 events_only mode"* `[runtime]` | answers |
