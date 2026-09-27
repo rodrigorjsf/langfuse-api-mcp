@@ -303,8 +303,9 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 }
 
 // metricsQueryHint is the hint for a malformed metrics query (#104): how the
-// query is sent as a string (#106), its top-level keys, from the validator's own list, and where the rest of
-// its shape is described. Static text: it never holds the caller's query.
+// query is sent as a string (#106), its top-level keys, from the validator's
+// own list, and where the rest of its shape is described. Static text: it
+// never holds the caller's query.
 func metricsQueryHint(op catalog.Operation) string {
 	describes := "its parameters"
 	if op.HasGuidance() {

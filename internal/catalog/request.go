@@ -86,12 +86,13 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 			continue
 		}
 		values, err := p.values(v)
-		if err != nil && o.isMetricsQuery(p) {
-			// An object or list query gets the metrics query refusal, whose
-			// hint says how the query is sent as a string (#106).
-			return Request{}, queryInvalidf("parameter %s: %s", p.Name, err.Error())
-		}
 		if err != nil {
+			if o.isMetricsQuery(p) {
+				// A metrics query that is not a string (an object, a list, a
+				// number) gets the metrics query refusal, whose hint says how
+				// the query is sent as a string (#106).
+				return Request{}, queryInvalidf("parameter %s: %s", p.Name, err.Error())
+			}
 			return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
 		}
 		if o.isListLimit(p) {

@@ -336,7 +336,7 @@ func TestTheRefusalHintAndTheGuidanceNameTheKeysTheValidatorAccepts(t *testing.T
 // metricsQueryEncoding is the one wording, shared by both refusals' hints and
 // the guidance, of how query is sent.
 const metricsQueryEncoding = `one string whose value is the JSON text of the query object, ` +
-	`such as {"view":"observations",…}: not an object, and with its quotes escaped once, as in any JSON string, never twice`
+	`such as {"view":"observations",…}: not an object, and the value itself has no backslash before its quotes`
 
 func TestAnOverEscapedOrObjectMetricsQueryIsRefusedWithTheSharedEncodingHint(t *testing.T) {
 	t.Parallel()
@@ -354,6 +354,14 @@ func TestAnOverEscapedOrObjectMetricsQueryIsRefusedWithTheSharedEncodingHint(t *
 		"object": {
 			map[string]any{"view": "observations", "filters": []any{map[string]any{"value": hostile}}},
 			"invalid parameter: parameter query: want a string, got an object",
+		},
+		"list": {
+			[]any{"view", hostile},
+			"invalid parameter: parameter query: want a string, got a list",
+		},
+		"number": {
+			7.0,
+			"invalid parameter: parameter query: want a string, got a number",
 		},
 	}
 	for name, tc := range tests {

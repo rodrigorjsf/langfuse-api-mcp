@@ -193,7 +193,7 @@ func checkDepth(raw string) error {
 // cannot drift and never push a model from one wrong shape to the other
 // (#106). Static text: it never holds the caller's query.
 const MetricsQueryEncoding = `one string whose value is the JSON text of the query object, ` +
-	`such as {"view":"observations",…}: not an object, and with its quotes escaped once, as in any JSON string, never twice`
+	`such as {"view":"observations",…}: not an object, and the value itself has no backslash before its quotes`
 
 // MetricsQueryKeys lists the top-level keys of a metrics query, the ones the
 // validator accepts, sorted and separated by ", ".
