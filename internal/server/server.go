@@ -321,14 +321,15 @@ func metricsQueryHint(op catalog.Operation) string {
 // go on with the operation's valid parameter names and describe_operation, so
 // one more call fixes the parameters.
 func parametersHintFor(err error, op catalog.Operation) string {
+	if errors.Is(err, catalog.ErrMetricsQuery) {
+		return metricsQueryHint(op)
+	}
 	hint := parametersHint
 	switch {
 	case errors.Is(err, catalog.ErrLimitOutOfRange):
 		hint = "use a limit from 1 to " + strconv.Itoa(catalog.MaxLimit) +
 			" and page through the rest (page, or cursor from meta.cursor); without a limit the server asks for " +
 			strconv.Itoa(catalog.DefaultLimit)
-	case errors.Is(err, catalog.ErrMetricsQuery):
-		return metricsQueryHint(op)
 	case errors.Is(err, catalog.ErrRowLimitOutOfRange):
 		hint = "set config.row_limit in the query JSON to an integer from 1 to " +
 			strconv.Itoa(catalog.MaxRowLimit) + ", or leave it out and the server asks for " +
