@@ -371,8 +371,8 @@ func operationDescriptionSchema() map[string]any {
 			"method":      map[string]any{"type": "string", "enum": []any{"GET", "POST", "PUT", "PATCH", "DELETE"}},
 			"tool":        map[string]any{"type": "string", "enum": []any{toolExecuteRead, toolExecuteWrite}},
 			"destructive": map[string]any{"type": "boolean", "description": "Whether the operation is destructive " +
-				"(HTTP DELETE, PUT or PATCH) and so needs the user's confirmation, which this server version cannot " +
-				"ask yet: execute_write refuses it with confirmation_unavailable. Present only in write mode."},
+				"(HTTP DELETE, PUT or PATCH) and so needs the user's confirmation: execute_write asks the user through " +
+				"form elicitation before sending it, and refuses it when the client cannot ask. Present only in write mode."},
 			"body": map[string]any{
 				"type":        "object",
 				"description": "The operation's JSON request body; present only in write mode, for an operation that takes one.",
@@ -519,8 +519,9 @@ func descriptionResult(od operationDescription) (*mcp.CallToolResult, error) {
 	switch {
 	case od.Destructive == nil:
 	case *od.Destructive:
-		b.WriteString("Destructive: yes (HTTP " + od.Method + "): it needs the user's confirmation, which this " +
-			"server version cannot ask yet, so execute_write refuses it with confirmation_unavailable.\n")
+		b.WriteString("Destructive: yes (HTTP " + od.Method + "): it needs the user's confirmation; execute_write asks " +
+			"the user through form elicitation before sending it, and refuses it with confirmation_unavailable when " +
+			"the client cannot ask.\n")
 	default:
 		b.WriteString("Destructive: no.\n")
 	}

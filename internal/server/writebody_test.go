@@ -218,8 +218,8 @@ func TestDescribeOperationInWriteModeReturnsTheBodySchemaAndTheDestructiveFlag(t
 	}
 }
 
-// A destructive operation says so; confirmation is not shipped yet (slice 3),
-// so the text says execute_write refuses it.
+// A destructive operation says so, and that execute_write asks the user to
+// confirm it (ticket #113).
 func TestDescribeOperationInWriteModeFlagsADestructiveOperationWithoutABody(t *testing.T) {
 	t.Parallel()
 
@@ -228,10 +228,14 @@ func TestDescribeOperationInWriteModeFlagsADestructiveOperationWithoutABody(t *t
 	if got["destructive"] != true || got["body"] != nil {
 		t.Errorf("structuredContent = %s, want destructive true and no body for a DELETE", mustJSON(t, got))
 	}
-	for _, want := range []string{"Destructive: yes (HTTP DELETE): it needs the user's confirmation", "Body: none"} {
+	for _, want := range []string{"Destructive: yes (HTTP DELETE): it needs the user's confirmation",
+		"execute_write asks the user", "form elicitation", "Body: none"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text does not contain %q:\n%s", want, text)
 		}
+	}
+	if strings.Contains(text, "cannot ask yet") {
+		t.Errorf("text says confirmation is not shipped:\n%s", text)
 	}
 }
 

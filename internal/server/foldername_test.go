@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 )
 
 // Seam S1 (spec #44, ticket #33): a Folder name — a prompt or dataset name
@@ -271,4 +273,115 @@ func TestALangfuse404Or400OnANameWithoutFoldersKeepsItsUsualHint(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Ticket #113: the write operations whose promptName, name (a prompt's) or
+// datasetName path parameter holds a Folder name take one too, sent as %2F
+// after the user confirms the call. promptVersion_update named its parameter
+// promptName before Langfuse 3.18.0 and name since.
+func TestAFolderNameReachesLangfuseOnAConfirmedWrite(t *testing.T) {
+	t.Parallel()
+	older := resolvedFor(t, catalog.Profile{Version: "3.16.0"})
+	tests := map[string]struct {
+		catalog  *catalog.Catalog
+		args     map[string]any
+		wantPath string
+	}{
+		"prompts_delete promptName": {
+			args:     map[string]any{"operationId": "prompts_delete", "parameters": map[string]any{"promptName": "folder/sub/name"}},
+			wantPath: "/api/public/v2/prompts/folder%2Fsub%2Fname",
+		},
+		"promptVersion_update name": {
+			args: map[string]any{"operationId": "promptVersion_update",
+				"parameters": map[string]any{"name": "folder/name", "version": 2},
+				"body":       map[string]any{"newLabels": []any{"production"}}},
+			wantPath: "/api/public/v2/prompts/folder%2Fname/versions/2",
+		},
+		"promptVersion_update promptName before 3.18.0": {
+			catalog: &older,
+			args: map[string]any{"operationId": "promptVersion_update",
+				"parameters": map[string]any{"promptName": "folder/name", "version": 2},
+				"body":       map[string]any{"newLabels": []any{"production"}}},
+			wantPath: "/api/public/v2/prompts/folder%2Fname/version/2",
+		},
+		"datasets_deleteRun datasetName": {
+			args: map[string]any{"operationId": "datasets_deleteRun",
+				"parameters": map[string]any{"datasetName": "evaluation/qa-dataset", "runName": "run-1"}},
+			wantPath: "/api/public/datasets/evaluation%2Fqa-dataset/runs/run-1",
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			fake, seen := writeLangfuse(t, http.StatusOK, `{}`)
+			client, _ := answering("accept")
+			cs := connectConfirm(t, fake, confirmSetup{client: client, catalog: tc.catalog})
+
+			res := callExecuteWrite(t, cs, tc.args)
+
+			if res.IsError {
+				t.Fatalf("execute_write returned a tool error: %s", resultText(t, res))
+			}
+			if got := writtenOne(t, seen).path; got != tc.wantPath {
+				t.Errorf("path = %s, want %s", got, tc.wantPath)
+			}
+		})
+	}
+}
+
+func TestAFolderNameOnAWriteThatCouldLeaveItsSegmentIsRefusedBeforeTheUserIsAsked(t *testing.T) {
+	t.Parallel()
+	calls := map[string]func(string) map[string]any{
+		"prompts_delete promptName": func(v string) map[string]any {
+			return map[string]any{"operationId": "prompts_delete", "parameters": map[string]any{"promptName": v}}
+		},
+		"promptVersion_update name": func(v string) map[string]any {
+			return map[string]any{"operationId": "promptVersion_update",
+				"parameters": map[string]any{"name": v, "version": 2},
+				"body":       map[string]any{"newLabels": []any{"production"}}}
+		},
+		"datasets_deleteRun datasetName": func(v string) map[string]any {
+			return map[string]any{"operationId": "datasets_deleteRun",
+				"parameters": map[string]any{"datasetName": v, "runName": "run-1"}}
+		},
+	}
+	for _, value := range []string{
+		"a/../b", "a/./b", "..", ".", "/a", "a/", "a//b", `a\b`, "https://evil/x", "//evil/x", "a/b\x00c",
+	} {
+		for name, call := range calls {
+			t.Run(name+" "+value, func(t *testing.T) {
+				t.Parallel()
+				fake, seen := writeLangfuse(t, http.StatusOK, `{}`)
+				client, u := answering("accept")
+				cs := connectConfirm(t, fake, confirmSetup{client: client})
+
+				got := toolErrorOf(t, callExecuteWrite(t, cs, call(value))).Error
+
+				if param := strings.Fields(name)[1]; got.Code != "invalid_argument" || !strings.Contains(got.Message, param) ||
+					(len(value) > 2 && strings.Contains(got.Message, value)) {
+					t.Errorf("error = %+v, want invalid_argument naming %s, never the value", got, param)
+				}
+				writtenNothing(t, seen)
+				if len(u.questions()) != 0 {
+					t.Errorf("the user was asked to confirm a refused Folder name")
+				}
+			})
+		}
+	}
+}
+
+// The runName of datasets_deleteRun stays off the allow-list.
+func TestASlashIsStillRefusedInTheRunNameOfDatasetsDeleteRun(t *testing.T) {
+	t.Parallel()
+	fake, seen := writeLangfuse(t, http.StatusOK, `{}`)
+	client, _ := answering("accept")
+	cs := connectConfirm(t, fake, confirmSetup{client: client})
+
+	got := toolErrorOf(t, callExecuteWrite(t, cs, map[string]any{"operationId": "datasets_deleteRun",
+		"parameters": map[string]any{"datasetName": "evaluation/qa-dataset", "runName": "runs/run-1"}})).Error
+
+	if got.Code != "invalid_argument" || !strings.Contains(got.Message, "runName") {
+		t.Errorf("error = %+v, want invalid_argument naming runName", got)
+	}
+	writtenNothing(t, seen)
 }

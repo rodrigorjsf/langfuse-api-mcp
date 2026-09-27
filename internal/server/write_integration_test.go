@@ -6,7 +6,9 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -17,7 +19,7 @@ import (
 )
 
 // Spec #109, ticket #110: a live write cycle through execute_write, on a
-// pinned self-hosted deployment only. The Langfuse Cloud test project has no
+// pinned self-hosted deployment only (#110, #113). The Langfuse Cloud test project has no
 // pin (LANGFUSE_TEST_DEPLOYMENT unset) and is never written to: its Hobby
 // limits and shared data are not the suite's to spend.
 
@@ -103,4 +105,97 @@ func readScoreBack(t *testing.T, cs *mcp.ClientSession, id string) (liveScore, b
 		return liveScore{}, false
 	}
 	return page.Data[0], true
+}
+
+// Ticket #113: a destructive write runs live only after the user confirms it.
+// The prompt lives in a folder, so the write Folder-name entries are proven
+// on a real Langfuse too. The client's user accepts every confirmation.
+func TestLiveExecuteWriteCreatesRelabelsAndDeletesAPromptWithTheUsersConfirmation(t *testing.T) {
+	t.Parallel()
+	if os.Getenv(envTestDeployment) == "" {
+		t.Skipf("%s not set: writes run against a pinned self-hosted deployment only, never Langfuse Cloud",
+			envTestDeployment)
+	}
+	client, keys := liveClient(t, langfuse.Options{RateLimit: liveRateLimit})
+	answers, u := answering("accept")
+	cs := startConfirm(t, client, keys, confirmSetup{client: answers})
+	name := "it-write-" + randomHex(t, 4) + "/cycle"
+	t.Cleanup(func() { deletePromptDirect(t, name) }) // after a failure only: the cycle deletes it
+
+	var created livePrompt
+	liveData(t, callExecuteWrite(t, cs, map[string]any{"operationId": "prompts_create", "body": map[string]any{
+		"name": name, "type": "text", "prompt": "Summarize the trace.", "labels": []any{"staging"},
+	}}), &created)
+	if created.Name != name || created.Version != 1 {
+		t.Fatalf("prompts_create answered %+v, want %q version 1", created, name)
+	}
+
+	var relabelled livePrompt
+	liveData(t, callExecuteWrite(t, cs, map[string]any{"operationId": "promptVersion_update",
+		"parameters": map[string]any{"name": name, "version": 1},
+		"body":       map[string]any{"newLabels": []any{"production"}}}), &relabelled)
+	if !slices.Contains(relabelled.Labels, "production") {
+		t.Fatalf("promptVersion_update answered labels %v, want production among them", relabelled.Labels)
+	}
+
+	if res := callExecuteWrite(t, cs, map[string]any{"operationId": "prompts_delete",
+		"parameters": map[string]any{"promptName": name}}); res.IsError {
+		t.Fatalf("prompts_delete returned a tool error: %s", resultText(t, res))
+	}
+	if asked := u.questions(); len(asked) != 2 {
+		t.Fatalf("the user was asked %d times, want twice (the PATCH and the DELETE, not the POST)", len(asked))
+	}
+	res := callExecuteRead(t, cs, map[string]any{"operationId": "prompts_get", "parameters": map[string]any{"promptName": name}})
+	if code := toolErrorOf(t, res).Error.Code; code != "langfuse_not_found" {
+		t.Fatalf("prompts_get after the delete answered %s, want langfuse_not_found", code)
+	}
+}
+
+func TestLiveADeclinedDeleteLeavesThePromptInPlace(t *testing.T) {
+	t.Parallel()
+	if os.Getenv(envTestDeployment) == "" {
+		t.Skipf("%s not set: writes run against a pinned self-hosted deployment only, never Langfuse Cloud",
+			envTestDeployment)
+	}
+	client, keys := liveClient(t, langfuse.Options{RateLimit: liveRateLimit})
+	answers, _ := answering("decline")
+	cs := startConfirm(t, client, keys, confirmSetup{client: answers})
+	name := "it-write-" + randomHex(t, 4) + "/kept"
+	status, body := langfuseDirect(t.Context(), t, http.MethodPost, "/api/public/v2/prompts", map[string]any{
+		"name": name, "type": "text", "prompt": "Keep me.", "labels": []string{"production"},
+	})
+	if status != http.StatusOK && status != http.StatusCreated {
+		t.Fatalf("create prompt %q: HTTP %d %s", name, status, body)
+	}
+	t.Cleanup(func() { deletePromptDirect(t, name) })
+
+	res := callExecuteWrite(t, cs, map[string]any{"operationId": "prompts_delete",
+		"parameters": map[string]any{"promptName": name}})
+
+	if code := toolErrorOf(t, res).Error.Code; code != "confirmation_declined" {
+		t.Fatalf("prompts_delete answered %s, want confirmation_declined", code)
+	}
+	var kept livePrompt
+	liveData(t, readLive(t, cs, map[string]any{"operationId": "prompts_get",
+		"parameters": map[string]any{"promptName": name}}, sleepCtx), &kept)
+	if kept.Name != name {
+		t.Fatalf("prompts_get after the declined delete = %+v, want the prompt %q still in place", kept, name)
+	}
+}
+
+// livePrompt is the part of a prompt the write cycle checks.
+type livePrompt struct {
+	Name    string   `json:"name"`
+	Version int      `json:"version"`
+	Labels  []string `json:"labels"`
+}
+
+// deletePromptDirect deletes every version of the prompt straight through
+// Langfuse; a failure (e.g. 404, already deleted) is logged only.
+func deletePromptDirect(t *testing.T, name string) {
+	t.Helper()
+	// t.Context() is already cancelled when cleanups run.
+	status, body := langfuseDirect(context.WithoutCancel(t.Context()), t, http.MethodDelete,
+		"/api/public/v2/prompts/"+url.PathEscape(name), nil)
+	t.Logf("cleanup: DELETE prompt %q → %d %s", name, status, body)
 }

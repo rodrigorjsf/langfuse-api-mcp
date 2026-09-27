@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -78,6 +79,8 @@ type Option func(*options)
 
 type options struct {
 	writeMode bool
+	// now is the clock that dates confirmation states; tests replace it.
+	now func() time.Time
 }
 
 // WithWriteMode turns write mode on: execute_write is registered, and the
@@ -95,13 +98,14 @@ func WithWriteMode() Option { return func(o *options) { o.writeMode = true } }
 func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets Secrets,
 	profile langfuse.DeploymentProfile, opts ...Option,
 ) *mcp.Server {
-	var o options
+	o := options{now: time.Now}
 	for _, opt := range opts {
 		opt(&o)
 	}
 	s := mcp.NewServer(&mcp.Implementation{Name: "langfuse-mcp", Version: "0.0.0-dev"}, nil)
 	redact := secrets.redactor()
-	ex := executor{catalog: cat, client: client, redact: redact, profile: profile, writeMode: o.writeMode}
+	ex := executor{catalog: cat, client: client, redact: redact, profile: profile, writeMode: o.writeMode,
+		confirmer: newConfirmer(o.now)}
 	traceTree := profile.On(catalog.V4ReadFamily)
 	d := discovery{catalog: cat, writeMode: o.writeMode, offersTraceTree: traceTree, redact: redact}
 	s.AddTool(&mcp.Tool{
@@ -172,6 +176,9 @@ type executor struct {
 	profile langfuse.DeploymentProfile
 	// writeMode reports whether execute_write is registered.
 	writeMode bool
+	// confirmer signs and checks the confirmation states of destructive
+	// writes; its key lives as long as the process.
+	confirmer confirmer
 }
 
 // executeReadInput is the execute_read argument object (executeReadSchema).
@@ -262,7 +269,7 @@ const (
 		"(prompts_list and datasets_list list existing ones); a reverse proxy in front of a self-hosted Langfuse " +
 		"may decode %2F before Langfuse sees it (langfuse/langfuse#12720), and then for a prompt, prompts_list " +
 		"with the full name in its name query parameter still finds it; the dataset runs routes " +
-		"(datasets_getRuns, datasets_getRun) currently fail upstream for Folder names (langfuse/langfuse#13933)"
+		"(datasets_getRuns, datasets_getRun, datasets_deleteRun) currently fail upstream for Folder names (langfuse/langfuse#13933)"
 	// notFoundHint answers an unknown operation ID (#36).
 	notFoundHint = "call search_operations to find the operation ID: without arguments it lists every " +
 		"operation, with query it keeps those matching keywords such as \"prompt get\""

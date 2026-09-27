@@ -274,8 +274,10 @@ func writeSample(op catalog.Operation) map[string]any {
 	return args
 }
 
-// Every destructive operation is refused before anything is sent: the user
-// cannot confirm it yet (confirmation arrives in ticket 3).
+// Every destructive operation is refused before anything is sent when the
+// client cannot ask the user to confirm it (the test client offers no
+// elicitation): with arguments that pass their checks it is
+// confirmation_unavailable; its arguments are checked first (ticket #113).
 func TestExecuteWriteRefusesEveryDestructiveOperationWithConfirmationUnavailable(t *testing.T) {
 	t.Parallel()
 	cat, err := catalog.Load()
@@ -284,26 +286,28 @@ func TestExecuteWriteRefusesEveryDestructiveOperationWithConfirmationUnavailable
 	}
 	fake, seen := writeLangfuse(t, http.StatusOK, `{}`)
 	cs := connectWrites(t, fake)
-	destructive := 0
+	destructive, unavailable := 0, 0
 	for _, op := range cat.Operations() {
 		if !op.IsDestructive() {
 			continue
 		}
 		destructive++
 		got := toolErrorOf(t, callExecuteWrite(t, cs, writeSample(op))).Error
-		if got.Code != "confirmation_unavailable" || got.OperationID != op.ID || got.Retryable ||
-			got.Hint != "this server cannot yet ask the user to confirm a destructive operation "+
-				"(DELETE, PUT, PATCH), so it never runs one; make the change in the Langfuse UI" {
+		switch {
+		case got.Code == "confirmation_unavailable" && got.OperationID == op.ID && !got.Retryable &&
+			got.Hint == "the client cannot confirm destructive operations (DELETE, PUT, PATCH): it offers no "+
+				"form elicitation, so they never run; use a client with form elicitation, or make the change in "+
+				"the Langfuse UI":
+			unavailable++
+		case got.Code == "invalid_argument" && op.Body != nil:
+			// The sample's empty body fails the operation's schema: refused before confirmation.
+		default:
 			t.Errorf("%s %s: error = %+v, want confirmation_unavailable with the static hint", op.Method, op.ID, got)
 		}
 	}
-	// Refused whatever the arguments: a bad parameter or a body it does not take.
-	if got := toolErrorOf(t, callExecuteWrite(t, cs, map[string]any{"operationId": "trace_delete",
-		"parameters": map[string]any{"nope": "x"}, "body": map[string]any{"note": "x"}})).Error; got.Code != "confirmation_unavailable" {
-		t.Errorf("trace_delete with bad arguments: error = %+v, want confirmation_unavailable", got)
-	}
-	if destructive < 30 {
-		t.Fatalf("the catalog holds %d destructive operations, want the DELETE, PUT and PATCH ones (30 or more)", destructive)
+	if destructive < 30 || unavailable < 20 {
+		t.Fatalf("the catalog holds %d destructive operations, %d refused as unconfirmable, want 30 or more "+
+			"and 20 or more", destructive, unavailable)
 	}
 	writtenNothing(t, seen)
 }
@@ -614,7 +618,7 @@ func TestExecuteWriteLogsItsAuditLineAtWarnWithTheConfirmationOutcomeAndNoBody(t
 			wantConfirmation: "not_required", wantMethod: "POST"},
 		"a DELETE with arguments it does not take": {args: map[string]any{"operationId": "trace_delete",
 			"parameters": map[string]any{"nope": planted}, "body": map[string]any{"note": planted}},
-			wantConfirmation: "unavailable", wantMethod: "DELETE"},
+			wantMethod: "DELETE"}, // refused before its confirmation starts
 		"an unknown operation": {args: map[string]any{"operationId": "no_such_write", "body": planted}},
 	}
 	for name, tc := range tests {
