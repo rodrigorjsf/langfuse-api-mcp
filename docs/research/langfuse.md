@@ -90,6 +90,17 @@ Sources: `[sourced]` local spec (script over every GET: `cursor` vs `page` param
 `/faq/all/deprecated-api-migration#dataset-runs`; `/docs/metrics/features/metrics-api#v2`.
 Observations v2 is **always sorted by `startTime` descending**. It has no `orderBy`. `[sourced]` public-api page.
 
+**Observations v2 cursor format (#93).** `meta.cursor` is base64 of a JSON keyset position: the sort key of the last row served, never an offset and never the page size. Two forms are documented and observed:
+
+- `{"lastStartTimeTo":"2026-09-24T01:53:32.683Z","lastTraceId":"a15f…1457","lastId":"dbd1a6c259d1b876"}`: decoded from a live cursor, self-hosted 4.46.0 `events_only`, `GET /v2/observations?limit=2&fields=core`, 2026-09-27. `[verified]` The cookbook `/guides/cookbook/example_data_migration` shows the same form. `[sourced]`
+- `{"lastStartTime":"2025-12-15T10:30:00Z","lastId":"obs-100"}`: the example cursor of the Observations API docs page as quoted at triage of #93 (`/docs/api-and-data-platform/features/observations-api`, which then said "the cursor encodes only the read position, not your query"). `[sourced]` That path now redirects to the public-api page, whose pagination section says only "pass this cursor … to continue where you left off" and shows the truncated `eyJsYXN0...` (checked with the langfuse-docs MCP, 2026-09-27).
+
+Consequences:
+
+- The cursor holds no `limit`, so a cursor issued at one page size continues correctly at another. `[verified]` `TestLiveObservationsCursorContinuesAtADifferentLimitWithoutGapsOrRepeats` (`internal/server/cursor_integration_test.go`) seeds one trace of 5 spans, two of them with the same start time, and reads it through `execute_read` twice: at limit 2 throughout, and at limit 2 then limit 1 from the returned cursor. Both reads return the same 5 IDs in the same order, with no gap and no repeat (self-hosted 4.46.0 `events_only`, 2026-09-27). This is what makes `get_trace_tree`'s continuation safe: its cursor comes from a page read at limit 1000, and `execute_read` continues it at a limit of at most 100.
+- The cursor does not encode the query, so every call must repeat the filters of the first request (`traceId`, `fields`, time window, `filter`). `[sourced]` triage quote above; the public-api page's example repeats `fields` and `traceId` next to the cursor.
+- The server treats the cursor as opaque: it never decodes it, sends it back as one query parameter, and returns it only inside the untrusted-data envelope.
+
 ### 1.5 Field projection (`fields`)
 
 | Endpoint | Groups | Default | Notes |

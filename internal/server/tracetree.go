@@ -94,7 +94,9 @@ const (
 		"ingested yet (data sent by older SDKs can take up to 15 minutes to appear); execute_read with " +
 		"observations_getMany lists recent observations with their traceId"
 	// traceTreeMoreHint answers a trace longer than the pages the tool reads.
-	// Continuing a limit-1000 cursor at limit 100 is not yet proven safe: see #93.
+	// Continuing its limit-1000 cursor at limit 100 is safe: the Observations v2
+	// cursor is a keyset position that holds no page size (#93,
+	// docs/research/langfuse.md §1.4, TestLiveObservationsCursorContinuesAtADifferentLimitWithoutGapsOrRepeats).
 	traceTreeMoreHint = "the trace has more observations than the 5 pages of 1000 this tool reads; Langfuse sends " +
 		"the newest first, so the oldest are missing and some rows may be orphans; execute_read with operationId " +
 		"observations_getMany and parameters traceId, fields, cursor (from data.meta.cursor) and a limit of at most " +

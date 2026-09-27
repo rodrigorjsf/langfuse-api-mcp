@@ -8,8 +8,9 @@
 #   ADR-0012 (3.80.0, the latest 3.x, 4.x `events_only`, 4.x `dual`), one runner each.
 #   TestLiveDeploymentAnswersEveryReadOperationOfItsResolvedCatalog proves there that startup
 #   detects the deployment's profile and that every read operation of the resolved catalog is
-#   reachable; a failure names the deployment and the operation ID. The payload-query probe seeds
-#   over OTLP/JSON and reads /v2/observations, so it runs on `events_only` only (see #85).
+#   reachable; a failure names the deployment and the operation ID. The payload-query probe and the
+#   cursor page-size probe (#93) seed over OTLP/JSON and read /v2/observations, so they run on
+#   `events_only` only (see #85).
 # - cloud: weekly and on manual dispatch against the dedicated Langfuse Cloud test project, whose
 #   keys scripts/setup-ci-langfuse-cloud.sh stored as repository secrets. Weekly only, to respect
 #   the Hobby plan's rate limits; the suite waits for Retry-After on 429.
@@ -75,13 +76,13 @@ jobs:
       matrix:
         include:
           - deployment: 3.80.0
-            skip: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows
+            skip: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows|TestLiveObservationsCursorContinuesAtADifferentLimitWithoutGapsOrRepeats
           - deployment: 3.225.11
-            skip: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows
+            skip: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows|TestLiveObservationsCursorContinuesAtADifferentLimitWithoutGapsOrRepeats
           - deployment: 4.46.0-events_only
             skip: ""
           - deployment: 4.46.0-dual
-            skip: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows
+            skip: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows|TestLiveObservationsCursorContinuesAtADifferentLimitWithoutGapsOrRepeats
     runs-on: ubuntu-latest
     timeout-minutes: 25
     concurrency:

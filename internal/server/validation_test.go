@@ -65,6 +65,15 @@ func TestExecuteReadRejectsInvalidParametersNamingTheFieldAndTheReason(t *testin
 			operationID: "trace_list", params: map[string]any{"tags": []any{"prod", 7}},
 			wantField: "tags", wantReason: "string",
 		},
+		// The continuation cursor get_trace_tree hands back (#93) is an opaque string.
+		"number where a cursor string is expected": {
+			operationID: "observations_getMany", params: map[string]any{"cursor": 42},
+			wantField: "cursor", wantReason: "string",
+		},
+		"object where a cursor string is expected": {
+			operationID: "observations_getMany", params: map[string]any{"cursor": map[string]any{"lastId": "o-1"}},
+			wantField: "cursor", wantReason: "string",
+		},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -120,6 +129,32 @@ func TestExecuteReadRejectsPathParameterValuesThatCouldRedirectTheRequest(t *tes
 			}
 			assertNoRequest(t, seen)
 		})
+	}
+}
+
+// A continuation cursor (#93) is opaque: execute_read sends it to Langfuse
+// byte for byte as one query parameter, never decoded, split or reshaped,
+// next to a limit at the cap.
+func TestExecuteReadSendsAContinuationCursorToLangfuseUnchangedAsOneQueryParameter(t *testing.T) {
+	t.Parallel()
+	// A keyset cursor as Langfuse issues it, plus the characters a query string
+	// must escape: base64 padding, '+', '/', '&', '#', and markup.
+	const cursor = "eyJsYXN0SWQiOiJvLTEifQ==+/&limit=1000#<b>x</b>"
+	fake, seen := fakeLangfuse(t, http.StatusOK, `{"data":[],"meta":{}}`)
+	cs := connect(t, fake)
+
+	res := callExecuteRead(t, cs, map[string]any{
+		"operationId": "observations_getMany",
+		"parameters":  map[string]any{"traceId": "t-1", "cursor": cursor, "limit": 100},
+	})
+
+	if res.IsError {
+		t.Fatalf("execute_read returned a tool error: %s", resultText(t, res))
+	}
+	got := receivedOne(t, seen).query
+	if got.Get("cursor") != cursor || len(got["cursor"]) != 1 || len(got["limit"]) != 1 || got.Get("limit") != "100" {
+		t.Errorf("Langfuse received cursor %q and limit %q, want cursor %q unchanged and limit [100]",
+			got["cursor"], got["limit"], cursor)
 	}
 }
 
