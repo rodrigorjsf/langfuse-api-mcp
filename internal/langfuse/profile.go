@@ -71,7 +71,10 @@ type Detection struct {
 	// Unsupported is set when the detected version is below v3.0.0, the
 	// supported floor (ADR-0012 §4): the catalog then ignores the families.
 	Unsupported bool
-	Warnings    []ProbeWarning
+	// Undecided are the families kept on although their sentinel gave no
+	// deciding answer; each also has a warning.
+	Undecided []catalog.Family
+	Warnings  []ProbeWarning
 }
 
 // ProbeWarning says why a probe left its part of the profile undecided.
@@ -138,6 +141,7 @@ func (c *Client) DetectProfile(ctx context.Context, budget time.Duration) Detect
 			d.Profile.Families = append(d.Profile.Families, s.family)
 		}
 		if reasons[i] != "" {
+			d.Undecided = append(d.Undecided, s.family)
 			d.Warnings = append(d.Warnings, ProbeWarning{Probe: string(s.family), Reason: reasons[i]})
 		}
 	}

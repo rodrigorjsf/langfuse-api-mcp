@@ -229,10 +229,10 @@ Nothing to configure: at startup the server detects which Langfuse it talks to, 
 The startup log shows what was detected, as one JSON line on stderr:
 
 ```json
-{"time":"…","level":"INFO","msg":"deployment profile","version":"4.46.0","families":["v4 read","experiments"],"operations":97}
+{"time":"…","level":"INFO","msg":"deployment profile","version":"4.46.0","families":["v4 read","experiments"],"undecided":[],"operations":97}
 ```
 
-`version` is `unknown` when it could not be detected; `families` lists the families on; `operations` counts the operations offered, reads and writes. Each undecided probe adds one line such as `{"level":"WARN","msg":"deployment profile probe undecided","probe":"legacy","reason":"family kept on: sentinel answered HTTP 401"}`. These lines never hold what Langfuse sent, nor your keys.
+`version` is `unknown` when it could not be detected; `families` lists the families on; `undecided` lists those of them kept on only because their probe got no deciding answer (the others answered); `operations` counts the operations offered, reads and writes. Each undecided probe adds one line such as `{"level":"WARN","msg":"deployment profile probe undecided","probe":"legacy","reason":"family kept on: sentinel answered HTTP 401"}`. These lines never hold what Langfuse sent, nor your keys.
 
 ### Behavior **(Planned)**
 

@@ -415,3 +415,32 @@ func TestExecutableLogsAVersionBelowTheSupportedFloorAsUnsupported(t *testing.T)
 			unsupported, s.stderr)
 	}
 }
+
+// Spec #68 story 23: the startup line tells the families that answered from
+// those kept on only because their probe could not decide.
+func TestExecutableLogsWhichFamiliesAreOnWithoutAnAnswer(t *testing.T) {
+	t.Parallel()
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/public/health":
+			_, _ = io.WriteString(w, `{"status":"OK","version":"4.46.0"}`) // a failed write leaves the version unknown, which the test sees
+		case "/api/public/experiments":
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = io.WriteString(w, `{"message":"boom"}`) // as above
+		default:
+			_, _ = io.WriteString(w, `{"data":[],"meta":{}}`) // as above
+		}
+	}))
+	t.Cleanup(fake.Close)
+	s := startStdio(t, "LANGFUSE_BASE_URL="+fake.URL)
+	s.initialize()
+	s.stop()
+
+	got := profileLogLine(t, s.stderr.Bytes())
+	families, _ := json.Marshal(got["families"])
+	undecided, _ := json.Marshal(got["undecided"])
+	if string(families) != `["legacy","v4 read","experiments"]` || string(undecided) != `["experiments"]` {
+		t.Errorf("deployment profile log line = %v, want families [legacy v4 read experiments] with undecided [experiments]", got)
+	}
+}

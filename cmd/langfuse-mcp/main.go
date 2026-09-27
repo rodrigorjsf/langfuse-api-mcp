@@ -112,9 +112,10 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 	})
 	// The deployment profile (ADR-0012 §3), detected once: the tool set and
 	// the operation set are then fixed until the process exits.
-	profile := detectProfile(log, client)
+	detection := detectProfile(log, client)
+	profile := detection.Profile
 	resolved := cat.Resolve(catalogProfile(profile))
-	logProfile(log, profile, len(resolved.Operations()))
+	logProfile(log, detection, len(resolved.Operations()))
 	srv := server.New(resolved, client, log, server.Secrets{Keys: keys}, profile)
 	serve := func(ctx context.Context) error {
 		// On shutdown, close the keep-alive connections to Langfuse instead of
@@ -129,7 +130,7 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 // langfuse.DefaultDetectionBudget, logs a version below the supported floor as
 // unsupported, and logs one warning per probe that could not decide. The
 // warnings hold fixed text only, never a Langfuse answer.
-func detectProfile(log *slog.Logger, client *langfuse.Client) langfuse.DeploymentProfile {
+func detectProfile(log *slog.Logger, client *langfuse.Client) langfuse.Detection {
 	d := client.DetectProfile(context.Background(), langfuse.DefaultDetectionBudget)
 	if version, ok := d.Profile.KnownVersion(); ok && d.Unsupported {
 		log.Warn("unsupported Langfuse version", "version", version,
@@ -138,13 +139,14 @@ func detectProfile(log *slog.Logger, client *langfuse.Client) langfuse.Deploymen
 	for _, w := range d.Warnings {
 		log.Warn("deployment profile probe undecided", "probe", w.Probe, "reason", w.Reason)
 	}
-	return d.Profile
+	return d
 }
 
-// logProfile logs the detected version, the families on and the number of
-// operations the resolved catalog offers. The version is untrusted Langfuse
-// text: only a plain version is logged.
-func logProfile(log *slog.Logger, p langfuse.DeploymentProfile, operations int) {
+// logProfile logs the detected version, the families on, those of them kept on
+// without a deciding answer, and the number of operations the resolved catalog
+// offers. The version is untrusted Langfuse text: only a plain version is logged.
+func logProfile(log *slog.Logger, d langfuse.Detection, operations int) {
+	p := d.Profile
 	version, ok := p.KnownVersion()
 	if !ok {
 		version = "unknown"
@@ -155,7 +157,11 @@ func logProfile(log *slog.Logger, p langfuse.DeploymentProfile, operations int) 
 			families = append(families, string(f))
 		}
 	}
-	log.Info("deployment profile", "version", version, "families", families, "operations", operations)
+	undecided := make([]string, 0, len(d.Undecided))
+	for _, f := range d.Undecided {
+		undecided = append(undecided, string(f))
+	}
+	log.Info("deployment profile", "version", version, "families", families, "undecided", undecided, "operations", operations)
 }
 
 // logProxy logs the proxy in use as scheme://host:port with its variable and
