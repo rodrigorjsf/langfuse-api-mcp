@@ -143,8 +143,10 @@ func detectProfile(log *slog.Logger, client *langfuse.Client) langfuse.Detection
 }
 
 // logProfile logs the detected version, the families on, those of them kept on
-// without a deciding answer, and the number of operations the resolved catalog
-// offers. The version is untrusted Langfuse text: only a plain version is logged.
+// without a deciding answer, whether the version is unsupported, and the number
+// of operations the resolved catalog offers. An unsupported version lists no
+// family: the catalog ignores them. The version is untrusted Langfuse text:
+// only a plain version is logged.
 func logProfile(log *slog.Logger, d langfuse.Detection, operations int) {
 	p := d.Profile
 	version, ok := p.KnownVersion()
@@ -152,16 +154,19 @@ func logProfile(log *slog.Logger, d langfuse.Detection, operations int) {
 		version = "unknown"
 	}
 	families := make([]string, 0, len(p.Families))
-	for _, f := range catalog.AllFamilies() {
-		if p.On(f) {
-			families = append(families, string(f))
+	undecided := make([]string, 0, len(d.Undecided))
+	if !d.Unsupported {
+		for _, f := range catalog.AllFamilies() {
+			if p.On(f) {
+				families = append(families, string(f))
+			}
+		}
+		for _, f := range d.Undecided {
+			undecided = append(undecided, string(f))
 		}
 	}
-	undecided := make([]string, 0, len(d.Undecided))
-	for _, f := range d.Undecided {
-		undecided = append(undecided, string(f))
-	}
-	log.Info("deployment profile", "version", version, "families", families, "undecided", undecided, "operations", operations)
+	log.Info("deployment profile", "version", version, "families", families, "undecided", undecided,
+		"unsupported", d.Unsupported, "operations", operations)
 }
 
 // logProxy logs the proxy in use as scheme://host:port with its variable and

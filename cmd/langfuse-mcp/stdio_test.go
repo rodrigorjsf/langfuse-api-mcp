@@ -414,6 +414,14 @@ func TestExecutableLogsAVersionBelowTheSupportedFloorAsUnsupported(t *testing.T)
 		t.Errorf("unsupported version line = %v, want a WARN naming version 2.95.0 and that families are ignored\n%s",
 			unsupported, s.stderr)
 	}
+	// Story 27: the catalog filters by version range alone, so the startup
+	// line presents no family as part of the decided profile.
+	got := profileLogLine(t, s.stderr.Bytes())
+	families, _ := json.Marshal(got["families"])
+	undecided, _ := json.Marshal(got["undecided"])
+	if string(families) != `[]` || string(undecided) != `[]` || got["unsupported"] != true {
+		t.Errorf("deployment profile log line = %v, want families [] and undecided [] with unsupported true", got)
+	}
 }
 
 // Spec #68 story 23: the startup line tells the families that answered from
