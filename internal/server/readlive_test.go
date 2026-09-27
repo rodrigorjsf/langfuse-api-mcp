@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -102,6 +103,10 @@ type liveTarget struct {
 	baseURL, publicKey, secretKey string
 }
 
+// otlpTracesPath is Langfuse's OTLP/HTTP traces endpoint, the suite's seeding
+// path; send asks it for ingestion version 4 (the v4 event pipeline).
+const otlpTracesPath = "/api/public/otel/v1/traces"
+
 // send sends one request to the target and returns its status and the start
 // of its body. Like readLive, it waits a 429's Retry-After once and calls
 // again, and never retries a 429 that named no wait. It trusts the system
@@ -143,9 +148,17 @@ func (lt liveTarget) do(ctx context.Context, t *testing.T, method, path string, 
 	}
 	req.SetBasicAuth(lt.publicKey, lt.secretKey)
 	req.Header.Set("Content-Type", "application/json")
-	// Its own transport, closed afterwards: no idle connection outlives the
-	// call to trip TestMain's leak check.
-	transport := &http.Transport{Proxy: http.ProxyFromEnvironment}
+	if path == otlpTracesPath {
+		// Without it a 4.x `dual` deployment leaves OTLP spans out of
+		// /v2/observations for minutes (#85); events_only and Cloud accept it.
+		req.Header.Set("X-Langfuse-Ingestion-Version", "4")
+	}
+	// Its own transport, one request long, so no connection outlives the call
+	// to trip TestMain's leak check. Keep-alives off makes that hold without
+	// racing the deferred close: an HTTP/2 connection (Langfuse Cloud) is then
+	// single-use and closes itself when its stream ends, and HTTP/1.1 closes
+	// after the response. The deferred close still sweeps anything left over.
+	transport := &http.Transport{Proxy: http.ProxyFromEnvironment, DisableKeepAlives: true}
 	defer transport.CloseIdleConnections()
 	resp, err := (&http.Client{Transport: transport}).Do(req) //nolint:gosec // G704: the test's own Langfuse, see above
 	if err != nil {
@@ -181,5 +194,21 @@ func TestTheSuitesDirectSetupCallNeverRetriesA429ThatNamesNoWait(t *testing.T) {
 	if status != http.StatusTooManyRequests || calls.Load() != 1 || len(wait.recorded()) != 0 {
 		t.Fatalf("after %d requests and waits %v the setup call got %d, want 429 after one request and no wait",
 			calls.Load(), wait.recorded(), status)
+	}
+}
+
+func TestTheSuitesOTLPSeedingAsksForIngestionVersion4(t *testing.T) {
+	t.Parallel()
+	got := make(chan string, 1)
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got <- r.Header.Get("X-Langfuse-Ingestion-Version")
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(fake.Close)
+
+	status, _ := liveTarget{baseURL: fake.URL}.send(t.Context(), t, http.MethodPost, "/api/public/otel/v1/traces", map[string]any{}, sleepCtx)
+
+	if version := <-got; status != http.StatusOK || version != "4" {
+		t.Fatalf("the OTLP seeding call got %d and sent x-langfuse-ingestion-version %q, want 200 and \"4\"", status, version)
 	}
 }
