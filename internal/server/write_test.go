@@ -297,6 +297,11 @@ func TestExecuteWriteRefusesEveryDestructiveOperationWithConfirmationUnavailable
 			t.Errorf("%s %s: error = %+v, want confirmation_unavailable with the static hint", op.Method, op.ID, got)
 		}
 	}
+	// Refused whatever the arguments: a bad parameter or a body it does not take.
+	if got := toolErrorOf(t, callExecuteWrite(t, cs, map[string]any{"operationId": "trace_delete",
+		"parameters": map[string]any{"nope": "x"}, "body": map[string]any{"note": "x"}})).Error; got.Code != "confirmation_unavailable" {
+		t.Errorf("trace_delete with bad arguments: error = %+v, want confirmation_unavailable", got)
+	}
 	if destructive < 30 {
 		t.Fatalf("the catalog holds %d destructive operations, want the DELETE, PUT and PATCH ones (30 or more)", destructive)
 	}
@@ -362,8 +367,8 @@ func TestExecuteWriteRefusesABadBodyWithoutSendingOrEchoingIt(t *testing.T) {
 		"a body over the size cap": {"operationId": "scores_create",
 			"body": map[string]any{"name": planted + strings.Repeat("a", 256<<10)}},
 		"a body over the depth cap": {"operationId": "scores_create", "body": deep},
-		"a body for an operation that takes none": {"operationId": "trace_delete",
-			"parameters": map[string]any{"traceId": "trace-1"}, "body": map[string]any{"note": planted}},
+		// Every in-scope operation that takes no body is destructive, so is
+		// refused first; the catalog proves the takes-no-body rule itself.
 	}
 	for name, args := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -607,6 +612,10 @@ func TestExecuteWriteLogsItsAuditLineAtWarnWithTheConfirmationOutcomeAndNoBody(t
 			wantConfirmation: "unavailable", wantMethod: "DELETE"},
 		"a refused body": {args: map[string]any{"operationId": "scores_create", "body": planted},
 			wantConfirmation: "not_required", wantMethod: "POST"},
+		"a DELETE with arguments it does not take": {args: map[string]any{"operationId": "trace_delete",
+			"parameters": map[string]any{"nope": planted}, "body": map[string]any{"note": planted}},
+			wantConfirmation: "unavailable", wantMethod: "DELETE"},
+		"an unknown operation": {args: map[string]any{"operationId": "no_such_write", "body": planted}},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -623,7 +632,8 @@ func TestExecuteWriteLogsItsAuditLineAtWarnWithTheConfirmationOutcomeAndNoBody(t
 				t.Fatalf("logged %d lines, want exactly 1:\n%s", len(lines), logs.String())
 			}
 			got := lines[0]
-			if got["level"] != "WARN" || got["tool"] != "execute_write" || got["confirmation"] != tc.wantConfirmation ||
+			confirmation, _ := got["confirmation"].(string) // absent before the operation is known
+			if got["level"] != "WARN" || got["tool"] != "execute_write" || confirmation != tc.wantConfirmation ||
 				got["method"] != tc.wantMethod {
 				t.Errorf("audit line = %v, want level WARN, tool execute_write, method %s, confirmation %s",
 					got, tc.wantMethod, tc.wantConfirmation)

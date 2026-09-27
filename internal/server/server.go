@@ -189,17 +189,25 @@ type executeReadInput struct {
 // bounded length there, so secrets are redacted from them first: a secret cut
 // short would no longer match. Parameter values are sent as given.
 func decodeExecuteReadInput(raw json.RawMessage, r sanitize.Redactor) (executeReadInput, error) {
-	var in executeReadInput
 	fields, err := argumentFields(raw, r, toolExecuteRead, "operationId", "parameters")
 	if err != nil {
-		return in, err
+		return executeReadInput{}, err
 	}
+	return decodeOperationArguments(fields, r, "trace_list")
+}
+
+// decodeOperationArguments decodes the operationId and parameters arguments
+// of an execute_* tool from its argument fields; example is an operation ID
+// the tool runs, named when the ID is missing or not a string.
+func decodeOperationArguments(fields map[string]json.RawMessage, r sanitize.Redactor, example string,
+) (executeReadInput, error) {
+	var in executeReadInput
 	id, ok := fields["operationId"]
 	if !ok {
 		return in, errors.New("argument operationId: required argument is missing")
 	}
 	if err := json.Unmarshal(id, &in.OperationID); err != nil || in.OperationID == "" {
-		return executeReadInput{}, errors.New("argument operationId: want a non-empty string, e.g. trace_list")
+		return executeReadInput{}, errors.New("argument operationId: want a non-empty string, e.g. " + example)
 	}
 	in.OperationID = r.Redact(in.OperationID)
 	if params, ok := fields["parameters"]; ok && string(params) != "null" {
@@ -316,8 +324,8 @@ func (ex executor) run(ctx context.Context, op catalog.Operation, request catalo
 		} else {
 			a.cause = err.Error()
 			f = failureFields(err)
-			f.OperationID = truncate(op.ID)
 		}
+		f.OperationID = truncate(op.ID)
 		if !op.IsRead() {
 			f.Hint = notRetriedHint(f)
 		}

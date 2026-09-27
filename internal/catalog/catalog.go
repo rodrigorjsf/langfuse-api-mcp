@@ -30,7 +30,7 @@ var unionCatalog []byte
 // excluded holds the operation IDs never exposed on any deployment (ADR-0004
 // and its M4 amendment): trace ingestion, organization admin mutations
 // (projects, API keys, memberships, SCIM users), media uploads and writes
-// whose body carries a third-party credential. load drops them.
+// whose body carries a third-party credential. Load removes them.
 var excluded = []string{
 	"ingestion_batch",            // POST /api/public/ingestion
 	"opentelemetry_exportTraces", // POST /api/public/otel/v1/traces

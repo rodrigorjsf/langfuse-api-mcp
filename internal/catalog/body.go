@@ -50,12 +50,9 @@ func (o Operation) CheckBody(body json.RawMessage) (json.RawMessage, error) {
 	case o.Body == nil:
 		return nil, invalidBodyf("operation %s takes no body", o.ID)
 	}
-	if !json.Valid(trimmed) {
-		return nil, invalidBodyf("not valid JSON")
-	}
 	var compact bytes.Buffer
 	if err := json.Compact(&compact, trimmed); err != nil {
-		return nil, invalidBodyf("not valid JSON") // unreachable: the body is valid JSON
+		return nil, invalidBodyf("not valid JSON")
 	}
 	out := compact.Bytes()
 	if len(out) > MaxBodyBytes {

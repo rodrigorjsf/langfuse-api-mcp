@@ -31,8 +31,10 @@ type audit struct {
 	// operationID names the catalog operation a tool without an operationId
 	// argument runs, such as a workflow tool; "" uses the argument.
 	operationID string
-	// confirmation is the confirmation outcome of a write call; "" for any
-	// other tool. A call that sets it is logged at Warn.
+	// write marks an execute_write call: its line is logged at Warn.
+	write bool
+	// confirmation is the confirmation outcome of a write call once its
+	// operation is known; "" otherwise.
 	confirmation string
 }
 
@@ -63,7 +65,7 @@ func audited(log *slog.Logger, r sanitize.Redactor, handler auditedHandler) mcp.
 			res = redacted(res, r)
 			code := errorCodeOf(res)
 			level := slog.LevelInfo
-			if a.confirmation != "" {
+			if a.write {
 				level = slog.LevelWarn // writes stand out in the log
 			}
 			if code == errorInternal {

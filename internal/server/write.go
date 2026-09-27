@@ -106,21 +106,12 @@ func decodeExecuteWriteInput(raw json.RawMessage, r sanitize.Redactor) (executeW
 	if err != nil {
 		return executeWriteInput{}, err
 	}
-	body := fields["body"]
-	delete(fields, "body")
-	rest, err := json.Marshal(fields)
-	if err != nil {
-		return executeWriteInput{}, err // unreachable: fields came from JSON
-	}
-	in, err := decodeExecuteReadInput(rest, r)
-	if err != nil {
-		return executeWriteInput{executeReadInput: in}, err
-	}
-	return executeWriteInput{executeReadInput: in, Body: body}, nil
+	in, err := decodeOperationArguments(fields, r, "scores_create")
+	return executeWriteInput{executeReadInput: in, Body: fields["body"]}, err
 }
 
 func (ex executor) executeWrite(ctx context.Context, req *mcp.CallToolRequest, a *audit) (*mcp.CallToolResult, error) {
-	a.confirmation = confirmationNotRequired
+	a.write = true
 	in, err := decodeExecuteWriteInput(req.Params.Arguments, ex.redact)
 	if err != nil {
 		return toolError(errorInvalidArgument, err.Error(), writeArgumentsHint, in.OperationID)
@@ -133,6 +124,14 @@ func (ex executor) executeWrite(ctx context.Context, req *mcp.CallToolRequest, a
 			" can be run by this server", writeNotFoundHint, in.OperationID)
 	}
 	a.method = op.Method
+	if op.IsDestructive() {
+		// Refused whatever its arguments: until the user can confirm it, a
+		// destructive operation never runs.
+		a.confirmation = confirmationUnavailable
+		return toolError(errorConfirmationUnavailable, "operation "+op.ID+" is a destructive "+op.Method+
+			" operation, which runs only after the user confirms it", confirmationUnavailableHint, op.ID)
+	}
+	a.confirmation = confirmationNotRequired
 	request, err := op.Request(in.Parameters)
 	if err != nil {
 		return toolError(errorInvalidArgument, err.Error(), parametersHintFor(err, op), op.ID)
@@ -140,11 +139,6 @@ func (ex executor) executeWrite(ctx context.Context, req *mcp.CallToolRequest, a
 	body, err := op.CheckBody(in.Body)
 	if err != nil {
 		return toolError(errorInvalidArgument, err.Error(), bodyHint(op), op.ID)
-	}
-	if op.IsDestructive() {
-		a.confirmation = confirmationUnavailable
-		return toolError(errorConfirmationUnavailable, "operation "+op.ID+" is a destructive "+op.Method+
-			" operation, which runs only after the user confirms it", confirmationUnavailableHint, op.ID)
 	}
 	return ex.run(ctx, op, request, body, a)
 }
