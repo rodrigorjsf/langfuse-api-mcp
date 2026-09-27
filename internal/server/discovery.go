@@ -28,7 +28,7 @@ const searchOperationsDescription = "Lists the Langfuse operations this server c
 	"(the API area: Trace, Prompts, Datasets…).\n\n" +
 	"With query, keeps only the operations where every whitespace-separated keyword appears, ignoring case, " +
 	"in the operation ID, the tag or the description line. Without query, lists every operation. " +
-	"When nothing matches, or the query asks about traces, a hint names where trace data is read on this " +
+	"When nothing matches, or the query asks about traces, a hint names how trace data is read on this " +
 	"deployment: one trace, filtered lists, aggregates such as cost per day.\n\n" +
 	"Reads the server's built-in catalog only: it does not call Langfuse and does not run any operation. " +
 	"describe_operation returns one operation's parameters; execute_read runs a read operation."
@@ -104,7 +104,7 @@ func operationIndexSchema() map[string]any {
 			},
 			"hint": map[string]any{
 				"type": "string",
-				"description": "Where trace data is read on this deployment; present only when nothing matched the query " +
+				"description": "How trace data is read on this deployment; present only when nothing matched the query " +
 					"or the query asks about traces.",
 			},
 		},
@@ -138,10 +138,10 @@ func searchArgumentsHint() string {
 }
 
 // discovery serves the discovery tools from the catalog, honoring write mode.
-// traceTree reports whether get_trace_tree is registered.
 type discovery struct {
 	catalog   catalog.Catalog
 	writeMode bool
+	// traceTree reports whether get_trace_tree is registered.
 	traceTree bool
 	redact    sanitize.Redactor
 }
@@ -179,7 +179,7 @@ func (d discovery) searchOperations(_ context.Context, req *mcp.CallToolRequest,
 		idx.Tags = d.tags()
 	}
 	if idx.Count == 0 || asksAboutTraces(query) {
-		idx.Hint = d.traceRouteHint()
+		idx.Hint = d.traceReadsHint()
 	}
 	return indexResult(idx, d.writeMode)
 }
@@ -193,26 +193,33 @@ func asksAboutTraces(query string) bool {
 	})
 }
 
-// traceRouteHint returns the routing hint of a search that matched nothing or
-// asks about traces (#100): a v4 deployment has no Trace tag, so it names
-// where trace data is read instead. It is static text naming only the routes
-// this deployment offers, never the query, and "" when it offers none.
-func (d discovery) traceRouteHint() string {
-	var routes []string
+// The operations the trace reads hint names (#100).
+const (
+	opObservationsGetMany = "observations_getMany"
+	opMetricsMetrics      = "metrics_metrics"
+)
+
+// traceReadsHint returns the hint of a search that matched nothing or asks
+// about traces (#100): a v4 deployment has no Trace tag, so it names how trace
+// data is read instead. It is static text naming only the tools and
+// operations this deployment offers, never the query, and "" when it offers
+// none of them.
+func (d discovery) traceReadsHint() string {
+	var reads []string
 	if d.traceTree {
-		routes = append(routes, "one trace by its ID: "+toolGetTraceTree)
+		reads = append(reads, "one trace by its ID: "+toolGetTraceTree)
 	}
-	if d.offers("observations_getMany") {
-		routes = append(routes, "a filtered list of observations: execute_read with observations_getMany")
+	if d.offers(opObservationsGetMany) {
+		reads = append(reads, "a filtered list of observations: "+toolExecuteRead+" with "+opObservationsGetMany)
 	}
-	if d.offers("metrics_metrics") {
-		routes = append(routes, "aggregates such as cost or latency per day, e.g. for a trace name: "+
-			"execute_read with metrics_metrics")
+	if d.offers(opMetricsMetrics) {
+		reads = append(reads, "aggregates such as cost or latency per day, e.g. for a trace name: "+
+			toolExecuteRead+" with "+opMetricsMetrics)
 	}
-	if len(routes) == 0 {
+	if len(reads) == 0 {
 		return ""
 	}
-	return "Trace data is read through these routes: " + strings.Join(routes, "; ") +
+	return "Trace data is read with: " + strings.Join(reads, "; ") +
 		". describe_operation returns an operation's parameters."
 }
 
