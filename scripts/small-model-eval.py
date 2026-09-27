@@ -24,6 +24,8 @@
 #       --max-tokens output tokens per model turn (default 1024); a thinking
 #                    model spends them on thinking first, so give it more
 #       --timeout    seconds to wait for one model turn (default 120)
+#       --only       comma-separated intent numbers to run (default: all), to
+#                    rerun a failing intent once before calling it a failure
 #
 #       Against a local model: scripts/small-model-eval-local.sh starts the
 #       Ollama stack of scripts/small-model-eval-ollama.yml, runs this script
@@ -402,7 +404,16 @@ def main():
     parser.add_argument("--max-turns", type=int, default=8)
     parser.add_argument("--max-tokens", type=int, default=1024)
     parser.add_argument("--timeout", type=float, default=120)
+    parser.add_argument("--only", help="comma-separated intent numbers to run (default: all)")
     args = parser.parse_args()
+    selected = list(range(1, len(INTENTS) + 1))
+    if args.only:
+        try:
+            selected = sorted({int(n) for n in args.only.split(",")})
+        except ValueError:
+            parser.error("--only takes comma-separated intent numbers")
+        if not all(1 <= n <= len(INTENTS) for n in selected):
+            parser.error(f"--only takes intent numbers from 1 to {len(INTENTS)}")
 
     key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not key:
@@ -426,7 +437,8 @@ def main():
             print(f"model {args.model}; max tokens {args.max_tokens}; fake Langfuse {FAKE_VERSION} events_only; "
                   f"tools {', '.join(sorted(names))}")
             passed = 0
-            for number, item in enumerate(INTENTS, 1):
+            for number in selected:
+                item = INTENTS[number - 1]
                 ok, calls = run_intent(server, tools, endpoint, key, args, item)
                 passed += ok
                 print(f"{'PASS' if ok else 'FAIL'} {number:02d} [{item['area']}] {item['intent']}")
@@ -434,8 +446,8 @@ def main():
                     print(f"       {describe(call)}")
                 if not ok:
                     print(f"       want: {' | '.join(describe_expected(e) for e in item['expect'])}")
-            print(f"TOTAL {passed}/{len(INTENTS)} passed")
-            return 0 if passed == len(INTENTS) else 1
+            print(f"TOTAL {passed}/{len(selected)} passed")
+            return 0 if passed == len(selected) else 1
         except SetupError as err:
             print(f"eval aborted: {err}", file=sys.stderr)
             return 2
