@@ -103,7 +103,7 @@ func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets
 	redact := secrets.redactor()
 	ex := executor{catalog: cat, client: client, redact: redact, profile: profile}
 	traceTree := profile.On(catalog.V4ReadFamily)
-	d := discovery{catalog: cat, writeMode: o.writeMode, traceTree: traceTree, redact: redact}
+	d := discovery{catalog: cat, writeMode: o.writeMode, offersTraceTree: traceTree, redact: redact}
 	s.AddTool(&mcp.Tool{
 		Name:         "search_operations",
 		Title:        searchOperationsTitle,

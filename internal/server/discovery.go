@@ -146,9 +146,9 @@ func searchArgumentsHint() string {
 type discovery struct {
 	catalog   catalog.Catalog
 	writeMode bool
-	// traceTree reports whether get_trace_tree is registered.
-	traceTree bool
-	redact    sanitize.Redactor
+	// offersTraceTree reports whether get_trace_tree is registered.
+	offersTraceTree bool
+	redact          sanitize.Redactor
 }
 
 // listed reports whether op is in the operation index: a read operation, or
@@ -207,7 +207,7 @@ func asksAboutTraces(query string) bool {
 // none of them.
 func (d discovery) traceReadsHint() string {
 	var reads []string
-	if d.traceTree {
+	if d.offersTraceTree {
 		reads = append(reads, "one trace by its ID: "+toolGetTraceTree)
 	}
 	if d.offers(workflows.ObservationsOperationID) {
