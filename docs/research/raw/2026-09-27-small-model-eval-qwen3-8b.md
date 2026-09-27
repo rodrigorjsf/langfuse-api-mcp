@@ -67,6 +67,9 @@ TOTAL 7/11 passed
 Intent 11 later passed after #104 without its time window being checked, and fails again once the
 eval names the run date (#105): see
 [2026-09-27-small-model-eval-intent-11-run-date.md](2026-09-27-small-model-eval-intent-11-run-date.md).
+It passes again, with the window computed from the run date, once both metrics query refusals and
+the guidance say how the query string is encoded (#106): see
+[2026-09-27-small-model-eval-intent-11-query-encoding.md](2026-09-27-small-model-eval-intent-11-query-encoding.md).
 
 ## Rerun of the failing intents (`--only 2,3,5,11`)
 

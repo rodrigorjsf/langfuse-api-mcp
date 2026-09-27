@@ -17,6 +17,7 @@ Evidence behind the ADRs. Labels: `[verified 3-0]` passed 3-vote adversarial che
 | `raw/2026-09-27-small-model-eval-qwen3-8b.md` | the first recorded small-model discovery eval (local qwen3:8b, 7/11) and its reruns | ROADMAP M3, #88, follow-ups #97–#100 |
 | `raw/2026-09-27-small-model-eval-intent-11-metrics-guidance.md` | intent 11 rerun four times while the metrics query guidance was worded (qwen3:8b; shipped wording passes) | ROADMAP M3, #104, follow-up #105 |
 | `raw/2026-09-27-small-model-eval-intent-11-run-date.md` | intent 11 rerun with the run date in the prompt and the time window checked (qwen3:8b: window right, query sent over-escaped or as an object; FAIL) | ROADMAP M3, #105, follow-up #106 |
+| `raw/2026-09-27-small-model-eval-intent-11-query-encoding.md` | intent 11 rerun after both metrics query refusals and the guidance got one query-encoding wording (qwen3:8b: PASS, window from the run date; a first wording saying "escaped" failed) | ROADMAP M3, #106 |
 | [2026-09-25-deep-research-run1.md](2026-09-25-deep-research-run1.md) | raw verified findings + all extracted claims of the first deep-research run | all of the above |
 
 ## Open questions
