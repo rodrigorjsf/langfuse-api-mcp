@@ -121,9 +121,12 @@ type indexEntry struct {
 	Tool        string `json:"tool"`
 }
 
-// searchArgumentsHint is the hint of an invalid search_operations call.
-var searchArgumentsHint = "call search_operations again without arguments to list every operation, or with " +
+// searchArgumentsHint returns the hint of an invalid search_operations call.
+// It is a function, not a variable: the package holds no mutable state.
+func searchArgumentsHint() string {
+	return "call search_operations again without arguments to list every operation, or with " +
 	"query, up to " + strconv.Itoa(maxQueryRunes) + " characters of plain keywords separated by spaces"
+}
 
 // discovery serves the discovery tools from the catalog, honoring write mode.
 type discovery struct {
@@ -147,7 +150,7 @@ func toolFor(op catalog.Operation) string {
 func (d discovery) searchOperations(_ context.Context, req *mcp.CallToolRequest, _ *audit) (*mcp.CallToolResult, error) {
 	query, err := decodeSearchInput(req.Params.Arguments, d.redact)
 	if err != nil {
-		return toolError(errorInvalidArgument, err.Error(), searchArgumentsHint, "")
+		return toolError(errorInvalidArgument, err.Error(), searchArgumentsHint(), "")
 	}
 	idx := operationIndex{Groups: []indexGroup{}}
 	for _, op := range d.catalog.Search(query) {
