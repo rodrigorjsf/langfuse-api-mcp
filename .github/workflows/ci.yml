@@ -106,7 +106,7 @@ jobs:
           persist-credentials: false
       # Supply chain (security.md): PyYAML is the generator's only dependency (it parses the
       # release specs), so the tests cannot import the generator without it. Pinned to the
-      # same version as union-catalog.yml; change both pins together.
+      # same version as union-catalog.yml; change both pins together (one shared file: #92).
       - name: Install PyYAML
         run: |
           set -euo pipefail
