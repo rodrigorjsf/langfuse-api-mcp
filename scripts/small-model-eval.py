@@ -17,7 +17,8 @@
 # WHEN: by hand, at the end of M3 and after any change to tool descriptions,
 #       hints or the operation index; paste the output into the pull request.
 #       It is not a CI gate: it costs API tokens and a model answer can vary.
-# HOW:  ANTHROPIC_API_KEY=... python3 scripts/small-model-eval.py [--server BIN]
+# HOW:  (Python 3.11 or later: timestamps ending in Z are parsed natively)
+#       ANTHROPIC_API_KEY=... python3 scripts/small-model-eval.py [--server BIN]
 #           [--model ID] [--max-turns N] [--max-tokens N] [--timeout S]
 #       --server     prebuilt langfuse-mcp binary (default: go build from this
 #                    checkout into a temporary directory)
@@ -72,7 +73,6 @@ ANTHROPIC_VERSION = "2023-06-01"
 EXPECTED_TOOLS = {"search_operations", "describe_operation", "execute_read", "get_trace_tree"}
 FAKE_VERSION = "4.46.0"
 MCP_PROTOCOL_VERSION = "2025-06-18"
-
 
 
 def system_prompt(today):
@@ -352,16 +352,20 @@ def in_last_days(query, days, today):
     UTC date). fromTimestamp must start `days` days back, counting today or not
     (so on 2026-10-15 with 7 days, on 2026-10-08 or 2026-10-09); toTimestamp,
     when given, must fall on today, or be the end of today. A copied example
-    window or a window a model guessed without the date does not pass (#105)."""
-    start = datetime.datetime.combine(today, datetime.time(), datetime.timezone.utc)
+    window or a window a model guessed without the date does not pass (#105).
+    This is stricter than "fromTimestamp within the 7 days before the run
+    date" on purpose: a window starting yesterday is not the last 7 days."""
+    today_start = datetime.datetime.combine(today, datetime.time(), datetime.timezone.utc)
     day = datetime.timedelta(days=1)
-    begin = timestamp(query.get("fromTimestamp"))
-    if begin is None or not start - days * day <= begin < start - (days - 2) * day:
+    earliest_from = today_start - days * day        # counting whole days before today
+    latest_from = today_start - (days - 1) * day    # counting today: up to its day's end
+    window_from = timestamp(query.get("fromTimestamp"))
+    if window_from is None or not earliest_from <= window_from < latest_from + day:
         return False
     if "toTimestamp" not in query:
         return True
-    end = timestamp(query.get("toTimestamp"))
-    return end is not None and start <= end <= start + day
+    window_to = timestamp(query.get("toTimestamp"))
+    return window_to is not None and today_start <= window_to <= today_start + day
 
 
 def timestamp(value):

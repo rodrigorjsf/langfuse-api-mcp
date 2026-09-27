@@ -7,9 +7,10 @@
 #       example, and the matcher ignored timestamps, so intent 11 passed on
 #       the one day those dates happened to be "the last 7 days". These cases
 #       need no model, no network and no server.
-# WHEN: by hand after changing the eval's system prompt or its matchers, and
-#       before recording an eval run.
-# HOW:  python3 scripts/test_small_model_eval.py   (standard library only)
+# WHEN: on every push and pull request (.github/workflows/ci.yml, job
+#       "generator"), and by hand after changing the eval's system prompt or
+#       its matchers.
+# HOW:  python3 scripts/test_small_model_eval.py   (Python 3.11+, standard library only)
 
 import datetime
 import importlib.util

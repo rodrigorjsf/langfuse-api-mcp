@@ -64,6 +64,10 @@ FAIL 11 [metrics] What was the total cost per day over the last 7 days for trace
 TOTAL 7/11 passed
 ```
 
+Intent 11 later passed after #104 without its time window being checked, and fails again once the
+eval names the run date (#105): see
+[2026-09-27-small-model-eval-intent-11-run-date.md](2026-09-27-small-model-eval-intent-11-run-date.md).
+
 ## Rerun of the failing intents (`--only 2,3,5,11`)
 
 ```text
