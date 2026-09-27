@@ -9,7 +9,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -307,8 +306,8 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 // query's top-level keys, from the validator's own list, and where the rest of
 // its shape is described. Static text: it never holds the caller's query.
 func metricsQueryHint(op catalog.Operation) string {
-	describes := "the query parameter"
-	if slices.ContainsFunc(op.Params, func(p catalog.Param) bool { return op.ParamGuidance(p) != "" }) {
+	describes := "its parameters"
+	if op.HasGuidance() {
 		describes = "the query's shape and a worked example"
 	}
 	return "send query as one JSON object whose top-level keys are only " + catalog.MetricsQueryKeys() +
@@ -317,9 +316,9 @@ func metricsQueryHint(op catalog.Operation) string {
 
 // parametersHintFor is the hint for a parameter the catalog refused: a
 // malformed metrics query gets metricsQueryHint; a page size out of range gets
-// how to page instead, anything else the generic parametersHint. Both go on
-// with the operation's valid parameter names and describe_operation, so one
-// more call fixes the parameters.
+// how to page instead, anything else the generic parametersHint. Those two
+// go on with the operation's valid parameter names and describe_operation, so
+// one more call fixes the parameters.
 func parametersHintFor(err error, op catalog.Operation) string {
 	hint := parametersHint
 	switch {

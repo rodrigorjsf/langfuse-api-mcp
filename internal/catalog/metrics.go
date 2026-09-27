@@ -190,13 +190,17 @@ func checkDepth(raw string) error {
 // MetricsQueryKeys lists the top-level keys of a metrics query, the ones the
 // validator accepts, sorted and separated by ", ".
 func MetricsQueryKeys() string {
-	return strings.Join(slices.Sorted(maps.Keys(metricsQueryKeys)), ", ")
+	return strings.Join(metricsQueryKeyList(), ", ")
 }
+
+// metricsQueryKeyList returns the top-level keys of a metrics query, sorted.
+func metricsQueryKeyList() []string { return slices.Sorted(maps.Keys(metricsQueryKeys)) }
 
 // metricsQueryExample is the worked example of the metrics query guidance:
 // the total cost per day of the observations of traces named checkout. It is
 // checked against the Langfuse Metrics v2 docs (docs/research/langfuse.md,
-// section 4.5), and a test proves the validator accepts it.
+// section 4.5), and a test proves the validator accepts it. Its dates are
+// fixed: a model without a clock copies them (see #105).
 const metricsQueryExample = `{"view":"observations","metrics":[{"measure":"totalCost","aggregation":"sum"}],` +
 	`"filters":[{"column":"traceName","operator":"=","value":"checkout","type":"string"}],` +
 	`"timeDimension":{"granularity":"day"},"fromTimestamp":"2026-09-20T00:00:00Z","toTimestamp":"2026-09-27T00:00:00Z"}`
@@ -211,7 +215,7 @@ func (o Operation) ParamGuidance(p Param) string {
 	if o.ID != "metrics_metrics" || !o.isMetricsQuery(p) {
 		return ""
 	}
-	keys := slices.Sorted(maps.Keys(metricsQueryKeys))
+	keys := metricsQueryKeyList()
 	typed := make([]string, len(keys))
 	for i, k := range keys {
 		typed[i] = k + " (" + metricsQueryKeys[k].String() + ")"
@@ -230,4 +234,9 @@ func (o Operation) ParamGuidance(p Param) string {
 		strconv.Itoa(MaxRowLimit) + ", default " + strconv.Itoa(DefaultRowLimit) + ". " +
 		"Example, the total cost per day of the observations of traces named checkout, " +
 		"for the week to 2026-09-27 (set fromTimestamp and toTimestamp to the window you need): " + metricsQueryExample
+}
+
+// HasGuidance reports whether any parameter of the operation has guidance.
+func (o Operation) HasGuidance() bool {
+	return slices.ContainsFunc(o.Params, func(p Param) bool { return o.ParamGuidance(p) != "" })
 }

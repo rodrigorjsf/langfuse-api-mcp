@@ -258,12 +258,14 @@ func TestOnlyMetricsMetricsCarriesTheQueryGuidance(t *testing.T) {
 
 func TestAMalformedMetricsQueryIsRefusedWithAHintNamingTheKeysAndDescribeOperation(t *testing.T) {
 	t.Parallel()
-	injectedJSON, _ := json.Marshal(injected)
-	// Each query carries the injected text: in a key, a value or broken JSON.
+	// injected plus a zero-width space and a control character.
+	hostile := injected + "\u200b\u0007"
+	injectedJSON, _ := json.Marshal(hostile)
+	// Each query carries the hostile text: in a key, a value or broken JSON.
 	tests := map[string]string{
 		"unknown top-level key":   strings.TrimSuffix(metricsQuery, "}") + `,` + string(injectedJSON) + `:1}`,
 		"invented query shape":    `{"dateRange":` + string(injectedJSON) + `,"aggregations":[{"field":"cost"}]}`,
-		"invalid JSON":            `{"view":` + injected,
+		"invalid JSON":            `{"view":` + hostile,
 		"not an object":           `[` + string(injectedJSON) + `]`,
 		"a key of the wrong type": `{"view":[` + string(injectedJSON) + `]}`,
 	}
@@ -289,7 +291,7 @@ func TestAMalformedMetricsQueryIsRefusedWithAHintNamingTheKeysAndDescribeOperati
 				t.Fatalf("tool error = %+v, want invalid_argument with a hint naming the keys %q and describe_operation",
 					got, metricsQueryKeys)
 			}
-			for _, leak := range []string{"Ignore previous", "<script>", "\u202e", "dateRange", "aggregations"} {
+			for _, leak := range []string{"Ignore previous", "<script>", "\u202e", "\u200b", "\u0007", `\u0007`, `\u200b`, "dateRange", "aggregations"} {
 				if strings.Contains(resultText(t, res), leak) || strings.Contains(logs.String(), leak) {
 					t.Errorf("the refusal or the audit line holds %q:\nresult %s\nlog %s", leak, resultText(t, res), logs.String())
 				}
