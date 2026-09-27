@@ -170,19 +170,21 @@ func TestSearchOperationsRanksTheV4FamilyBeforeTheLegacyFamily(t *testing.T) {
 }
 
 // Spec #68 story 12, ADR-0002, #79: listing every read operation of the
-// unresolved union catalog (68) stays within 7 KiB of text (7,081 bytes,
-// ~1.8k tokens, when measured with the #82 third-party note; ~9 KB while
-// legacy lines carried the whole deprecation notice). A catalog regeneration
-// that crosses the budget updates ADR-0002 and spec #68 with the new figure;
-// the headroom is thin, see #87.
+// unresolved union catalog (68) stays within readIndexBudget: 7,081 bytes,
+// ~1.8k tokens, measured with the #82 third-party note. #87 raised the cap
+// from 7 KiB to leave a 1,111-byte margin, about 10 new read operations at the
+// current ~104-byte average line, for the weekly union-catalog regeneration.
+// A regeneration that crosses the cap updates this test, ADR-0002 and spec #68
+// story 12 with the new figure.
 func TestSearchOperationsWithoutQueryListsTheReadIndexWithinItsBudget(t *testing.T) {
 	t.Parallel()
+	const readIndexBudget = 8 * 1024
 	cs := connectOffline(t)
 
 	text := resultText(t, callTool(t, cs, "search_operations", map[string]any{}))
 
-	if len(text) > 7*1024 {
-		t.Errorf("read index text is %d bytes, want at most 7 KiB", len(text))
+	if len(text) > readIndexBudget {
+		t.Errorf("read index text is %d bytes, want at most %d; a catalog regeneration that crosses it updates the cap and measured figure in this test, ADR-0002 and spec #68 story 12", len(text), readIndexBudget)
 	}
 }
 
