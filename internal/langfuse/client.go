@@ -4,6 +4,7 @@
 package langfuse
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -228,15 +229,17 @@ type Response struct {
 // attempt, retries included, waits on both limits. A GET is retried within the deadline: twice with exponential
 // backoff and jitter on a 5xx or a network failure, once after Retry-After on
 // a 429 (see retries.next). Other methods are never retried: they are not
-// idempotent.
-func (c *Client) Do(ctx context.Context, method, escapedPath string, query url.Values) (Response, error) {
+// idempotent. body is the JSON request body, sent with Content-Type
+// application/json; nil sends none. A 2xx answer to a method other than GET
+// may have an empty body (e.g. 204): its Response.Body is then empty.
+func (c *Client) Do(ctx context.Context, method, escapedPath string, query url.Values, body json.RawMessage) (Response, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 	var r retries
 	var last error // the failure that caused the current retry
 	attempts := 0
 	for {
-		resp, sent, err := c.attempt(ctx, method, escapedPath, query, true)
+		resp, sent, err := c.attempt(ctx, method, escapedPath, query, body, true)
 		if sent {
 			attempts++
 		}
@@ -256,13 +259,15 @@ func (c *Client) Do(ctx context.Context, method, escapedPath string, query url.V
 // attempt makes one attempt of Do, within the client's limits; the request
 // carries the key pair only when authenticated is true. sent is false when
 // the limits held the request, which then never left.
-func (c *Client) attempt(ctx context.Context, method, escapedPath string, query url.Values, authenticated bool) (resp Response, sent bool, err error) {
+func (c *Client) attempt(ctx context.Context, method, escapedPath string, query url.Values, body json.RawMessage,
+	authenticated bool,
+) (resp Response, sent bool, err error) {
 	release, err := c.acquire(ctx)
 	if err != nil {
 		return Response{}, false, err
 	}
 	defer release()
-	resp, err = c.send(ctx, method, escapedPath, query, authenticated)
+	resp, err = c.send(ctx, method, escapedPath, query, body, authenticated)
 	return resp, true, err
 }
 
@@ -270,7 +275,9 @@ func (c *Client) attempt(ctx context.Context, method, escapedPath string, query 
 var errNotJSON = errors.New("response is not JSON")
 
 // send sends one request and reads its answer.
-func (c *Client) send(ctx context.Context, method, escapedPath string, query url.Values, authenticated bool) (Response, error) {
+func (c *Client) send(ctx context.Context, method, escapedPath string, query url.Values, reqBody json.RawMessage,
+	authenticated bool,
+) (Response, error) {
 	u := *c.host
 	u.RawPath = strings.TrimSuffix(c.host.EscapedPath(), "/") + escapedPath
 	path, err := url.PathUnescape(u.RawPath)
@@ -280,9 +287,16 @@ func (c *Client) send(ctx context.Context, method, escapedPath string, query url
 	u.Path = path
 	u.RawQuery = query.Encode()
 
-	req, err := http.NewRequestWithContext(ctx, method, u.String(), nil)
+	var payload io.Reader
+	if reqBody != nil {
+		payload = bytes.NewReader(reqBody)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, u.String(), payload)
 	if err != nil {
 		return Response{}, fmt.Errorf("build request: %w", err)
+	}
+	if reqBody != nil {
+		req.Header.Set("Content-Type", "application/json")
 	}
 	if authenticated {
 		req.SetBasicAuth(c.keys.reveal())
@@ -310,6 +324,9 @@ func (c *Client) send(ctx context.Context, method, escapedPath string, query url
 	}
 	if len(body) > MaxResponseBytes {
 		return Response{Status: resp.StatusCode}, ErrResponseTooLarge // the status tells what Langfuse answered
+	}
+	if len(bytes.TrimSpace(body)) == 0 && method != http.MethodGet {
+		return Response{Status: resp.StatusCode}, nil // e.g. 204 No Content answering a write
 	}
 	if !json.Valid(body) {
 		return Response{}, errNotJSON

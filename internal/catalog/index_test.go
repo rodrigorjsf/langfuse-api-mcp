@@ -167,8 +167,8 @@ func TestSearchWithoutTermsReturnsEveryOperationGroupedByTag(t *testing.T) {
 
 	got := cat.Search("")
 
-	if len(got) != 123 {
-		t.Fatalf("Search(\"\") returned %d operations, want all 123", len(got))
+	if len(got) != 119 {
+		t.Fatalf("Search(\"\") returned %d operations, want all 119", len(got))
 	}
 	// The tags holding a v4-family operation come first; then, from
 	// AnnotationQueues on, the tags in alphabetical order.

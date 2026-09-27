@@ -80,15 +80,15 @@ type options struct {
 	writeMode bool
 }
 
-// WithWriteMode turns write mode on: the discovery tools list and describe
-// write operations too, each naming execute_write as the tool that runs it.
-// Write mode is fixed at startup (ADR-0003); execute_write itself arrives in
-// M4.
+// WithWriteMode turns write mode on: execute_write is registered, and the
+// discovery tools list and describe write operations too, each naming
+// execute_write as the tool that runs it. Write mode is fixed at startup
+// (ADR-0003).
 func WithWriteMode() Option { return func(o *options) { o.writeMode = true } }
 
 // New returns the MCP server exposing the discovery tools and execute_read
-// over the catalog. The tool set is fixed here, at startup, and is the same
-// for every client. log receives one audit line per tool call; it must write
+// over the catalog, and execute_write in write mode. The tool set is fixed
+// here, at startup, and is the same for every client. log receives one audit line per tool call; it must write
 // to stderr. secrets are redacted from every result and log line. profile is
 // the deployment profile detected at startup; operation_unavailable hints name
 // it.
@@ -101,7 +101,7 @@ func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets
 	}
 	s := mcp.NewServer(&mcp.Implementation{Name: "langfuse-mcp", Version: "0.0.0-dev"}, nil)
 	redact := secrets.redactor()
-	ex := executor{catalog: cat, client: client, redact: redact, profile: profile}
+	ex := executor{catalog: cat, client: client, redact: redact, profile: profile, writeMode: o.writeMode}
 	traceTree := profile.On(catalog.V4ReadFamily)
 	d := discovery{catalog: cat, writeMode: o.writeMode, offersTraceTree: traceTree, redact: redact}
 	s.AddTool(&mcp.Tool{
@@ -136,6 +136,9 @@ func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets
 	if traceTree {
 		s.AddTool(traceTreeTool(), audited(log, redact, ex.getTraceTree))
 	}
+	if o.writeMode {
+		s.AddTool(executeWriteTool(), audited(log, redact, ex.executeWrite))
+	}
 	return s
 }
 
@@ -167,6 +170,8 @@ type executor struct {
 	client  *langfuse.Client
 	redact  sanitize.Redactor
 	profile langfuse.DeploymentProfile
+	// writeMode reports whether execute_write is registered.
+	writeMode bool
 }
 
 // executeReadInput is the execute_read argument object (executeReadSchema).
@@ -255,6 +260,10 @@ const (
 		"operation, with query it keeps those matching keywords such as \"prompt get\""
 	writeRefusedHint = "this server changes no data; to read the data instead, use a read operation " +
 		"such as trace_list or trace_get"
+	// writeModeRefusedHint replaces writeRefusedHint in write mode, where
+	// execute_write exists.
+	writeModeRefusedHint = "run a write operation with execute_write; to read the data instead, use a read " +
+		"operation such as trace_list or trace_get"
 )
 
 func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a *audit) (*mcp.CallToolResult, error) {
@@ -274,27 +283,51 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 	}
 	a.method = op.Method
 	if !op.IsRead() {
+		hint := writeRefusedHint
+		if ex.writeMode {
+			hint = writeModeRefusedHint
+		}
 		return toolError(errorInvalidArgument, "operation "+op.ID+" is a "+op.Method+
-			" operation; execute_read runs read (GET) operations only", writeRefusedHint, op.ID)
+			" operation; execute_read runs read (GET) operations only", hint, op.ID)
 	}
 	request, err := op.Request(in.Parameters)
 	if err != nil {
 		return toolError(errorInvalidArgument, err.Error(), parametersHintFor(err, op), op.ID)
 	}
-	resp, err := ex.client.Do(ctx, request.Method, request.Path, request.Query)
+	return ex.run(ctx, op, request, nil, a)
+}
+
+// run sends the operation's request, with body when it is not nil, and
+// returns Langfuse's answer sanitized inside the untrusted-data envelope, or
+// the tool error of its failure. An empty answer (e.g. a 204 to a write) is
+// the payload null.
+func (ex executor) run(ctx context.Context, op catalog.Operation, request catalog.Request, body json.RawMessage,
+	a *audit,
+) (*mcp.CallToolResult, error) {
+	resp, err := ex.client.Do(ctx, request.Method, request.Path, request.Query, body)
 	a.requests, a.status, a.bytes = resp.Attempts, resp.Status, len(resp.Body)
 	if err != nil {
-		if f, ok := langfuseErrorFields(err, op, ex.redact, ex.profile); ok {
+		f, ok := langfuseErrorFields(err, op, ex.redact, ex.profile)
+		if ok {
 			a.status = f.HTTPStatus
 			if request.FolderName && (f.HTTPStatus == http.StatusNotFound || f.HTTPStatus == http.StatusBadRequest) {
 				f.Hint = folderNameHintFor(f)
 			}
-			return errorResult(f)
+		} else {
+			a.cause = err.Error()
+			f = failureFields(err)
+			f.OperationID = truncate(op.ID)
 		}
-		a.cause = err.Error()
-		return failure(op.ID, err)
+		if !op.IsRead() {
+			f.Hint = notRetriedHint(f)
+		}
+		return errorResult(f)
 	}
-	payload, err := sanitize.Payload(resp.Body, ex.redact)
+	raw := resp.Body
+	if len(raw) == 0 {
+		raw = json.RawMessage("null")
+	}
+	payload, err := sanitize.Payload(raw, ex.redact)
 	if err != nil {
 		a.cause = err.Error()
 		return failure(op.ID, err) // unreachable: the client returns valid JSON only

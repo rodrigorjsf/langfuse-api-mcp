@@ -42,7 +42,7 @@ func TestAWriteThatFailsOnTheNetworkIsNeverRetried(t *testing.T) {
 	}
 	client := langfuse.New(langfuse.Options{Host: host, Keys: langfuse.NewKeyPair("pk-lf-test", "sk-lf-test")}) //nolint:gosec // G101: fake keys for a fake host
 
-	_, err = client.Do(context.Background(), http.MethodDelete, "/api/public/traces/trace-1", nil)
+	_, err = client.Do(context.Background(), http.MethodDelete, "/api/public/traces/trace-1", nil, nil)
 
 	if !errors.Is(err, langfuse.ErrNetwork) {
 		t.Fatalf("error = %v, want one wrapping ErrNetwork", err)
@@ -95,7 +95,7 @@ func TestAHostThatDropsTheConnectionBeforeAnsweringIsANetworkErrorAndTheReadIsRe
 	host, accepted := closingHost(t, "")
 	client := langfuse.New(langfuse.Options{Host: host, Keys: langfuse.NewKeyPair("pk-lf-test", "sk-lf-test"), Wait: noWait}) //nolint:gosec // G101: fake keys for a fake host
 
-	_, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces/trace-1", nil)
+	_, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces/trace-1", nil, nil)
 
 	if !errors.Is(err, langfuse.ErrNetwork) {
 		t.Fatalf("error = %v, want one wrapping ErrNetwork", err)
@@ -110,7 +110,7 @@ func TestABodyCutShortAfterTheAnswerStartedIsNotANetworkErrorAndIsNotRetried(t *
 	host, accepted := closingHost(t, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{\"data\":")
 	client := langfuse.New(langfuse.Options{Host: host, Keys: langfuse.NewKeyPair("pk-lf-test", "sk-lf-test"), Wait: noWait}) //nolint:gosec // G101: fake keys for a fake host
 
-	_, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces/trace-1", nil)
+	_, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces/trace-1", nil, nil)
 
 	if err == nil {
 		t.Fatal("a truncated body returned no error")
