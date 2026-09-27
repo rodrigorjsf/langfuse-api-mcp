@@ -6,23 +6,27 @@ are (context 16384, temperature 0, `--max-tokens 4096 --timeout 600`, one reques
 GPU, container capped at 4 GiB of RAM and 2 CPUs), does a larger or less quantized model than `qwen3:8b` Q4_K_M
 pass more intents on the maintainer's RTX 3060 12 GB?
 
-- **Code:** `5333416`, whose Go code, catalog and eval script are identical to `48000b9` (the three commits
-  between them touch only docs and ADRs). Ollama 0.34.4, image pinned in `scripts/small-model-eval-ollama.yml`.
-- **Host:** WSL with 7.8 GiB of RAM, 4 GiB of swap, 12 CPUs; 11249 MiB of 12288 MiB VRAM free before the runs
-  (the Windows desktop holds the rest). The preflight minimum of 6144 MiB `MemAvailable` refused to start
+- **Code:** `5333416` plus this change's edits of `scripts/small-model-eval-ollama.yml` (it passes
+  `OLLAMA_KV_CACHE_TYPE` to the container; at `5333416` the variable does not reach it); the Go code, catalog and
+  eval script are identical to `48000b9` (the three commits between them touch only docs and ADRs). Ollama 0.34.4, image pinned in `scripts/small-model-eval-ollama.yml`.
+- **Host:** `~/wsl-otimizacao/verificar.sh` (the maintainer's WSL check) reported 12 CPUs, 7.8 GiB of RAM, 4.0 GiB
+  of swap and `NVIDIA GeForce RTX 3060, 12288 MiB, 617.14`, GPU visible inside containers; `nvidia-smi` then showed
+  11249 MiB of 12288 MiB VRAM free before the runs (the Windows desktop holds the rest). The preflight minimum of 6144 MiB `MemAvailable` refused to start
   (6044 MiB available), so every run used `MIN_MEM_AVAILABLE_MIB=5120`, a one-off override the maintainer
   approved; the container caps were unchanged.
 - **The only server knob changed:** `OLLAMA_KV_CACHE_TYPE` (`f16`, Ollama's default, or `q8_0`). Ollama started
   llama-server with `--cache-type-k q8_0 --cache-type-v q8_0 --flash-attn auto`, and the log said
   `flash_attn = enabled` and `KV buffer size = 1224.00 MiB` for qwen3:8b at 16384 cells (about 2304 MiB at
-  `f16`). `qwen3:14b` does not fit at `f16`: its 9.3 GB file plus an `f16` cache of 16384 cells is over 12 GB.
+  `f16`). `qwen3:14b` was not run at `f16`: by estimate (not a run), its 9.3 GB file plus an `f16` cache of 16384
+  cells (about 2.6 GB for its 40 layers) is over the 12 GB GPU.
 - **Measured by** sampling `nvidia-smi` memory.used and `/proc/meminfo` `MemAvailable` every 2 s for the whole
-  run. VRAM is the whole GPU, the Windows desktop's ~865 MiB included. Tokens per second were not measured, so a
+  run. VRAM is the whole GPU, the Windows desktop's ~865 MiB included. Per-intent latency was not recorded (only
+  the wall time of each run), and no request hit the 600 s timeout. Tokens per second were not measured, so a
   spill into shared system memory near the VRAM ceiling (the Windows driver's sysmem fallback) is not ruled out
   for `qwen3:14b`; `ollama ps` said `100% GPU` for every model.
 - **Adoption rule, agreed before the runs:** a candidate replaces the default only if it passes every intent the
-  baseline passes, passes at least one more, and never hits the timeout; and its peak VRAM stays at or under
-  about 11 GiB.
+  baseline passes, passes at least one more, and never hits the timeout; and its peak VRAM, measured on the whole
+  GPU, stays at or under 11264 MiB (11 GiB, 1 GiB free).
 
 | Configuration | Model ID | Loaded (`ollama ps`) | Peak VRAM | Min `MemAvailable` | Wall time | Result | Fails |
 |---|---|---|---|---|---|---|---|
@@ -35,7 +39,7 @@ pass more intents on the maintainer's RTX 3060 12 GB?
 
 - `qwen3:14b` passes the most intents (9/11, gaining 02 and 08), but it fails intent 11, which the baseline
   passes (it ends its turn right after `describe_operation metrics_metrics`, with no timeout). Its peak of
-  11337 MiB leaves 951 MiB of the GPU free, over the ~11 GiB budget. It also takes 3.4 times as long. It is a
+  11337 MiB leaves 951 MiB of the GPU free, over the 11264 MiB budget. It also takes 3.4 times as long. It is a
   measured opt-in, `SMALL_MODEL=qwen3:14b OLLAMA_KV_CACHE_TYPE=q8_0`, not the default.
 - The `q8_0` KV cache on its own costs the 8B model intent 09 (control run), so `f16` stays the default cache
   type. Whether the cache type also caused the 14B model's intent-11 failure cannot be tested here: the 14B model
@@ -46,6 +50,17 @@ pass more intents on the maintainer's RTX 3060 12 GB?
 - Against the first recorded run (7/11, failing 02, 03, 05 and 11), the baseline now passes 05 and 11 (#99 is
   still open, but its intent passes at this code) and fails 08, which passed then: intent 08 stops after a
   `search_operations` query for "billing" that returns no match, a regression filed as #114.
+
+## Runner flows after the edits
+
+After the compose and runner edits of this change, both configurations were run again through
+`scripts/small-model-eval-local.sh --only 6` (`MIN_MEM_AVAILABLE_MIB=5120`): the default printed
+`ollama {"version":"0.34.4"}; KV cache f16` and `PASS 06` (peak 8205 MiB), and
+`SMALL_MODEL=qwen3:14b OLLAMA_KV_CACHE_TYPE=q8_0` printed `KV cache q8_0`, `qwen3:14b bdbd181c33f2 10 GB 100% GPU`
+and `PASS 06` (peak 10942 MiB). The preflight refused the default minimum (`only 6044 MiB of memory available, it
+needs 6144 MiB`). `go build ./...`, `go test -race ./...`, `golangci-lint run` (0 issues),
+`python3 scripts/test_small_model_eval.py` (7 tests OK) and the new CI compose check passed; no Go code changed, so
+the integration suite was not rerun.
 
 ## Baseline: `qwen3:8b` Q4_K_M, KV `f16`
 

@@ -12,14 +12,10 @@
 #       change to tool descriptions, hints or the operation index.
 # HOW:  scripts/small-model-eval-local.sh [extra small-model-eval.py flags]
 #       SMALL_MODEL=<ollama model> overrides the model (default qwen3:8b).
-#       OLLAMA_KV_CACHE_TYPE=q8_0 halves the KV cache (default f16); only
-#                   qwen3:14b needs it to fit 12 GB, and it costs qwen3:8b
-#                   an intent (docs/research/raw/
-#                   2026-09-27-small-model-eval-local-model-vram.md):
-#                   SMALL_MODEL=qwen3:14b OLLAMA_KV_CACHE_TYPE=q8_0 passes
-#                   9/11 against 8/11, but fails intent 11, peaks at 11337 MiB
-#                   of VRAM and takes 3.4 times as long, so it is not the
-#                   default.
+#       OLLAMA_KV_CACHE_TYPE=q8_0 halves the KV cache (default f16), which
+#                   qwen3:14b needs to fit 12 GB of VRAM. Why qwen3:8b with
+#                   f16 stays the default: docs/research/raw/
+#                   2026-09-27-small-model-eval-local-model-vram.md.
 #       docker compose -f scripts/small-model-eval-ollama.yml down -v
 #                   also deletes the model cache (about 5 GB for qwen3:8b).
 #
