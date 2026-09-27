@@ -563,7 +563,7 @@ func TestTheConfirmationShowsTheCleanKeyWhenTwoKeysReadTheSameOnceStripped(t *te
 	for range 20 {
 		got := question(t, map[string]any{"operationId": "promptVersion_update",
 			"parameters": map[string]any{"name": "greeting", "version": 2},
-			"body": map[string]any{"newLabels": []any{"production"}, "no\u200bte": "hidden", "note": "shown"}})
+			"body":       map[string]any{"newLabels": []any{"production"}, "no\u200bte": "hidden", "note": "shown"}})
 
 		if want := `"note":"shown"`; !strings.Contains(got, want) {
 			t.Fatalf("confirmation lacks %q:\n%s", want, got)
