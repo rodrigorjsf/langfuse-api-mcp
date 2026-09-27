@@ -554,6 +554,23 @@ func TestTheConfirmationShowsInjectedTextStrippedAndMarkupAsText(t *testing.T) {
 	}
 }
 
+// Review of spec #109: two body keys that read the same once stripped show
+// one value, always the key that was already clean, so the question never
+// varies between two identical calls.
+func TestTheConfirmationShowsTheCleanKeyWhenTwoKeysReadTheSameOnceStripped(t *testing.T) {
+	t.Parallel()
+
+	for range 20 {
+		got := question(t, map[string]any{"operationId": "promptVersion_update",
+			"parameters": map[string]any{"name": "greeting", "version": 2},
+			"body": map[string]any{"newLabels": []any{"production"}, "no\u200bte": "hidden", "note": "shown"}})
+
+		if want := `"note":"shown"`; !strings.Contains(got, want) {
+			t.Fatalf("confirmation lacks %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestTheConfirmationShowsAnInjectedPathParameterStripped(t *testing.T) {
 	t.Parallel()
 

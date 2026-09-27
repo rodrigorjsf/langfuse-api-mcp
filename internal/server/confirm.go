@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -256,18 +255,7 @@ func quoted(v any) string {
 		raw, _ := json.Marshal(v) // a validated parameter value: string, number, boolean or a list of those
 		return string(raw)
 	}
-	return jsonText(plain(s))
-}
-
-// plain drops every control, invisible and bidi character of s, line breaks
-// and tabs included, so a value stays on its line.
-func plain(s string) string {
-	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
-			return -1
-		}
-		return r
-	}, sanitize.Text(s))
+	return jsonText(sanitize.Line(s))
 }
 
 // jsonText encodes v as JSON without HTML escaping, so markup reads as the
@@ -287,32 +275,11 @@ func bodySummary(body json.RawMessage) (summary string, cut bool) {
 	dec.UseNumber()
 	var v any
 	_ = dec.Decode(&v) // body passed CheckBody: it is valid JSON
-	s := jsonText(stripped(v))
+	s := jsonText(sanitize.LineValue(v))
 	if utf8.RuneCountInString(s) <= maxSummaryRunes {
 		return s, false
 	}
 	return string([]rune(s)[:maxSummaryRunes]), true
-}
-
-// stripped returns v with every string, keys included, passed through plain.
-func stripped(v any) any {
-	switch t := v.(type) {
-	case string:
-		return plain(t)
-	case []any:
-		out := make([]any, len(t))
-		for i, e := range t {
-			out[i] = stripped(e)
-		}
-		return out
-	case map[string]any:
-		out := make(map[string]any, len(t))
-		for k, e := range t {
-			out[plain(k)] = stripped(e)
-		}
-		return out
-	}
-	return v
 }
 
 // traceIDCount returns the number of trace IDs a trace_deleteMultiple body
