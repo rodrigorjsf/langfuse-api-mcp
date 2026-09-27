@@ -103,6 +103,10 @@ var metricsQueryKeys = map[string]jsonType{
 	"view":          jsonString,
 }
 
+// metricsQueryKeyNames are the keys of metricsQueryKeys, sorted: the order
+// both the refusal's key list and the guidance use.
+var metricsQueryKeyNames = slices.Sorted(maps.Keys(metricsQueryKeys))
+
 // metricsQuery checks a metrics query JSON and returns it re-encoded, with
 // config.row_limit defaulted. The query must be one JSON object within the
 // size and depth bounds, with only the keys of metricsQueryKeys, each of its
@@ -209,7 +213,7 @@ const MetricsQueryEncoding = `one string whose value is the JSON text of the que
 // MetricsQueryKeys lists the top-level keys of a metrics query, the ones the
 // validator accepts, sorted and separated by ", ".
 func MetricsQueryKeys() string {
-	return strings.Join(slices.Sorted(maps.Keys(metricsQueryKeys)), ", ")
+	return strings.Join(metricsQueryKeyNames, ", ")
 }
 
 // metricsQueryExample is the worked example of the metrics query guidance:
@@ -233,9 +237,8 @@ func (o Operation) ParamGuidance(p Param) string {
 	if !o.isMetricsV2Query(p) {
 		return ""
 	}
-	keys := slices.Sorted(maps.Keys(metricsQueryKeys))
-	typed := make([]string, len(keys))
-	for i, k := range keys {
+	typed := make([]string, len(metricsQueryKeyNames))
+	for i, k := range metricsQueryKeyNames {
 		typed[i] = k + " (" + metricsQueryKeys[k].String() + ")"
 	}
 	return "Send query as " + MetricsQueryEncoding + ". Its top-level keys: " + strings.Join(typed, ", ") +
