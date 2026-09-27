@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 )
 
@@ -63,4 +64,20 @@ func classify(err error) error {
 	default:
 		return err
 	}
+}
+
+// classifySend classifies an error of http.Client.Do, returned before any
+// answer exists. Besides the classes of classify, an end-of-stream there is a
+// connection the host or proxy dropped before answering: a reset that lands
+// after the request write reaches Do as *url.Error{Err: io.EOF} (#91). A body
+// read keeps classify alone, so a body cut short after the answer started is
+// not taken for a network failure.
+func classifySend(err error) error {
+	if classified := classify(err); classified != err {
+		return classified
+	}
+	if errors.Is(err, io.EOF) {
+		return fmt.Errorf("%w: %w", ErrNetwork, err)
+	}
+	return err
 }
