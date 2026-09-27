@@ -36,9 +36,11 @@ func (o Operation) IsDestructive() bool {
 // compacted, ready to send, or nil when there is no body to send. An absent
 // body or a JSON null is no body. It refuses a body given to an operation
 // that takes none, a missing required body, malformed JSON, a body over
-// MaxBodyBytes or nested deeper than MaxBodyDepth, and a body that is not a
-// JSON object where the operation's schema expects one. Every error wraps
-// ErrInvalidBody and names the rule, never the value.
+// MaxBodyBytes or nested deeper than MaxBodyDepth, a body that is not a JSON
+// object where the operation's schema expects one and, once those pass, a
+// body that fails the operation's JSON Schema 2020-12 (#112). Every error
+// wraps ErrInvalidBody and names the rule, never the value: a schema failure
+// names the JSON location and the failed keyword.
 func (o Operation) CheckBody(body json.RawMessage) (json.RawMessage, error) {
 	trimmed := bytes.TrimSpace(body)
 	absent := len(trimmed) == 0 || string(trimmed) == "null"
@@ -63,6 +65,9 @@ func (o Operation) CheckBody(body json.RawMessage) (json.RawMessage, error) {
 	}
 	if out[0] != '{' && expectsObject(o.Body.Schema) {
 		return nil, invalidBodyf("want a JSON object, as the schema of operation %s asks", o.ID)
+	}
+	if err := o.Body.validate(out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

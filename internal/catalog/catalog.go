@@ -22,6 +22,8 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 //go:embed spec/langfuse-union-catalog.json
@@ -106,6 +108,9 @@ type RequestBody struct {
 	// generator converts the release spec's OpenAPI 3.0 dialect (#111). It is
 	// third-party text, so every string in it is cleaned of hidden characters.
 	Schema json.RawMessage
+	// compiled is Schema compiled once, when the catalog loads (#112);
+	// CheckBody validates a body against it. Shared read-only.
+	compiled *jsonschema.Resolved
 }
 
 // Param is one path or query parameter of an operation.
@@ -226,7 +231,11 @@ func load(spec []byte) (Catalog, error) {
 				if err != nil {
 					return Catalog{}, fmt.Errorf("embedded union catalog: %s request body: %w", o.ID, err)
 				}
-				o.Body = &RequestBody{Required: op.RequestBody.Required, Schema: schema}
+				compiled, err := compileSchema(schema)
+				if err != nil {
+					return Catalog{}, fmt.Errorf("embedded union catalog: %s request body: %w", o.ID, err)
+				}
+				o.Body = &RequestBody{Required: op.RequestBody.Required, Schema: schema, compiled: compiled}
 			}
 			r, err := rangeOf(o)
 			if err != nil {

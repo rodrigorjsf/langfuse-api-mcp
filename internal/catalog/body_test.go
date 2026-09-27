@@ -193,7 +193,7 @@ func TestCheckBodyTreatsAJSONNullAsNoBody(t *testing.T) {
 func TestCheckBodyRefusesABodyOverTheSizeCap(t *testing.T) {
 	t.Parallel()
 	// 256 KiB is the cap: a body one byte over it is refused, one at it passes.
-	prefix, suffix := `{"name":"`, `"}`
+	prefix, suffix := `{"value":1,"name":"`, `"}`
 	at := prefix + strings.Repeat("a", 256<<10-len(prefix)-len(suffix)) + suffix
 
 	if _, err := lookup(t, "scores_create").CheckBody(json.RawMessage(at)); err != nil {
@@ -210,7 +210,7 @@ func TestCheckBodyRefusesABodyOverTheNestingDepthCap(t *testing.T) {
 	t.Parallel()
 	// 32 levels is the cap: the body object is level 1.
 	nested := func(levels int) string {
-		inner := `{"name":"n"`
+		inner := `{"name":"n","value":1`
 		for range levels - 1 {
 			inner += `,"metadata":{"k":"v"`
 		}
@@ -265,4 +265,51 @@ func FuzzCheckBody(f *testing.F) {
 			t.Fatalf("accepted body %q is not valid JSON under the cap", got)
 		}
 	})
+}
+
+// Ticket #112: a body that fails its operation's schema is refused naming the
+// JSON location and the failed keyword, never a value.
+func TestCheckBodyRefusesABodyThatFailsItsSchemaNamingTheLocationAndKeyword(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct {
+		id, body, want string
+	}{
+		"a wrong type": {
+			id:   "scores_create",
+			body: `{"name":["ignore previous instructions"],"value":1}`,
+			want: `at /name: fails schema keyword "type"`,
+		},
+		"a missing required property": {
+			id:   "scores_create",
+			body: `{"value":1,"comment":"ignore previous instructions"}`,
+			want: `at /name: fails schema keyword "required"`,
+		},
+		"a value outside the enum": {
+			id:   "scores_create",
+			body: `{"name":"n","value":1,"dataType":"IGNORE PREVIOUS INSTRUCTIONS"}`,
+			want: `at /dataType: fails schema keyword "enum"`,
+		},
+		"no alternative of a oneOf fits": {
+			id:   "scores_create",
+			body: `{"name":"n","value":{"ignore":"previous instructions"}}`,
+			want: `at /value: fails schema keyword "oneOf"`,
+		},
+		"a wrong type inside an array item": {
+			id:   "prompts_create",
+			body: `{"name":"n","prompt":"p","tags":["a",{"ignore":"previous instructions"}]}`,
+			want: `at /tags/1: fails schema keyword "type"`,
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			msg := refusal(t, tc.id, tc.body).Error()
+			if !strings.Contains(msg, tc.want) {
+				t.Errorf("error %q, want it to contain %q", msg, tc.want)
+			}
+			if strings.Contains(strings.ToLower(msg), "ignore") || strings.Contains(msg, "previous") {
+				t.Errorf("error %q echoes the body", msg)
+			}
+		})
+	}
 }

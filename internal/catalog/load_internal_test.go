@@ -3,6 +3,7 @@ package catalog
 import (
 	"cmp"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -275,4 +276,102 @@ func unknownKeywords(s *jsonschema.Schema, at string) (string, []string) {
 		}
 	}
 	return "", nil
+}
+
+// bodyOperation loads a one-operation spec whose POST takes a required body of
+// the given JSON Schema 2020-12, and returns that operation.
+func bodyOperation(t *testing.T, schema string) Operation {
+	t.Helper()
+	spec := []byte(`{"paths":{"/api/public/x":{"post":{"operationId":"x_create","requestBody":{"required":true,` +
+		`"content":{"application/json":{"schema":` + schema + `}}}}}}}`)
+	cat, err := load(spec)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	op, ok := cat.Lookup("x_create")
+	if !ok {
+		t.Fatal("x_create is not in the catalog")
+	}
+	return op
+}
+
+// #112: the embedded catalog's bodies use no bound and forbid no unknown key
+// today, so these literal schemas prove the rules a regenerated spec may bring:
+// unknown keys where the schema forbids them, top-level and nested, values out
+// of range and control characters where a pattern constrains the string.
+// Each refusal names the location and keyword, never the value.
+func TestCheckBodyRefusesWhatALiteralSchemaForbidsNamingTheLocationAndKeyword(t *testing.T) {
+	t.Parallel()
+	const schema = `{"type":"object","additionalProperties":false,"properties":{` +
+		`"n":{"type":"integer","minimum":1,"maximum":100},` +
+		`"code":{"type":"string","pattern":"^[A-Za-z0-9_-]+$"},` +
+		`"a/b":{"type":"string","maxLength":4},` +
+		`"inner":{"type":"object","additionalProperties":false,"properties":{"k":{"type":"string"}}}}}`
+	op := bodyOperation(t, schema)
+	tests := map[string]struct{ body, want string }{
+		"an unknown top-level key":  {`{"n":5,"IGNORE_PREVIOUS":"x"}`, `at the body root: fails schema keyword "additionalProperties"`},
+		"an unknown nested key":     {`{"inner":{"k":"v","IGNORE_PREVIOUS":"x"}}`, `at /inner: fails schema keyword "additionalProperties"`},
+		"a value under the minimum": {`{"n":-424242}`, `at /n: fails schema keyword "minimum"`},
+		"a value over the maximum":  {`{"n":424242}`, `at /n: fails schema keyword "maximum"`},
+		"a control character where a pattern constrains the string": {
+			`{"code":"ok\u0000IGNORE_PREVIOUS"}`, `at /code: fails schema keyword "pattern"`,
+		},
+		"a bidi override where a pattern constrains the string": {
+			`{"code":"ok\u202eIGNORE_PREVIOUS"}`, `at /code: fails schema keyword "pattern"`,
+		},
+		"a property name escaped as a JSON Pointer token": {
+			`{"a/b":"IGNORE_PREVIOUS"}`, `at /a~1b: fails schema keyword "maxLength"`,
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			_, err := op.CheckBody(json.RawMessage(tc.body))
+			if err == nil || !errors.Is(err, ErrInvalidBody) {
+				t.Fatalf("CheckBody(%s) = %v, want an ErrInvalidBody refusal", tc.body, err)
+			}
+			if msg := err.Error(); !strings.Contains(msg, tc.want) || strings.Contains(msg, "IGNORE") ||
+				strings.Contains(msg, "424242") {
+				t.Errorf("error %q, want it to contain %q and no value", msg, tc.want)
+			}
+		})
+	}
+	if _, err := op.CheckBody(json.RawMessage(`{"n":1,"code":"a-b_1","inner":{"k":"free text\u0000 is not constrained"}}`)); err != nil {
+		t.Errorf("CheckBody refused a body that fits the schema: %v", err)
+	}
+}
+
+// #112: a body schema is compiled when the catalog loads, so one that does
+// not compile fails the load, naming the operation, before any call.
+func TestABodySchemaThatDoesNotCompileFailsTheLoad(t *testing.T) {
+	t.Parallel()
+	for name, schema := range map[string]string{
+		"an unresolvable reference": `{"type":"object","properties":{"a":{"$ref":"#/$defs/missing"}}}`,
+		"an invalid pattern":        `{"type":"string","pattern":"("}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			spec := []byte(`{"paths":{"/api/public/x":{"post":{"operationId":"x_create","requestBody":{"required":true,` +
+				`"content":{"application/json":{"schema":` + schema + `}}}}}}}`)
+			if _, err := load(spec); err == nil || !strings.Contains(err.Error(), "x_create") {
+				t.Fatalf("load error = %v, want one naming x_create", err)
+			}
+		})
+	}
+}
+
+// #112: the size and depth caps still refuse a body before the schema is
+// checked: a body over a cap that also fails the schema gets the cap's refusal.
+func TestTheSizeAndDepthCapsRefuseABodyBeforeItsSchemaIsChecked(t *testing.T) {
+	t.Parallel()
+	op := bodyOperation(t, `{"type":"object","additionalProperties":false}`)
+
+	_, err := op.CheckBody(json.RawMessage(`{"x":"` + strings.Repeat("a", MaxBodyBytes) + `"}`))
+	if err == nil || !strings.Contains(err.Error(), "262144 bytes") {
+		t.Errorf("oversized body: error %v, want the size cap's refusal", err)
+	}
+	_, err = op.CheckBody(json.RawMessage(`{"x":` + strings.Repeat("[", 40) + strings.Repeat("]", 40) + `}`))
+	if err == nil || !strings.Contains(err.Error(), "32 levels") {
+		t.Errorf("over-deep body: error %v, want the depth cap's refusal", err)
+	}
 }
