@@ -153,9 +153,12 @@ func (lt liveTarget) do(ctx context.Context, t *testing.T, method, path string, 
 		// /v2/observations for minutes (#85); events_only and Cloud accept it.
 		req.Header.Set("X-Langfuse-Ingestion-Version", "4")
 	}
-	// Its own transport, closed afterwards: no idle connection outlives the
-	// call to trip TestMain's leak check.
-	transport := &http.Transport{Proxy: http.ProxyFromEnvironment}
+	// Its own transport, one request long, so no connection outlives the call
+	// to trip TestMain's leak check. Keep-alives off makes that hold without
+	// racing the deferred close: an HTTP/2 connection (Langfuse Cloud) is then
+	// single-use and closes itself when its stream ends, and HTTP/1.1 closes
+	// after the response. The deferred close still sweeps anything left over.
+	transport := &http.Transport{Proxy: http.ProxyFromEnvironment, DisableKeepAlives: true}
 	defer transport.CloseIdleConnections()
 	resp, err := (&http.Client{Transport: transport}).Do(req) //nolint:gosec // G704: the test's own Langfuse, see above
 	if err != nil {
