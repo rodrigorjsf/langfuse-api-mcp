@@ -112,7 +112,7 @@ func metricsQuery(raw string) (string, error) {
 	// The decode error is dropped on purpose: its text quotes the caller's
 	// input, which an error message never repeats.
 	if err := dec.Decode(&q); err != nil || q == nil {
-		return "", queryInvalidf("parameter query: want a JSON object")
+		return "", queryInvalidf("parameter query: want a string holding the JSON text of one object")
 	}
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return "", queryInvalidf("parameter query: want one JSON object, got data after it")
@@ -187,6 +187,14 @@ func checkDepth(raw string) error {
 	}
 }
 
+// MetricsQueryEncoding says how the query of a metrics operation is sent:
+// one string holding the JSON text, never an object and never escaped twice.
+// It is the one wording both refusals' hints and the guidance use, so they
+// cannot drift and never push a model from one wrong shape to the other
+// (#106). Static text: it never holds the caller's query.
+const MetricsQueryEncoding = `one string whose value is the JSON text of the query object, ` +
+	`such as {"view":"observations",…}: not an object, and with its quotes escaped once, as in any JSON string, never twice`
+
 // MetricsQueryKeys lists the top-level keys of a metrics query, the ones the
 // validator accepts, sorted and separated by ", ".
 func MetricsQueryKeys() string {
@@ -222,7 +230,7 @@ func (o Operation) ParamGuidance(p Param) string {
 	for i, k := range keys {
 		typed[i] = k + " (" + metricsQueryKeys[k].String() + ")"
 	}
-	return "A JSON object, sent as a string. Its top-level keys: " + strings.Join(typed, ", ") +
+	return "Send query as " + MetricsQueryEncoding + ". Its top-level keys: " + strings.Join(typed, ", ") +
 		"; any other key is refused. " +
 		"Langfuse requires view, metrics, fromTimestamp and toTimestamp (ISO 8601 date-times). " +
 		"view: observations, scores-numeric, scores-boolean or scores-categorical. " +

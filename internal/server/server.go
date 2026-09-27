@@ -302,15 +302,15 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 	return jsonResult(sanitize.Wrap(op.ID, payload), false)
 }
 
-// metricsQueryHint is the hint for a malformed metrics query (#104): the
-// query's top-level keys, from the validator's own list, and where the rest of
+// metricsQueryHint is the hint for a malformed metrics query (#104): how the
+// query is sent as a string (#106), its top-level keys, from the validator's own list, and where the rest of
 // its shape is described. Static text: it never holds the caller's query.
 func metricsQueryHint(op catalog.Operation) string {
 	describes := "its parameters"
 	if op.HasGuidance() {
 		describes = "the query's shape and a worked example"
 	}
-	return "send query as one JSON object whose top-level keys are only " + catalog.MetricsQueryKeys() +
+	return "send query as " + catalog.MetricsQueryEncoding + "; its top-level keys are only " + catalog.MetricsQueryKeys() +
 		"; describe_operation with operationId " + op.ID + " returns " + describes
 }
 

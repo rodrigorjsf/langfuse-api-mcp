@@ -187,7 +187,7 @@ const metricsQueryExample = `{"view":"observations","metrics":[{"measure":"total
 
 // metricsQueryGuidance is the guidance describe_operation gives for the query
 // parameter of metrics_metrics.
-const metricsQueryGuidance = "A JSON object, sent as a string. Its top-level keys: config (an object or null), " +
+const metricsQueryGuidance = "Send query as " + metricsQueryEncoding + ". Its top-level keys: config (an object or null), " +
 	"dimensions (a list), filters (a list), fromTimestamp (a string), metrics (a list), orderBy (a list or null), " +
 	"timeDimension (an object or null), toTimestamp (a string), view (a string); any other key is refused. " +
 	"Langfuse requires view, metrics, fromTimestamp and toTimestamp (ISO 8601 date-times). " +
@@ -325,6 +325,63 @@ func TestTheRefusalHintAndTheGuidanceNameTheKeysTheValidatorAccepts(t *testing.T
 
 			if _, ok := sent[key]; !ok {
 				t.Fatalf("Langfuse received %v, want key %s", sent, key)
+			}
+		})
+	}
+}
+
+// #106: the query's string encoding. A small model alternated between an
+// over-escaped string and an object, each refusal pushing it to the other.
+
+// metricsQueryEncoding is the one wording, shared by both refusals' hints and
+// the guidance, of how query is sent.
+const metricsQueryEncoding = `one string whose value is the JSON text of the query object, ` +
+	`such as {"view":"observations",…}: not an object, and with its quotes escaped once, as in any JSON string, never twice`
+
+func TestAnOverEscapedOrObjectMetricsQueryIsRefusedWithTheSharedEncodingHint(t *testing.T) {
+	t.Parallel()
+	// The two shapes qwen3:8b sent (#106), each carrying hostile text.
+	hostile := injected + "\u200b\u0007"
+	escaped, _ := json.Marshal(hostile)
+	tests := map[string]struct {
+		query   any
+		message string
+	}{
+		"over-escaped string": {
+			strings.ReplaceAll(`{"view":"observations","filters":[{"value":`+string(escaped)+`}]}`, `"`, `\"`),
+			"invalid parameter: parameter query: want a string holding the JSON text of one object",
+		},
+		"object": {
+			map[string]any{"view": "observations", "filters": []any{map[string]any{"value": hostile}}},
+			"invalid parameter: parameter query: want a string, got an object",
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			fake, seen := fakeLangfuse(t, http.StatusOK, `{"data":[]}`)
+			var logs syncBuffer
+			cs := connectClient(t, langfuse.New(clientOptions(t, fake)), slog.New(slog.NewJSONHandler(&logs, nil)))
+
+			res := callExecuteRead(t, cs, map[string]any{
+				"operationId": "metrics_metrics", "parameters": map[string]any{"query": tc.query},
+			})
+
+			select {
+			case r := <-seen:
+				t.Fatalf("Langfuse received %s %s for a refused query", r.method, r.path)
+			default:
+			}
+			got := toolErrorOf(t, res).Error
+			wantHint := "send query as " + metricsQueryEncoding + "; its top-level keys are only " + metricsQueryKeys +
+				"; describe_operation with operationId metrics_metrics returns the query's shape and a worked example"
+			if got.Code != "invalid_argument" || got.Message != tc.message || got.Hint != wantHint {
+				t.Fatalf("tool error = %+v,\nwant invalid_argument, message %q and hint %q", got, tc.message, wantHint)
+			}
+			for _, leak := range []string{"Ignore previous", "<script>", "\u202e", "\u200b", "\u0007", `\u0007`, `\u200b`} {
+				if strings.Contains(resultText(t, res), leak) || strings.Contains(logs.String(), leak) {
+					t.Errorf("the refusal or the audit line holds %q:\nresult %s\nlog %s", leak, resultText(t, res), logs.String())
+				}
 			}
 		})
 	}
