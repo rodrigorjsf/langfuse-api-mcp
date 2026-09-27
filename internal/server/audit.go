@@ -35,7 +35,7 @@ type audit struct {
 	write bool
 	// confirmation is the confirmation outcome of a write call once its
 	// operation is known; "" otherwise.
-	confirmation string
+	confirmation confirmationOutcome
 }
 
 // auditedHandler is a tool handler that records its call in a.
@@ -82,7 +82,7 @@ func audited(log *slog.Logger, r sanitize.Redactor, handler auditedHandler) mcp.
 				"code", code,
 			}
 			if a.confirmation != "" {
-				attrs = append(attrs, "confirmation", a.confirmation)
+				attrs = append(attrs, "confirmation", string(a.confirmation))
 			}
 			if a.cause != "" {
 				attrs = append(attrs, "cause", r.Redact(a.cause))

@@ -73,15 +73,6 @@ func executeWriteTool() *mcp.Tool {
 	}
 }
 
-// Confirmation outcomes of a write call, as its audit line records them.
-const (
-	// confirmationNotRequired: the operation is not destructive.
-	confirmationNotRequired = "not_required"
-	// confirmationUnavailable: the operation is destructive and could not be
-	// confirmed, so it was refused.
-	confirmationUnavailable = "unavailable"
-)
-
 // Hints of the execute_write refusals.
 const (
 	writeArgumentsHint = "call execute_write again with operationId, a Langfuse write operation ID such as " +

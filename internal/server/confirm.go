@@ -106,18 +106,25 @@ func canonicalArgs(request catalog.Request, body json.RawMessage) []byte {
 	return out
 }
 
-// Confirmation outcomes a write call's audit line records beyond
-// not_required and unavailable.
+// confirmationOutcome is the confirmation outcome of a write call, as its
+// audit line records it; "" until the call's arguments passed their checks.
+type confirmationOutcome string
+
 const (
+	// confirmationNotRequired: the operation is not destructive.
+	confirmationNotRequired confirmationOutcome = "not_required"
+	// confirmationUnavailable: the operation is destructive and the client
+	// cannot ask the user, so it was refused.
+	confirmationUnavailable confirmationOutcome = "unavailable"
 	// confirmationRequested: the call returned the confirmation question.
-	confirmationRequested = "requested"
+	confirmationRequested confirmationOutcome = "requested"
 	// confirmationAccepted: the user accepted; the operation was sent.
-	confirmationAccepted = "accepted"
+	confirmationAccepted confirmationOutcome = "accepted"
 	// confirmationDeclined: the user declined or cancelled; nothing was sent.
-	confirmationDeclined = "declined"
+	confirmationDeclined confirmationOutcome = "declined"
 	// confirmationInvalid: the confirmation data was missing, forged,
 	// expired or bound to other arguments; nothing was sent.
-	confirmationInvalid = "invalid"
+	confirmationInvalid confirmationOutcome = "invalid"
 )
 
 // Hints of the confirmation refusals (ADR-0008): static text.
