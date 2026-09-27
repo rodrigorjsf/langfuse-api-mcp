@@ -443,10 +443,10 @@ The integration suite drives `execute_read` (the real executor and Langfuse HTTP
 
 CI ([`.github/workflows/integration.yml`](.github/workflows/integration.yml)) runs it against a throwaway self-hosted Langfuse 4.46.0 in `events_only` mode on every pull request. Weekly and on manual dispatch it runs against each pinned deployment of [ADR-0012](docs/adr/0012-version-aware-catalog.md) and against the dedicated Langfuse Cloud test project. The pinned deployments are 3.80.0, 3.225.11 (the latest 3.x), 4.46.0 `events_only` and 4.46.0 `dual`, one runner each. On each of them the per-deployment check detects the deployment profile, fails unless it is the one expected for that pin, and calls every read operation of the catalog resolved for it. A read passes when Langfuse answers the request itself: a success, or a 400, 403, 404 "not found" (its IDs are placeholders), 409 or 422. `operation_unavailable`, a 401, a 5xx, a 429 or no answer fails it. A failure names the deployment, the operation ID and the tool error code, never a payload or a key. The payload-query probe runs on `events_only` only ([#85](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/85)).
 
-Run it locally against a self-hosted Langfuse (needs Docker with the compose plugin and about 3 GiB of free RAM; uses ports 3000 and 9090). `LANGFUSE_DEPLOYMENT` picks the pinned deployment (`4.46.0-events_only` by default, `4.46.0-dual`, `3.225.11` or `3.80.0`), one at a time:
+Run it locally against a self-hosted Langfuse (needs Docker with the compose plugin and about 3 GiB of free RAM; uses ports 3000 and 9090). `LANGFUSE_DEPLOYMENT` picks the pinned deployment (`4.46.0-events_only` by default, `4.46.0-dual`, `3.225.11` or `3.80.0`), one at a time. The whole stack is committed under [`internal/server/testdata/langfuse-selfhosted/`](internal/server/testdata/langfuse-selfhosted/): the official compose file of each Langfuse version, byte for byte, plus one override per deployment that pins every image by digest. Nothing is downloaded but the images, and the script refuses to start a stack with an unpinned image:
 
 ```bash
-scripts/langfuse-selfhosted.sh up          # official compose, images pinned by digest; fresh project + keys
+scripts/langfuse-selfhosted.sh up          # committed compose stack, images pinned by digest; fresh project + keys
 set -a; . ./.env.integration.selfhosted; set +a
 go test -tags integration -count=1 ./internal/server/
 scripts/langfuse-selfhosted.sh down        # removes the containers and their volumes

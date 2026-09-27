@@ -2,7 +2,8 @@
 # and Langfuse HTTP client against a live Langfuse.
 # - self-hosted: every pull request against a throwaway Langfuse 4.46.0 in `events_only` mode,
 #   started from the official docker compose setup with a fresh project and key pair
-#   (scripts/langfuse-selfhosted.sh; compose file and images pinned there).
+#   (scripts/langfuse-selfhosted.sh; the compose files and their digest-pinned image overrides are
+#   committed in internal/server/testdata/langfuse-selfhosted/, nothing is fetched but the images).
 # - pinned-deployments: weekly and on manual dispatch, the same against each pinned deployment of
 #   ADR-0012 (3.80.0, the latest 3.x, 4.x `events_only`, 4.x `dual`), one runner each.
 #   TestLiveDeploymentAnswersEveryReadOperationOfItsResolvedCatalog proves there that startup

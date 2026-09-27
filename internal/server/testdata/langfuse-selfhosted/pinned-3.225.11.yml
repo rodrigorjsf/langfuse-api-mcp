@@ -1,0 +1,9 @@
+# Override for LANGFUSE_DEPLOYMENT=3.225.11 on top of compose-3.225.11.yml (scripts/langfuse-selfhosted.sh):
+# pins every service image by digest. No secrets here: the script passes them at runtime.
+services:
+  langfuse-web: { image: "docker.io/langfuse/langfuse:3.225.11@sha256:a343f64e035eb01aeea358703a0428945d909d01e19452509a5a830862dda878", environment: {  } }
+  langfuse-worker: { image: "docker.io/langfuse/langfuse-worker:3.225.11@sha256:8a28c946bb5401eef488153fa294db5a79bd99dd5c90db8e4d39559374c9ebd3", environment: {  } }
+  clickhouse: { image: "docker.io/clickhouse/clickhouse-server:25.12@sha256:8a790dd3468db22b1d4e7b18a176f378ff5ff6053b9c48dd4ea1fa71a24c5ba6" }
+  minio: { image: "cgr.dev/chainguard/minio:latest@sha256:bd014394a80898e68c149f2311fdf8d5a2c2f3bb2c33b9327ae6d02b4b065ae1" }
+  redis: { image: "docker.io/redis:7@sha256:c6eabf748fc7a61dbb5a705c78bcf3d6377b1127a97d0ce965c11c44ba46896f" }
+  postgres: { image: "docker.io/postgres:17@sha256:d74eeac9a635390a49bc21bd49fccd973de707e2a53a76ac49b552b8712ec46f" }
