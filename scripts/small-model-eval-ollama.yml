@@ -19,6 +19,10 @@
 # host memory), and LLAMA_ARG_CACHE_RAM=0 turns off llama-server's prompt
 # cache in host RAM (8192 MiB by default): on 2026-09-27 that cache grew
 # the container past its 4 GiB cap mid-eval and it was OOM-killed.
+# OLLAMA_KV_CACHE_TYPE (f16 unless set in the caller's environment) is the
+# only model-fit knob: q8_0 halves the KV cache so qwen3:14b fits 12 GB of
+# VRAM at context 16384, but it costs qwen3:8b an intent, so f16 stays the
+# default (docs/research/raw/2026-09-27-small-model-eval-local-model-vram.md).
 # The volume is named `ollama` on purpose, so an existing model cache is reused
 # instead of a fresh <project>_ollama volume; `down -v` deletes the models.
 name: langfuse-mcp-small-model-eval
@@ -30,6 +34,7 @@ services:
       OLLAMA_CONTEXT_LENGTH: "16384"
       OLLAMA_NUM_PARALLEL: "1"
       OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_KV_CACHE_TYPE: "${OLLAMA_KV_CACHE_TYPE:-f16}"
       LLAMA_ARG_N_GPU_LAYERS: "999"
       LLAMA_ARG_CACHE_RAM: "0"
     mem_limit: 4g

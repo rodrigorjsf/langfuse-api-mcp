@@ -5,7 +5,8 @@
 #       other container is running, or when the kernel reports less free
 #       memory (MemAvailable in /proc/meminfo) than the stack needs. It never
 #       stops or removes a container itself.
-# WHY:  the development box gives WSL 10 GB of RAM, 2 GB of swap and 4 CPUs
+# WHY:  the development box is small: WSL had 10 GB of RAM, 2 GB of swap and
+#       4 CPUs when it froze, and now has 7.8 GiB, 4 GiB and 12 CPUs
 #       (.wslconfig). On 2026-09-27 WSL froze when three full Langfuse stacks
 #       (one of them this repository's integration stack, left running) and
 #       Ollama loading qwen3:8b ran at once. One stack at a time, and only with
