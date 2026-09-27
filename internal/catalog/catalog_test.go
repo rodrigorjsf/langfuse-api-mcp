@@ -17,7 +17,8 @@ func mustLoad(t testing.TB) catalog.Catalog {
 	return cat
 }
 
-// ADR-0004: ingestion, OTLP and organization admin mutations are never in the
+// ADR-0004: ingestion, OTLP, organization admin mutations, media uploads and
+// writes whose body carries a third-party credential are never in the
 // catalog. A spec update that adds an operation of these kinds must be triaged.
 func TestCatalogContainsNoExcludedOperation(t *testing.T) {
 	t.Parallel()
@@ -31,6 +32,9 @@ func TestCatalogContainsNoExcludedOperation(t *testing.T) {
 		"organizations_updateOrganizationMembership", "organizations_deleteOrganizationMembership",
 		"organizations_updateProjectMembership", "organizations_deleteProjectMembership",
 		"scim_createUser", "scim_deleteUser",
+		// ADR-0004 amendment (M4): media uploads and credential-carrying writes.
+		"media_getUploadUrl", "media_patch",
+		"llmConnections_upsert", "blobStorageIntegrations_upsertBlobStorageIntegration",
 	} {
 		if _, ok := cat.Lookup(id); ok {
 			t.Errorf("excluded operation %s is in the catalog", id)
@@ -51,11 +55,11 @@ func TestCatalogKeepsEveryOperationOfTheUnionThatIsNotExcluded(t *testing.T) {
 	t.Parallel()
 	cat := mustLoad(t)
 
-	// The union catalog (v3.0.0 to v4.46.0) has 137 operations, 13 of them
-	// excluded; promptVersion_update names two of them (its path changed in
+	// The union catalog (v3.0.0 to v4.46.0) has 137 operations, 17 of them
+	// excluded (ADR-0004 and its M4 amendment); promptVersion_update names two of them (its path changed in
 	// 3.18.0), and the newer one wins.
-	if got := len(cat.Operations()); got != 123 {
-		t.Fatalf("catalog has %d operations, want 123", got)
+	if got := len(cat.Operations()); got != 119 {
+		t.Fatalf("catalog has %d operations, want 119", got)
 	}
 	for id, want := range map[string]string{ //nolint:gosec // G101: operation IDs, not credentials
 		"trace_list":                           "GET /api/public/traces",

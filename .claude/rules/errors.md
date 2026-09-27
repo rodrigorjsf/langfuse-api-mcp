@@ -13,7 +13,10 @@ Contract: ADR-0008. The agent must always receive a structured tool error it can
 | Startup (config, CA explicit sources, invalid host) | exit non-zero with one clear stderr message naming the variable; never start half-configured |
 | Tool input invalid | tool result `isError: true`, code `invalid_argument`, which field and why |
 | Unknown / excluded operation | `operation_not_found` + hint to call `search_operations` |
-| Write requested with writes off | cannot happen via tools (tool absent); guard anyway → `writes_disabled` |
+| Write requested with writes off | cannot happen via tools: `execute_write` is not registered, so the client gets the SDK's unknown-tool error (no `writes_disabled` code exists) |
+| Destructive write (DELETE, PUT, PATCH), client offers no form elicitation (none, or URL mode only; read per request) | `confirmation_unavailable`, static hint (use a client with form elicitation, or the Langfuse UI), not retryable; nothing is sent (#113) |
+| Destructive write the user declined or cancelled | `confirmation_declined`, static hint (do not call again unless the user asks again), not retryable; nothing is sent |
+| Destructive write re-sent with missing, forged, corrupted, expired or mismatched confirmation data (an accept sent before the server asked, other arguments, another process's state) | `confirmation_invalid`, static hint (call again without confirmation data to be asked afresh), not retryable; nothing is sent |
 | Langfuse HTTP error | map status (table below) |
 | Network / TLS / timeout | classify with `errors.As` (e.g. `x509.UnknownAuthorityError`, `*tls.CertificateVerificationError`, `net.Error` timeout, `context.DeadlineExceeded`) |
 | Bug (panic) | recover at the tool-handler boundary → `internal_error`; stack only to stderr |
@@ -42,7 +45,7 @@ Protocol-level JSON-RPC errors are reserved for malformed requests and unknown t
 | timeout / canceled | `timeout` / `canceled` | narrow the query | no |
 | held by the server's own rate limit or concurrency cap past the deadline (never sent) | `timeout`, `retryable: true` | call again later, fewer calls at once; operator raises `LANGFUSE_MCP_RATE_LIMIT`/`LANGFUSE_MCP_MAX_CONCURRENCY` | no |
 
-Writes are never retried automatically (not idempotent).
+Writes are never retried automatically (not idempotent); a failed write's hint says it was not retried and may or may not have been applied.
 
 ## Go mechanics
 - Internal errors: wrap with `fmt.Errorf("op %s: %w", id, err)`; one typed `*langfuse.APIError{Status, Code, Message, RetryAfter}` and sentinels for branchable cases; branch with `errors.Is/As`, never on strings.

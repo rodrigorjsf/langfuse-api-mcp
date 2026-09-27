@@ -68,7 +68,7 @@ func TestConcurrentRequestsNeverExceedTheConcurrencyCap(t *testing.T) {
 	errs := make(chan error, requests)
 	for range requests {
 		wg.Go(func() {
-			_, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil)
+			_, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil, nil)
 			errs <- err
 		})
 	}
@@ -144,7 +144,7 @@ func TestRequestsArePacedToTheRateLimit(t *testing.T) {
 	client := langfuse.New(pacedOptions(t, fake, clock, 60, 1)) // one request per second
 
 	for range 3 {
-		if _, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil); err != nil {
+		if _, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil, nil); err != nil {
 			t.Fatalf("Do: %v", err)
 		}
 	}
@@ -162,7 +162,7 @@ func TestTheBurstEqualsTheConcurrencyCap(t *testing.T) {
 	client := langfuse.New(pacedOptions(t, fake, clock, 60, 4))
 
 	for range 5 {
-		if _, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil); err != nil {
+		if _, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil, nil); err != nil {
 			t.Fatalf("Do: %v", err)
 		}
 	}
@@ -187,7 +187,7 @@ func TestARetryWaitsOnTheRateLimitToo(t *testing.T) {
 	clock := newFakeClock()
 	client := langfuse.New(pacedOptions(t, fake, clock, 60, 1))
 
-	if _, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil); err != nil {
+	if _, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil, nil); err != nil {
 		t.Fatalf("Do: %v", err)
 	}
 
@@ -210,11 +210,11 @@ func TestARateLimitWaitBeyondTheDeadlineReturnsAThrottledTimeoutWithoutCallingLa
 	opts := pacedOptions(t, fake, clock, 1, 1) // the next request may leave in a minute
 	opts.RequestTimeout = 5 * time.Second
 	client := langfuse.New(opts)
-	if _, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil); err != nil {
+	if _, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil, nil); err != nil {
 		t.Fatalf("first Do: %v", err)
 	}
 
-	_, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil)
+	_, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil, nil)
 
 	if !errors.Is(err, langfuse.ErrThrottled) || !errors.Is(err, langfuse.ErrTimeout) {
 		t.Fatalf("second Do error = %v, want ErrThrottled and ErrTimeout", err)
@@ -231,11 +231,11 @@ func TestACanceledRequestWaitingOnTheRateLimitReturnsCanceledWithoutCallingLangf
 	opts := pacedOptions(t, fake, clock, 60, 1)
 	opts.Wait = func(ctx context.Context, _ time.Duration) error { return context.Canceled } // canceled mid-wait
 	client := langfuse.New(opts)
-	if _, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil); err != nil {
+	if _, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil, nil); err != nil {
 		t.Fatalf("first Do: %v", err)
 	}
 
-	_, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil)
+	_, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil, nil)
 
 	if !errors.Is(err, langfuse.ErrCanceled) || errors.Is(err, langfuse.ErrThrottled) {
 		t.Fatalf("second Do error = %v, want ErrCanceled, not ErrThrottled", err)
@@ -260,14 +260,14 @@ func TestARequestWaitingForASlotPastItsDeadlineReturnsAThrottledTimeoutWithoutCa
 	client := langfuse.New(pacedOptions(t, fake, newFakeClock(), 60000, 1))
 	done := make(chan error, 1)
 	go func() {
-		_, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil)
+		_, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil, nil)
 		done <- err
 	}()
 	<-arrived // the only slot is taken
 	expired, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 	defer cancel()
 
-	_, err := client.Do(expired, http.MethodGet, "/api/public/traces", nil)
+	_, err := client.Do(expired, http.MethodGet, "/api/public/traces", nil, nil)
 
 	close(release)
 	if firstErr := <-done; firstErr != nil {
@@ -298,14 +298,14 @@ func TestARequestQueuedForASlotTakesNoRateLimitTokenUntilItHasTheSlot(t *testing
 	client := langfuse.New(pacedOptions(t, fake, clock, 6000, 1))
 	done := make(chan error, 1)
 	go func() {
-		_, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil)
+		_, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil, nil)
 		done <- err
 	}()
 	<-arrived // the only slot is taken, and so is the only token
 	short, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
-	_, err := client.Do(short, http.MethodGet, "/api/public/traces", nil)
+	_, err := client.Do(short, http.MethodGet, "/api/public/traces", nil, nil)
 
 	close(release)
 	if firstErr := <-done; firstErr != nil {
@@ -335,7 +335,7 @@ func TestARetryHeldByTheRateLimitReturnsTheLangfuseErrorThatCausedIt(t *testing.
 	opts.RequestTimeout = 5 * time.Second
 	client := langfuse.New(opts)
 
-	_, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil)
+	_, err := client.Do(context.Background(), http.MethodGet, "/api/public/traces", nil, nil)
 
 	var apiErr *langfuse.APIError
 	if !errors.As(err, &apiErr) || apiErr.Status != http.StatusServiceUnavailable || errors.Is(err, langfuse.ErrThrottled) {

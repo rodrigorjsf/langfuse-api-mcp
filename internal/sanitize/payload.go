@@ -17,10 +17,8 @@ import (
 // result is compact JSON with object keys in sorted order and numbers kept
 // exact; payload must be valid JSON.
 func Payload(payload json.RawMessage, r Redactor) (json.RawMessage, error) {
-	dec := json.NewDecoder(bytes.NewReader(payload))
-	dec.UseNumber() // keep numbers exact: an ID-like 12345678901234567890 stays as is
-	var v any
-	if err := dec.Decode(&v); err != nil {
+	v, err := Decode(payload)
+	if err != nil {
 		return nil, err
 	}
 	var out bytes.Buffer
@@ -32,14 +30,48 @@ func Payload(payload json.RawMessage, r Redactor) (json.RawMessage, error) {
 	return bytes.TrimSuffix(out.Bytes(), []byte("\n")), nil
 }
 
+// Decode decodes one JSON value, keeping numbers exact as json.Number: an
+// ID-like 12345678901234567890 stays as is.
+func Decode(raw json.RawMessage) (any, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	err := dec.Decode(&v)
+	return v, err
+}
+
 // clean returns v with every string cleaned by Text and redacted by r.
 func clean(v any, r Redactor) any {
+	return walk(v, func(s string) string { return r.Redact(Text(s)) })
+}
+
+// Line drops every control, invisible and bidirectional formatting character
+// of s, tab and line breaks included, so a value shown on one line stays on
+// it. Invalid UTF-8 becomes U+FFFD.
+func Line(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, Text(s))
+}
+
+// LineValue returns v, a decoded JSON value, with every string, keys
+// included, passed through Line. Keys that read the same once cleaned keep
+// one value by Payload's rule: the key that was already clean, else the first
+// in byte order.
+func LineValue(v any) any { return walk(v, Line) }
+
+// walk returns v, a decoded JSON value, with every string, keys included,
+// passed through f.
+func walk(v any, f func(string) string) any {
 	switch v := v.(type) {
 	case string:
-		return r.Redact(Text(v))
+		return f(v)
 	case []any:
 		for i, item := range v {
-			v[i] = clean(item, r)
+			v[i] = walk(item, f)
 		}
 		return v
 	case map[string]any:
@@ -47,11 +79,11 @@ func clean(v any, r Redactor) any {
 		// Keys that clean to the same key keep one value, deterministically:
 		// the key that was already clean, else the first in byte order.
 		for _, k := range slices.Sorted(maps.Keys(v)) {
-			key := r.Redact(Text(k))
+			key := f(k)
 			if _, taken := out[key]; taken && key != k {
 				continue
 			}
-			out[key] = clean(v[k], r)
+			out[key] = walk(v[k], f)
 		}
 		return out
 	}

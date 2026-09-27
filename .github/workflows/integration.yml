@@ -16,6 +16,8 @@
 #   Decision (#85): no v3 variant of the payload-query probe. Langfuse Cloud retires v3 on
 #   2026-11-16; seeding v3 correctly needs OTLP/protobuf (hand-written protobuf or a new test-only
 #   dependency); the io/metadata window facts stay proven weekly on 4.46.0 and Cloud.
+#   The live write cycles (spec #109) are specified for 4.46.0 only: they run on 4.x and are
+#   skipped on 3.x, whose write body schemas the spec does not cover.
 # - cloud: weekly and on manual dispatch against the dedicated Langfuse Cloud test project, whose
 #   keys scripts/setup-ci-langfuse-cloud.sh stored as repository secrets. Weekly only, to respect
 #   the Hobby plan's rate limits; the suite waits for Retry-After on 429.
@@ -81,9 +83,9 @@ jobs:
       matrix:
         include:
           - deployment: 3.80.0
-            skip: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows|TestLiveObservationsCursorContinuesAtADifferentLimitWithoutGapsOrRepeats
+            skip: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows|TestLiveObservationsCursorContinuesAtADifferentLimitWithoutGapsOrRepeats|TestLiveExecuteWrite|TestLiveADeclinedDeleteLeavesThePromptInPlace
           - deployment: 3.225.11
-            skip: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows|TestLiveObservationsCursorContinuesAtADifferentLimitWithoutGapsOrRepeats
+            skip: TestLiveLangfuseServesPayloadQueriesBeyondFourteenDaysAndFiftyRows|TestLiveObservationsCursorContinuesAtADifferentLimitWithoutGapsOrRepeats|TestLiveExecuteWrite|TestLiveADeclinedDeleteLeavesThePromptInPlace
           - deployment: 4.46.0-events_only
             skip: ""
           - deployment: 4.46.0-dual

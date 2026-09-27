@@ -32,6 +32,16 @@ const (
 	errorLangfuseUnavailable  = "langfuse_unavailable"
 	errorRedirectRefused      = "redirect_refused"
 	errorResponseTooLarge     = "response_too_large"
+	// errorConfirmationUnavailable refuses a destructive write the user
+	// could not confirm; nothing is sent to Langfuse.
+	errorConfirmationUnavailable = "confirmation_unavailable"
+	// errorConfirmationDeclined refuses a destructive write the user
+	// declined or cancelled; nothing is sent to Langfuse.
+	errorConfirmationDeclined = "confirmation_declined"
+	// errorConfirmationInvalid refuses a destructive write re-sent with
+	// missing, forged, expired or mismatched confirmation data; nothing is
+	// sent to Langfuse.
+	errorConfirmationInvalid = "confirmation_invalid"
 )
 
 // toolErrorBody is the ADR-0008 tool error shape.

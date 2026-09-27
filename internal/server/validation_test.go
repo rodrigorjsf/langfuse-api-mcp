@@ -196,7 +196,7 @@ func TestExecuteReadRefusesAWriteOperationSayingItRunsReadOperationsOnly(t *test
 		t.Errorf("error = %+v, want invalid_argument saying execute_read runs read (GET) operations only", got)
 	}
 	if got.Hint == "" || strings.Contains(got.Hint, "execute_write") || strings.Contains(got.Hint, "ALLOW_WRITES") {
-		t.Errorf("hint %q, want one that names no write tool or setting: none exists yet", got.Hint)
+		t.Errorf("hint %q, want one that names no write tool or setting: write mode is off", got.Hint)
 	}
 	assertNoRequest(t, seen)
 }
@@ -289,7 +289,7 @@ func TestExecuteReadRejectsInvalidArgumentsNamingTheField(t *testing.T) {
 			if got.Hint == "" {
 				t.Errorf("error = %+v, want a hint naming the next useful action", got)
 			}
-			if strings.Contains(got.Message, "Go struct") || strings.Contains(got.Message, "executeReadInput") {
+			if strings.Contains(got.Message, "Go struct") || strings.Contains(got.Message, "operationArguments") {
 				t.Errorf("message %q exposes Go internals", got.Message)
 			}
 			assertNoRequest(t, seen)

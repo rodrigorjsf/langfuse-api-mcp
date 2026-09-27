@@ -6,9 +6,10 @@
 // parameters (ADR-0010). It never performs I/O.
 //
 // The union catalog (ADR-0012) holds every operation of the Langfuse release
-// specs since v3.0.0, each with its version range and operation family, minus
-// the ADR-0004 exclusions; scripts/gen-union-catalog.py generates it. Resolve
-// narrows it to the operations one deployment profile serves.
+// specs since v3.0.0, each with its version range and operation family;
+// scripts/gen-union-catalog.py generates it. The embedded JSON still holds the
+// ADR-0004 exclusions: Load removes them. Resolve narrows the rest to the
+// operations one deployment profile serves.
 package catalog
 
 import (
@@ -21,14 +22,17 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 //go:embed spec/langfuse-union-catalog.json
 var unionCatalog []byte
 
-// excluded holds the operation IDs never exposed on any deployment (ADR-0004):
-// trace ingestion, and organization admin mutations (projects, API keys,
-// memberships, SCIM users).
+// excluded holds the operation IDs never exposed on any deployment (ADR-0004
+// and its M4 amendment): trace ingestion, organization admin mutations
+// (projects, API keys, memberships, SCIM users), media uploads and writes
+// whose body carries a third-party credential. Load removes them.
 var excluded = []string{
 	"ingestion_batch",            // POST /api/public/ingestion
 	"opentelemetry_exportTraces", // POST /api/public/otel/v1/traces
@@ -43,6 +47,15 @@ var excluded = []string{
 	"organizations_deleteProjectMembership",
 	"scim_createUser",
 	"scim_deleteUser",
+	// ADR-0004 amendment (M4): a media upload is a PUT of the bytes to a
+	// presigned URL this server never makes, so these two only leave
+	// half-registered media behind.
+	"media_getUploadUrl",
+	"media_patch",
+	// ADR-0004 amendment (M4): their bodies carry a third-party credential,
+	// which would pass through the model's context as a tool argument.
+	"llmConnections_upsert",
+	"blobStorageIntegrations_upsertBlobStorageIntegration",
 }
 
 // Catalog is the set of in-scope operations, built once at startup and shared
@@ -86,14 +99,18 @@ type Operation struct {
 }
 
 // RequestBody is the JSON request body of a write operation, from the release
-// spec the operation was taken from (#81). The body gate of execute_write
-// (M4) checks a body against it; nothing reads it yet.
+// spec the operation was taken from (#81). CheckBody, the body gate of
+// execute_write, checks a body against it.
 type RequestBody struct {
 	// Required reports whether the operation needs a body.
 	Required bool
-	// Schema is the body's JSON schema, $refs inlined. It is third-party
-	// text, so every string in it is cleaned of hidden characters.
+	// Schema is the body's JSON Schema 2020-12 document, $refs inlined; the
+	// generator converts the release spec's OpenAPI 3.0 dialect (#111). It is
+	// third-party text, so every string in it is cleaned of hidden characters.
 	Schema json.RawMessage
+	// compiled is Schema compiled once, when the catalog loads (#112);
+	// CheckBody validates a body against it. Shared read-only.
+	compiled *jsonschema.Resolved
 }
 
 // Param is one path or query parameter of an operation.
@@ -214,7 +231,11 @@ func load(spec []byte) (Catalog, error) {
 				if err != nil {
 					return Catalog{}, fmt.Errorf("embedded union catalog: %s request body: %w", o.ID, err)
 				}
-				o.Body = &RequestBody{Required: op.RequestBody.Required, Schema: schema}
+				compiled, err := compileSchema(schema)
+				if err != nil {
+					return Catalog{}, fmt.Errorf("embedded union catalog: %s request body: %w", o.ID, err)
+				}
+				o.Body = &RequestBody{Required: op.RequestBody.Required, Schema: schema, compiled: compiled}
 			}
 			r, err := rangeOf(o)
 			if err != nil {
