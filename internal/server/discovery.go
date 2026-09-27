@@ -385,6 +385,9 @@ func operationDescriptionSchema() map[string]any {
 						"minLength": map[string]any{"type": "integer"},
 						"maxLength": map[string]any{"type": "integer"},
 						"default":   map[string]any{},
+						"guidance": map[string]any{"type": "string", "description": "How to fill the parameter: static text " +
+							"written by this server, not from the Langfuse spec; present only where the spec's type " +
+							"does not say it, e.g. the metrics query JSON."},
 					},
 				},
 			},
@@ -416,6 +419,7 @@ type paramDescription struct {
 	MinLength *int     `json:"minLength,omitempty"`
 	MaxLength *int     `json:"maxLength,omitempty"`
 	Default   any      `json:"default,omitempty"`
+	Guidance  string   `json:"guidance,omitempty"`
 }
 
 // describeArgumentsHint is the hint of an invalid describe_operation call.
@@ -446,7 +450,7 @@ func describe(op catalog.Operation) operationDescription {
 	}
 	for _, p := range op.Params {
 		s := p.Schema
-		pd := paramDescription{Name: p.Name, In: p.In, Required: p.Required}
+		pd := paramDescription{Name: p.Name, In: p.In, Required: p.Required, Guidance: op.ParamGuidance(p)}
 		if s.Type == "array" {
 			pd.Repeated = true
 			if s.Items != nil {
@@ -478,6 +482,9 @@ func descriptionResult(od operationDescription) (*mcp.CallToolResult, error) {
 		b.WriteString("Parameters:\n")
 		for _, p := range od.Parameters {
 			b.WriteString("- " + p.Name + " (" + strings.Join(p.facts(), ", ") + ")\n")
+			if p.Guidance != "" {
+				b.WriteString("  " + p.Guidance + "\n")
+			}
 		}
 	}
 	return textResult(b.String(), od)

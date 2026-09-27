@@ -9,6 +9,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -302,10 +303,23 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 	return jsonResult(sanitize.Wrap(op.ID, payload), false)
 }
 
-// parametersHintFor is the hint for a parameter the catalog refused: a page
-// size out of range gets how to page instead, anything else the generic
-// parametersHint. Both go on with the operation's valid parameter names and
-// describe_operation, so one more call fixes the parameters.
+// metricsQueryHint is the hint for a malformed metrics query (#104): the
+// query's top-level keys, from the validator's own list, and where the rest of
+// its shape is described. Static text: it never holds the caller's query.
+func metricsQueryHint(op catalog.Operation) string {
+	describes := "the query parameter"
+	if slices.ContainsFunc(op.Params, func(p catalog.Param) bool { return op.ParamGuidance(p) != "" }) {
+		describes = "the query's shape and a worked example"
+	}
+	return "send query as one JSON object whose top-level keys are only " + catalog.MetricsQueryKeys() +
+		"; describe_operation with operationId " + op.ID + " returns " + describes
+}
+
+// parametersHintFor is the hint for a parameter the catalog refused: a
+// malformed metrics query gets metricsQueryHint; a page size out of range gets
+// how to page instead, anything else the generic parametersHint. Both go on
+// with the operation's valid parameter names and describe_operation, so one
+// more call fixes the parameters.
 func parametersHintFor(err error, op catalog.Operation) string {
 	hint := parametersHint
 	switch {
@@ -313,6 +327,8 @@ func parametersHintFor(err error, op catalog.Operation) string {
 		hint = "use a limit from 1 to " + strconv.Itoa(catalog.MaxLimit) +
 			" and page through the rest (page, or cursor from meta.cursor); without a limit the server asks for " +
 			strconv.Itoa(catalog.DefaultLimit)
+	case errors.Is(err, catalog.ErrMetricsQuery):
+		return metricsQueryHint(op)
 	case errors.Is(err, catalog.ErrRowLimitOutOfRange):
 		hint = "set config.row_limit in the query JSON to an integer from 1 to " +
 			strconv.Itoa(catalog.MaxRowLimit) + ", or leave it out and the server asks for " +
