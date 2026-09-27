@@ -95,7 +95,7 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 					p.Name, MaxLimit)}
 			}
 		}
-		if err := p.inBounds(values); err != nil {
+		if err := p.inBounds(v, values); err != nil {
 			return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
 		}
 		if o.isMetricsQuery(p) {
@@ -276,19 +276,25 @@ func (s Schema) scalar(v any) (string, error) {
 
 // inBounds checks the parameter's rendered values against the bounds its
 // spec gives (#80): Minimum and Maximum for a number, MinLength and MaxLength,
-// in runes, for a string; the items' bounds for a repeated parameter. It runs
-// after the list limit check, so a limit keeps its own error. The message
-// names the bound, never the value.
-func (p Param) inBounds(values []string) error {
+// in runes, for a string; the items' bounds for a repeated parameter. v is the
+// caller's value the values were rendered from: a schema without a type
+// bounds each value by its JSON kind (#83). It runs after the list limit
+// check, so a limit keeps its own error. The message names the bound, never
+// the value.
+func (p Param) inBounds(v any, values []string) error {
 	s := p.Schema
+	raw := []any{v}
 	if s.Type == "array" {
 		if s.Items == nil {
 			return nil
 		}
 		s = *s.Items
+		if items, ok := v.([]any); ok {
+			raw = items
+		}
 	}
-	for i, v := range values {
-		err := s.withinBounds(v)
+	for i, value := range values {
+		err := s.withinBounds(value, raw[i])
 		if err == nil {
 			continue
 		}
@@ -301,9 +307,19 @@ func (p Param) inBounds(values []string) error {
 }
 
 // withinBounds checks one rendered value against the schema's bounds. A
-// schema without a type skips its bounds (see #83).
-func (s Schema) withinBounds(v string) error {
-	switch s.Type {
+// schema without a type takes the kind of raw, the value before rendering:
+// a JSON number meets the numeric bounds, a string the length bounds, and a
+// boolean none.
+func (s Schema) withinBounds(v string, raw any) error {
+	kind := s.Type
+	if kind == "" {
+		if _, ok := raw.(string); ok {
+			kind = "string"
+		} else if _, ok := number(raw); ok {
+			kind = "number"
+		}
+	}
+	switch kind {
 	case "integer", "number":
 		n, err := strconv.ParseFloat(v, 64)
 		if err != nil {
