@@ -10,6 +10,10 @@ guidance. The final wording (run 4) is the shipped one.
 
 - **Result:** PASS with the final wording. The model sends the example query verbatim, dates included: the
   eval gives the model no current date, and the matcher ignores timestamps. Follow-up: #105.
+- **These PASS lines do not check the time window.** The matcher of these runs ignored `fromTimestamp` and
+  `toTimestamp`, and the model had no date: it passed only because the example's week was the run week.
+  #105 added the run date and a window check; the rerun is in
+  [2026-09-27-small-model-eval-intent-11-run-date.md](2026-09-27-small-model-eval-intent-11-run-date.md).
 - The wording "(put the time window asked for in fromTimestamp and toTimestamp)" made the model end its turn
   after `describe_operation` in both runs (runs 2 and 3).
 

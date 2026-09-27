@@ -6,7 +6,9 @@
 #       get_trace_tree) and no word about the Langfuse API. An intent passes when
 #       the model calls the expected tool with the expected operationId and key
 #       parameters and the server accepts that call. It prints one PASS/FAIL
-#       line per intent and the total.
+#       line per intent and the total. The system prompt names the run date
+#       (UTC), and the metrics intent checks its query's time window against
+#       it (#105); scripts/test_small_model_eval.py tests that offline.
 # WHY:  M3 claims that a small model can go from an intent to the right
 #       operation using the discovery tools alone. This run is the evidence. A
 #       failing intent becomes a follow-up issue on M3 or M6 (a description,
