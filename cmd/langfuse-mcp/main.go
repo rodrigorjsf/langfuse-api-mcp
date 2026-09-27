@@ -153,20 +153,28 @@ func logProfile(log *slog.Logger, d langfuse.Detection, operations int) {
 	if !ok {
 		version = "unknown"
 	}
-	families := make([]string, 0, len(p.Families))
-	undecided := make([]string, 0, len(d.Undecided))
+	var on, kept []catalog.Family
 	if !d.Unsupported {
 		for _, f := range catalog.AllFamilies() {
 			if p.On(f) {
-				families = append(families, string(f))
+				on = append(on, f)
 			}
 		}
-		for _, f := range d.Undecided {
-			undecided = append(undecided, string(f))
-		}
+		kept = d.Undecided
 	}
+	families, undecided := familyNames(on), familyNames(kept)
 	log.Info("deployment profile", "version", version, "families", families, "undecided", undecided,
 		"unsupported", d.Unsupported, "operations", operations)
+}
+
+// familyNames returns the families' names in order, never nil, so an empty
+// list logs as [].
+func familyNames(families []catalog.Family) []string {
+	names := make([]string, 0, len(families))
+	for _, f := range families {
+		names = append(names, string(f))
+	}
+	return names
 }
 
 // logProxy logs the proxy in use as scheme://host:port with its variable and
