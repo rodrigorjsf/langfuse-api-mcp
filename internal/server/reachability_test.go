@@ -30,8 +30,8 @@ import (
 // each with the deployment profile startup must detect on it
 // (docs/research/langfuse-api-versions.md §1). 3.225.11, the latest 3.x,
 // serves the legacy family only: its experiments routes answer 404 "only
-// available in a Langfuse v4 write mode", unlike ADR-0012's "legacy plus
-// experiments" (observed 2026-09-26, #73). Contradicts ADR-0012; see #84.
+// available in a Langfuse v4 write mode" (observed 2026-09-26, #73; ADR-0012
+// amendment of 2026-09-27, #84).
 var pinnedDeployments = map[string]catalog.Profile{
 	"3.80.0":             {Version: "3.80.0", Families: []catalog.Family{catalog.LegacyFamily}},
 	"3.225.11":           {Version: "3.225.11", Families: []catalog.Family{catalog.LegacyFamily}},
