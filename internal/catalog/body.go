@@ -32,6 +32,22 @@ func (o Operation) IsDestructive() bool {
 	return false
 }
 
+// DeletedTraceCount returns the number of trace IDs body deletes when the
+// operation is trace_deleteMultiple, the one operation whose body lists what
+// it deletes; ok is false for any other operation or a body without traceIds.
+func (o Operation) DeletedTraceCount(body json.RawMessage) (n int, ok bool) {
+	if o.ID != "trace_deleteMultiple" {
+		return 0, false
+	}
+	var b struct {
+		TraceIDs []json.RawMessage `json:"traceIds"`
+	}
+	if json.Unmarshal(body, &b) != nil || b.TraceIDs == nil {
+		return 0, false
+	}
+	return len(b.TraceIDs), true
+}
+
 // CheckBody checks a caller's request body for the operation and returns it
 // compacted, ready to send, or nil when there is no body to send. An absent
 // body or a JSON null is no body. It refuses a body given to an operation

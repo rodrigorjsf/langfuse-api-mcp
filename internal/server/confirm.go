@@ -238,7 +238,7 @@ func confirmationText(op catalog.Operation, params map[string]any, request catal
 		b.WriteString("Body: none\n")
 		return b.String()
 	}
-	if n, ok := traceIDCount(op, body); ok {
+	if n, ok := op.DeletedTraceCount(body); ok {
 		b.WriteString("Trace IDs to delete: " + strconv.Itoa(n) + "\n")
 	}
 	summary, cut := bodySummary(body)
@@ -282,19 +282,4 @@ func bodySummary(body json.RawMessage) (summary string, cut bool) {
 		return s, false
 	}
 	return string([]rune(s)[:maxSummaryRunes]), true
-}
-
-// traceIDCount returns the number of trace IDs a trace_deleteMultiple body
-// deletes.
-func traceIDCount(op catalog.Operation, body json.RawMessage) (int, bool) {
-	if op.ID != "trace_deleteMultiple" {
-		return 0, false
-	}
-	var b struct {
-		TraceIDs []json.RawMessage `json:"traceIds"`
-	}
-	if json.Unmarshal(body, &b) != nil || b.TraceIDs == nil {
-		return 0, false
-	}
-	return len(b.TraceIDs), true
 }
