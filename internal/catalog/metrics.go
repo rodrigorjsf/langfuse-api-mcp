@@ -45,6 +45,13 @@ func (o Operation) isMetricsQuery(p Param) bool {
 	return metricsOperations[o.ID] && p.In == "query" && p.Name == "query"
 }
 
+// isMetricsV2Query reports whether p is the JSON query of MetricsOperationID;
+// the legacy v1 metrics operation is left out on purpose, as it has no
+// guidance.
+func (o Operation) isMetricsV2Query(p Param) bool {
+	return o.ID == MetricsOperationID && o.isMetricsQuery(p)
+}
+
 // A metrics query JSON is bounded before it is decoded: at most
 // maxMetricsQueryBytes long (the first query-JSON size cap; the M3 workflow
 // payload-query guard, #42, is to reuse it) and nested at most maxMetricsQueryDepth objects
@@ -226,7 +233,7 @@ const metricsQueryExample = `{"view":"observations","metrics":[{"measure":"total
 // binary, never built from API data, and its key list is the validator's
 // own (metricsQueryKeys), so the two cannot drift.
 func (o Operation) ParamGuidance(p Param) string {
-	if o.ID != MetricsOperationID || !o.isMetricsQuery(p) {
+	if !o.isMetricsV2Query(p) {
 		return ""
 	}
 	keys := metricsQueryKeyList()
