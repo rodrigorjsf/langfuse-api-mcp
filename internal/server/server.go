@@ -44,15 +44,21 @@ func executeReadSchema() map[string]any {
 				"maxLength":   maxOperationIDRunes,
 				"description": "Operation ID of a Langfuse read (GET) operation, e.g. trace_list or trace_get.",
 			},
-			"parameters": map[string]any{
-				"type": "object",
-				"description": "The operation's path and query parameters by name. A value is a string, number " +
-					"or boolean; a list of those repeats the query parameter.",
-				"additionalProperties": map[string]any{
-					"type":  []any{"string", "number", "boolean", "array"},
-					"items": map[string]any{"type": []any{"string", "number", "boolean"}},
-				},
-			},
+			"parameters": parametersProperty(),
+		},
+	}
+}
+
+// parametersProperty is the parameters property of the execute_* input
+// schemas.
+func parametersProperty() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"description": "The operation's path and query parameters by name. A value is a string, number " +
+			"or boolean; a list of those repeats the query parameter.",
+		"additionalProperties": map[string]any{
+			"type":  []any{"string", "number", "boolean", "array"},
+			"items": map[string]any{"type": []any{"string", "number", "boolean"}},
 		},
 	}
 }

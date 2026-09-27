@@ -38,20 +38,25 @@ const executeWriteDescription = "Performs changes. Intended for operations the u
 // executeWriteSchema returns the execute_write input schema: an operation ID,
 // its parameters and a JSON body, never a URL, path, host or header.
 func executeWriteSchema() map[string]any {
-	schema := executeReadSchema()
-	props := schema["properties"].(map[string]any)
-	props["operationId"] = map[string]any{
-		"type":        "string",
-		"minLength":   1,
-		"maxLength":   maxOperationIDRunes,
-		"description": "Operation ID of a Langfuse write operation, e.g. scores_create or comments_create.",
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []any{"operationId"},
+		"properties": map[string]any{
+			"operationId": map[string]any{
+				"type":        "string",
+				"minLength":   1,
+				"maxLength":   maxOperationIDRunes,
+				"description": "Operation ID of a Langfuse write operation, e.g. scores_create or comments_create.",
+			},
+			"parameters": parametersProperty(),
+			"body": map[string]any{
+				"type": "object",
+				"description": "The operation's JSON request body, as its Langfuse schema describes it; leave it " +
+					"out for an operation that takes none. At most " + bodyCaps + ".",
+			},
+		},
 	}
-	props["body"] = map[string]any{
-		"type": "object",
-		"description": "The operation's JSON request body, as its Langfuse schema describes it; leave it out " +
-			"for an operation that takes none. At most " + bodyCaps + ".",
-	}
-	return schema
 }
 
 // executeWriteTool is the execute_write tool: destructive, not idempotent,
