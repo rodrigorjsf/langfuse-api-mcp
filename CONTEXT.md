@@ -19,7 +19,10 @@ _Avoid_: operation docs, spec (for this per-operation view)
 **Write operation**: an operation using POST, PUT, PATCH or DELETE; executable only through `execute_write`.
 _Avoid_: mutation (outside code comments)
 
-**Destructive operation**: a write operation using DELETE, or one that overwrites existing data; requests confirmation when the client supports elicitation.
+**Destructive operation**: a write operation using DELETE, PUT or PATCH — one that removes or overwrites existing data; it runs only after a confirmation.
+
+**Confirmation**: the user's explicit acceptance of one destructive operation call, asked by the server through the client (elicitation); a declined or cancelled confirmation, or a client that cannot ask, refuses the call before any request reaches Langfuse.
+_Avoid_: approval (that is the client's own per-tool permission prompt), consent
 
 **Write mode**: the server state, fixed at startup by `LANGFUSE_MCP_ALLOW_WRITES=true`, in which `execute_write` is registered. Default is off.
 _Avoid_: admin mode, unsafe mode

@@ -12,3 +12,12 @@ Organization **read** operations are exposed when an organization key is configu
 ## Consequences
 
 - A test asserts the union catalog contains no excluded operation (ingestion, OTLP, org admin mutations), and ADR-0012's fixture test asserts the resolved set per deployment, so a spec update that adds an operation fails CI until it is triaged.
+
+## Amendment: three write operations an agent cannot use safely (2026-09-27, M4 grilling)
+
+Also excluded on every deployment, even in write mode:
+
+- `media_getUploadUrl` and `media_patch`: a media upload is a PUT of the bytes straight to the presigned storage URL, which this server never makes; without it the two calls only leave half-registered media behind.
+- `llmConnections_upsert`: its body carries the LLM provider's API key, which would pass through the model's context and the chat transcript as a tool argument — the same exposure the rule "keys never come from tool arguments" forbids for Langfuse keys. `llmConnections_delete` stays.
+
+The catalog test that asserts no excluded operation is present covers these three.
