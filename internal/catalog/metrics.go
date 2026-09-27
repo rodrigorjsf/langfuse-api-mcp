@@ -200,10 +200,12 @@ func metricsQueryKeyList() []string { return slices.Sorted(maps.Keys(metricsQuer
 // the total cost per day of the observations of traces named checkout. It is
 // checked against the Langfuse Metrics v2 docs (docs/research/langfuse.md,
 // section 4.5), and a test proves the validator accepts it. Its dates are
-// fixed: a model without a clock copies them (see #105).
+// fixed, as static text must be, and lie in January 2025 so that they read
+// as an example and never coincide with "the last 7 days" of a run: a model
+// without a clock copied the earlier window of the eval's run week (#105).
 const metricsQueryExample = `{"view":"observations","metrics":[{"measure":"totalCost","aggregation":"sum"}],` +
 	`"filters":[{"column":"traceName","operator":"=","value":"checkout","type":"string"}],` +
-	`"timeDimension":{"granularity":"day"},"fromTimestamp":"2026-09-20T00:00:00Z","toTimestamp":"2026-09-27T00:00:00Z"}`
+	`"timeDimension":{"granularity":"day"},"fromTimestamp":"2025-01-01T00:00:00Z","toTimestamp":"2025-01-08T00:00:00Z"}`
 
 // ParamGuidance returns static guidance on how to fill parameter p of the
 // operation, or "" when there is none (#104). Only the query of
@@ -233,7 +235,7 @@ func (o Operation) ParamGuidance(p Param) string {
 		`config: {"row_limit": ` + strconv.Itoa(DefaultRowLimit) + `}; row_limit is from 1 to ` +
 		strconv.Itoa(MaxRowLimit) + ", default " + strconv.Itoa(DefaultRowLimit) + ". " +
 		"Example, the total cost per day of the observations of traces named checkout, " +
-		"for the week to 2026-09-27 (set fromTimestamp and toTimestamp to the window you need): " + metricsQueryExample
+		"for the week to 2025-01-08 (set fromTimestamp and toTimestamp to the window you need): " + metricsQueryExample
 }
 
 // HasGuidance reports whether any parameter of the operation has guidance.

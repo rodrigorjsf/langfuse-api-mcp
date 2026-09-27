@@ -183,7 +183,7 @@ const metricsQueryKeys = "config, dimensions, filters, fromTimestamp, metrics, o
 // Langfuse Metrics v2 docs (docs/research/langfuse.md, section 4.5).
 const metricsQueryExample = `{"view":"observations","metrics":[{"measure":"totalCost","aggregation":"sum"}],` +
 	`"filters":[{"column":"traceName","operator":"=","value":"checkout","type":"string"}],` +
-	`"timeDimension":{"granularity":"day"},"fromTimestamp":"2026-09-20T00:00:00Z","toTimestamp":"2026-09-27T00:00:00Z"}`
+	`"timeDimension":{"granularity":"day"},"fromTimestamp":"2025-01-01T00:00:00Z","toTimestamp":"2025-01-08T00:00:00Z"}`
 
 // metricsQueryGuidance is the guidance describe_operation gives for the query
 // parameter of metrics_metrics.
@@ -200,7 +200,7 @@ const metricsQueryGuidance = "A JSON object, sent as a string. Its top-level key
 	`orderBy: a list of {"field": "sum_totalCost", "direction": "desc"}. ` +
 	`config: {"row_limit": 100}; row_limit is from 1 to 1000, default 100. ` +
 	"Example, the total cost per day of the observations of traces named checkout, " +
-	"for the week to 2026-09-27 (set fromTimestamp and toTimestamp to the window you need): " + metricsQueryExample
+	"for the week to 2025-01-08 (set fromTimestamp and toTimestamp to the window you need): " + metricsQueryExample
 
 func TestDescribeOperationGivesTheMetricsQueryGuidanceOnTheQueryParameter(t *testing.T) {
 	t.Parallel()

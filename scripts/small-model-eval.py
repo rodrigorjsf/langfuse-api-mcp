@@ -51,6 +51,7 @@
 # --server, the Go toolchain.
 
 import argparse
+import datetime
 import ipaddress
 import json
 import os
@@ -70,11 +71,17 @@ EXPECTED_TOOLS = {"search_operations", "describe_operation", "execute_read", "ge
 FAKE_VERSION = "4.46.0"
 MCP_PROTOCOL_VERSION = "2025-06-18"
 
-SYSTEM_PROMPT = (
-    "You help a user investigate their LLM application's observability data "
-    "through the tools you are given. Use the tools to answer the request. "
-    "Do not ask the user questions; if a detail is missing, choose a sensible default."
-)
+
+
+def system_prompt(today):
+    """The system prompt of every conversation. It names the run date, as agent
+    hosts do, so a relative window ("the last 7 days") can be computed (#105)."""
+    return (
+        f"Today is {today.isoformat()} (UTC). "
+        "You help a user investigate their LLM application's observability data "
+        "through the tools you are given. Use the tools to answer the request. "
+        "Do not ask the user questions; if a detail is missing, choose a sensible default."
+    )
 
 # Each intent lists the calls that count as reaching it: a tool, the operationId
 # (for execute_read) and the key parameters that call must carry. Every value is
@@ -147,10 +154,12 @@ INTENTS = [
         "intent": "What was the total cost per day over the last 7 days for traces named 'checkout'?",
         # Langfuse 4.x serves only Metrics v2: its query JSON has no traces view,
         # so the cost sits on the observations view, filtered by traceName.
+        # last_days: the query's window must be the 7 days before the run date
+        # (#105); before, a query with any dates passed.
         "expect": [{"tool": "execute_read", "operationId": "metrics_metrics",
                     "parameters": {}, "query": {"view": "observations", "measure": "totalCost",
                                                 "filter": ["traceName", "checkout"],
-                                                "granularity": "day"}}],
+                                                "granularity": "day", "last_days": 7}}],
     },
 ]
 
@@ -300,8 +309,8 @@ def create_message(endpoint, key, body, timeout):
 
 # --- the eval -----------------------------------------------------------------
 
-def matches(call, expected):
-    """Whether one tool call reaches one expected call."""
+def matches(call, expected, today):
+    """Whether one tool call reaches one expected call on the run date today."""
     if call["tool"] != expected["tool"]:
         return False
     args = call["arguments"] if isinstance(call["arguments"], dict) else {}
@@ -310,15 +319,16 @@ def matches(call, expected):
             return False
         got = args.get("parameters") if isinstance(args.get("parameters"), dict) else {}
         want = expected["parameters"]
-        if "query" in expected and not metrics_query_matches(got.get("query"), expected["query"]):
+        if "query" in expected and not metrics_query_matches(got.get("query"), expected["query"], today):
             return False
     else:
         got, want = args, expected["arguments"]
     return all(same_value(got.get(k), v) for k, v in want.items())
 
 
-def metrics_query_matches(raw, want):
-    """Whether a metrics query JSON has the view, a measure and a filter wanted."""
+def metrics_query_matches(raw, want, today):
+    """Whether a metrics query JSON has the view, measure, filter and granularity
+    wanted and, when want names last_days, that window before the run date."""
     try:
         query = json.loads(raw) if isinstance(raw, str) else raw
     except ValueError:
@@ -331,7 +341,39 @@ def metrics_query_matches(raw, want):
     time = query.get("timeDimension") if isinstance(query.get("timeDimension"), dict) else {}
     return (want["measure"] in measures
             and any(same_value(f.get("value"), value) for f in filters)
-            and time.get("granularity") == want["granularity"])
+            and time.get("granularity") == want["granularity"]
+            and ("last_days" not in want or in_last_days(query, want["last_days"], today)))
+
+
+def in_last_days(query, days, today):
+    """Whether the query's window is the given number of days before today (a
+    UTC date). fromTimestamp must start `days` days back, counting today or not
+    (so on 2026-10-15 with 7 days, on 2026-10-08 or 2026-10-09); toTimestamp,
+    when given, must fall on today, or be the end of today. A copied example
+    window or a window a model guessed without the date does not pass (#105)."""
+    start = datetime.datetime.combine(today, datetime.time(), datetime.timezone.utc)
+    day = datetime.timedelta(days=1)
+    begin = timestamp(query.get("fromTimestamp"))
+    if begin is None or not start - days * day <= begin < start - (days - 2) * day:
+        return False
+    if "toTimestamp" not in query:
+        return True
+    end = timestamp(query.get("toTimestamp"))
+    return end is not None and start <= end <= start + day
+
+
+def timestamp(value):
+    """An ISO 8601 date-time as an aware UTC datetime (no offset means UTC), or
+    None when the value is not one."""
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+    return parsed.astimezone(datetime.timezone.utc)
 
 
 def same_value(got, want):
@@ -357,8 +399,9 @@ def describe_expected(expected):
     return line
 
 
-def run_intent(server, tools, endpoint, key, args, item):
-    """Runs one conversation; returns (passed, the calls the model made, how it ended)."""
+def run_intent(server, tools, endpoint, key, args, item, today):
+    """Runs one conversation on the run date today; returns (passed, the calls
+    the model made, how it ended)."""
     messages = [{"role": "user", "content": item["intent"]}]
     calls = []
     ended = f"max turns ({args.max_turns})"
@@ -367,7 +410,7 @@ def run_intent(server, tools, endpoint, key, args, item):
             "model": args.model,
             "max_tokens": args.max_tokens,
             "temperature": 0,
-            "system": SYSTEM_PROMPT,
+            "system": system_prompt(today),
             "tools": tools,
             "messages": messages,
         }, args.timeout)
@@ -382,7 +425,7 @@ def run_intent(server, tools, endpoint, key, args, item):
             calls.append(call)
             result = server.request("tools/call", {"name": use["name"], "arguments": use.get("input", {})})
             # A pass is the expected call that the server also accepts.
-            if not result.get("isError") and any(matches(call, e) for e in item["expect"]):
+            if not result.get("isError") and any(matches(call, e, today) for e in item["expect"]):
                 return True, calls, "expected call"
             text = "\n".join(c.get("text", "") for c in result.get("content", []) if c.get("type") == "text")
             results.append({"type": "tool_result", "tool_use_id": use["id"],
@@ -439,12 +482,14 @@ def main():
             tools = [{"name": t["name"], "description": t.get("description", ""),
                       "input_schema": t["inputSchema"]} for t in listed]
 
+            # One run date for the whole run: the prompt and the matcher agree.
+            today = datetime.datetime.now(datetime.timezone.utc).date()
             print(f"model {args.model}; max tokens {args.max_tokens}; fake Langfuse {FAKE_VERSION} events_only; "
-                  f"tools {', '.join(sorted(names))}")
+                  f"run date {today.isoformat()} UTC; tools {', '.join(sorted(names))}")
             passed = 0
             for number in selected:
                 item = INTENTS[number - 1]
-                ok, calls, ended = run_intent(server, tools, endpoint, key, args, item)
+                ok, calls, ended = run_intent(server, tools, endpoint, key, args, item, today)
                 passed += ok
                 print(f"{'PASS' if ok else 'FAIL'} {number:02d} [{item['area']}] {item['intent']}")
                 for call in calls:
