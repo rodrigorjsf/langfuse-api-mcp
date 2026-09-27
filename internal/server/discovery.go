@@ -52,6 +52,10 @@ const (
 	toolExecuteWrite = "execute_write"
 )
 
+// toolDescribeOperation is the tool that returns an operation's parameters;
+// hints name it.
+const toolDescribeOperation = "describe_operation"
+
 // searchOperationsSchema returns the search_operations input schema.
 func searchOperationsSchema() map[string]any {
 	return map[string]any{
@@ -217,7 +221,7 @@ func (d discovery) traceReadsHint() string {
 		return ""
 	}
 	return "Trace data is read with: " + strings.Join(reads, "; ") +
-		". describe_operation returns an operation's parameters."
+		". " + toolDescribeOperation + " returns an operation's parameters."
 }
 
 // offers reports whether the operation index lists the operation id.
@@ -537,7 +541,7 @@ func formatNumber(f float64) string { return strconv.FormatFloat(f, 'f', -1, 64)
 // missing, not a string, empty, longer than maxOperationIDRunes, or holding a
 // control or invisible character; the refused ID is never repeated.
 func decodeDescribeInput(raw json.RawMessage, r sanitize.Redactor) (string, error) {
-	fields, err := argumentFields(raw, r, "describe_operation", "operationId")
+	fields, err := argumentFields(raw, r, toolDescribeOperation, "operationId")
 	if err != nil {
 		return "", err
 	}

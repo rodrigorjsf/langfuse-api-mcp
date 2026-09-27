@@ -113,7 +113,7 @@ func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets
 		Annotations:  closedWorldReadOnly(searchOperationsTitle),
 	}, audited(log, redact, d.searchOperations))
 	s.AddTool(&mcp.Tool{
-		Name:         "describe_operation",
+		Name:         toolDescribeOperation,
 		Title:        describeOperationTitle,
 		Description:  describeOperationDescription,
 		InputSchema:  describeOperationSchema(),
@@ -312,7 +312,7 @@ func metricsQueryHint(op catalog.Operation) string {
 		describes = "the query's shape and a worked example"
 	}
 	return "send query as " + catalog.MetricsQueryEncoding + "; its top-level keys are only " + catalog.MetricsQueryKeys() +
-		"; describe_operation with operationId " + op.ID + " returns " + describes
+		"; " + toolDescribeOperation + " with operationId " + op.ID + " returns " + describes
 }
 
 // parametersHintFor is the hint for a parameter the catalog refused: a
@@ -343,6 +343,6 @@ func parametersHintFor(err error, op catalog.Operation) string {
 	if len(names) > 0 {
 		valid = "its parameters are " + strings.Join(names, ", ")
 	}
-	return hint + "; " + valid + "; describe_operation with operationId " + op.ID +
+	return hint + "; " + valid + "; " + toolDescribeOperation + " with operationId " + op.ID +
 		" returns their location, type, allowed values and bounds"
 }
