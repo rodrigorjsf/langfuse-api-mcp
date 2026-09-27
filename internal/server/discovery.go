@@ -125,7 +125,7 @@ type indexEntry struct {
 // It is a function, not a variable: the package holds no mutable state.
 func searchArgumentsHint() string {
 	return "call search_operations again without arguments to list every operation, or with " +
-	"query, up to " + strconv.Itoa(maxQueryRunes) + " characters of plain keywords separated by spaces"
+		"query, up to " + strconv.Itoa(maxQueryRunes) + " characters of plain keywords separated by spaces"
 }
 
 // discovery serves the discovery tools from the catalog, honoring write mode.
