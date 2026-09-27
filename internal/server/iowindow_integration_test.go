@@ -141,7 +141,7 @@ func seedIOWindow(t *testing.T, cs *mcp.ClientSession) ioSeed {
 // Langfuse accepts them.
 func exportOTLPSpans(t *testing.T, scope string, spans []any) {
 	t.Helper()
-	status, body := langfuseDirect(t.Context(), t, http.MethodPost, "/api/public/otel/v1/traces", map[string]any{
+	status, body := langfuseDirect(t.Context(), t, http.MethodPost, otlpTracesPath, map[string]any{
 		"resourceSpans": []any{map[string]any{
 			"resource":   map[string]any{"attributes": []any{map[string]any{"key": "service.name", "value": map[string]any{"stringValue": "langfuse-mcp-integration"}}}},
 			"scopeSpans": []any{map[string]any{"scope": map[string]any{"name": scope}, "spans": spans}},

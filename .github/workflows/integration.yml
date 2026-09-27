@@ -9,8 +9,8 @@
 #   TestLiveDeploymentAnswersEveryReadOperationOfItsResolvedCatalog proves there that startup
 #   detects the deployment's profile and that every read operation of the resolved catalog is
 #   reachable; a failure names the deployment and the operation ID. The payload-query probe and the
-#   cursor page-size probe (#93) seed over OTLP/JSON and read /v2/observations, so they run on
-#   4.x only (`events_only` and `dual`, #85). They are skipped on 3.x for verified reasons:
+#   cursor page-size probe (#93) seed over OTLP/JSON (x-langfuse-ingestion-version: 4) and read
+#   /v2/observations, so they run on 4.x only (`events_only` and `dual`, #85). They are skipped on 3.x for verified reasons:
 #   /v2/observations is missing on 3.80.0 (HTML 404) and gated behind a v4 write mode on 3.225.11,
 #   and OTLP/JSON stores a hex traceId wrongly on 3.80.0 (docs/research/langfuse.md §1.8).
 #   Decision (#85): no v3 variant of the payload-query probe. Langfuse Cloud retires v3 on
