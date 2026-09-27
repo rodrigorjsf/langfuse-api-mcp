@@ -209,11 +209,8 @@ const MetricsQueryEncoding = `one string whose value is the JSON text of the que
 // MetricsQueryKeys lists the top-level keys of a metrics query, the ones the
 // validator accepts, sorted and separated by ", ".
 func MetricsQueryKeys() string {
-	return strings.Join(metricsQueryKeyList(), ", ")
+	return strings.Join(slices.Sorted(maps.Keys(metricsQueryKeys)), ", ")
 }
-
-// metricsQueryKeyList returns the top-level keys of a metrics query, sorted.
-func metricsQueryKeyList() []string { return slices.Sorted(maps.Keys(metricsQueryKeys)) }
 
 // metricsQueryExample is the worked example of the metrics query guidance:
 // the total cost per day of the observations of traces named checkout. It is
@@ -236,7 +233,7 @@ func (o Operation) ParamGuidance(p Param) string {
 	if !o.isMetricsV2Query(p) {
 		return ""
 	}
-	keys := metricsQueryKeyList()
+	keys := slices.Sorted(maps.Keys(metricsQueryKeys))
 	typed := make([]string, len(keys))
 	for i, k := range keys {
 		typed[i] = k + " (" + metricsQueryKeys[k].String() + ")"
