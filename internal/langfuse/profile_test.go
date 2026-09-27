@@ -248,8 +248,9 @@ func TestAnUnreachableOrUnparsableHealthLeavesTheVersionUnknownWithAWarning(t *t
 	}
 }
 
-// ADR-0012 §4: below v3.0.0 the version is kept, and a warning says it is unsupported.
-func TestAVersionBelowTheSupportedFloorIsKeptWithAnUnsupportedWarning(t *testing.T) {
+// ADR-0012 §4: below v3.0.0 the version is kept and marked unsupported; it is
+// decided, so no probe warning is raised for it.
+func TestAVersionBelowTheSupportedFloorIsKeptAndMarkedUnsupported(t *testing.T) {
 	t.Parallel()
 	fake := newProfileLangfuse(t, map[string]probeAnswer{healthPath: healthy("2.95.0")})
 
@@ -258,7 +259,10 @@ func TestAVersionBelowTheSupportedFloorIsKeptWithAnUnsupportedWarning(t *testing
 	if v, _ := got.Profile.KnownVersion(); v != "2.95.0" {
 		t.Errorf("version = %q, want 2.95.0", got.Profile.Version)
 	}
-	assertWarnings(t, got.Warnings, "health", "unsupported Langfuse version", "")
+	if !got.Unsupported {
+		t.Errorf("detection = %+v, want the version marked unsupported", got)
+	}
+	assertWarnings(t, got.Warnings, "health", "", "")
 }
 
 // ADR-0012 amendment: a probe that has not answered within the budget leaves

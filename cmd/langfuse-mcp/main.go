@@ -126,10 +126,15 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 }
 
 // detectProfile detects the deployment profile within
-// langfuse.DefaultDetectionBudget and logs one warning per probe that could
-// not decide. The warnings hold fixed text only, never a Langfuse answer.
+// langfuse.DefaultDetectionBudget, logs a version below the supported floor as
+// unsupported, and logs one warning per probe that could not decide. The
+// warnings hold fixed text only, never a Langfuse answer.
 func detectProfile(log *slog.Logger, client *langfuse.Client) langfuse.DeploymentProfile {
 	d := client.DetectProfile(context.Background(), langfuse.DefaultDetectionBudget)
+	if version, ok := d.Profile.KnownVersion(); ok && d.Unsupported {
+		log.Warn("unsupported Langfuse version", "version", version,
+			"reason", "below the supported floor 3.0.0: operations are filtered by version range alone; families are ignored")
+	}
 	for _, w := range d.Warnings {
 		log.Warn("deployment profile probe undecided", "probe", w.Probe, "reason", w.Reason)
 	}

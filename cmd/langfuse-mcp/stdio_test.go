@@ -389,3 +389,29 @@ func TestExecutableStartsWithEveryFamilyOnWhenLangfuseDoesNotAnswerWithinTheBudg
 		t.Errorf("deployment profile log line = %v, want version unknown and every family on", got)
 	}
 }
+
+// ADR-0012 §4, spec #68 story 27: a Langfuse older than v3.0.0 is logged as
+// unsupported, with its version and that families are ignored, not as a probe
+// that could not decide.
+func TestExecutableLogsAVersionBelowTheSupportedFloorAsUnsupported(t *testing.T) {
+	t.Parallel()
+	fake := deploymentLangfuse(t, `{"status":"OK","version":"2.95.0"}`, nil, http.NotFound)
+	s := startStdio(t, "LANGFUSE_BASE_URL="+fake.URL)
+	s.initialize()
+	s.stop()
+
+	var unsupported map[string]any
+	for _, line := range logLines(t, s.stderr.Bytes()) {
+		switch line["msg"] {
+		case "unsupported Langfuse version":
+			unsupported = line
+		case "deployment profile probe undecided":
+			t.Errorf("the version was decided, yet logged as an undecided probe: %v", line)
+		}
+	}
+	reason, _ := unsupported["reason"].(string)
+	if unsupported["level"] != "WARN" || unsupported["version"] != "2.95.0" || !strings.Contains(reason, "families are ignored") {
+		t.Errorf("unsupported version line = %v, want a WARN naming version 2.95.0 and that families are ignored\n%s",
+			unsupported, s.stderr)
+	}
+}

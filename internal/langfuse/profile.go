@@ -63,11 +63,15 @@ const DefaultDetectionBudget = 5 * time.Second
 // supportedFloor is the oldest supported Langfuse version, v3.0.0 (ADR-0012 §4).
 const supportedFloor = 3
 
-// Detection is the outcome of DetectProfile: the deployment profile and one
-// warning per probe that could not decide.
+// Detection is the outcome of DetectProfile: the deployment profile, whether
+// its version is below the supported floor, and one warning per probe that
+// could not decide.
 type Detection struct {
-	Profile  DeploymentProfile
-	Warnings []ProbeWarning
+	Profile DeploymentProfile
+	// Unsupported is set when the detected version is below v3.0.0, the
+	// supported floor (ADR-0012 §4): the catalog then ignores the families.
+	Unsupported bool
+	Warnings    []ProbeWarning
 }
 
 // ProbeWarning says why a probe left its part of the profile undecided.
@@ -114,17 +118,18 @@ func (c *Client) DetectProfile(ctx context.Context, budget time.Duration) Detect
 	reasons := make([]string, len(sentinels))
 	on := make([]bool, len(sentinels))
 	var version, healthReason string
+	var unsupported bool
 	// One goroutine per probe, bounded by their fixed number; each ends
 	// with ctx at the latest. No probe returns an error: each one decides.
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(1 + len(sentinels))
-	g.Go(func() error { version, healthReason = c.detectVersion(gctx); return nil })
+	g.Go(func() error { version, unsupported, healthReason = c.detectVersion(gctx); return nil })
 	for i, s := range sentinels {
 		g.Go(func() error { on[i], reasons[i] = c.probe(gctx, s); return nil })
 	}
 	_ = g.Wait() // always nil: see above
 
-	d := Detection{Profile: DeploymentProfile{Version: version, Families: []catalog.Family{}}}
+	d := Detection{Profile: DeploymentProfile{Version: version, Families: []catalog.Family{}}, Unsupported: unsupported}
 	if healthReason != "" {
 		d.Warnings = append(d.Warnings, ProbeWarning{Probe: "health", Reason: healthReason})
 	}
@@ -141,27 +146,25 @@ func (c *Client) DetectProfile(ctx context.Context, budget time.Duration) Detect
 
 // detectVersion asks health for the version. It returns the version only
 // when it is a plain major.minor.patch version, and a warning reason
-// otherwise, or when the version is below the supported floor.
-func (c *Client) detectVersion(ctx context.Context) (version, reason string) {
+// otherwise; unsupported is set when the version is below the supported floor.
+func (c *Client) detectVersion(ctx context.Context) (version string, unsupported bool, reason string) {
 	resp, _, err := c.attempt(ctx, http.MethodGet, "/api/public/health", nil, false)
 	switch {
 	case errors.Is(err, errNotJSON):
-		return "", "version unknown: the health answer is not JSON"
+		return "", false, "version unknown: the health answer is not JSON"
 	case err != nil:
-		return "", "version unknown: health " + failureReason(err)
+		return "", false, "version unknown: health " + failureReason(err)
 	}
 	var health struct {
 		Version string `json:"version"`
 	}
 	err = json.NewDecoder(bytes.NewReader(resp.Body)).Decode(&health)
 	if _, known := (DeploymentProfile{Version: health.Version}).KnownVersion(); err != nil || !known {
-		return "", "version unknown: health reported no plain major.minor.patch version"
+		return "", false, "version unknown: health reported no plain major.minor.patch version"
 	}
 	major, _, _ := strings.Cut(health.Version, ".")
-	if n, _ := strconv.Atoi(major); n < supportedFloor { // at most 5 digits: always parses
-		return health.Version, "unsupported Langfuse version: below the supported floor 3.0.0; operations are filtered by version range alone"
-	}
-	return health.Version, ""
+	n, _ := strconv.Atoi(major) // at most 5 digits: always parses
+	return health.Version, n < supportedFloor, ""
 }
 
 // probe sends one family's sentinel and reports whether the family is on,
