@@ -64,6 +64,10 @@ func boundedOperation() catalog.Operation {
 			{Name: "ratio", In: "query", Schema: catalog.Schema{Type: "number", Minimum: new(0.5)}},
 			{Name: "s", In: "query", Schema: catalog.Schema{Type: "string", MinLength: new(2), MaxLength: new(4)}},
 			{Name: "tags", In: "query", Schema: catalog.Schema{Type: "array", Items: &catalog.Schema{Type: "string", MaxLength: new(3)}}},
+			// #83: a schema without a type bounds a number by value and a
+			// string by length, by the JSON kind of the value.
+			{Name: "u", In: "query", Schema: catalog.Schema{Minimum: new(float64(0)), Maximum: new(float64(10)), MaxLength: new(3)}},
+			{Name: "us", In: "query", Schema: catalog.Schema{Type: "array", Items: &catalog.Schema{MaxLength: new(3)}}},
 		},
 	}
 }
@@ -77,20 +81,28 @@ func TestAValueOutsideASpecGivenBoundIsRefusedNamingTheParameterAndTheBound(t *t
 		params     map[string]any
 		wantReason string // "" when the value is accepted
 	}{
-		"integer below the minimum":          {map[string]any{"n": -1.0}, "parameter n: want a value from 0 to 1000"},
-		"integer on the minimum":             {map[string]any{"n": 0.0}, ""},
-		"integer on the maximum":             {map[string]any{"n": json.Number("1000")}, ""},
-		"integer above the maximum":          {map[string]any{"n": json.Number("1001")}, "parameter n: want a value from 0 to 1000"},
-		"number below a lone minimum":        {map[string]any{"ratio": 0.25}, "parameter ratio: want a value of at least 0.5"},
-		"number on a lone minimum":           {map[string]any{"ratio": 0.5}, ""},
-		"string below the minimum length":    {map[string]any{"s": "a"}, "parameter s: want a length from 2 to 4 characters"},
-		"string on the minimum length":       {map[string]any{"s": "ab"}, ""},
-		"multi-byte string on the max runes": {map[string]any{"s": "çãé😀"}, ""},
-		"multi-byte string one rune over":    {map[string]any{"s": "çãé😀ü"}, "parameter s: want a length from 2 to 4 characters"},
-		"oversized string":                   {map[string]any{"s": strings.Repeat("x", 1<<20)}, "parameter s: want a length from 2 to 4 characters"},
-		"list item above a lone max length":  {map[string]any{"tags": []any{"ok", "long"}}, "parameter tags: item 1: want a length of at most 3 characters"},
-		"list items on the max length":       {map[string]any{"tags": []any{"abc", "déf"}}, ""},
-		"wrong type keeps the type error":    {map[string]any{"s": 12.0}, "parameter s: want a string, got a number"},
+		"integer below the minimum":                    {map[string]any{"n": -1.0}, "parameter n: want a value from 0 to 1000"},
+		"integer on the minimum":                       {map[string]any{"n": 0.0}, ""},
+		"integer on the maximum":                       {map[string]any{"n": json.Number("1000")}, ""},
+		"integer above the maximum":                    {map[string]any{"n": json.Number("1001")}, "parameter n: want a value from 0 to 1000"},
+		"number below a lone minimum":                  {map[string]any{"ratio": 0.25}, "parameter ratio: want a value of at least 0.5"},
+		"number on a lone minimum":                     {map[string]any{"ratio": 0.5}, ""},
+		"string below the minimum length":              {map[string]any{"s": "a"}, "parameter s: want a length from 2 to 4 characters"},
+		"string on the minimum length":                 {map[string]any{"s": "ab"}, ""},
+		"multi-byte string on the max runes":           {map[string]any{"s": "çãé😀"}, ""},
+		"multi-byte string one rune over":              {map[string]any{"s": "çãé😀ü"}, "parameter s: want a length from 2 to 4 characters"},
+		"oversized string":                             {map[string]any{"s": strings.Repeat("x", 1<<20)}, "parameter s: want a length from 2 to 4 characters"},
+		"list item above a lone max length":            {map[string]any{"tags": []any{"ok", "long"}}, "parameter tags: item 1: want a length of at most 3 characters"},
+		"list items on the max length":                 {map[string]any{"tags": []any{"abc", "déf"}}, ""},
+		"wrong type keeps the type error":              {map[string]any{"s": 12.0}, "parameter s: want a string, got a number"},
+		"untyped number above the maximum":             {map[string]any{"u": 11.0}, "parameter u: want a value from 0 to 10"},
+		"untyped number below the minimum":             {map[string]any{"u": json.Number("-1")}, "parameter u: want a value from 0 to 10"},
+		"untyped number on the maximum":                {map[string]any{"u": 10.0}, ""},
+		"untyped number longer than the max length":    {map[string]any{"u": 1.25}, ""},
+		"untyped string over the max length":           {map[string]any{"u": "abcd"}, "parameter u: want a length of at most 3 characters"},
+		"untyped numeric string within the max length": {map[string]any{"u": "999"}, ""},
+		"untyped boolean":                              {map[string]any{"u": true}, ""},
+		"untyped list item over the max length":        {map[string]any{"us": []any{1234.0, "abcd"}}, "parameter us: item 1: want a length of at most 3 characters"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -124,7 +136,7 @@ func TestTheRefusalOfAnOutOfBoundValueNeverRepeatsTheValue(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			for _, params := range []map[string]any{{"s": value}, {"tags": []any{"ok", value}}} {
+			for _, params := range []map[string]any{{"s": value}, {"tags": []any{"ok", value}}, {"u": value}, {"us": []any{value}}} {
 				_, err := boundedOperation().Request(params)
 				if !errors.Is(err, catalog.ErrInvalidParameter) {
 					t.Fatalf("Request error = %v, want ErrInvalidParameter", err)
