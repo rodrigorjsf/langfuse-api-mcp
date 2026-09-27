@@ -16,17 +16,7 @@ import (
 // its operation's own JSON Schema 2020-12 before sending it, and
 // describe_operation gives the agent that schema.
 
-// compacted returns the JSON literal s compacted, as Langfuse receives a body.
-func compacted(t *testing.T, s string) string {
-	t.Helper()
-	var v any
-	if err := json.Unmarshal([]byte(s), &v); err != nil {
-		t.Fatalf("bad JSON literal: %v", err)
-	}
-	return mustJSON(t, v)
-}
-
-// A valid body whose schema uses combinators (oneOf) and nullable fields
+// A valid body whose schema uses combinators (oneOf, allOf) and nullable fields
 // (type [T, "null"]) is accepted and reaches Langfuse unchanged.
 func TestExecuteWriteSendsABodyThatFitsACombinatorAndNullableSchemaUnchanged(t *testing.T) {
 	t.Parallel()
@@ -41,6 +31,14 @@ func TestExecuteWriteSendsABodyThatFitsACombinatorAndNullableSchemaUnchanged(t *
 		"a text prompt: the other oneOf alternative, a nullable enum set to null": {
 			operationID: "prompts_create",
 			body:        `{"name":"greeting","prompt":"Hello {{name}}","type":null,"labels":["staging"]}`,
+		},
+		"an evaluation rule: filters that are a oneOf of allOf alternatives, a nullable array and number": {
+			operationID: "evaluationRules_create",
+			body: `{"name":"rule","enabled":true,"sampling":null,
+				"evaluatorAssignments":[{"evaluatorId":"ev-1","variableMapping":null},
+					{"evaluatorId":"ev-2","variableMapping":[{"variable":"input","source":"input","jsonPath":null}]}],
+				"filter":[{"type":"string","column":"name","operator":"contains","value":"checkout"},
+					{"type":"number","column":"latency","operator":">","value":1.5}]}`,
 		},
 		"a score: a oneOf of number and string, nullable enums and fields set to null": {
 			operationID: "scores_create",
@@ -62,8 +60,9 @@ func TestExecuteWriteSendsABodyThatFitsACombinatorAndNullableSchemaUnchanged(t *
 			if res.IsError {
 				t.Fatalf("execute_write refused a body that fits the schema: %s", resultText(t, res))
 			}
-			if got, want := writtenOne(t, seen).body, compacted(t, tc.body); got != want {
-				t.Fatalf("Langfuse received body\n %s\nwant\n %s", got, want)
+			got := writtenOne(t, seen).body
+			if !reflect.DeepEqual(asJSON(t, got), asJSON(t, tc.body)) {
+				t.Fatalf("Langfuse received body\n %s\nwant the same JSON as\n %s", got, tc.body)
 			}
 		})
 	}
@@ -217,13 +216,19 @@ func TestDescribeOperationInWriteModeReturnsTheBodySchemaAndTheDestructiveFlag(t
 	if sanitize.Text(text) != text {
 		t.Errorf("text holds a hidden character:\n%q", text)
 	}
+}
 
-	got, text = describeWrite(t, "prompts_delete")
+// A destructive operation says so; confirmation is not shipped yet (slice 3),
+// so the text says execute_write refuses it.
+func TestDescribeOperationInWriteModeFlagsADestructiveOperationWithoutABody(t *testing.T) {
+	t.Parallel()
+
+	got, text := describeWrite(t, "prompts_delete")
 
 	if got["destructive"] != true || got["body"] != nil {
 		t.Errorf("structuredContent = %s, want destructive true and no body for a DELETE", mustJSON(t, got))
 	}
-	for _, want := range []string{"Destructive: yes (HTTP DELETE): it runs only after the user confirms it.", "Body: none"} {
+	for _, want := range []string{"Destructive: yes (HTTP DELETE): it needs the user's confirmation", "Body: none"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text does not contain %q:\n%s", want, text)
 		}

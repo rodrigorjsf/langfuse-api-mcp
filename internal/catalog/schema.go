@@ -29,7 +29,8 @@ func compileSchema(raw json.RawMessage) (*jsonschema.Resolved, error) {
 }
 
 // validate checks the valid JSON body against the compiled schema. A body
-// that fails it is refused naming the location and keyword (explain).
+// that fails it is refused naming the location and keyword that explain
+// finds.
 func (b *RequestBody) validate(body []byte) error {
 	var instance any
 	if err := json.Unmarshal(body, &instance); err != nil {
@@ -63,15 +64,19 @@ func (f failure) rank() int {
 	return r
 }
 
+// onlyType keeps only the type of a schema.
+func onlyType(s *jsonschema.Schema) *jsonschema.Schema {
+	return &jsonschema.Schema{Type: s.Type, Types: s.Types}
+}
+
 // leafKeywords are the keywords checked on the instance itself, in the order
-// a failure is reported; each keeps only its own part of a schema.
+// a failure is reported; each keeps only its own part of a schema. The table
+// is never modified.
 var leafKeywords = []struct {
 	name string
 	only func(s *jsonschema.Schema) *jsonschema.Schema
 }{
-	{"type", func(s *jsonschema.Schema) *jsonschema.Schema {
-		return &jsonschema.Schema{Type: s.Type, Types: s.Types}
-	}},
+	{"type", onlyType},
 	{"const", func(s *jsonschema.Schema) *jsonschema.Schema { return &jsonschema.Schema{Const: s.Const} }},
 	{"enum", func(s *jsonschema.Schema) *jsonschema.Schema { return &jsonschema.Schema{Enum: s.Enum} }},
 	{"minimum", func(s *jsonschema.Schema) *jsonschema.Schema { return &jsonschema.Schema{Minimum: s.Minimum} }},
@@ -173,7 +178,7 @@ func (e explainer) explain(s *jsonschema.Schema, instance any, at string) failur
 func (e explainer) closestAlternative(keyword string, alternatives []*jsonschema.Schema, instance any, at string) failure {
 	var typed []*jsonschema.Schema
 	for _, a := range alternatives {
-		if e.fits(&jsonschema.Schema{Type: a.Type, Types: a.Types}, instance) {
+		if e.fits(onlyType(a), instance) {
 			typed = append(typed, a)
 		}
 	}
@@ -198,7 +203,10 @@ func (e explainer) closestAlternative(keyword string, alternatives []*jsonschema
 
 // fits reports whether instance validates against the subschema s. The
 // subschema is compiled on its own, which jsonschema-go allows without
-// changing it: body schemas hold no $ref (the generator inlines them).
+// changing it: body schemas hold no $ref (the generator inlines them). A
+// subschema of a schema that compiled compiles too; should one not, it is
+// reported as not fitting, so the body is still refused (validate decided
+// that already) and only the location gets coarser.
 func (e explainer) fits(s *jsonschema.Schema, instance any) bool {
 	compiled, ok := e[s]
 	if !ok {

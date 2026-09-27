@@ -278,13 +278,18 @@ func unknownKeywords(s *jsonschema.Schema, at string) (string, []string) {
 	return "", nil
 }
 
+// bodySpec is a one-operation spec whose POST x_create takes a required body
+// of the given schema.
+func bodySpec(schema string) []byte {
+	return []byte(`{"paths":{"/api/public/x":{"post":{"operationId":"x_create","requestBody":{"required":true,` +
+		`"content":{"application/json":{"schema":` + schema + `}}}}}}}`)
+}
+
 // bodyOperation loads a one-operation spec whose POST takes a required body of
 // the given JSON Schema 2020-12, and returns that operation.
 func bodyOperation(t *testing.T, schema string) Operation {
 	t.Helper()
-	spec := []byte(`{"paths":{"/api/public/x":{"post":{"operationId":"x_create","requestBody":{"required":true,` +
-		`"content":{"application/json":{"schema":` + schema + `}}}}}}}`)
-	cat, err := load(spec)
+	cat, err := load(bodySpec(schema))
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -300,14 +305,17 @@ func bodyOperation(t *testing.T, schema string) Operation {
 // unknown keys where the schema forbids them, top-level and nested, values out
 // of range and control characters where a pattern constrains the string.
 // Each refusal names the location and keyword, never the value.
+// literalSchema forbids unknown keys at two levels, bounds a number, and
+// constrains two strings.
+const literalSchema = `{"type":"object","additionalProperties":false,"properties":{` +
+	`"n":{"type":"integer","minimum":1,"maximum":100},` +
+	`"code":{"type":"string","pattern":"^[A-Za-z0-9_-]+$"},` +
+	`"a/b":{"type":"string","maxLength":4},` +
+	`"inner":{"type":"object","additionalProperties":false,"properties":{"k":{"type":"string"}}}}}`
+
 func TestCheckBodyRefusesWhatALiteralSchemaForbidsNamingTheLocationAndKeyword(t *testing.T) {
 	t.Parallel()
-	const schema = `{"type":"object","additionalProperties":false,"properties":{` +
-		`"n":{"type":"integer","minimum":1,"maximum":100},` +
-		`"code":{"type":"string","pattern":"^[A-Za-z0-9_-]+$"},` +
-		`"a/b":{"type":"string","maxLength":4},` +
-		`"inner":{"type":"object","additionalProperties":false,"properties":{"k":{"type":"string"}}}}}`
-	op := bodyOperation(t, schema)
+	op := bodyOperation(t, literalSchema)
 	tests := map[string]struct{ body, want string }{
 		"an unknown top-level key":  {`{"n":5,"IGNORE_PREVIOUS":"x"}`, `at the body root: fails schema keyword "additionalProperties"`},
 		"an unknown nested key":     {`{"inner":{"k":"v","IGNORE_PREVIOUS":"x"}}`, `at /inner: fails schema keyword "additionalProperties"`},
@@ -336,6 +344,13 @@ func TestCheckBodyRefusesWhatALiteralSchemaForbidsNamingTheLocationAndKeyword(t 
 			}
 		})
 	}
+}
+
+// A control character in a string the schema does not constrain is accepted.
+func TestCheckBodyAcceptsABodyThatFitsALiteralSchema(t *testing.T) {
+	t.Parallel()
+	op := bodyOperation(t, literalSchema)
+
 	if _, err := op.CheckBody(json.RawMessage(`{"n":1,"code":"a-b_1","inner":{"k":"free text\u0000 is not constrained"}}`)); err != nil {
 		t.Errorf("CheckBody refused a body that fits the schema: %v", err)
 	}
@@ -351,9 +366,7 @@ func TestABodySchemaThatDoesNotCompileFailsTheLoad(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			spec := []byte(`{"paths":{"/api/public/x":{"post":{"operationId":"x_create","requestBody":{"required":true,` +
-				`"content":{"application/json":{"schema":` + schema + `}}}}}}}`)
-			if _, err := load(spec); err == nil || !strings.Contains(err.Error(), "x_create") {
+			if _, err := load(bodySpec(schema)); err == nil || !strings.Contains(err.Error(), "x_create") {
 				t.Fatalf("load error = %v, want one naming x_create", err)
 			}
 		})
