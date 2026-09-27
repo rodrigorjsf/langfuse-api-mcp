@@ -40,14 +40,14 @@ type confirmSetup struct {
 
 // connectConfirm starts the server in write mode against the fake Langfuse
 // and connects a client set up as s says.
-func connectConfirm(t *testing.T, fake *httptest.Server, s confirmSetup) *mcp.ClientSession {
+func connectConfirm(t testing.TB, fake *httptest.Server, s confirmSetup) *mcp.ClientSession {
 	t.Helper()
 	return startConfirm(t, langfuse.New(testOptions(t, fake.URL)), server.Secrets{Keys: testKeys()}, s)
 }
 
 // startConfirm starts the server in write mode with the given Langfuse client
 // and key pair to redact, and connects a client set up as s says.
-func startConfirm(t *testing.T, client *langfuse.Client, secrets server.Secrets, s confirmSetup) *mcp.ClientSession {
+func startConfirm(t testing.TB, client *langfuse.Client, secrets server.Secrets, s confirmSetup) *mcp.ClientSession {
 	t.Helper()
 	cat := s.catalog
 	if cat == nil {
@@ -242,23 +242,26 @@ func TestAClientThatCannotAskGetsConfirmationUnavailable(t *testing.T) {
 			Capabilities: &mcp.ClientCapabilities{Elicitation: &mcp.ElicitationCapabilities{URL: &mcp.URLElicitationCapabilities{}}}},
 	}
 	for name, client := range tests {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			fake, seen := writeLangfuse(t, http.StatusNoContent, "")
-			var logs syncBuffer
-			cs := connectConfirm(t, fake, confirmSetup{client: client, log: slog.New(slog.NewJSONHandler(&logs, nil))})
+		for version, protocol := range map[string]string{"protocol 2026-07-28": "", "older protocol": olderProtocol} {
+			t.Run(name+" "+version, func(t *testing.T) {
+				t.Parallel()
+				fake, seen := writeLangfuse(t, http.StatusNoContent, "")
+				var logs syncBuffer
+				cs := connectConfirm(t, fake, confirmSetup{client: client, protocol: protocol,
+					log: slog.New(slog.NewJSONHandler(&logs, nil))})
 
-			res := callExecuteWrite(t, cs, promptDelete("greeting"))
+				res := callExecuteWrite(t, cs, promptDelete("greeting"))
 
-			wantCode(t, res, "confirmation_unavailable")
-			if hint := toolErrorOf(t, res).Error.Hint; !strings.Contains(hint, "form elicitation") {
-				t.Errorf("hint = %q, want it to name form elicitation", hint)
-			}
-			writtenNothing(t, seen)
-			if got := auditLines(t, &logs)[0]["confirmation"]; got != "unavailable" {
-				t.Errorf("audit confirmation = %v, want unavailable", got)
-			}
-		})
+				wantCode(t, res, "confirmation_unavailable")
+				if hint := toolErrorOf(t, res).Error.Hint; !strings.Contains(hint, "form elicitation") {
+					t.Errorf("hint = %q, want it to name form elicitation", hint)
+				}
+				writtenNothing(t, seen)
+				if got := auditLines(t, &logs)[0]["confirmation"]; got != "unavailable" {
+					t.Errorf("audit confirmation = %v, want unavailable", got)
+				}
+			})
+		}
 	}
 	if len(u.questions()) != 0 {
 		t.Errorf("a client that cannot ask was asked: %q", u.questions())
@@ -560,4 +563,43 @@ func TestTheConfirmationShowsAnInjectedPathParameterStripped(t *testing.T) {
 	if want := "  promptName = \"folder/gnp.exe<i>x</i>\"\n"; !strings.Contains(got, want) {
 		t.Errorf("confirmation lacks %q:\n%s", want, got)
 	}
+}
+
+// security.md Credentials: a key the agent put in the arguments never
+// reaches the user's screen through the confirmation text.
+func TestTheConfirmationRedactsTheKeyPair(t *testing.T) {
+	t.Parallel()
+
+	got := question(t, map[string]any{"operationId": "promptVersion_update",
+		"parameters": map[string]any{"name": "greeting", "version": 2},
+		"body":       map[string]any{"newLabels": []any{testSecretKey, testPublicKey}}})
+
+	if strings.Contains(got, testSecretKey) || strings.Contains(got, testPublicKey) || !strings.Contains(got, "[REDACTED]") {
+		t.Errorf("confirmation shows a key, want [REDACTED]:\n%s", got)
+	}
+}
+
+// go.md Security: the RequestState a client sends back is untrusted input.
+// Whatever it holds, an accept with it is refused and nothing is sent.
+func FuzzConfirmationState(f *testing.F) {
+	for _, seed := range []string{"", ".", "9999999999.forged", "1.AAAA", "-1.", "99999999999999999999.x",
+		"1790000000.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "a.b.c", "\x00.\u202e"} {
+		f.Add(seed)
+	}
+	var sent atomic.Int64
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		sent.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	f.Cleanup(fake.Close)
+	cs := connectConfirm(f, fake, confirmSetup{client: manual()})
+	f.Fuzz(func(t *testing.T, state string) {
+		res := callWith(t, cs, promptDelete("greeting"), accepted, state)
+		if got := toolErrorOf(t, res).Error.Code; got != "confirmation_invalid" {
+			t.Fatalf("state %q: code %s, want confirmation_invalid", state, got)
+		}
+		if n := sent.Load(); n != 0 {
+			t.Fatalf("state %q: Langfuse received %d requests, want none", state, n)
+		}
+	})
 }

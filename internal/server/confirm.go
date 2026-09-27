@@ -16,7 +16,6 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
@@ -100,7 +99,9 @@ func canonicalArgs(request catalog.Request, body json.RawMessage) []byte {
 		dec.UseNumber()          // numbers keep their literal text
 		_ = dec.Decode(&decoded) // body passed CheckBody: it is valid JSON
 	}
-	out, _ := json.Marshal(struct { // maps marshal with sorted keys
+	// Maps marshal with sorted keys. The error is ignored: strings, a
+	// url.Values and a decoded JSON value always marshal.
+	out, _ := json.Marshal(struct {
 		Path  string     `json:"path"`
 		Query url.Values `json:"query"`
 		Body  any        `json:"body"`
@@ -145,18 +146,18 @@ func formElicitation(caps *mcp.ClientCapabilities) bool {
 }
 
 // confirm runs the confirmation of a destructive call whose parameters and
-// body passed their checks. It returns the result to answer the call with,
-// or nil when the user accepted this exact call and it may be sent. Nothing
+// body passed their checks. It reports accepted when the user accepted this
+// exact call and it may be sent; otherwise res answers the call. Nothing
 // is sent to Langfuse in any refusal. The client's capabilities are read per
 // request.
 func (ex executor) confirm(req *mcp.CallToolRequest, op catalog.Operation, params map[string]any,
 	request catalog.Request, body json.RawMessage, a *audit,
-) (*mcp.CallToolResult, error) {
+) (res *mcp.CallToolResult, accepted bool) {
 	if !formElicitation(req.ClientCapabilities()) {
 		a.confirmation = confirmationUnavailable
-		return toolError(errorConfirmationUnavailable, "operation "+op.ID+" is a destructive "+op.Method+
+		return refusal(toolError(errorConfirmationUnavailable, "operation "+op.ID+" is a destructive "+op.Method+
 			" operation, which runs only after the user confirms it, and the client cannot ask the user",
-			confirmationUnavailableHint, op.ID)
+			confirmationUnavailableHint, op.ID))
 	}
 	canonical := canonicalArgs(request, body)
 	responses := req.Params.InputResponses
@@ -164,30 +165,36 @@ func (ex executor) confirm(req *mcp.CallToolRequest, op catalog.Operation, param
 		a.confirmation = confirmationRequested
 		return &mcp.CallToolResult{
 			InputRequests: mcp.InputRequestMap{confirmInputID: &mcp.ElicitParams{
-				Message:         ex.redact.Redact(confirmationText(op, params, request, body)),
-				RequestedSchema: &jsonschema.Schema{Type: "object", Properties: map[string]*jsonschema.Schema{}},
+				Message: ex.redact.Redact(confirmationText(op, params, request, body)),
+				// An accept-only form: the answer is the action, no field.
+				RequestedSchema: map[string]any{"type": "object", "properties": map[string]any{}},
 			}},
 			RequestState: ex.confirmer.sign(op.ID, canonical),
-		}, nil
+		}, false
 	}
 	answer, ok := responses[confirmInputID].(*mcp.ElicitResult)
 	if !ok || !ex.confirmer.valid(op.ID, canonical, req.Params.RequestState) {
 		a.confirmation = confirmationInvalid
-		return toolError(errorConfirmationInvalid, "the confirmation of operation "+op.ID+" is missing, forged, "+
-			"expired or was given for other arguments", confirmationInvalidHint, op.ID)
+		return refusal(toolError(errorConfirmationInvalid, "the confirmation of operation "+op.ID+" is missing, "+
+			"forged, expired or was given for other arguments", confirmationInvalidHint, op.ID))
 	}
 	switch answer.Action {
 	case "accept":
 		a.confirmation = confirmationAccepted
-		return nil, nil
+		return nil, true
 	case "decline", "cancel":
 		a.confirmation = confirmationDeclined
-		return toolError(errorConfirmationDeclined, "the user did not confirm operation "+op.ID,
-			confirmationDeclinedHint, op.ID)
+		return refusal(toolError(errorConfirmationDeclined, "the user did not confirm operation "+op.ID,
+			confirmationDeclinedHint, op.ID))
 	}
 	a.confirmation = confirmationInvalid
-	return toolError(errorConfirmationInvalid, "the confirmation of operation "+op.ID+" has no known answer",
-		confirmationInvalidHint, op.ID)
+	return refusal(toolError(errorConfirmationInvalid, "the confirmation of operation "+op.ID+" has no known answer",
+		confirmationInvalidHint, op.ID))
+}
+
+// refusal is a tool error that refuses the call: it is never accepted.
+func refusal(res *mcp.CallToolResult, _ error) (*mcp.CallToolResult, bool) {
+	return res, false // toolError never fails: it marshals a fixed struct
 }
 
 // maxSummaryRunes is the rune budget of the body summary in the confirmation

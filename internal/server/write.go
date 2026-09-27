@@ -139,8 +139,8 @@ func (ex executor) executeWrite(ctx context.Context, req *mcp.CallToolRequest, a
 	}
 	if op.IsDestructive() {
 		// Checked arguments only: the user confirms exactly what is sent.
-		if res, err := ex.confirm(req, op, in.Parameters, request, body, a); res != nil || err != nil {
-			return res, err
+		if res, accepted := ex.confirm(req, op, in.Parameters, request, body, a); !accepted {
+			return res, nil
 		}
 	}
 	return ex.run(ctx, op, request, body, a)
