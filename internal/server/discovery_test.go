@@ -470,6 +470,28 @@ func TestSearchOperationsThatMatchesWithoutAskingAboutTracesReturnsNoHint(t *tes
 	}
 }
 
+// #100: trace must be a whole word, and words are split on whitespace as the
+// search's own keywords are, so an operation ID such as trace_list that
+// matches does not count as asking about traces.
+func TestSearchOperationsForAnOperationIDStartingWithTraceReturnsNoHint(t *testing.T) {
+	t.Parallel()
+	for _, query := range []string{"trace_list", "TRACE_GET"} {
+		t.Run(query, func(t *testing.T) {
+			t.Parallel()
+			cs := connectResolved(t, "4.46.0-dual")
+
+			res := callTool(t, cs, "search_operations", map[string]any{"query": query})
+
+			if operationIndexOf(t, res).Count == 0 {
+				t.Fatalf("query %q matches nothing on this profile", query)
+			}
+			if got := hintOf(t, res); got != "" {
+				t.Errorf("hint = %q, want none", got)
+			}
+		})
+	}
+}
+
 // #100: the hint names only trace reads the deployment offers. A 3.x deployment
 // serves the legacy family only: no get_trace_tree, observations_getMany or
 // metrics_metrics, so none is named.

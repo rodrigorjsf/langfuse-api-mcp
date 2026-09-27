@@ -186,10 +186,12 @@ func (d discovery) searchOperations(_ context.Context, req *mcp.CallToolRequest,
 }
 
 // asksAboutTraces reports whether query holds the word trace or traces,
-// ignoring case.
+// ignoring case. Words are split on whitespace, as the search's keywords are,
+// and lose only leading and trailing punctuation ("traces?"), so an operation
+// ID such as trace_list is not the word trace.
 func asksAboutTraces(query string) bool {
-	words := strings.FieldsFunc(query, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
-	return slices.ContainsFunc(words, func(w string) bool {
+	return slices.ContainsFunc(strings.Fields(query), func(w string) bool {
+		w = strings.TrimFunc(w, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
 		return strings.EqualFold(w, "trace") || strings.EqualFold(w, "traces")
 	})
 }
