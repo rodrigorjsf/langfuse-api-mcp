@@ -21,7 +21,7 @@ var (
 	// another reason: host name, validity period or usage.
 	ErrCertificateRejected = errors.New("the Langfuse server certificate failed verification")
 	// ErrNetwork: the host could not be reached: DNS, connection or proxy
-	// failure.
+	// failure, or a connection dropped before any answer.
 	ErrNetwork = errors.New("the Langfuse host could not be reached")
 	// ErrTimeout: the request deadline passed before Langfuse answered.
 	ErrTimeout = errors.New("the Langfuse request timed out")
@@ -32,6 +32,20 @@ var (
 // classify wraps a transport error with the sentinel of its failure class, or
 // returns it unchanged when it belongs to none.
 func classify(err error) error {
+	return wrapClass(failureClass(err), err)
+}
+
+// wrapClass wraps err with the sentinel class; a nil class leaves it unchanged.
+func wrapClass(class, err error) error {
+	if class == nil {
+		return err
+	}
+	return fmt.Errorf("%w: %w", class, err)
+}
+
+// failureClass returns the sentinel of err's failure class, or nil when it
+// belongs to none.
+func failureClass(err error) error {
 	var (
 		unknownAuthority x509.UnknownAuthorityError
 		verification     *tls.CertificateVerificationError
@@ -42,27 +56,27 @@ func classify(err error) error {
 	)
 	switch {
 	case errors.Is(err, context.Canceled):
-		return fmt.Errorf("%w: %w", ErrCanceled, err)
+		return ErrCanceled
 	case errors.Is(err, context.DeadlineExceeded):
-		return fmt.Errorf("%w: %w", ErrTimeout, err)
+		return ErrTimeout
 	// Before the generic timeout: a DNS lookup that timed out is a
 	// connectivity fault, not a slow query.
 	case errors.As(err, &dnsErr):
-		return fmt.Errorf("%w: %w", ErrNetwork, err)
+		return ErrNetwork
 	// Before the network errors: a read that timed out is one too.
 	case errors.As(err, &netErr) && netErr.Timeout():
-		return fmt.Errorf("%w: %w", ErrTimeout, err)
+		return ErrTimeout
 	// Before the verification error, which wraps it.
 	case errors.As(err, &unknownAuthority):
-		return fmt.Errorf("%w: %w", ErrUntrustedCertificate, err)
+		return ErrUntrustedCertificate
 	case errors.As(err, &verification):
-		return fmt.Errorf("%w: %w", ErrCertificateRejected, err)
+		return ErrCertificateRejected
 	// A refused proxy dial is an OpError ("proxyconnect"); a proxy that
 	// answers the CONNECT with a status other than 200 is this one.
 	case errors.As(err, &opErr), errors.As(err, &proxyConnect):
-		return fmt.Errorf("%w: %w", ErrNetwork, err)
+		return ErrNetwork
 	default:
-		return err
+		return nil
 	}
 }
 
@@ -73,11 +87,9 @@ func classify(err error) error {
 // read keeps classify alone, so a body cut short after the answer started is
 // not taken for a network failure.
 func classifySend(err error) error {
-	if classified := classify(err); classified != err {
-		return classified
+	class := failureClass(err)
+	if class == nil && errors.Is(err, io.EOF) {
+		class = ErrNetwork
 	}
-	if errors.Is(err, io.EOF) {
-		return fmt.Errorf("%w: %w", ErrNetwork, err)
-	}
-	return err
+	return wrapClass(class, err)
 }
