@@ -213,10 +213,7 @@ func (p Param) values(v any) ([]string, error) {
 		}
 		return []string{s}, nil
 	}
-	items, ok := v.([]any)
-	if !ok {
-		items = []any{v}
-	}
+	items := listItems(v)
 	item := Schema{}
 	if p.Schema.Items != nil {
 		item = *p.Schema.Items
@@ -230,6 +227,16 @@ func (p Param) values(v any) ([]string, error) {
 		out = append(out, s)
 	}
 	return out, nil
+}
+
+// listItems returns the items of a repeated parameter's value: the list, or
+// a list of one for a single value. values and inBounds both walk it, so the
+// rendered values and the raw items line up.
+func listItems(v any) []any {
+	if items, ok := v.([]any); ok {
+		return items
+	}
+	return []any{v}
 }
 
 // scalar checks one value against the schema's type and allowed values and
@@ -289,9 +296,7 @@ func (p Param) inBounds(v any, values []string) error {
 			return nil
 		}
 		s = *s.Items
-		if items, ok := v.([]any); ok {
-			raw = items
-		}
+		raw = listItems(v)
 	}
 	for i, value := range values {
 		err := s.withinBounds(value, raw[i])
