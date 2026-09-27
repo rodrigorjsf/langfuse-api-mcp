@@ -116,11 +116,11 @@ func (c *Client) DetectProfile(ctx context.Context, budget time.Duration) Detect
 	var version, healthReason string
 	// One goroutine per probe, bounded by their fixed number; each ends
 	// with ctx at the latest. No probe returns an error: each one decides.
-	var g errgroup.Group
+	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(1 + len(sentinels))
-	g.Go(func() error { version, healthReason = c.detectVersion(ctx); return nil })
+	g.Go(func() error { version, healthReason = c.detectVersion(gctx); return nil })
 	for i, s := range sentinels {
-		g.Go(func() error { on[i], reasons[i] = c.probe(ctx, s); return nil })
+		g.Go(func() error { on[i], reasons[i] = c.probe(gctx, s); return nil })
 	}
 	_ = g.Wait() // always nil: see above
 
