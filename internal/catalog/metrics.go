@@ -29,10 +29,14 @@ var ErrRowLimitOutOfRange = errors.New("row_limit out of range")
 // key or a key of the wrong type. It also matches ErrInvalidParameter.
 var ErrMetricsQuery = errors.New("malformed metrics query")
 
+// MetricsOperationID is the Metrics v2 operation: the one whose query has
+// static guidance (ParamGuidance).
+const MetricsOperationID = "metrics_metrics"
+
 // metricsOperations are the operations whose "query" parameter is a metrics
 // query JSON.
 var metricsOperations = map[string]bool{
-	"metrics_metrics":          true,
+	MetricsOperationID:         true,
 	"legacy_metricsV1_metrics": true,
 }
 
@@ -222,7 +226,7 @@ const metricsQueryExample = `{"view":"observations","metrics":[{"measure":"total
 // binary, never built from API data, and its key list is the validator's
 // own (metricsQueryKeys), so the two cannot drift.
 func (o Operation) ParamGuidance(p Param) string {
-	if o.ID != "metrics_metrics" || !o.isMetricsQuery(p) {
+	if o.ID != MetricsOperationID || !o.isMetricsQuery(p) {
 		return ""
 	}
 	keys := metricsQueryKeyList()

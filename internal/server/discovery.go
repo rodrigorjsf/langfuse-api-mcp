@@ -15,6 +15,7 @@ import (
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/sanitize"
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/workflows"
 )
 
 // Operation discovery (ADR-0002 amendment): search_operations lists the
@@ -193,12 +194,6 @@ func asksAboutTraces(query string) bool {
 	})
 }
 
-// The operations the trace reads hint names (#100).
-const (
-	opObservationsGetMany = "observations_getMany"
-	opMetricsMetrics      = "metrics_metrics"
-)
-
 // traceReadsHint returns the hint of a search that matched nothing or asks
 // about traces (#100): a v4 deployment has no Trace tag, so it names how trace
 // data is read instead. It is static text naming only the tools and
@@ -209,12 +204,12 @@ func (d discovery) traceReadsHint() string {
 	if d.traceTree {
 		reads = append(reads, "one trace by its ID: "+toolGetTraceTree)
 	}
-	if d.offers(opObservationsGetMany) {
-		reads = append(reads, "a filtered list of observations: "+toolExecuteRead+" with "+opObservationsGetMany)
+	if d.offers(workflows.ObservationsOperationID) {
+		reads = append(reads, "a filtered list of observations: "+toolExecuteRead+" with "+workflows.ObservationsOperationID)
 	}
-	if d.offers(opMetricsMetrics) {
+	if d.offers(catalog.MetricsOperationID) {
 		reads = append(reads, "aggregates such as cost or latency per day, e.g. for a trace name: "+
-			toolExecuteRead+" with "+opMetricsMetrics)
+			toolExecuteRead+" with "+catalog.MetricsOperationID)
 	}
 	if len(reads) == 0 {
 		return ""
