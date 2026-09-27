@@ -1,6 +1,8 @@
 package catalog_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
@@ -101,6 +103,66 @@ func TestEveryUnionOperationCarriesItsRangeAndFamily(t *testing.T) {
 		}
 		if got := [3]string{op.Introduced, op.Removed, string(op.Family)}; got != want {
 			t.Errorf("%s = {introduced, removed, family} %q, want %q", id, got, want)
+		}
+	}
+}
+
+// #81: a write operation carries the request body schema of the release spec
+// it was taken from, never the newest spec's. unstable_evaluators_create
+// proves it: its body component (unstableCreateEvaluatorRequest) exists only
+// in the specs before 4.31.0. promptVersion_update at its pre-3.18.0 path
+// shows an operation of an older path keeps a body (its schema happens to
+// equal the newer path's); prompts_create is a current operation.
+func TestAWriteOperationOfAnOlderReleaseCarriesItsOwnReleasesBodySchema(t *testing.T) {
+	t.Parallel()
+	cat := mustLoad(t)
+
+	for _, tc := range []struct {
+		version, id, path string
+		check             func(t *testing.T, schema map[string]any)
+	}{
+		{"3.16.0", "promptVersion_update", "/api/public/v2/prompts/{promptName}/version/{version}", func(t *testing.T, s map[string]any) {
+			newLabels, _ := s["properties"].(map[string]any)["newLabels"].(map[string]any)
+			if s["type"] != "object" || fmt.Sprint(s["required"]) != "[newLabels]" || newLabels["type"] != "array" {
+				t.Errorf("schema %v, want an object requiring the array newLabels", s)
+			}
+		}},
+		{"4.30.0", "unstable_evaluators_create", "/api/public/unstable/evaluators", func(t *testing.T, s map[string]any) {
+			variants, _ := s["oneOf"].([]any)
+			if s["title"] != "unstableCreateEvaluatorRequest" || len(variants) != 2 {
+				t.Errorf("schema title %v with %d variants, want unstableCreateEvaluatorRequest with 2", s["title"], len(variants))
+			}
+		}},
+		{"4.46.0", "prompts_create", "/api/public/v2/prompts", func(t *testing.T, s map[string]any) {
+			if s["title"] != "CreatePromptRequest" {
+				t.Errorf("schema title %v, want CreatePromptRequest", s["title"])
+			}
+		}},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			t.Parallel()
+			op, ok := cat.Resolve(catalog.Profile{Version: tc.version, Families: catalog.AllFamilies()}).Lookup(tc.id)
+			if !ok || op.Path != tc.path {
+				t.Fatalf("%s at %s = %s (found %v), want path %s", tc.id, tc.version, op.Path, ok, tc.path)
+			}
+			if op.Body == nil || !op.Body.Required {
+				t.Fatalf("%s body = %+v, want a required body", tc.id, op.Body)
+			}
+			var schema map[string]any
+			if err := json.Unmarshal(op.Body.Schema, &schema); err != nil {
+				t.Fatalf("%s body schema: %v", tc.id, err)
+			}
+			tc.check(t, schema)
+		})
+	}
+}
+
+// #81: a read operation takes no request body.
+func TestNoReadOperationCarriesARequestBody(t *testing.T) {
+	t.Parallel()
+	for _, op := range mustLoad(t).Operations() {
+		if op.IsRead() && op.Body != nil {
+			t.Errorf("read operation %s carries a request body", op.ID)
 		}
 	}
 }

@@ -4,12 +4,13 @@
 #       every Langfuse release tag from v3.0.0 onward, and writes it to
 #       internal/catalog/spec/langfuse-union-catalog.json, which the server embeds.
 #       Each operation (method + path) keeps its definition from the last spec
-#       that contained it, and carries its version range (x-introduced, plus
-#       x-removed when it left the spec) and its operation family (x-family:
-#       legacy, v4 read or experiments) where a write mode gates it. An
-#       operation whose description opens with a deprecation notice also gets
-#       x-summary, its operation index line: what it does and the operation to
-#       prefer (ADR-0012 §5, #79).
+#       that contained it: its path and query parameters and its JSON request
+#       body, with $refs inlined from that same spec (#81). It also carries
+#       its version range (x-introduced, plus x-removed when it left the spec)
+#       and its operation family (x-family: legacy, v4 read or experiments)
+#       where a write mode gates it. An operation whose description opens
+#       with a deprecation notice also gets x-summary, its operation index
+#       line: what it does and the operation to prefer (ADR-0012 §5, #79).
 # WHY:  ADR-0012 — a deployment gets every operation its version serves, so the
 #       catalog must know operations older releases had and newer ones dropped.
 #       The file is committed so that builds and pull-request CI stay offline.
@@ -127,7 +128,11 @@ def deref(node, spec, seen=()):
             sys.exit(f"unresolvable reference {ref}")
         target = spec
         for part in ref[2:].split("/"):
+            if not isinstance(target, dict) or part not in target:
+                sys.exit(f"unresolvable reference {ref}")
             target = target[part]
+        if not isinstance(target, dict):
+            sys.exit(f"unresolvable reference {ref}")
         merged = deref(target, spec, seen + (ref,))
         rest = {k: deref(v, spec, seen) for k, v in node.items() if k != "$ref"}
         if merged.get("nullable") or rest.get("nullable"):
@@ -137,10 +142,13 @@ def deref(node, spec, seen=()):
 
 
 def operations(spec):
-    """{"METHOD path": operation} of one spec, parameters inlined.
+    """{"METHOD path": operation} of one spec, parameters and request body inlined.
 
-    Only what the read path uses is kept: request bodies and responses are
-    dropped, so execute_write (M4) has no body schema yet (see #81).
+    Kept: the path and query parameters the read path uses, and the JSON
+    request body of a write operation, which execute_write's body gate (M4)
+    checks against (#81). Both are resolved against this spec's own components,
+    so an operation keeps the schemas of the release it was taken from. Header
+    parameters and responses are dropped: nothing uses them.
     """
     out = {}
     for path, item in (spec.get("paths") or {}).items():
@@ -157,14 +165,32 @@ def operations(spec):
                 p.pop("description", None)
                 if isinstance(p.get("schema"), dict):
                     p["schema"].pop("description", None)
-            out[f"{method.upper()} {path}"] = {
+            key = f"{method.upper()} {path}"
+            out[key] = {
                 "operationId": op.get("operationId"),
                 "tags": op.get("tags") or [],
                 "description": op.get("description") or op.get("summary") or "",
                 "deprecated": bool(op.get("deprecated")),
                 "parameters": kept,
             }
+            if "requestBody" in op:
+                out[key]["requestBody"] = request_body(key, op["requestBody"], spec)
     return out
+
+
+def request_body(key, body, spec):
+    """The operation's request body, $refs inlined from spec: a JSON body only.
+
+    A $ref that is cyclic, points outside components or names nothing fails
+    generation (deref), so no schema is ever cut short or left half resolved.
+    """
+    body = deref(body, spec)
+    content = body.get("content") if isinstance(body, dict) else None
+    if not isinstance(content, dict) or set(content) != {"application/json"} \
+            or not isinstance(content["application/json"].get("schema"), dict):
+        sys.exit(f"{key}: request body is not a single JSON schema")
+    return {"required": bool(body.get("required")),
+            "content": {"application/json": {"schema": content["application/json"]["schema"]}}}
 
 
 def family(key, op, removed):

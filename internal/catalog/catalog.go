@@ -12,6 +12,7 @@
 package catalog
 
 import (
+	"bytes"
 	_ "embed" // the Langfuse OpenAPI spec is compiled into the binary
 	"encoding/json"
 	"fmt"
@@ -80,6 +81,19 @@ type Operation struct {
 	// Family is the operation family the deployment's migration mode gates
 	// the operation by (ADR-0012 §2); empty when no mode gates it.
 	Family Family
+	// Body is the operation's JSON request body; nil when it takes none.
+	Body *RequestBody
+}
+
+// RequestBody is the JSON request body of a write operation, from the release
+// spec the operation was taken from (#81). The body gate of execute_write
+// (M4) checks a body against it; nothing reads it yet.
+type RequestBody struct {
+	// Required reports whether the operation needs a body.
+	Required bool
+	// Schema is the body's JSON schema, $refs inlined. It is third-party
+	// text, so every string in it is cleaned of hidden characters.
+	Schema json.RawMessage
 }
 
 // Param is one path or query parameter of an operation.
@@ -168,6 +182,12 @@ func load(spec []byte) (Catalog, error) {
 				Introduced  string   `json:"x-introduced"`
 				Removed     string   `json:"x-removed"`
 				Family      Family   `json:"x-family"`
+				RequestBody *struct {
+					Required bool `json:"required"`
+					Content  map[string]struct {
+						Schema json.RawMessage `json:"schema"`
+					} `json:"content"`
+				} `json:"requestBody"`
 			}
 			if err := json.Unmarshal(raw, &op); err != nil {
 				return Catalog{}, fmt.Errorf("embedded union catalog: %s %s: %w", m, path, err)
@@ -184,6 +204,17 @@ func load(spec []byte) (Catalog, error) {
 			o := Operation{
 				ID: op.OperationID, Method: m, Path: path, Params: op.Parameters,
 				Introduced: op.Introduced, Removed: op.Removed, Family: op.Family,
+			}
+			if op.RequestBody != nil {
+				content := op.RequestBody.Content["application/json"]
+				if len(op.RequestBody.Content) != 1 || len(content.Schema) == 0 {
+					return Catalog{}, fmt.Errorf("embedded union catalog: %s: request body is not a single JSON schema", o.ID)
+				}
+				schema, err := cleanSchema(content.Schema)
+				if err != nil {
+					return Catalog{}, fmt.Errorf("embedded union catalog: %s request body: %w", o.ID, err)
+				}
+				o.Body = &RequestBody{Required: op.RequestBody.Required, Schema: schema}
 			}
 			r, err := rangeOf(o)
 			if err != nil {
@@ -230,6 +261,56 @@ func indexLine(summary, description string) string {
 	return line
 }
 
+// cleanSchema returns the JSON schema raw with every string in it cleaned of
+// hidden characters: keys by visible, values by visibleText. A compromised
+// upstream spec cannot smuggle hidden instructions through a body schema.
+func cleanSchema(raw json.RawMessage) (json.RawMessage, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber() // keeps numbers exactly as the spec wrote them
+	var schema any
+	if err := dec.Decode(&schema); err != nil {
+		return nil, err
+	}
+	cleaned, err := cleanValue(schema)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(cleaned)
+}
+
+// cleanValue is v with visible applied to every string it holds. Two keys of
+// one object that only hidden characters told apart are an error: keeping
+// either would depend on map order.
+func cleanValue(v any) (any, error) {
+	switch v := v.(type) {
+	case string:
+		return visibleText(v), nil
+	case []any:
+		for i := range v {
+			x, err := cleanValue(v[i])
+			if err != nil {
+				return nil, err
+			}
+			v[i] = x
+		}
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for k, x := range v {
+			x, err := cleanValue(x)
+			if err != nil {
+				return nil, err
+			}
+			k := visible(k)
+			if _, dup := out[k]; dup {
+				return nil, fmt.Errorf("schema key %q appears twice once hidden characters are removed", k)
+			}
+			out[k] = x
+		}
+		return out, nil
+	}
+	return v, nil
+}
+
 // resolve replaces a component reference in s by the referenced schema's type
 // and allowed values, keeping s's own nullability; it resolves array items too.
 func resolve(s *Schema, components map[string]Schema) error {
@@ -259,11 +340,27 @@ func resolve(s *Schema, components map[string]Schema) error {
 // which catalog may not import (ADR-0009).
 func visible(s string) string {
 	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || (r >= 0xE0000 && r <= 0xE007F) {
+		if hidden(r) {
 			return -1
 		}
 		return r
 	}, strings.ToValidUTF8(s, ""))
+}
+
+// visibleText is visible for multi-line text: tab, line feed and carriage
+// return are kept, as sanitize.Text keeps them in a payload.
+func visibleText(s string) string {
+	return strings.Map(func(r rune) rune {
+		if hidden(r) && r != '\t' && r != '\n' && r != '\r' {
+			return -1
+		}
+		return r
+	}, strings.ToValidUTF8(s, ""))
+}
+
+// hidden reports whether r hides or reorders text (see visible).
+func hidden(r rune) bool {
+	return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || (r >= 0xE0000 && r <= 0xE007F)
 }
 
 // Lookup returns the in-scope operation with the given ID.
