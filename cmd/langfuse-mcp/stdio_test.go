@@ -243,9 +243,9 @@ func TestExecutableServesTheDiscoveryToolsExecuteReadAndGetTraceTreeOverStdio(t 
 	}
 	got := profileLogLine(t, s.stderr.Bytes())
 	families, _ := json.Marshal(got["families"])
-	// 111: the 4.x dual fixture of the catalog's deployment-profile test.
-	if got["version"] != "4.46.0" || string(families) != `["legacy","v4 read","experiments"]` || got["operations"] != float64(111) {
-		t.Errorf("deployment profile log line = %v, want version 4.46.0, every family, 111 operations", got)
+	// 107: the 4.x dual fixture of the catalog's deployment-profile test.
+	if got["version"] != "4.46.0" || string(families) != `["legacy","v4 read","experiments"]` || got["operations"] != float64(107) {
+		t.Errorf("deployment profile log line = %v, want version 4.46.0, every family, 107 operations", got)
 	}
 }
 
@@ -358,9 +358,9 @@ func TestExecutableOffersOnlyTheOperationsOfTheDetectedDeploymentProfile(t *test
 	}
 	got := profileLogLine(t, s.stderr.Bytes())
 	families, _ := json.Marshal(got["families"])
-	// 97: the 4.x events_only fixture of the catalog's deployment-profile test.
-	if got["version"] != "4.46.0" || string(families) != `["v4 read","experiments"]` || got["operations"] != float64(97) {
-		t.Errorf("deployment profile log line = %v, want version 4.46.0, families [v4 read experiments], 97 operations", got)
+	// 93: the 4.x events_only fixture of the catalog's deployment-profile test.
+	if got["version"] != "4.46.0" || string(families) != `["v4 read","experiments"]` || got["operations"] != float64(93) {
+		t.Errorf("deployment profile log line = %v, want version 4.46.0, families [v4 read experiments], 93 operations", got)
 	}
 }
 

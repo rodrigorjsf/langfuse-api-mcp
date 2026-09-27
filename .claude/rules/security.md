@@ -9,9 +9,10 @@ Full risk→control mapping with sources: `docs/research/security.md`. Cite OWAS
 - Redact `Authorization`, `sk-lf-…`, `pk-lf-…`, the HTTP bearer token and proxy credentials (`user:password@` in a proxy URL; used only for Basic proxy auth, logged as `scheme://host:port`) from logs, errors, hints, the audit line and tool output. A startup error for an invalid proxy value names the variable and its source, never the value.
 - After startup the key pair travels only as `langfuse.KeyPair`, which renders `[REDACTED]` in fmt, JSON and slog; never copy the keys into plain `string` fields.
 
-**Write gating** (ADR-0003)
-- `execute_read` accepts GET operation IDs only. `execute_write` is not registered unless `LANGFUSE_MCP_ALLOW_WRITES=true`. Tests must prove both.
+**Write gating** (ADR-0003 and its amendment)
+- `execute_read` accepts GET operation IDs only. `execute_write` is not registered unless `LANGFUSE_MCP_ALLOW_WRITES=true` (exactly `true`/`false`, environment or config file, environment wins; any other value stops startup naming the variable and its source, never the value). Tests must prove both.
 - The tool set is fixed at startup; it never changes per request or per client.
+- `execute_write` (#110): an excluded, unknown or read `operationId` is `operation_not_found`, echoed only redacted and cut to 64 bytes; path and query parameters get the `execute_read` checks; the body must be a JSON object where the schema expects one, at most 256 KiB compacted and 32 levels deep, and absent where the operation takes none, refused with `invalid_argument` naming the rule, never the value, before any request. Every destructive operation (DELETE, PUT, PATCH) is refused with `confirmation_unavailable` and never sent until server-enforced confirmation ships. A write is never retried. Its audit line is logged at `Warn` with `confirmation` and never the body. Excluded from the catalog: `media_getUploadUrl`, `media_patch`, `llmConnections_upsert`, `blobStorageIntegrations_upsertBlobStorageIntegration`; a catalog test fails on any in-scope write body property whose name contains `secret`, `password` or `accessKey` (ADR-0004 amendment). Tests prove each.
 
 **Every slice: prompt injection + dangerous parameters** (LLM01:2025/2026, MCP05/MCP06:2025)
 - Any spec, ticket or change that adds or alters a tool, operation, parameter, workflow, or write path lists in its acceptance criteria (a) its prompt-injection cases — instructions, hidden/bidi characters and markup inside Langfuse payloads, echoed input in error text — and (b) its dangerous-parameter cases — unknown params, URLs/schemes/hosts, traversal, control characters, wrong types, out-of-range limits, oversized filters or query JSON.
@@ -35,4 +36,4 @@ Full risk→control mapping with sources: `docs/research/security.md`. Cite OWAS
 
 **Supply chain**: `govulncheck` in CI; pinned `go.sum`; base image pinned by digest; SBOM for archives *and* image; cosign keyless signing; `actions/attest` provenance; no new dependency without justification.
 
-**Audit**: one structured stderr log line per tool call (tool, operationId, method, status, latency, bytes, requests: the Langfuse requests the call made) — metadata only, never payloads.
+**Audit**: one structured stderr log line per tool call (tool, operationId, method, status, latency, bytes, requests: the Langfuse requests the call made) — metadata only, never payloads; an `execute_write` line is at `Warn` and adds `confirmation`.

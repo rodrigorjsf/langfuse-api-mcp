@@ -67,6 +67,8 @@ type Config struct {
 	// ProxySettings are the proxy variables in effect, from the environment
 	// or the config file, for the Langfuse client's proxy function (ADR-0006, #45).
 	ProxySettings ProxySettings
+	// AllowWrites is write mode (LANGFUSE_MCP_ALLOW_WRITES); off unless set to true.
+	AllowWrites WriteMode
 }
 
 // Ambient holds the values of the ambient CA source variables; "" when unset.
@@ -194,6 +196,9 @@ func Load(env map[string]string, file File) (Config, []IgnoredKey, error) {
 		"requests in flight", file.Path); err != nil {
 		return Config{}, nil, err
 	}
+	if cfg.AllowWrites, err = loadWriteMode(setting(EnvAllowWrites), file.Path); err != nil {
+		return Config{}, nil, err
+	}
 	if cfg.Connection, err = loadConnection(env, fromFile); err != nil {
 		return Config{}, nil, err
 	}
@@ -227,8 +232,9 @@ func isKnownFileKey(key string) bool {
 		EnvSSLCertFile, EnvSSLCertDir, EnvNodeExtraCACerts, EnvRequestsCABundle, EnvCurlCABundle,
 		EnvBaseURL, EnvHost, EnvRateLimit, EnvMaxConcurrency,
 		EnvHTTPSProxy, EnvHTTPSProxyLower, EnvHTTPProxy, EnvHTTPProxyLower, EnvNoProxy, EnvNoProxyLower,
-		// Planned (README "Behavior"); no code reads them yet.
-		"LANGFUSE_MCP_ALLOW_WRITES", "LANGFUSE_MCP_TRANSPORT":
+		EnvAllowWrites,
+		// Planned (README "Behavior"); no code reads it yet.
+		"LANGFUSE_MCP_TRANSPORT":
 		return true
 	}
 	return false

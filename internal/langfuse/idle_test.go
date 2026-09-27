@@ -52,7 +52,7 @@ func TestTheClientReleasesItsIdleConnectionsLeavingNoTransportGoroutine(t *testi
 			opts := limitsOptions(t, fake.URL)
 			opts.TLS = &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots}
 			client := langfuse.New(opts)
-			if _, err := client.Do(context.Background(), http.MethodGet, "/api/public/health", nil); err != nil {
+			if _, err := client.Do(context.Background(), http.MethodGet, "/api/public/health", nil, nil); err != nil {
 				t.Fatalf("request: %v", err)
 			}
 			// Precondition, not the behaviour under test: the case ran over its protocol.

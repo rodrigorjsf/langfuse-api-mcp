@@ -102,7 +102,7 @@ func GetTraceTree(ctx context.Context, client *langfuse.Client, r sanitize.Redac
 		if cursor != "" {
 			query.Set("cursor", cursor)
 		}
-		resp, err := client.Do(ctx, http.MethodGet, observationsPath, query)
+		resp, err := client.Do(ctx, http.MethodGet, observationsPath, query, nil)
 		tree.Requests += resp.Attempts
 		tree.Status, tree.Bytes = resp.Status, tree.Bytes+len(resp.Body)
 		if err != nil {

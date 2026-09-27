@@ -16,7 +16,7 @@ import (
 // (prototype/langfuse-io-window, scan-3.80.0.json), except six routes that
 // exist only for another method there (405); the 4.46.0 dual set is the 124
 // operations of the 4.46.0 spec, all routed on a live 4.46.0 dual
-// (prototype/langfuse-api-versions), minus the 13 ADR-0004 exclusions.
+// (prototype/langfuse-api-versions), minus the 13 ADR-0004 exclusions and the 4 of its M4 amendment.
 //
 // The weekly regeneration (.github/workflows/union-catalog.yml) changes the
 // "newer than any known version" row when a new release adds or drops an
@@ -26,7 +26,7 @@ import (
 var inEveryFixture = []string{
 	"comments_create", "comments_get", "comments_get-by-id", "datasetItems_create", "datasetItems_get",
 	"datasetItems_list", "datasets_create", "datasets_get", "datasets_list", "health_health",
-	"legacy_scoreV1_delete", "media_get", "media_getUploadUrl", "media_patch", "models_create", "models_delete",
+	"legacy_scoreV1_delete", "media_get", "models_create", "models_delete",
 	"models_get", "models_list", "projects_get", "prompts_create", "prompts_get", "prompts_list",
 	"scoreConfigs_create", "scoreConfigs_get", "scoreConfigs_get-by-id", "scores_create",
 }
@@ -43,13 +43,13 @@ func TestEachDeploymentProfileResolvesToExactlyItsOperations(t *testing.T) {
 		"blobStorageIntegrations_deleteBlobStorageIntegration",
 		"blobStorageIntegrations_getBlobStorageIntegrationStatus",
 		"blobStorageIntegrations_getBlobStorageIntegrations",
-		"blobStorageIntegrations_upsertBlobStorageIntegration", "datasetItems_delete", "datasetRunItems_create",
+		"datasetItems_delete", "datasetRunItems_create",
 		"datasetRunItems_list", "datasets_deleteRun", "datasets_getRun", "datasets_getRuns",
 		"evaluationRules_create", "evaluationRules_delete", "evaluationRules_get", "evaluationRules_list",
 		"evaluationRules_update", "evaluators_create", "evaluators_delete", "evaluators_get", "evaluators_list",
 		"evaluators_listVersions", "evaluators_update", "experiments_list", "experiments_listItems",
 		"feedback_submit", "legacy_metricsV1_metrics", "legacy_observationsV1_get", "legacy_observationsV1_getMany",
-		"llmConnections_delete", "llmConnections_list", "llmConnections_upsert", "metrics_metrics", "models_upsert",
+		"llmConnections_delete", "llmConnections_list", "metrics_metrics", "models_upsert",
 		"observations_getMany", "organizations_getOrganizationApiKeys", "organizations_getOrganizationMemberships",
 		"organizations_getOrganizationProjects", "organizations_getProjectMemberships", "projects_getApiKeys",
 		"promptVersion_update", "prompts_delete", "scim_getResourceTypes", "scim_getSchemas",
@@ -92,10 +92,10 @@ func TestEachDeploymentProfileResolvesToExactlyItsOperations(t *testing.T) {
 			"blobStorageIntegrations_deleteBlobStorageIntegration",
 			"blobStorageIntegrations_getBlobStorageIntegrationStatus",
 			"blobStorageIntegrations_getBlobStorageIntegrations",
-			"blobStorageIntegrations_upsertBlobStorageIntegration", "datasetItems_delete", "datasetRunItems_create",
+			"datasetItems_delete", "datasetRunItems_create",
 			"datasetRunItems_list", "datasets_deleteRun", "datasets_getRun", "datasets_getRuns",
 			"legacy_metricsV1_metrics", "legacy_observationsV1_get", "legacy_observationsV1_getMany",
-			"llmConnections_delete", "llmConnections_list", "llmConnections_upsert",
+			"llmConnections_delete", "llmConnections_list",
 			"organizations_getOrganizationApiKeys", "organizations_getOrganizationMemberships",
 			"organizations_getOrganizationProjects", "organizations_getProjectMemberships", "projects_getApiKeys",
 			"promptVersion_update", "prompts_delete", "scim_getResourceTypes", "scim_getSchemas",
@@ -118,11 +118,11 @@ func TestEachDeploymentProfileResolvesToExactlyItsOperations(t *testing.T) {
 			"blobStorageIntegrations_deleteBlobStorageIntegration",
 			"blobStorageIntegrations_getBlobStorageIntegrationStatus",
 			"blobStorageIntegrations_getBlobStorageIntegrations",
-			"blobStorageIntegrations_upsertBlobStorageIntegration", "datasetItems_delete", "evaluationRules_create",
+			"datasetItems_delete", "evaluationRules_create",
 			"evaluationRules_delete", "evaluationRules_get", "evaluationRules_list", "evaluationRules_update",
 			"evaluators_create", "evaluators_delete", "evaluators_get", "evaluators_list", "evaluators_listVersions",
 			"evaluators_update", "experiments_list", "experiments_listItems", "feedback_submit",
-			"llmConnections_delete", "llmConnections_list", "llmConnections_upsert", "metrics_metrics", "models_upsert",
+			"llmConnections_delete", "llmConnections_list", "metrics_metrics", "models_upsert",
 			"observations_getMany", "organizations_getOrganizationApiKeys", "organizations_getOrganizationMemberships",
 			"organizations_getOrganizationProjects", "organizations_getProjectMemberships", "projects_getApiKeys",
 			"promptVersion_update", "prompts_delete", "scim_getResourceTypes", "scim_getSchemas",

@@ -98,6 +98,7 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 	// Logged after the last startup step that returns an error: a failed startup logs one line only.
 	log.Info("rate limit", "perMinute", cfg.RateLimit, "source", cfg.RateLimitSource)
 	logProxy(log, cfg.Proxy)
+	logWriteMode(log, cfg.AllowWrites)
 	// The key pair leaves config.Secret straight into a langfuse.KeyPair,
 	// which redacts itself as config.Secret does.
 	keys := langfuse.NewKeyPair(cfg.Connection.PublicKey.Reveal(), cfg.Connection.SecretKey.Reveal())
@@ -116,7 +117,11 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 	profile := detection.Profile
 	resolved := cat.Resolve(catalogProfile(profile))
 	logProfile(log, detection, len(resolved.Operations()))
-	srv := server.New(resolved, client, log, server.Secrets{Keys: keys}, profile)
+	var opts []server.Option
+	if cfg.AllowWrites.On {
+		opts = append(opts, server.WithWriteMode())
+	}
+	srv := server.New(resolved, client, log, server.Secrets{Keys: keys}, profile, opts...)
 	serve := func(ctx context.Context) error {
 		// On shutdown, close the keep-alive connections to Langfuse instead of
 		// leaving them to the process exit.
@@ -185,6 +190,16 @@ func logProxy(log *slog.Logger, p config.Proxy) {
 		return
 	}
 	log.Info("proxy", "endpoint", p.Endpoint, "variable", p.Variable, "source", p.Origin, "noProxySet", p.NoProxy)
+}
+
+// logWriteMode logs whether write mode is on and where that was set; an
+// unset LANGFUSE_MCP_ALLOW_WRITES is the default, off.
+func logWriteMode(log *slog.Logger, w config.WriteMode) {
+	source := string(w.Origin)
+	if source == "" {
+		source = "default"
+	}
+	log.Info("write mode", "on", w.On, "source", source)
 }
 
 // envMap turns "KEY=value" entries into a map; the last entry for a key wins.

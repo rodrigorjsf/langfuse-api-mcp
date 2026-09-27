@@ -196,7 +196,7 @@ func TestExecuteReadRefusesAWriteOperationSayingItRunsReadOperationsOnly(t *test
 		t.Errorf("error = %+v, want invalid_argument saying execute_read runs read (GET) operations only", got)
 	}
 	if got.Hint == "" || strings.Contains(got.Hint, "execute_write") || strings.Contains(got.Hint, "ALLOW_WRITES") {
-		t.Errorf("hint %q, want one that names no write tool or setting: none exists yet", got.Hint)
+		t.Errorf("hint %q, want one that names no write tool or setting: write mode is off", got.Hint)
 	}
 	assertNoRequest(t, seen)
 }
