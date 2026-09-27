@@ -29,7 +29,7 @@
 # Needs git, network access to github.com and PyYAML (pip install pyyaml): the
 # release specs are YAML, and parsing them in Go would add a module dependency
 # to the server for a maintainer-only step (security.md: no new dependency
-# without justification). The weekly workflow pins PyYAML's version.
+# without justification). CI installs PyYAML from the hash-pinned scripts/requirements.txt.
 # The first run downloads the commit and tree history (a few hundred MiB) and
 # about 150 distinct spec blobs; later runs fetch only new tags.
 #

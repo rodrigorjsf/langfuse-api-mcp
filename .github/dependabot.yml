@@ -1,4 +1,5 @@
-# Dependabot: Go module requirements and GitHub Actions (pinned by SHA).
+# Dependabot: Go module requirements, GitHub Actions (pinned by SHA) and the union catalog
+# generator's hash-pinned Python requirements (scripts/requirements.txt, #92).
 # Dependabot does not bump the go.mod `toolchain` directive
 # (https://github.com/dependabot/dependabot-core/issues/13520, open as of 2026-09-25);
 # .github/workflows/go-toolchain.yml covers it.
@@ -12,6 +13,12 @@ updates:
       prefix: "build(deps)"
   - package-ecosystem: github-actions
     directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci(deps)"
+  - package-ecosystem: pip
+    directory: /scripts
     schedule:
       interval: weekly
     commit-message:
