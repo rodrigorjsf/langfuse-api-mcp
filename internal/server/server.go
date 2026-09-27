@@ -274,12 +274,12 @@ const (
 	// notFoundHint answers an unknown operation ID (#36).
 	notFoundHint = "call search_operations to find the operation ID: without arguments it lists every " +
 		"operation, with query it keeps those matching keywords such as \"prompt get\""
-	writeRefusedHint = "this server changes no data; to read the data instead, use a read operation " +
-		"such as trace_list or trace_get"
+	// readInsteadHint closes the hints of a write refused by execute_read.
+	readInsteadHint  = "to read the data instead, use a read operation such as trace_list or trace_get"
+	writeRefusedHint = "this server changes no data; " + readInsteadHint
 	// writeModeRefusedHint replaces writeRefusedHint in write mode, where
 	// execute_write exists.
-	writeModeRefusedHint = "run a write operation with execute_write; to read the data instead, use a read " +
-		"operation such as trace_list or trace_get"
+	writeModeRefusedHint = "run a write operation with execute_write; " + readInsteadHint
 )
 
 func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a *audit) (*mcp.CallToolResult, error) {

@@ -49,8 +49,7 @@ func executeWriteSchema() map[string]any {
 	props["body"] = map[string]any{
 		"type": "object",
 		"description": "The operation's JSON request body, as its Langfuse schema describes it; leave it out " +
-			"for an operation that takes none. At most " + strconv.Itoa(catalog.MaxBodyBytes) + " bytes and " +
-			strconv.Itoa(catalog.MaxBodyDepth) + " levels of nesting.",
+			"for an operation that takes none. At most " + bodyCaps + ".",
 	}
 	return schema
 }
@@ -142,11 +141,15 @@ func bodyHint(op catalog.Operation) string {
 	if op.Body == nil {
 		return "call again without body: operation " + op.ID + " takes none"
 	}
-	return "send body as the JSON object operation " + op.ID + " takes, at most " +
-		strconv.Itoa(catalog.MaxBodyBytes) + " bytes and " + strconv.Itoa(catalog.MaxBodyDepth) +
-		" levels deep, that fits its schema; " + toolDescribeOperation + " with operationId " + op.ID +
+	return "send body as the JSON object operation " + op.ID + " takes, at most " + bodyCaps +
+		", that fits its schema; " + toolDescribeOperation + " with operationId " + op.ID +
 		" returns the body schema"
 }
+
+// bodyCaps names the size and depth caps of a body, for the body schema
+// description and the refused-body hint alike.
+var bodyCaps = strconv.Itoa(catalog.MaxBodyBytes) + " bytes and " + strconv.Itoa(catalog.MaxBodyDepth) +
+	" levels of nesting"
 
 // notRetriedHint is the hint of a failed write: a failure that may have
 // reached Langfuse says the write was not retried, and a 5xx loses the read
