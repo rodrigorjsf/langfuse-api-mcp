@@ -17,10 +17,8 @@ import (
 // result is compact JSON with object keys in sorted order and numbers kept
 // exact; payload must be valid JSON.
 func Payload(payload json.RawMessage, r Redactor) (json.RawMessage, error) {
-	dec := json.NewDecoder(bytes.NewReader(payload))
-	dec.UseNumber() // keep numbers exact: an ID-like 12345678901234567890 stays as is
-	var v any
-	if err := dec.Decode(&v); err != nil {
+	v, err := Decode(payload)
+	if err != nil {
 		return nil, err
 	}
 	var out bytes.Buffer
@@ -30,6 +28,16 @@ func Payload(payload json.RawMessage, r Redactor) (json.RawMessage, error) {
 		return nil, err
 	}
 	return bytes.TrimSuffix(out.Bytes(), []byte("\n")), nil
+}
+
+// Decode decodes one JSON value, keeping numbers exact as json.Number: an
+// ID-like 12345678901234567890 stays as is.
+func Decode(raw json.RawMessage) (any, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	err := dec.Decode(&v)
+	return v, err
 }
 
 // clean returns v with every string cleaned by Text and redacted by r.

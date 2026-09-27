@@ -94,9 +94,7 @@ func (c confirmer) mac(expiry, operationID string, canonical []byte) []byte {
 func canonicalArgs(request catalog.Request, body json.RawMessage) []byte {
 	var decoded any
 	if len(body) > 0 {
-		dec := json.NewDecoder(bytes.NewReader(body))
-		dec.UseNumber()          // numbers keep their literal text
-		_ = dec.Decode(&decoded) // body passed CheckBody: it is valid JSON
+		decoded, _ = sanitize.Decode(body) // body passed CheckBody: it is valid JSON; numbers keep their literal text
 	}
 	// Maps marshal with sorted keys. The error is ignored: strings, a
 	// url.Values and a decoded JSON value always marshal.
@@ -271,10 +269,7 @@ func jsonText(v any) string {
 // bodySummary returns the body as compact JSON with every string (keys
 // included) stripped, cut at maxSummaryRunes; cut reports whether it was.
 func bodySummary(body json.RawMessage) (summary string, cut bool) {
-	dec := json.NewDecoder(bytes.NewReader(body))
-	dec.UseNumber()
-	var v any
-	_ = dec.Decode(&v) // body passed CheckBody: it is valid JSON
+	v, _ := sanitize.Decode(body) // body passed CheckBody: it is valid JSON
 	s := jsonText(sanitize.LineValue(v))
 	if utf8.RuneCountInString(s) <= maxSummaryRunes {
 		return s, false
