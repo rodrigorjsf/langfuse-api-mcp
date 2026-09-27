@@ -156,7 +156,7 @@ func metricsQuery(raw string) (string, error) {
 		literal, isNumber := v.(json.Number)
 		n, ok := parsePageSize(string(literal), MaxRowLimit)
 		if !isNumber || !ok {
-			return "", markedError{ErrRowLimitOutOfRange,
+			return "", sentinelError{ErrRowLimitOutOfRange,
 				invalidf("parameter query: config.row_limit: want an integer from 1 to %d, got %s", MaxRowLimit, kind(v))}
 		}
 		rowLimit = n
@@ -174,7 +174,7 @@ func metricsQuery(raw string) (string, error) {
 // queryInvalidf is invalidf for a malformed metrics query: the error also
 // matches ErrMetricsQuery.
 func queryInvalidf(format string, args ...any) error {
-	return markedError{ErrMetricsQuery, invalidf(format, args...)}
+	return sentinelError{ErrMetricsQuery, invalidf(format, args...)}
 }
 
 // checkDepth refuses JSON nested deeper than maxMetricsQueryDepth, before it

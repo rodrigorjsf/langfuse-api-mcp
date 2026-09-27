@@ -97,7 +97,7 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 		}
 		if o.isListLimit(p) {
 			if _, ok := parsePageSize(values[0], MaxLimit); !ok {
-				return Request{}, markedError{ErrLimitOutOfRange, invalidf("parameter %s: want an integer from 1 to %d",
+				return Request{}, sentinelError{ErrLimitOutOfRange, invalidf("parameter %s: want an integer from 1 to %d",
 					p.Name, MaxLimit)}
 			}
 		}
@@ -164,17 +164,17 @@ func safePathValue(v string, folderName bool) error {
 	return nil
 }
 
-// markedError is a refusal that also matches a more specific sentinel: a page
+// sentinelError is a refusal that also matches a more specific sentinel: a page
 // size outside its range (limit or config.row_limit) or a malformed metrics
 // query. It matches its sentinel and, through the error it wraps,
 // ErrInvalidParameter.
-type markedError struct {
+type sentinelError struct {
 	sentinel error
 	error
 }
 
-func (e markedError) Unwrap() error        { return e.error }
-func (e markedError) Is(target error) bool { return target == e.sentinel }
+func (e sentinelError) Unwrap() error        { return e.error }
+func (e sentinelError) Is(target error) bool { return target == e.sentinel }
 
 // parsePageSize parses s as a page size: a decimal integer from 1 to upper.
 func parsePageSize(s string, upper int) (int, bool) {
