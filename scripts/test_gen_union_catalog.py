@@ -7,9 +7,10 @@
 # WHY:  pull-request CI proves the generator's committed output (internal/catalog
 #       tests), not how it treats a hostile or broken release spec; these cases
 #       need no network.
-# WHEN: before each weekly regeneration (.github/workflows/union-catalog.yml),
-#       and by hand after changing the generator; pull-request CI does not
-#       run them yet (see #89).
+# WHEN: on every push and pull request (.github/workflows/ci.yml, job
+#       "generator", #89), before each weekly regeneration
+#       (.github/workflows/union-catalog.yml), and by hand after changing the
+#       generator.
 # HOW:  python3 scripts/test_gen_union_catalog.py   (needs PyYAML, like the generator)
 
 import importlib.util

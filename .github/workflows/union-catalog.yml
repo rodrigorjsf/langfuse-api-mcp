@@ -3,8 +3,10 @@
 # scripts/gen-union-catalog.py, which rebuilds
 # internal/catalog/spec/langfuse-union-catalog.json from the OpenAPI spec of every
 # Langfuse release tag since v3.0.0, and opens a pull request when the output changed.
-# When nothing changed, it does nothing. Pull-request CI never runs the generator: it
-# checks the committed file offline (internal/catalog tests).
+# When nothing changed, it does nothing. Pull-request CI never regenerates the catalog: it
+# checks the committed file offline (internal/catalog tests) and runs the generator's
+# offline unit tests (ci.yml, job "generator", #89).
+# The PyYAML pin below is shared with ci.yml; change both together.
 #
 # A new or removed operation changes the deployment-profile fixtures in
 # internal/catalog/resolve_test.go ("newer than any known version"), and a new
