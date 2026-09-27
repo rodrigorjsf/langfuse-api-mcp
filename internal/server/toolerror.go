@@ -114,6 +114,10 @@ func secondsRoundedUp(d time.Duration) int {
 	return int((d + time.Second - 1) / time.Second)
 }
 
+// searchServedOperations points an unavailable operation's hint at discovery,
+// never at an external page (mcp-tool-design.md).
+const searchServedOperations = "search_operations lists the operations this deployment serves"
+
 // unavailableHint names, per unavailable flavour, the family the operation
 // is in or the version the deployment lacks, and where the replacement is;
 // then the detected deployment profile: the version and the families on and
@@ -125,10 +129,11 @@ func unavailableHint(why langfuse.Unavailability, family catalog.Family, profile
 	case langfuse.EventsOnly:
 		flavour = "the operation is in the legacy family, which Langfuse v4 in events_only mode turns off; " +
 			"use the replacement operation, e.g. observations_getMany (/v2/observations), metrics_metrics (/v2/metrics) " +
-			"or scoresV3_getManyV3 (/v3/scores) (see https://langfuse.com/faq/all/deprecated-api-migration)"
+			"or scoresV3_getManyV3 (/v3/scores); " + searchServedOperations
 	case langfuse.V4WriteModeOff:
 		flavour = "the operation is in the v4 read family, which is off on this deployment (it is not in a Langfuse v4 write mode: " +
-			"Langfuse v3, or v4 in legacy mode); use the legacy operation instead, e.g. trace_list or legacy_observationsV1_getMany"
+			"Langfuse v3, or v4 in legacy mode); use the legacy operation instead, e.g. trace_list or legacy_observationsV1_getMany; " +
+			searchServedOperations
 	default: // langfuse.RouteMissing
 		flavour = routeMissingFlavour(family, profile)
 	}
@@ -142,7 +147,7 @@ func unavailableHint(why langfuse.Unavailability, family catalog.Family, profile
 func routeMissingFlavour(family catalog.Family, profile langfuse.DeploymentProfile) string {
 	const (
 		missing     = "this route does not exist on the deployment: "
-		replacement = "; use the older operation it replaces (see https://langfuse.com/faq/all/deprecated-api-migration)"
+		replacement = "; use the older operation it replaces: " + searchServedOperations
 	)
 	switch {
 	case !slices.Contains(catalog.AllFamilies(), family):
