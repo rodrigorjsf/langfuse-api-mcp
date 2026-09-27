@@ -14,6 +14,7 @@ Evidence behind the ADRs. Labels: `[verified 3-0]` passed 3-vote adversarial che
 | [mcp-hosts-env.md](mcp-hosts-env.md) | how each MCP host (Claude Code/Desktop, Cursor, VS Code, Codex, Gemini, Windsurf, Docker) passes env to a stdio server; which filter it | install docs, config guidance |
 | prototype branches | `prototype/tls-trust-pool` (capture-and-unset proof, Linux ×3 + Windows 11) → `go-tls-facts.md` §7; `prototype/langfuse-io-window` (self-hosted 4.46.0 io/metadata window, limits, error shapes; self-hosted 3.80.0 operation availability) → `langfuse.md` §1.7–1.8 | #4/#13, #2/#15, M1 error mapping |
 | `raw/2026-09-26-*` | verbatim integration-test probe of io/metadata windows and row limits on Cloud and self-hosted 4.46.0 (answered: no REST enforcement), Cloud back-dating limit | `langfuse.md` §1.6, #2/#15 |
+| `raw/2026-09-27-small-model-eval-qwen3-8b.md` | the first recorded small-model discovery eval (local qwen3:8b, 7/11) and its reruns | ROADMAP M3, #88, follow-ups #97–#100 |
 | [2026-09-25-deep-research-run1.md](2026-09-25-deep-research-run1.md) | raw verified findings + all extracted claims of the first deep-research run | all of the above |
 
 ## Open questions

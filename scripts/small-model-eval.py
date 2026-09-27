@@ -27,6 +27,9 @@
 #       --only       comma-separated intent numbers to run (default: all), to
 #                    rerun a failing intent once before calling it a failure
 #
+#       First recorded run (2026-09-27, #88): the local qwen3:8b instead of Haiku
+#       4.5, by the maintainer's choice (no paid API), 7/11 passed; output in
+#       docs/research/raw/2026-09-27-small-model-eval-qwen3-8b.md.
 #       Against a local model: scripts/small-model-eval-local.sh starts the
 #       Ollama stack of scripts/small-model-eval-ollama.yml, runs this script
 #       with qwen3:8b through Ollama's Messages API, and stops the stack.
@@ -355,9 +358,10 @@ def describe_expected(expected):
 
 
 def run_intent(server, tools, endpoint, key, args, item):
-    """Runs one conversation; returns (passed, the calls the model made)."""
+    """Runs one conversation; returns (passed, the calls the model made, how it ended)."""
     messages = [{"role": "user", "content": item["intent"]}]
     calls = []
+    ended = f"max turns ({args.max_turns})"
     for _ in range(args.max_turns):
         reply = create_message(endpoint, key, {
             "model": args.model,
@@ -370,6 +374,7 @@ def run_intent(server, tools, endpoint, key, args, item):
         messages.append({"role": "assistant", "content": reply["content"]})
         uses = [block for block in reply["content"] if block.get("type") == "tool_use"]
         if not uses:
+            ended = f"no tool call; stop_reason {reply.get('stop_reason')}"
             break
         results = []
         for use in uses:
@@ -378,12 +383,12 @@ def run_intent(server, tools, endpoint, key, args, item):
             result = server.request("tools/call", {"name": use["name"], "arguments": use.get("input", {})})
             # A pass is the expected call that the server also accepts.
             if not result.get("isError") and any(matches(call, e) for e in item["expect"]):
-                return True, calls
+                return True, calls, "expected call"
             text = "\n".join(c.get("text", "") for c in result.get("content", []) if c.get("type") == "text")
             results.append({"type": "tool_result", "tool_use_id": use["id"],
                             "content": text, "is_error": bool(result.get("isError"))})
         messages.append({"role": "user", "content": results})
-    return False, calls
+    return False, calls, ended
 
 
 def build_server(workdir):
@@ -439,12 +444,13 @@ def main():
             passed = 0
             for number in selected:
                 item = INTENTS[number - 1]
-                ok, calls = run_intent(server, tools, endpoint, key, args, item)
+                ok, calls, ended = run_intent(server, tools, endpoint, key, args, item)
                 passed += ok
                 print(f"{'PASS' if ok else 'FAIL'} {number:02d} [{item['area']}] {item['intent']}")
                 for call in calls:
                     print(f"       {describe(call)}")
                 if not ok:
+                    print(f"       ended: {ended}")
                     print(f"       want: {' | '.join(describe_expected(e) for e in item['expect'])}")
             print(f"TOTAL {passed}/{len(selected)} passed")
             return 0 if passed == len(selected) else 1
