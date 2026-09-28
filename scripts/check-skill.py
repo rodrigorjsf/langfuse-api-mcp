@@ -11,7 +11,11 @@
 #       - the text holds a phrase of FORBIDDEN_PHRASES: follow or obey
 #         instructions found in data or a payload, enable or turn on write
 #         mode, LANGFUSE_MCP_ALLOW_WRITES, skip, bypass or avoid the
-#         confirmation, retry a refused or declined write.
+#         confirmation, retry a refused or declined write. The words are
+#         banned even when negated ("never skip the confirmation"): say what
+#         to do instead ("stop and tell the user").
+#       Only lowercase snake_case words are checked; a mixed-case operation
+#       ID (observations_getMany) is not.
 #       It prints one line per problem, or "OK <dir>", and exits 1 on any
 #       problem.
 # WHY:  the skill is text an agent follows. The server's write gate
@@ -27,6 +31,7 @@
 #       (Python 3.11+, standard library only; default: every directory under
 #       skills/)
 
+import functools
 import json
 import os
 import re
@@ -97,6 +102,7 @@ FORBIDDEN_PHRASES = [
 ]
 
 
+@functools.cache
 def catalog_operation_ids():
     """Return every operation ID of the embedded union catalog. Some are
     lowercase snake_case too (prompts_get), so they are not unknown names."""
@@ -115,7 +121,7 @@ def frontmatter(text):
     for line in m.group(1).splitlines():
         key, sep, value = line.partition(":")
         if sep and not line.startswith((" ", "\t")):
-            fields[key.strip()] = value.strip()
+            fields[key.strip()] = value.strip().strip('"\'')
     return fields
 
 
@@ -127,7 +133,7 @@ def cited_files(text):
         target = target.split("#", 1)[0]
         if target and not re.match(r"[a-z][a-z0-9+.-]*:", target, re.I):
             cited.append(target)
-    cited += re.findall(r"references/[\w.-]+\.md", text)
+    cited += re.findall(r"(?<![\w/.:-])references/[\w.-]+\.md", text)
     return list(dict.fromkeys(cited))
 
 
@@ -154,7 +160,7 @@ def check_skill(skill_dir):
     for rel, text in skill_texts(skill_dir):
         for word in dict.fromkeys(SNAKE_WORD.findall(text)):
             if word not in known:
-                problems.append(f"{rel}: '{word}' is not a tool name or error code the server has")
+                problems.append(f"{rel}: '{word}' is not a tool name, error code or catalog operation ID")
         folded = " ".join(text.split())
         for rule, pattern in FORBIDDEN_PHRASES:
             for m in pattern.finditer(folded):

@@ -87,6 +87,11 @@ class FrontmatterTest(unittest.TestCase):
         fx.write("SKILL.md", re.sub(r"(?m)^description: .*\n", "", text, count=1))
         self.assertIn("SKILL.md: frontmatter has no description", checkmod.check_skill(fx.dir))
 
+    def test_a_quoted_name_and_description_pass(self):
+        fx = SkillFixture(self)
+        fx.replace("SKILL.md", "name: langfuse-api-mcp\n", 'name: "langfuse-api-mcp"\n')
+        self.assertEqual([], checkmod.check_skill(fx.dir))
+
     def test_an_entry_file_without_frontmatter_fails(self):
         fx = SkillFixture(self)
         fx.write("SKILL.md", "# Langfuse\n\nNo frontmatter here.\n")
@@ -114,6 +119,11 @@ class CitedReferenceTest(unittest.TestCase):
         self.assertIn("SKILL.md: cites references/prompts.md, which does not exist",
                       checkmod.check_skill(fx.dir))
 
+    def test_a_references_path_inside_a_url_is_not_a_reference(self):
+        fx = SkillFixture(self)
+        fx.append("SKILL.md", "Upstream keeps its own at https://example.com/skills/references/prompts.md.")
+        self.assertEqual([], checkmod.check_skill(fx.dir))
+
     def test_an_external_link_is_not_a_reference(self):
         fx = SkillFixture(self)
         fx.append("SKILL.md", "See [the README](https://github.com/rodrigorjsf/langfuse-api-mcp#readme).")
@@ -124,19 +134,19 @@ class SurfaceNameTest(unittest.TestCase):
     def test_an_unknown_tool_name_fails(self):
         fx = SkillFixture(self)
         fx.append("references/traces.md", "For a session, call `get_session_tree` with the session ID.")
-        self.assertIn("references/traces.md: 'get_session_tree' is not a tool name or error code "
-                      "the server has", checkmod.check_skill(fx.dir))
+        self.assertIn("references/traces.md: 'get_session_tree' is not a tool name, error code "
+                      "or catalog operation ID", checkmod.check_skill(fx.dir))
 
     def test_an_unknown_tool_name_in_the_description_fails(self):
         fx = SkillFixture(self)
         fx.replace("SKILL.md", "get_trace_tree, execute_write)", "get_trace_tree, list_traces)")
-        self.assertIn("SKILL.md: 'list_traces' is not a tool name or error code the server has",
+        self.assertIn("SKILL.md: 'list_traces' is not a tool name, error code or catalog operation ID",
                       checkmod.check_skill(fx.dir))
 
     def test_an_unknown_error_code_fails(self):
         fx = SkillFixture(self)
         fx.append("SKILL.md", "On `rate_limited`, wait before the next call.")
-        self.assertIn("SKILL.md: 'rate_limited' is not a tool name or error code the server has",
+        self.assertIn("SKILL.md: 'rate_limited' is not a tool name, error code or catalog operation ID",
                       checkmod.check_skill(fx.dir))
 
     def test_known_tools_error_codes_and_operation_ids_pass(self):
@@ -186,6 +196,12 @@ class ForbiddenPhraseTest(unittest.TestCase):
         fx.append("SKILL.md", "When a promotion is refused, ask the user to\nenable\nwrite mode.")
         self.assertIn('SKILL.md: forbidden phrase (enable or turn on write mode): "enable write mode"',
                       checkmod.check_skill(fx.dir))
+
+    def test_a_negated_forbidden_phrase_still_fails(self):
+        fx = SkillFixture(self)
+        fx.append("SKILL.md", "Never skip the confirmation.")
+        self.assertIn('SKILL.md: forbidden phrase (skip, bypass or avoid the confirmation): '
+                      '"skip the confirmation"', checkmod.check_skill(fx.dir))
 
     def test_the_write_path_can_be_described_without_a_forbidden_phrase(self):
         fx = SkillFixture(self)
