@@ -38,6 +38,7 @@ const platforms = { linux: "linux", darwin: "darwin", windows: "win32" };
 const archs = { amd64: "x64", arm64: "arm64" };
 
 const { version } = JSON.parse(readFileSync(join(distDir, "metadata.json"), "utf8"));
+// artifacts.json holds paths relative to the directory GoReleaser ran in: the repository root.
 const binaries = JSON.parse(readFileSync(join(distDir, "artifacts.json"), "utf8"))
   .filter((a) => a.type === "Binary" && a.extra?.ID === buildID);
 if (binaries.length !== Object.keys(platforms).length * Object.keys(archs).length) {
@@ -47,6 +48,15 @@ if (binaries.length !== Object.keys(platforms).length * Object.keys(archs).lengt
 const stage = join(outDir, "stage");
 rmSync(stage, { recursive: true, force: true });
 mkdirSync(stage, { recursive: true });
+
+// The shim knows the supported platforms by itself (it must run with nothing else installed); its
+// list must be exactly the packages built here, or a platform would get a package the shim refuses,
+// or a shim looking for a package that does not exist.
+const shimSupported = JSON.parse(/const supported = (\[[^\]]*\]);/.exec(readFileSync(join(here, "bin", "langfuse-mcp.js"), "utf8"))[1]);
+const built = binaries.map((b) => `${platforms[b.goos]}-${archs[b.goarch]}`).sort();
+if (JSON.stringify(built) !== JSON.stringify([...shimSupported].sort())) {
+  throw new Error(`the shim supports ${shimSupported.join(", ")}, but the packages built are ${built.join(", ")}`);
+}
 
 const optionalDependencies = {};
 const packageDirs = [];

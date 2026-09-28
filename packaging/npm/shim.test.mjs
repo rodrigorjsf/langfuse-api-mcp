@@ -1,5 +1,5 @@
 // Tests of the npm shim (bin/langfuse-mcp.js, spec #119, ticket #123), run with `node --test
-// packaging/npm/` by the release workflow's smoke-npx job on Linux, macOS and Windows.
+// packaging/npm/shim.test.mjs` by the release workflow's smoke-npx job on Linux, macOS and Windows.
 //
 // Each test lays out an installed package the way npm does (node_modules/langfuse-api-mcp with the
 // shim, node_modules/langfuse-api-mcp-<platform>-<arch> with the binary) and runs the shim as a

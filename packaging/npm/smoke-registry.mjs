@@ -41,9 +41,14 @@ for (const file of readdirSync(dir).filter((f) => f.endsWith(".tgz"))) {
 }
 
 const server = createServer((req, res) => {
-  const path = decodeURIComponent(new URL(req.url, "http://registry").pathname).replace(/^\/+/, "");
-  const origin = `http://${req.headers.host}`;
   if (req.method !== "GET") return send(res, 405, { error: "method not allowed" });
+  let path;
+  try {
+    path = decodeURIComponent(new URL(req.url, "http://registry").pathname).replace(/^\/+/, "");
+  } catch {
+    return send(res, 400, { error: "bad request path" });
+  }
+  const origin = `http://${req.headers.host}`;
   const [pkgName, dash, tarballFile] = path.split("/");
   const tarball = packages.get(pkgName);
   if (dash === "-" && tarball?.file === tarballFile) {
