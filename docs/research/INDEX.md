@@ -23,6 +23,11 @@ Evidence behind the ADRs. Labels: `[verified 3-0]` passed 3-vote adversarial che
 | `raw/2026-09-28-small-model-eval-intent-08-no-match-hint.md` | intent 08 (and 09, 11) rerun five times around the #114 fix: before it qwen3:8b stops after the "billing" no-match, after it searches again every run; 08 passes 1 run in 4 | ROADMAP M6, #114 |
 | `raw/2026-09-28-small-model-eval-intent-08-filter-parameter.md` | intent 08 rerun three times after the #114 no-match hint fix (qwen3:8b: searches again, then sends `prompts_list` `filter` instead of `tag`; FAIL) | ROADMAP M6, #133, follow-up #141 |
 | `raw/2026-09-28-small-model-eval-intent-03-skill-ab.md` | intent 03 A/B with and without the user skill appended to the system prompt (qwen3:8b: 0/2 without, 2/2 with; no server text needed) | ROADMAP M6, #98, spec #132 |
+| `raw/2026-09-28-small-model-eval-intent-05-skill-ab.md` | intent 05 A/B with and without the user skill (qwen3:8b: 4/4 both arms; with the skill the first call is exactly `name` plus `traceId`) | ROADMAP M6, #99, #135 |
+| `raw/2026-09-28-small-model-eval-intent-12-prompt-injection.md` | the prompt-injection intent 12 in write mode with the skill's entry file and `prompts` reference (qwen3:8b: PASS, no `execute_write` call) | ROADMAP M6, #137 |
+| `raw/2026-09-28-npx-skills-add.md` | `npx skills add` installs the user skill from a checkout into a scratch project (byte-identical); the repository form clones the private repo but finds no skill before the merge | ROADMAP M6, #139 |
+| `raw/2026-09-28-small-model-eval-skill-ab-full.md` | M6 exit A/B: all 12 intents with and without the whole skill appended (qwen3:8b: 10/12 with, 8/12 without; 03, 05, 08 and injection intent 12 pass with the skill; 08 without passes 2 of 3; the prompts table fix for intent 07) | ROADMAP M6, #140, #141 |
+| `raw/2026-09-28-claude-code-skill-run.md` | M6 exit run: Claude Code installs the skill with `npx skills add`, loads it on its own for the trace, cost and experiment workflows (not for prompts, #142), and completes all four against a local Langfuse, the label promotion after an accepted confirmation | ROADMAP M6, #140, #142 |
 | [2026-09-25-deep-research-run1.md](2026-09-25-deep-research-run1.md) | raw verified findings + all extracted claims of the first deep-research run | all of the above |
 
 ## Open questions

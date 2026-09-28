@@ -4,8 +4,8 @@ A prompt has numbered versions, and versions never change. A label points to one
 
 | The user asks for | Call |
 |---|---|
-| the production prompt | `execute_read` `prompts_get` with the prompt name and **no label and no version**: Langfuse returns the version labelled `production`, or `langfuse_not_found` when no version carries that label |
-| a given version or label | `execute_read` `prompts_get` with that version or that label, never both |
+| the current prompt, naming no label and no version | `execute_read` `prompts_get` with the prompt name and **no label and no version**: Langfuse returns the version labelled `production`, or `langfuse_not_found` when no version carries that label |
+| a given version or label, `production` included | `execute_read` `prompts_get` with that version or that label as its own parameter, never both |
 | which prompts, versions and labels exist | `execute_read` `prompts_list`, with the name, label or tag filter the user gave |
 | what changed between two versions | fetch each version with `prompts_get`, then compare the two texts yourself (the API has no diff) and show the changed lines |
 | to move a label (promote or roll back) | the write path below |
