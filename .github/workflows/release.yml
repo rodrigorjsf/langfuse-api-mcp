@@ -34,6 +34,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Node runs the MCPB CLI (spec #119); Node 24.21.0 (LTS), the one pin for every job below.
+  NODE_VERSION: 24.21.0
+
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: true
@@ -129,10 +133,10 @@ jobs:
           path: image/
           if-no-files-found: error
           retention-days: 7
-      # Node runs the MCPB CLI (spec #119); GitHub's own setup action, pinned to Node 24.21.0 (LTS).
+      # Node runs the MCPB CLI (spec #119); GitHub's own setup action, Node pinned by NODE_VERSION above.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.21.0
+          node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
       # The MCPB CLI (@anthropic-ai/mcpb 2.1.2, Anthropic's reference packer and validator), installed
       # from its lockfile with integrity hashes and no install scripts.
@@ -141,7 +145,10 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Pack the MCPB bundle
         id: mcpb
-        run: echo "bundle=$(scripts/pack-mcpb.sh)" >> "$GITHUB_OUTPUT"
+        run: |
+          set -euo pipefail
+          bundle=$(scripts/pack-mcpb.sh) # a failed pack fails this step, not a later one
+          echo "bundle=$bundle" >> "$GITHUB_OUTPUT"
       # What the install dialog promises (spec #119): the version is the build's; exactly the four
       # user_config fields, the keys sensitive and required, the base URL required, the CA an
       # optional file; they reach the server only as the four LANGFUSE_* variables; no write-mode
@@ -339,7 +346,7 @@ jobs:
           cache-dependency-path: go.mod
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.21.0
+          node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
       - name: Install the MCPB CLI
         working-directory: packaging/mcpb

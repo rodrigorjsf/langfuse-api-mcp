@@ -13,12 +13,13 @@
 #       (the release workflow's snapshot job), or after a tagged release build.
 # HOW:  (cd packaging/mcpb && npm ci --ignore-scripts)   # once: the pinned CLI
 #       scripts/pack-mcpb.sh                              # from the repository root
-#       Needs jq and Node. DIST=<dir> reads another GoReleaser output directory.
+#       Needs jq and Node. GoReleaser must have run from the repository root
+#       (its dist/artifacts.json paths are relative to it).
 
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-dist=${DIST:-$root/dist}
+dist=$root/dist
 mcpb=$root/packaging/mcpb/node_modules/.bin/mcpb
 [[ -x $mcpb ]] || { echo "pack-mcpb: the pinned MCPB CLI is missing; run: (cd packaging/mcpb && npm ci --ignore-scripts)" >&2; exit 1; }
 

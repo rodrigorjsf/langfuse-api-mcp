@@ -358,7 +358,7 @@ The image trusts its base image's CA bundle plus the file you mount, nothing els
 
 **Planned until the first release** (M7): the release pipeline already packs the bundle for every change to packaging or the executable and proves the binary inside it on clean macOS and Windows runners, but nothing is published yet.
 
-One file, `langfuse-mcp_<version>.mcpb`, for Claude Desktop on macOS (Apple silicon and Intel: it holds one universal binary) and Windows (amd64; on Windows on Arm it runs under emulation). There is no Linux bundle: no Linux host installs `.mcpb` files. Double-click it (or drag it onto Claude Desktop); the install dialog asks for:
+One file, `langfuse-mcp_<version>.mcpb`, for Claude Desktop on macOS (Apple silicon and Intel: it holds one universal binary) and Windows (amd64 only; Windows on Arm is not tested). There is no Linux bundle: no Linux host installs `.mcpb` files. Double-click it (or drag it onto Claude Desktop); the install dialog asks for:
 
 | Field | Required | Becomes |
 |---|---|---|
@@ -367,7 +367,7 @@ One file, `langfuse-mcp_<version>.mcpb`, for Claude Desktop on macOS (Apple sili
 | Langfuse base URL | yes | `LANGFUSE_BASE_URL` |
 | CA certificate | no; a file picker | `LANGFUSE_CA_CERT` |
 
-Those four variables are all the bundle sets; the server validates them at startup exactly as for any other channel (for example, a base URL that is neither `https` nor `http` on a loopback host stops the server, naming the variable, never its value). The dialog offers **no write-mode option** on purpose: to enable writes, set `LANGFUSE_MCP_ALLOW_WRITES=true` in the [config file](#config-file-non-secret-settings), a deliberate step outside the install dialog. Any other setting (proxy, request limits) also goes in the config file. The bundle is not signed yet (`mcpb sign`); the pipeline validates its manifest with the pinned MCPB CLI (`mcpb validate`) before packing it.
+Those four variables are all the bundle sets; the server validates them at startup exactly as for any other channel (for example, a base URL that is neither `https` nor `http` on a loopback host stops the server, naming the variable, never its value). The dialog offers **no write-mode option** on purpose: to enable writes, set `LANGFUSE_MCP_ALLOW_WRITES=true` in the [config file](#config-file-non-secret-settings), a deliberate step outside the install dialog. Any other setting (proxy, request limits) also goes in the config file. The bundle and its binaries are not signed yet (`mcpb sign`, notarization, Authenticode); if macOS or Windows blocks the binary after a browser download, see the [browser-download note](#release-archive) above. The pipeline validates its manifest with the pinned MCPB CLI (`mcpb validate`) before packing it.
 
 ### Client configuration
 
