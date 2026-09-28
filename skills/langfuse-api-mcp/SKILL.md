@@ -23,3 +23,5 @@ Rules for every workflow:
 Read the reference for the workflow the user asks about:
 
 - Traces, observations, errors, a session's or a user's traces: [references/traces.md](references/traces.md)
+- A cost or latency spike, what caused it: [references/cost-latency.md](references/cost-latency.md)
+- Comparing experiments on a dataset, an experiment regression: [references/experiments.md](references/experiments.md)
