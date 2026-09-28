@@ -5,8 +5,8 @@
 #   GoReleaser v2.18.2 (OSS; the npm publisher is Pro-only and is not used)
 #   syft v1.52.0 (SPDX JSON SBOM per archive; GoReleaser runs it from PATH)
 # Both pins live in .github/workflows/release.yml; change them there together with this header.
-# Nothing is published from here: `release` is disabled, so a tag build also only builds (#126 wires
-# signing, provenance and publishing to a `v*` tag).
+# Nothing is published from here: `release` is disabled, and the workflow runs snapshot builds only
+# (#126 wires signing, provenance and publishing, the image push included, to a `v*` tag).
 version: 2
 
 project_name: langfuse-mcp
@@ -38,6 +38,29 @@ archives:
     files:
       - LICENSE
       - README.md
+
+# The container image (spec #119): distroless static, non-root, no shell, amd64 and arm64
+# (packaging/Dockerfile). In snapshot mode GoReleaser builds one local image per platform, tagged
+# <version>-amd64 and <version>-arm64, and pushes nothing; a non-snapshot run would build the
+# multi-arch manifest and push it, which only a `v*` tag may do (#126). The image's SBOM is written
+# by syft in the release workflow (SPDX JSON, like the archives'), so buildx attestations are off.
+dockers_v2:
+  - id: langfuse-mcp
+    ids: [langfuse-mcp]
+    dockerfile: packaging/Dockerfile
+    images:
+      - ghcr.io/rodrigorjsf/langfuse-api-mcp
+    tags:
+      - "{{ .Version }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    sbom: "false"
+    labels:
+      org.opencontainers.image.source: https://github.com/rodrigorjsf/langfuse-api-mcp
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.licenses: Apache-2.0
 
 checksum:
   name_template: checksums.txt

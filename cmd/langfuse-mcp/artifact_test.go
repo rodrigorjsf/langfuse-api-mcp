@@ -77,7 +77,7 @@ func buildExecutable(t *testing.T, version string) []string {
 func TestExecutableReportsTheVersionInjectedAtBuildTime(t *testing.T) {
 	t.Parallel()
 	const injected = "1.4.2-SNAPSHOT-0a1b2c3"
-	checkInstalledArtifact(t, buildExecutable(t, injected), injected)
+	checkInstalledArtifact(t, buildExecutable(t, injected), injected, "")
 }
 
 // untrustedLabel is the label of the untrusted-data envelope (security.md
@@ -93,8 +93,10 @@ const (
 )
 
 // checkInstalledArtifact runs the seam S2 assertions against the executable
-// launched by argv, which must report wantVersion.
-func checkInstalledArtifact(t *testing.T, argv []string, wantVersion string) {
+// launched by argv, which must report wantVersion. caDir is the directory the
+// private CA file is written to, readable at the same path by the executable
+// (the container adapter mounts it read-only); empty means a test temp dir.
+func checkInstalledArtifact(t *testing.T, argv []string, wantVersion, caDir string) {
 	t.Helper()
 	t.Run("initialize reports the build version", func(t *testing.T) {
 		t.Parallel()
@@ -106,7 +108,11 @@ func checkInstalledArtifact(t *testing.T, argv []string, wantVersion string) {
 	})
 	t.Run("execute_read returns a private-CA Langfuse payload stripped inside the envelope", func(t *testing.T) {
 		t.Parallel()
-		checkReadsThroughAPrivateCA(t, argv)
+		checkReadsThroughAPrivateCA(t, argv, caDir)
+	})
+	t.Run("execute_read without the CA file is refused as tls_untrusted_certificate", func(t *testing.T) {
+		t.Parallel()
+		checkRefusesAnUntrustedCertificate(t, argv)
 	})
 	t.Run("an invalid base URL stops startup naming the variable, never the value", func(t *testing.T) {
 		t.Parallel()
@@ -144,33 +150,12 @@ func checkListsTheReadToolSet(t *testing.T, argv []string) {
 // checkReadsThroughAPrivateCA proves one execute_read against a TLS Langfuse
 // whose certificate only the CA file named by LANGFUSE_CA_CERT trusts, and
 // that the hostile payload comes back stripped inside the envelope.
-func checkReadsThroughAPrivateCA(t *testing.T, argv []string) {
+func checkReadsThroughAPrivateCA(t *testing.T, argv []string, caDir string) {
 	t.Helper()
-	payload, err := json.Marshal(map[string]string{"id": "trace-1", "name": hostileTraceName})
-	if err != nil {
-		t.Fatalf("encode payload: %v", err)
-	}
-	fake := httptest.NewUnstartedServer(deploymentHandler(`{"status":"OK","version":"4.46.0"}`, nil,
-		func(w http.ResponseWriter, _ *http.Request) {
-			_, _ = w.Write(payload) // a failed write fails the call below
-		}))
-	fake.Config.ErrorLog = log.New(io.Discard, "", 0) // handshakes the executable abandons are noise
-	fake.StartTLS()
-	t.Cleanup(fake.Close)
-	// httptest's certificate is its own self-signed CA: a private CA no OS store holds.
-	caFile := filepath.Join(t.TempDir(), "private-ca.pem")
-	if err := os.WriteFile(caFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: fake.Certificate().Raw}), 0o600); err != nil {
-		t.Fatalf("write CA file: %v", err)
-	}
+	fake := privateCALangfuse(t)
+	caFile := writePrivateCAFile(t, caDir, fake)
 
-	s := startCommand(t, argv, "", "LANGFUSE_BASE_URL="+fake.URL, "LANGFUSE_CA_CERT="+caFile)
-	s.initialize()
-	raw := s.send("tools/call", map[string]any{
-		"name": "execute_read", "arguments": map[string]any{
-			"operationId": "trace_get", "parameters": map[string]any{"traceId": "trace-1"},
-		},
-	}, true)
-	s.stop()
+	raw := callTraceGet(t, argv, "LANGFUSE_BASE_URL="+fake.URL, "LANGFUSE_CA_CERT="+caFile)
 
 	var call struct {
 		IsError           bool `json:"isError"`
@@ -198,6 +183,100 @@ func checkReadsThroughAPrivateCA(t *testing.T, argv []string) {
 			t.Errorf("text content carries a hidden or bidi character: %+q", c.Text)
 		}
 	}
+}
+
+// checkRefusesAnUntrustedCertificate proves the executable trusts nothing of
+// its own beyond the OS store: without the CA file, the same private-CA
+// Langfuse is refused as tls_untrusted_certificate.
+func checkRefusesAnUntrustedCertificate(t *testing.T, argv []string) {
+	t.Helper()
+	fake := privateCALangfuse(t)
+
+	raw := callTraceGet(t, argv, "LANGFUSE_BASE_URL="+fake.URL)
+
+	var call struct {
+		IsError bool `json:"isError"`
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(raw, &call); err != nil {
+		t.Fatalf("decode tools/call: %v", err)
+	}
+	if !call.IsError || len(call.Content) == 0 {
+		t.Fatalf("tools/call result = %s, want a tool error", raw)
+	}
+	var body struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(call.Content[0].Text), &body); err != nil {
+		t.Fatalf("decode tool error %q: %v", call.Content[0].Text, err)
+	}
+	if body.Error.Code != "tls_untrusted_certificate" {
+		t.Errorf("error code = %q, want tls_untrusted_certificate; result %s", body.Error.Code, raw)
+	}
+}
+
+// privateCALangfuse is a TLS fake Langfuse answering trace_get with the
+// hostile trace. httptest's certificate is its own self-signed CA: a private
+// CA no OS store holds.
+func privateCALangfuse(t *testing.T) *httptest.Server {
+	t.Helper()
+	payload, err := json.Marshal(map[string]string{"id": "trace-1", "name": hostileTraceName})
+	if err != nil {
+		t.Fatalf("encode payload: %v", err)
+	}
+	fake := httptest.NewUnstartedServer(deploymentHandler(`{"status":"OK","version":"4.46.0"}`, nil,
+		func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write(payload) // a failed write fails the call
+		}))
+	fake.Config.ErrorLog = log.New(io.Discard, "", 0) // handshakes the executable abandons are noise
+	fake.StartTLS()
+	t.Cleanup(fake.Close)
+	return fake
+}
+
+// writePrivateCAFile writes the fake's CA certificate as PEM into dir (a test
+// temp dir when empty) and returns its path. The file is world-readable like
+// any CA certificate a user mounts, so the image's non-root user can read it.
+func writePrivateCAFile(t *testing.T, dir string, fake *httptest.Server) string {
+	t.Helper()
+	if dir == "" {
+		dir = t.TempDir()
+	}
+	f, err := os.CreateTemp(dir, "private-ca-*.pem")
+	if err != nil {
+		t.Fatalf("create CA file: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(f.Name()) }) //nolint:gosec // G703: a file this test created in a directory it was given
+	_, err = f.Write(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: fake.Certificate().Raw}))
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		t.Fatalf("write CA file: %v", err)
+	}
+	if err := os.Chmod(f.Name(), 0o644); err != nil { //nolint:gosec // G302: a CA certificate is public; the container's non-root user must read it
+		t.Fatalf("make CA file readable: %v", err)
+	}
+	return f.Name()
+}
+
+// callTraceGet starts the executable with env, makes one execute_read of
+// trace_get and returns the tools/call result.
+func callTraceGet(t *testing.T, argv []string, env ...string) json.RawMessage {
+	t.Helper()
+	s := startCommand(t, argv, "", env...)
+	s.initialize()
+	raw := s.send("tools/call", map[string]any{
+		"name": "execute_read", "arguments": map[string]any{
+			"operationId": "trace_get", "parameters": map[string]any{"traceId": "trace-1"},
+		},
+	}, true)
+	s.stop()
+	return raw
 }
 
 // checkRefusesAnInvalidBaseURL proves an invalid base URL stops startup with
