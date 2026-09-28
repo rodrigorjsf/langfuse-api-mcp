@@ -13,3 +13,6 @@ docs/architecture/*.visual-check.*
 
 # Python bytecode (scripts/*.py)
 __pycache__/
+
+# npm tooling installed by `npm ci` (packaging/mcpb: the pinned MCPB CLI)
+node_modules/

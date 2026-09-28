@@ -80,7 +80,7 @@ jobs:
       # goroutine stack on AMX Intel runners of the windows-latest pool, so the test binary dies
       # with a runtime fatal error for any commit. Retry once, and only when the log carries that
       # crash signature; a real test failure still fails the first attempt. Remove with #102, together with
-      # its copies in release.yml (smoke-archive and smoke-npx jobs).
+      # its copies in release.yml (smoke-archive, smoke-npx and smoke-mcpb jobs).
       - name: Test (race detector)
         shell: bash
         run: |

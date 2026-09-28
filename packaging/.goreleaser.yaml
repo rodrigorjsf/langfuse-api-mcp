@@ -27,6 +27,18 @@ builds:
     # Reproducible builds: the file times come from the commit, not the build machine.
     mod_timestamp: "{{ .CommitTimestamp }}"
 
+# The universal macOS binary (amd64+arm64) exists for the MCPB bundle only (spec #119): one
+# bundle serves both Mac architectures because its platform_overrides are keyed by OS. The
+# per-architecture darwin binaries stay (`replace: false`) and keep feeding the archives and the
+# image; nothing below selects this id, so it is neither archived nor checksummed.
+# scripts/pack-mcpb.sh finds it in dist/artifacts.json by this id.
+universal_binaries:
+  - id: langfuse-mcp-macos-universal
+    ids: [langfuse-mcp]
+    name_template: langfuse-mcp
+    replace: false
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
 archives:
   - id: langfuse-mcp
     ids: [langfuse-mcp]

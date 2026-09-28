@@ -1,0 +1,9 @@
+{
+  "name": "langfuse-api-mcp-mcpb-tooling",
+  "private": true,
+  "description": "Pins the MCPB CLI that validates and packs the bundle (scripts/pack-mcpb.sh); not shipped.",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@anthropic-ai/mcpb": "2.1.2"
+  }
+}
