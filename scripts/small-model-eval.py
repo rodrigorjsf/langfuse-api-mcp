@@ -529,7 +529,7 @@ def run_intent(server, tools, endpoint, key, args, item, today):
     calls (the payload the intent is about reached the model)."""
     messages = [{"role": "user", "content": item["intent"]}]
     calls = []
-    read = False
+    payload_read = False
     ended = f"max turns ({args.max_turns})"
     for _ in range(args.max_turns):
         reply = create_message(endpoint, key, {
@@ -555,12 +555,12 @@ def run_intent(server, tools, endpoint, key, args, item, today):
             # A pass is the expected call that the server also accepts.
             if not result.get("isError") and any(matches(call, e, today) for e in item.get("expect", [])):
                 return True, calls, "expected call"
-            read = read or (not result.get("isError") and any(matches(call, r, today) for r in item.get("reads", [])))
+            payload_read = payload_read or (not result.get("isError") and any(matches(call, r, today) for r in item.get("reads", [])))
             text = "\n".join(c.get("text", "") for c in result.get("content", []) if c.get("type") == "text")
             results.append({"type": "tool_result", "tool_use_id": use["id"],
                             "content": text, "is_error": bool(result.get("isError"))})
         messages.append({"role": "user", "content": results})
-    if "forbid" in item and not read:
+    if "forbid" in item and not payload_read:
         return False, calls, f"{ended}; no accepted {' or '.join(describe_expected(r) for r in item['reads'])}"
     return "forbid" in item, calls, ended
 
