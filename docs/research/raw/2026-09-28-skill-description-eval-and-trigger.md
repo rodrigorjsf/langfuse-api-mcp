@@ -10,6 +10,7 @@ This is the evidence for #148. The description #142 set ("Load before any langfu
 ## Descriptions tried
 
 - **A** (pre-#142, 194 characters, calibration only): `Investigate Langfuse traces, sessions, scores, prompts, datasets and metrics with the langfuse-api-mcp tools (search_operations, describe_operation, execute_read, get_trace_tree, execute_write).`
+- **D** (#142, 195 characters, the description before this ticket; measured in the #142 and #147 records, not re-run here): `Load before any langfuse-api-mcp tool call (search_operations, describe_operation, execute_read, get_trace_tree, execute_write) on Langfuse traces, sessions, scores, cost, experiments or prompts.`
 - **E** (194): `Read before calling langfuse-api-mcp tools (search_operations, describe_operation, execute_read, get_trace_tree, execute_write) to investigate Langfuse traces, sessions, scores, cost or prompts.`
 - **F** (199): `Investigate Langfuse traces, sessions, scores, cost, experiments, prompts with langfuse-api-mcp tools (search_operations, describe_operation, execute_read, get_trace_tree, execute_write). Load first.`
 - **H** (196): `Load before any langfuse-api-mcp tool call (search_operations, describe_operation, execute_read, get_trace_tree, execute_write) on Langfuse traces, sessions, scores, prompts, datasets and metrics.`
@@ -22,6 +23,7 @@ This is the evidence for #148. The description #142 set ("Load before any langfu
 | Description | Screen 10, 12 | Screen 10, 11, 12 | Claude Code: prompt read | prompt promote | trace | cost | experiments | Full runs |
 |---|---|---|---|---|---|---|---|---|
 | A (pre-#142) | PASS, PASS | — | (#142: 0 of 1) | (#142: 0 of 1) | — | — | — | (#147: 12/13 once) |
+| D (#142) | (#147: FAIL, FAIL) | — | (#142: 3 of 3) | (#142: 2 of 2) | (#142: 1 of 1) | (#142: 1 of 1) | (#142: 1 of 1) | (#147: 11/13 three times, 10 and 12 fail) |
 | E | FAIL, FAIL | — | not run | not run | — | — | — | not run |
 | F | FAIL, PASS | — | not run | not run | — | — | — | not run |
 | H | PASS, FAIL | — | not run | not run | — | — | — | not run |
@@ -37,6 +39,8 @@ With J, every full run passes 01, 03, 04, 05, 06, 07, 08, 09, 10, 12 and 13, and
 - **Opening with "Load before" or "Read before" fails intent 12.** D, E and H open with the timing clause and end intent 12 with no tool call. Opening with "Investigate ..." (A, F, I, J) passes it. *[hypothesis: an opening clause about loading reads to qwen3:8b as a precondition it cannot meet, so it stops.]*
 - **The trigger survives at the end of the description, but only as a tie to the call.** I's closing "Load first." loaded the skill for 2 of 2 prompt reads and 1 of 2 promotes; in `I-promote-1` the model went straight to `search_operations`. J's "Load before any call." loaded it in every run, as D did. The #142 finding holds: what moves Claude Code is tying the skill to the moment before a call.
 - **Intent 11 fails with J.** Intent 11 (Metrics v2 cost per day) passed with A in #147 and with D in every #147 full run; it fails in 3 of 3 J full runs and in J's subset screen, each time ending with no tool call. I fails it the same way; K reaches `metrics_metrics` but sends malformed queries until the 8-turn cap. So neither the closing clause nor the dropped "sessions" explains it alone. Intent 11 is not in #148's acceptance criteria, and the #143 record already saw one-word skill edits move it; follow-up #149.
+- **What J drops.** Against D, J no longer names sessions, cost or experiments; it keeps all five tool names (spec #132 user story 30), and Claude Code still loaded the skill for the trace (session), cost and experiment requests.
+- **Intent 11 is a new failure, not a settled baseline.** Accepting it is a maintainer decision (#149); this record states the measurement only.
 - **The skill arm still passes more intents than the arm without it** (8/12 twice without in the #140 record), and intents 03, 05, 07, 08, 09, 10, 12 and 13 pass in 3 of 3 full runs.
 
 ## What this does not prove
