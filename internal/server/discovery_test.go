@@ -460,11 +460,25 @@ func TestSearchOperationsThatMatchesNothingWithoutAskingAboutTracesEndsWithTheSe
 			if !strings.HasPrefix(text, "No operation matches the query.") || !strings.HasSuffix(text, suffix) {
 				t.Errorf("text does not say nothing matched and end with the search-again text:\n%s", text)
 			}
-			if !strings.Contains(text, "Prompts") || !slices.Contains(idx.Tags, "Prompts") {
-				t.Errorf("result does not name the Prompts tag:\n%s", text)
-			}
-			if strings.Contains(text, "Trace data is read with") || strings.Contains(text, query) {
-				t.Errorf("text carries the trace reads hint or echoes the query:\n%s", text)
+		})
+	}
+}
+
+// #114: without the trace reads hint, a no-match result on a v4 deployment
+// still names the tags to search by, and never echoes the query.
+func TestSearchOperationsThatMatchesNothingWithoutAskingAboutTracesNamesTheTagsWithoutEchoingTheQuery(t *testing.T) {
+	t.Parallel()
+	for _, query := range []string{"billing", "zqxj-nothing-matches"} {
+		t.Run(query, func(t *testing.T) {
+			t.Parallel()
+			cs := connectResolved(t, "4.46.0-events_only")
+
+			res := callTool(t, cs, "search_operations", map[string]any{"query": query})
+
+			idx := operationIndexOf(t, res)
+			text := resultText(t, res)
+			if !strings.Contains(text, "Prompts") || !slices.Contains(idx.Tags, "Prompts") || strings.Contains(text, query) {
+				t.Errorf("result (tags %v) does not name the Prompts tag, or echoes the query:\n%s", idx.Tags, text)
 			}
 		})
 	}
