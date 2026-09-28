@@ -3,23 +3,31 @@
 # runner's system trust store (spec #7).
 # The generator job runs the union catalog generator's offline unit tests (#89).
 # Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current.
+# The generator job also runs the user skill check (#134, spec #132 S3).
 # A push or pull request that only changes docs (Markdown, docs/, .claude/, LICENSE) starts no run:
 # nothing in those paths is compiled or embedded (the only go:embed is internal/catalog/spec/*.json).
+# The user skill's Markdown under skills/ is the exception: the skill check guards it, so an edit
+# there starts a run. `paths` is used instead of `paths-ignore` because only `paths` can re-include
+# a path (the last matching pattern wins).
 name: CI
 
 on:
   push:
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-      - ".claude/**"
-      - "LICENSE"
+    paths:
+      - "**"
+      - "!**/*.md"
+      - "!docs/**"
+      - "!.claude/**"
+      - "!LICENSE"
+      - "skills/**"
   pull_request:
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-      - ".claude/**"
-      - "LICENSE"
+    paths:
+      - "**"
+      - "!**/*.md"
+      - "!docs/**"
+      - "!.claude/**"
+      - "!LICENSE"
+      - "skills/**"
 
 permissions:
   contents: read
@@ -128,6 +136,17 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/test_small_model_eval.py
+      # The user skill check (spec #132 S3, #134): frontmatter, cited references, tool names and
+      # error codes the server has (lists kept in step with internal/server, proven by the tests),
+      # and the forbidden phrases that would weaken the write gate. Standard library only.
+      - name: Test the user skill check
+        run: |
+          set -euo pipefail
+          python3 scripts/test_check_skill.py
+      - name: Check the user skill
+        run: |
+          set -euo pipefail
+          python3 scripts/check-skill.py
       # The eval's Ollama stack takes OLLAMA_KV_CACHE_TYPE from the caller's environment; a typo in
       # the compose file or its interpolation fails here, not at the next hand-run eval. Parse only:
       # nothing is pulled or started (the stack needs an NVIDIA GPU that runners lack).
