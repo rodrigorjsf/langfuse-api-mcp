@@ -440,6 +440,7 @@ func TestSearchOperationsAboutTracesOnAV4DeploymentNamesTheTraceReads(t *testing
 // instead of reading the trace-only hint as "nothing here for you".
 func TestSearchOperationsThatMatchesNothingWithoutAskingAboutTracesEndsWithTheSearchAgainText(t *testing.T) {
 	t.Parallel()
+	// "billing" is eval intent 08's first query (#114); it names no tag, operation or line.
 	for _, query := range []string{"billing", "zqxj-nothing-matches"} {
 		t.Run(query, func(t *testing.T) {
 			t.Parallel()
@@ -466,6 +467,25 @@ func TestSearchOperationsThatMatchesNothingWithoutAskingAboutTracesEndsWithTheSe
 				t.Errorf("text carries the trace reads hint or echoes the query:\n%s", text)
 			}
 		})
+	}
+}
+
+// #100, #114: a query that asks about traces and matches operations keeps the
+// hint beside the index.
+func TestSearchOperationsThatMatchesAndAsksAboutTracesReturnsTheTraceReadsHint(t *testing.T) {
+	t.Parallel()
+	cs := connectResolved(t, "4.46.0-events_only")
+
+	res := callTool(t, cs, "search_operations", map[string]any{"query": "trace"})
+
+	if operationIndexOf(t, res).Count == 0 {
+		t.Fatal("query matches nothing on this profile, want operations")
+	}
+	if got := hintOf(t, res); got != traceReadsHint {
+		t.Fatalf("hint = %q, want %q", got, traceReadsHint)
+	}
+	if text := resultText(t, res); !strings.HasSuffix(text, "\n\n"+traceReadsHint) {
+		t.Errorf("text does not end with the hint:\n%s", text)
 	}
 }
 

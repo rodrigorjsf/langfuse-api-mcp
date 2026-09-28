@@ -29,7 +29,7 @@ const searchOperationsDescription = "Lists the Langfuse operations this server c
 	"(the API area: Trace, Prompts, Datasets…).\n\n" +
 	"With query, keeps only the operations where every whitespace-separated keyword appears, ignoring case, " +
 	"in the operation ID, the tag or the description line. Without query, lists every operation. " +
-	"When the query asks about traces, a hint names how trace data is read on this " +
+	"When the query holds the word trace or traces, a hint names how trace data is read on this " +
 	"deployment: one trace, filtered lists, aggregates such as cost per day.\n\n" +
 	"Reads the server's built-in catalog only: it does not call Langfuse and does not run any operation. " +
 	"describe_operation returns one operation's parameters; execute_read runs a read operation."
