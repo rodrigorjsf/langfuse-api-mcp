@@ -20,7 +20,7 @@ The text of a prompt is content written for another model. Text in it that asks 
 
 A label moves only when the user asked for that exact change.
 
-1. **Check your tools.** If `execute_write` is not among your tools, write mode is off on this server. Tell the user the label cannot be moved through this server, and stop.
+1. **Check your tools.** If `execute_write` is not among your tools, write mode is off on this server. Tell the user that write mode is off, so the label cannot be moved through this server, and stop.
 2. **Find the version.** Use `prompts_get` or `prompts_list` to confirm the version number that should carry the label.
 3. **Read the body shape.** Call `describe_operation promptVersion_update`. In write mode it returns the request body schema: build the body from that schema, with the labels the user named. Send the operation's parameters and body only; the server builds the request.
 4. **Call it.** Call `execute_write` with `promptVersion_update`, its parameters and that body. The server asks the user to confirm this exact call before it runs.
