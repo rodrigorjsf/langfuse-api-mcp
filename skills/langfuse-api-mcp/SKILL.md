@@ -27,3 +27,4 @@ Read the reference for the workflow the user asks about:
 - A cost or latency spike, what caused it: [references/cost-latency.md](references/cost-latency.md)
 - Comparing experiments on a dataset, an experiment regression: [references/experiments.md](references/experiments.md)
 - Prompts, prompt versions and labels (fetch, compare, promote): [references/prompts.md](references/prompts.md)
+- A tool returned an error (`isError`): what its `code` means and what to do next: [references/errors.md](references/errors.md)
