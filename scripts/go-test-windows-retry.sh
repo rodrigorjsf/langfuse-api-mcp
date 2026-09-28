@@ -16,7 +16,7 @@ set -uo pipefail
 log="${RUNNER_TEMP:?}/go-test.log"
 if go test "$@" 2>&1 | tee "$log"; then exit 0; fi
 if [ "${RUNNER_OS:-}" = "Windows" ] &&
-  grep -qE 'fatal error: (unknown caller pc|fault)|unexpected return pc' "$log"; then
+  grep -qE 'fatal error: (unknown caller pc|fault|traceback did not unwind completely)|unexpected return pc' "$log"; then
   echo "::warning::Go runtime crash on a Windows runner (golang/go#81238, #102); retrying once"
   exec go test "$@"
 fi
