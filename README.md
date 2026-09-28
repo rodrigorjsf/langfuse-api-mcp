@@ -265,7 +265,7 @@ Off by default, and then `execute_write` does not exist: the agent cannot even t
 | You were given a folder of certificates | `LANGFUSE_CA_CERTS_PATH=/path/to/certs/` |
 | `NODE_EXTRA_CA_CERTS` or `REQUESTS_CA_BUNDLE` is already set on your machine for other tools | Nothing. They are picked up automatically. |
 | You are behind an HTTP proxy | Set `HTTPS_PROXY` (and `NO_PROXY` for internal hosts) in the environment or the config file; see [Proxy](#certificates-and-proxy) |
-| Docker | Mount the file and point the variable at it (see below). The image is **Planned** (M5); the mounted-CA proof is tracked in [#28](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/28) |
+| Docker | Mount the file read-only and point the variable at it: `-v /path/to/corp.pem:/certs/corp.pem:ro -e LANGFUSE_CA_CERT=/certs/corp.pem` (see [Docker](#docker)). The image trusts its base image's CA bundle plus that file, nothing else |
 
 Get your company's root CA in PEM format:
 
@@ -275,54 +275,306 @@ Get your company's root CA in PEM format:
 | macOS | Keychain Access → System Roots / System → select the certificate → File → Export → `.pem` |
 | Linux | usually `/usr/local/share/ca-certificates/` or `/etc/pki/ca-trust/source/anchors/` |
 
-## Install and run **(Planned)**
+## Install and run
 
-| Channel | Command |
+Every build reports the version it was built with: `initialize` returns it as the server version, and the startup log line `server started` names it. A build without an injected version (`go build`, `go install`) reports `0.0.0-dev`.
+
+| Channel | Status |
 |---|---|
-| Release binary (Linux / macOS / Windows, amd64 / arm64) | download from GitHub Releases, then verify the signature (see [Verify what you run](#verify-what-you-run)) |
-| Docker | `docker run -i --rm -e LANGFUSE_PUBLIC_KEY -e LANGFUSE_SECRET_KEY -e LANGFUSE_BASE_URL -e LANGFUSE_CA_CERT=/certs/corp.pem -v /path/to/corp.pem:/certs/corp.pem:ro ghcr.io/rodrigorjsf/langfuse-api-mcp` |
-| Claude Desktop | `.mcpb` bundle (double-click install) |
+| [Release archive](#release-archive) (Linux, macOS, Windows × amd64, arm64) | built and smoke-tested on every change to packaging or the executable; **publishing Planned**: the first release is cut in M7, after the repository goes public |
+| [`go install`](#go-install) | **Planned**: works once the repository is public (M7); `@<version>` once a release tag exists |
+| [Docker](#docker) (linux/amd64, linux/arm64; stdio only) | built and smoke-tested on every change to packaging or the executable; **publishing Planned**: the image is pushed to GHCR with the first release (M7) |
+| [Claude Desktop (MCPB)](#claude-desktop-mcpb) (macOS, Windows) | built and smoke-tested on every change to packaging or the executable; **publishing Planned**: the bundle is attached to the first release (M7) |
+| [npx](#npx) (Linux, macOS, Windows × x64, arm64) | built on every change to packaging or the executable, and smoke-tested on Linux x64, macOS arm64 and Windows x64 (the other three platform packages are built, not CI-tested); **publishing Planned**: `npm publish` runs with the first release (M7) |
 
-### Client configuration
+### Release archive
 
-Generic `mcpServers` JSON (Claude Desktop, Cursor and others; the exact file location depends on the client):
+**Planned until the first release** (M7): the release pipeline already builds these archives for every change to packaging or the executable and proves each one on a clean runner, but nothing is published yet.
+
+One archive per target: `langfuse-mcp_<version>_<os>_<arch>.tar.gz` (`.zip` on Windows), with `os` one of `linux`, `darwin`, `windows` and `arch` one of `amd64`, `arm64`. Each holds the `langfuse-mcp` binary (`langfuse-mcp.exe` on Windows), `LICENSE` and this README. Next to them: `checksums.txt` (SHA-256 of every file) and one SPDX JSON SBOM per archive (`<archive>.sbom.json`). `windows/arm64` is **built, not CI-tested**: no runner proves it; on Windows on Arm you can also run the `windows/amd64` build under emulation.
+
+Download with `gh` or `curl`, check the archive against `checksums.txt`, then extract it (Linux on amd64 shown; `<version>` is the release without the leading `v`):
+
+```bash
+version=<version>
+archive="langfuse-mcp_${version}_linux_amd64.tar.gz"
+gh release download "v$version" -R rodrigorjsf/langfuse-api-mcp -p "$archive" -p checksums.txt
+# or: curl -fsSLO "https://github.com/rodrigorjsf/langfuse-api-mcp/releases/download/v$version/$archive"
+#     curl -fsSLO "https://github.com/rodrigorjsf/langfuse-api-mcp/releases/download/v$version/checksums.txt"
+awk -v f="$archive" '$2 == f' checksums.txt | sha256sum -c -   # macOS: … | shasum -a 256 -c -
+tar -xzf "$archive"
+```
+
+On Windows (PowerShell), compare the hash and extract the zip:
+
+```powershell
+$archive = "langfuse-mcp_<version>_windows_amd64.zip"
+(Get-FileHash $archive -Algorithm SHA256).Hash.ToLower()   # must equal the line for $archive in checksums.txt
+Expand-Archive $archive -DestinationPath langfuse-mcp
+```
+
+Then point your MCP client at the extracted binary (see [Client configuration](#client-configuration)).
+
+**Downloaded in a browser?** The binaries are not notarized by Apple nor Authenticode-signed, so macOS Gatekeeper blocks a binary downloaded in a browser ("cannot be opened because the developer cannot be verified") and Windows SmartScreen may warn about it. Download with `curl` or `gh` as above (neither marks the file as downloaded from the internet), or use another channel. If you already downloaded it in a browser, check the checksum first, then on macOS remove the mark with `xattr -d com.apple.quarantine langfuse-mcp`, or on Windows choose "More info" → "Run anyway" (or `Unblock-File langfuse-mcp.exe`).
+
+### go install
+
+**Planned until the repository is public** (M7). With Go 1.21 or later (the module's `toolchain` directive fetches the Go 1.27 toolchain it needs):
+
+```bash
+go install github.com/rodrigorjsf/langfuse-api-mcp/cmd/langfuse-mcp@<version>
+```
+
+The binary lands in `$(go env GOPATH)/bin`. A `go install` build carries no injected version, so it reports `0.0.0-dev`; use a release archive when you need the version in bug reports (see [#127](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/127)).
+
+### Docker
+
+**Planned until the first release** (M7): the release pipeline already builds the image for every change to packaging or the executable and proves the amd64 image with `docker run -i` on a clean Linux runner, but nothing is pushed yet.
+
+The image `ghcr.io/rodrigorjsf/langfuse-api-mcp:<version>` is minimal: based on `gcr.io/distroless/static-debian12:nonroot` pinned by digest, the binary is the entrypoint, it runs as the non-root user `nonroot`, and it holds no shell. It is built for `linux/amd64` and `linux/arm64` and will be published as one multi-arch image, so an arm64 machine runs it natively (a snapshot build tags one local image per architecture, `<version>-amd64` and `<version>-arm64`, since a multi-arch image exists only once pushed). One SPDX JSON SBOM describes it (`langfuse-mcp_<version>_image.sbom.json`, scanned from the amd64 image; the arm64 image holds the same base and the same binary built for arm64).
+
+Pass the keys and the base URL with `-e`, and keep `-i` (the server speaks MCP over stdin and stdout):
+
+```bash
+docker run -i --rm \
+  -e LANGFUSE_PUBLIC_KEY -e LANGFUSE_SECRET_KEY -e LANGFUSE_BASE_URL \
+  ghcr.io/rodrigorjsf/langfuse-api-mcp:<version>
+```
+
+`-e NAME` without a value passes the variable from the environment that runs `docker`, so the keys never appear in the command line; set them there, or in your MCP client's `"env"`. Behind a corporate CA, mount the CA file read-only and point `LANGFUSE_CA_CERT` at it; the file must be readable by any user (the image does not run as you):
+
+```bash
+docker run -i --rm \
+  -e LANGFUSE_PUBLIC_KEY -e LANGFUSE_SECRET_KEY -e LANGFUSE_BASE_URL \
+  -e LANGFUSE_CA_CERT=/certs/corp.pem -v /path/to/corp.pem:/certs/corp.pem:ro \
+  ghcr.io/rodrigorjsf/langfuse-api-mcp:<version>
+```
+
+The image trusts its base image's CA bundle plus the file you mount, nothing else (the base image sets `SSL_CERT_FILE` to its bundle, so the startup `CA sources loaded` line lists it as an ambient source next to your file): without the file, a Langfuse host signed by a private CA is refused with `tls_untrusted_certificate`. In an MCP client, the `command` is `docker` and `args` is the list above. To cap the server's memory, give the container a limit and pass the matching Go soft limit, for example `--memory 256m -e GOMEMLIMIT=200MiB`: the Go runtime reads `GOMEMLIMIT` and collects garbage harder as it nears it, instead of being killed at the container limit.
+
+**The image serves stdio only.** The loopback HTTP transport (`LANGFUSE_MCP_TRANSPORT=http`, **Planned**) binds `127.0.0.1` only, which inside a container is the container's own loopback: it cannot be reached from outside, and it is not meant to be exposed.
+
+### npx
+
+**Planned until the first release** (M7): the release pipeline already packs the npm packages for every change to packaging or the executable and proves them with `npx` on clean Linux, macOS and Windows runners, but nothing is published yet.
+
+Configure the server in your MCP client as `npx -y langfuse-api-mcp` (pin a version with `langfuse-api-mcp@<version>`); it needs Node.js with npm, nothing else:
 
 ```json
 {
   "mcpServers": {
     "langfuse": {
-      "command": "langfuse-mcp",
+      "command": "npx",
+      "args": ["-y", "langfuse-api-mcp"],
       "env": {
         "LANGFUSE_PUBLIC_KEY": "pk-lf-...",
         "LANGFUSE_SECRET_KEY": "sk-lf-...",
-        "LANGFUSE_BASE_URL": "https://cloud.langfuse.com",
-        "LANGFUSE_CA_CERT": "/path/to/corp-root.pem"
+        "LANGFUSE_BASE_URL": "https://cloud.langfuse.com"
       }
     }
   }
 }
 ```
 
-Claude Code:
+The package carries the Go binary; nothing is downloaded at install time and no install script runs, so it installs wherever npm can reach its registry, also with `--ignore-scripts`. `langfuse-api-mcp` holds only a small Node launcher, `langfuse-mcp`, and lists one optional dependency per platform: `langfuse-api-mcp-<platform>-<arch>` for `linux`, `darwin` and `win32` × `x64` and `arm64`, each restricted to its OS and CPU and holding only that platform's binary, so npm installs the one for your machine and skips the others. All of them carry the same version as the release. The launcher starts the binary with your arguments and environment unchanged, never through a shell, with stdin, stdout and stderr passed straight through; it forwards `SIGINT`, `SIGTERM` and `SIGHUP` to the binary and exits with the binary's exit code, or of the same signal (proven on Linux and macOS; Windows has no such signals, and there a stop request ends the binary too). On Windows, `npx` itself is a `.cmd` script that npm runs through `cmd.exe`, so arguments you put after the package name pass through npm's own command-line handling before they reach the launcher; the server takes no arguments, and your keys and settings travel in the environment, which no shell rewrites. On any other platform it exits with an error naming your platform and the supported ones: use a [release archive](#release-archive) or [Docker](#docker) there. An install with `--omit=optional` leaves the binary out, and the launcher says so.
+
+The npm registry and Node.js are dependencies of this channel only: the other channels do not touch them.
+
+### Claude Desktop (MCPB)
+
+**Planned until the first release** (M7): the release pipeline already packs the bundle for every change to packaging or the executable and proves the binary inside it on clean macOS and Windows runners, but nothing is published yet.
+
+One file, `langfuse-mcp_<version>.mcpb`, for Claude Desktop on macOS (Apple silicon and Intel: it holds one universal binary) and Windows (amd64 only; Windows on Arm is not tested). There is no Linux bundle: no Linux host installs `.mcpb` files. Double-click it (or drag it onto Claude Desktop); the install dialog asks for:
+
+| Field | Required | Becomes |
+|---|---|---|
+| Langfuse public key | yes; stored in the OS keychain, masked | `LANGFUSE_PUBLIC_KEY` |
+| Langfuse secret key | yes; stored in the OS keychain, masked | `LANGFUSE_SECRET_KEY` |
+| Langfuse base URL | yes | `LANGFUSE_BASE_URL` |
+| CA certificate | no; a file picker | `LANGFUSE_CA_CERT` |
+
+Those four variables are all the bundle sets; the server validates them at startup exactly as for any other channel (for example, a base URL that is neither `https` nor `http` on a loopback host stops the server, naming the variable, never its value). The dialog offers **no write-mode option** on purpose: to enable writes, set `LANGFUSE_MCP_ALLOW_WRITES=true` in the [config file](#config-file-non-secret-settings), a deliberate step outside the install dialog. Any other setting (proxy, request limits) also goes in the config file. The bundle and its binaries are not signed yet (`mcpb sign`, notarization, Authenticode); if macOS or Windows blocks the binary after a browser download, see the [browser-download note](#release-archive) above. The pipeline validates its manifest with the pinned MCPB CLI (`mcpb validate`) before packing it.
+
+### Client configuration
+
+One snippet per MCP client. Every snippet uses the [npx](#npx) channel (**Planned** until `npm publish` in M7); to use a [release archive](#release-archive) instead, replace `"command": "npx", "args": ["-y", "langfuse-api-mcp"]` with `"command": "/absolute/path/to/langfuse-mcp"` and no `args` (`langfuse-mcp.exe` on Windows).
+
+Each client starts the server with its own view of your environment, and several do not pass your shell's variables on (details and sources: [docs/research/mcp-hosts-env.md](docs/research/mcp-hosts-env.md)). So every snippet names the three variables the server needs in the client's own `env` mechanism, the one place a key may go. Settings that are not secret (`LANGFUSE_CA_CERT`, the proxy, the request limits) can go in the client's `env` as well, or once for every client in the [config file](#config-file-non-secret-settings). **Never put `LANGFUSE_PUBLIC_KEY` or `LANGFUSE_SECRET_KEY` in the config file**: the server refuses to start if it finds them there ([ADR-0011](docs/adr/0011-non-secret-config-file.md)).
+
+`pk-lf-...` and `sk-lf-...` below stand for your keys. Where a snippet reads `${LANGFUSE_SECRET_KEY}` or similar, the client copies the value from its own environment when it starts the server, so the key never sits in the file. The snippets were checked against each client's official docs on 2026-09-25. On Linux on 2026-09-27 ([records](docs/research/raw/2026-09-27-mcp-host-proof.md)), the one marked **proven** ran end to end (`search_operations`, then `execute_read`, against a local Langfuse); the one marked **startup proven** started the server with its keys, but no tool call was made through it (a non-Anthropic client's tool calls are still to be recorded, [#128](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/128)).
+
+#### Claude Code — proven
+
+Source: [code.claude.com/docs/en/mcp](https://code.claude.com/docs/en/mcp). **Pitfall:** Claude Code passes its own environment to the server, but that environment is only what the shell that started Claude Code exported; a variable set elsewhere is missing. **Workaround:** pass the keys with `--env`. `--env` takes several `KEY=value` pairs and reads the next word as one more pair, so an option (here `--transport stdio`) must sit between the last `--env` and the server name, or the command fails with `Invalid environment variable format`:
 
 ```bash
-claude mcp add langfuse -- langfuse-mcp   # uses the variables already exported in your shell
+claude mcp add \
+  --env LANGFUSE_PUBLIC_KEY=pk-lf-... \
+  --env LANGFUSE_SECRET_KEY=sk-lf-... \
+  --env LANGFUSE_BASE_URL=https://cloud.langfuse.com \
+  --transport stdio langfuse -- npx -y langfuse-api-mcp
 ```
 
-Per-client snippets (Claude Code, Claude Desktop, Cursor, VS Code, Codex) will be copied from each client's official docs and dated when M1 ships.
+This stores the keys in `~/.claude.json` (local or user scope). For a project `.mcp.json` shared through git, reference the variables instead; Claude Code expands `${VAR}` and `${VAR:-default}` in `env`. A variable that is not set and has no default is passed on as the literal text `${VAR}`, which the server rejects at startup as a key without its `pk-lf-`/`sk-lf-` prefix; `claude mcp list` warns about it:
+
+```json
+{
+  "mcpServers": {
+    "langfuse": {
+      "command": "npx",
+      "args": ["-y", "langfuse-api-mcp"],
+      "env": {
+        "LANGFUSE_PUBLIC_KEY": "${LANGFUSE_PUBLIC_KEY}",
+        "LANGFUSE_SECRET_KEY": "${LANGFUSE_SECRET_KEY}",
+        "LANGFUSE_BASE_URL": "${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}"
+      }
+    }
+  }
+}
+```
+
+#### Claude Desktop
+
+Source: [modelcontextprotocol.io/docs/develop/connect-local-servers](https://modelcontextprotocol.io/docs/develop/connect-local-servers) and [modelcontextprotocol.io/docs/tools/debugging](https://modelcontextprotocol.io/docs/tools/debugging). **Pitfall:** Claude Desktop passes the server only "a limited subset of environment variables"; your shell exports never reach it, and on macOS an app started from the Dock does not see the `PATH` your shell profile builds (nvm, Homebrew), so a bare `npx` may not be found. **Workaround:** prefer the [MCPB bundle](#claude-desktop-mcpb), which stores the keys in the OS keychain. To configure it by hand, edit `claude_desktop_config.json` (macOS `~/Library/Application Support/Claude/`, Windows `%APPDATA%\Claude\`), put the keys in `env`, and give `command` as an absolute path (`which npx` on macOS, `where npx` on Windows, or the path of the extracted `langfuse-mcp` binary):
+
+```json
+{
+  "mcpServers": {
+    "langfuse": {
+      "command": "/absolute/path/to/npx",
+      "args": ["-y", "langfuse-api-mcp"],
+      "env": {
+        "LANGFUSE_PUBLIC_KEY": "pk-lf-...",
+        "LANGFUSE_SECRET_KEY": "sk-lf-...",
+        "LANGFUSE_BASE_URL": "https://cloud.langfuse.com"
+      }
+    }
+  }
+}
+```
+
+This file holds the keys in plain text; that is why the MCPB bundle is the better choice here.
+
+#### Cursor
+
+Source: [cursor.com/docs/mcp](https://cursor.com/docs/mcp). **Pitfall:** the docs do not say whether Cursor passes its environment to the server. **Workaround:** forward each variable explicitly with `${env:NAME}` in `env`, in `~/.cursor/mcp.json` (every project) or `.cursor/mcp.json` (one project):
+
+```json
+{
+  "mcpServers": {
+    "langfuse": {
+      "command": "npx",
+      "args": ["-y", "langfuse-api-mcp"],
+      "env": {
+        "LANGFUSE_PUBLIC_KEY": "${env:LANGFUSE_PUBLIC_KEY}",
+        "LANGFUSE_SECRET_KEY": "${env:LANGFUSE_SECRET_KEY}",
+        "LANGFUSE_BASE_URL": "${env:LANGFUSE_BASE_URL}"
+      }
+    }
+  }
+}
+```
+
+Cursor must itself have been started with those variables set (for example from a terminal where they are exported). Cursor also reads an `envFile`, but a `.env` file is a plaintext key file; keep it out of the repository if you use one.
+
+#### VS Code (GitHub Copilot)
+
+Source: [code.visualstudio.com/docs/copilot/reference/mcp-configuration](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration). **Pitfall:** VS Code passes its full environment, but a VS Code started from the Dock or Start menu may not have your shell's exports, and `.vscode/mcp.json` is usually committed. **Workaround:** declare the keys as `inputs` with `"password": true`: VS Code asks for them the first time the server starts and stores them securely. VS Code does not forward a server that needs `${input:...}` to its Agent Host, so there use `"LANGFUSE_SECRET_KEY": "${env:LANGFUSE_SECRET_KEY}"` (and the same for the other two) instead. The file uses `servers`, not `mcpServers`:
+
+```json
+{
+  "inputs": [
+    { "type": "promptString", "id": "langfuse-public-key", "description": "Langfuse public key", "password": true },
+    { "type": "promptString", "id": "langfuse-secret-key", "description": "Langfuse secret key", "password": true }
+  ],
+  "servers": {
+    "langfuse": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "langfuse-api-mcp"],
+      "env": {
+        "LANGFUSE_PUBLIC_KEY": "${input:langfuse-public-key}",
+        "LANGFUSE_SECRET_KEY": "${input:langfuse-secret-key}",
+        "LANGFUSE_BASE_URL": "https://cloud.langfuse.com"
+      }
+    }
+  }
+}
+```
+
+#### Codex CLI
+
+Source: [learn.chatgpt.com/docs/extend/mcp?surface=cli](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) and the [config reference](https://learn.chatgpt.com/docs/config-file/config-reference). **Pitfall:** Codex clears the environment before it starts the server and passes on only a fixed list (`HOME`, `PATH`, `LANG`, …); an exported `LANGFUSE_SECRET_KEY` never arrives. **Workaround:** list the variable names in `env_vars` in `~/.codex/config.toml` (or a project `.codex/config.toml`); Codex then forwards their values from its own environment, and no key is written in the file:
+
+```toml
+[mcp_servers.langfuse]
+command = "npx"
+args = ["-y", "langfuse-api-mcp"]
+env_vars = ["LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_BASE_URL"]
+```
+
+Or set literal values with `codex mcp add --env LANGFUSE_PUBLIC_KEY=pk-lf-... --env LANGFUSE_SECRET_KEY=sk-lf-... --env LANGFUSE_BASE_URL=https://cloud.langfuse.com langfuse -- npx -y langfuse-api-mcp`, which stores them in plain text in `config.toml`; keep such a file out of the repository (a project `.codex/config.toml` is often committed). The same clearing applies to npm's own settings: if npm needs a proxy or a private registry, add `HTTPS_PROXY`, `npm_config_registry` or the like to `env_vars` too.
+
+#### Gemini CLI — startup proven
+
+Source: [gemini-cli docs/tools/mcp-server.md](https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md). **Pitfall:** Gemini CLI passes its environment but removes every variable whose name contains `KEY`, `SECRET`, `TOKEN` (and a few more), so both Langfuse keys are dropped and the server stops at startup. **Workaround:** name the keys in `env`; variables named there are not removed. In `~/.gemini/settings.json` (or a project `.gemini/settings.json`, which Gemini CLI reads only in a trusted folder):
+
+```json
+{
+  "mcpServers": {
+    "langfuse": {
+      "command": "npx",
+      "args": ["-y", "langfuse-api-mcp"],
+      "env": {
+        "LANGFUSE_PUBLIC_KEY": "$LANGFUSE_PUBLIC_KEY",
+        "LANGFUSE_SECRET_KEY": "$LANGFUSE_SECRET_KEY",
+        "LANGFUSE_BASE_URL": "$LANGFUSE_BASE_URL"
+      }
+    }
+  }
+}
+```
+
+An unset variable becomes an empty string, which the server refuses at startup naming the variable.
+
+#### Windsurf
+
+Source: [docs.windsurf.com/windsurf/cascade/mcp](https://docs.windsurf.com/windsurf/cascade/mcp) (now served at docs.devin.ai). **Pitfall:** the docs do not say whether Windsurf passes its environment to the server. **Workaround:** forward each variable with `${env:NAME}` in `env`, in `~/.config/devin/mcp_config.json` (macOS and Linux; `%APPDATA%\devin\mcp_config.json` on Windows; older Windsurf builds may use `~/.codeium/windsurf/mcp_config.json`, a path the current docs no longer name):
+
+```json
+{
+  "mcpServers": {
+    "langfuse": {
+      "command": "npx",
+      "args": ["-y", "langfuse-api-mcp"],
+      "env": {
+        "LANGFUSE_PUBLIC_KEY": "${env:LANGFUSE_PUBLIC_KEY}",
+        "LANGFUSE_SECRET_KEY": "${env:LANGFUSE_SECRET_KEY}",
+        "LANGFUSE_BASE_URL": "${env:LANGFUSE_BASE_URL}"
+      }
+    }
+  }
+}
+```
+
+Windsurf also reads `${file:/path}`, which puts the trimmed content of a file (for example a key file only you can read) in its place.
+
+#### Docker as the command
+
+In any client, `command` can be `docker` with the [Docker](#docker) `args`. The container sees only the variables named with `-e` in `args`, and `-e NAME` takes the value from the environment of the `docker` process, which is what the client passes it: put the keys in the client's `env` block (for Codex CLI, list them in `env_vars`), never as `-e NAME=value` in `args`.
 
 ### Where do environment variables come from?
 
-The server reads its own process environment, then an optional config file. Whether your *system* variables reach the process depends on the MCP client (facts and sources: [docs/research/mcp-hosts-env.md](docs/research/mcp-hosts-env.md), checked 2026-09-25):
+The server reads its own process environment, then an optional config file. Whether your *system* variables reach the process depends on the MCP client (facts and sources: [docs/research/mcp-hosts-env.md](docs/research/mcp-hosts-env.md), checked 2026-09-25; Claude Code and Gemini CLI also run on Linux on 2026-09-27, [records](docs/research/raw/2026-09-27-mcp-host-proof.md)). The [per-client snippets](#client-configuration) above apply the last column:
 
 | Client | Passes your system/shell variables? | What to do |
 |---|---|---|
 | VS Code / GitHub Copilot | yes (full environment) | nothing, or `"env"` / `${env:NAME}` |
-| Claude Code | not documented, likely yes | reference them: `"env": {"LANGFUSE_SECRET_KEY": "${LANGFUSE_SECRET_KEY}"}` |
+| Claude Code | yes, the environment Claude Code was started with (not documented; observed on Linux) | `--env` pairs, or reference them: `"env": {"LANGFUSE_SECRET_KEY": "${LANGFUSE_SECRET_KEY}"}` |
 | Cursor, Windsurf | not documented | reference them with `${env:NAME}` in `"env"` |
 | Claude Desktop | **no**, only a limited subset | put values in `"env"`, or install the `.mcpb` bundle (keys stored in the OS keychain) |
 | Codex CLI | **no**, the environment is cleared | list names in `env_vars = ["LANGFUSE_PUBLIC_KEY", …]` |
-| Gemini CLI | yes, but **hides names containing `KEY`/`SECRET`/`TOKEN`** | declare the keys explicitly in `"env"` |
+| Gemini CLI | yes, but **hides names containing `KEY`/`SECRET`/`TOKEN`** (observed on Linux: without `env` the server gets no keys and stops) | declare the keys explicitly in `"env"`: `"LANGFUSE_SECRET_KEY": "$LANGFUSE_SECRET_KEY"` |
 | Docker | only what you pass with `-e` | `-e LANGFUSE_PUBLIC_KEY -e LANGFUSE_SECRET_KEY …` |
 
 ### Config file (non-secret settings)
@@ -394,7 +646,35 @@ Recommendations: create a dedicated Langfuse key for the agent, set an expiry da
 
 ### Verify what you run **(Planned)**
 
-Releases will ship with checksums, an SBOM, cosign keyless signatures and GitHub build provenance (`gh attestation verify`).
+**Planned until the first release** (M7): the release workflow is wired, but its signing, provenance and publishing jobs run **only on a `v*` release tag**, never on a pull request, a push to `main` or the weekly run, so none of the commands below has anything to verify yet. The first tag is cut after the repository goes public, because a cosign keyless signature writes a permanent public entry (the Rekor transparency log) naming this repository and its workflow.
+
+Every release will carry: `checksums.txt` (SHA-256 of every archive and SBOM); one SPDX JSON SBOM per archive and one for the image; a cosign keyless signature, as a Sigstore bundle `<file>.sigstore.json`, and GitHub build provenance for every archive, `checksums.txt` and the `.mcpb`; the multi-arch image signed and attested by digest. The SBOMs are covered through `checksums.txt`, which lists them and is itself signed. A signature is valid only when its certificate names this repository's release workflow at the release tag, issued to GitHub Actions. With `version=<version>` (without the leading `v`):
+
+```bash
+# 1. The archive is the one in checksums.txt (Windows: compare Get-FileHash, see Release archive).
+awk -v f="$archive" '$2 == f' checksums.txt | sha256sum -c -   # macOS: … | shasum -a 256 -c -
+
+# 2. The archive, checksums.txt or the .mcpb was signed by this repository's release workflow.
+identity="https://github.com/rodrigorjsf/langfuse-api-mcp/.github/workflows/release.yml@refs/tags/v$version"
+for f in "$archive" checksums.txt "langfuse-mcp_${version}.mcpb"; do
+  cosign verify-blob --bundle "$f.sigstore.json" \
+    --certificate-identity "$identity" \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com "$f"
+done
+
+# 3. The image was signed by the same workflow.
+cosign verify ghcr.io/rodrigorjsf/langfuse-api-mcp:$version \
+  --certificate-identity "$identity" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+# 4. GitHub build provenance: built by this repository's workflow from the tagged commit.
+gh attestation verify "$archive" -R rodrigorjsf/langfuse-api-mcp
+gh attestation verify oci://ghcr.io/rodrigorjsf/langfuse-api-mcp:$version -R rodrigorjsf/langfuse-api-mcp
+```
+
+The npm packages are published with npm provenance: `npm audit signatures` in a project that installed `langfuse-api-mcp` checks them.
+
+The [npx](#npx) channel adds the npm registry and Node.js as dependencies of that channel only; its packages depend on nothing but their own platform packages and run no install script. The one Python dependency of the maintainer tooling (PyYAML, used by the union catalog generator in CI only) is pinned with hashes in [`scripts/requirements.txt`](scripts/requirements.txt), installed with `--require-hashes` and kept current by Dependabot. The MCPB CLI that validates and packs the Claude Desktop bundle is pinned with its whole dependency tree and integrity hashes in [`packaging/mcpb/package-lock.json`](packaging/mcpb/package-lock.json), installed with `npm ci --ignore-scripts` and kept current by Dependabot.
 
 ## Stack
 
@@ -444,11 +724,56 @@ What you need installed:
   GOTOOLCHAIN=go1.27.1 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
   ```
 
-Dependencies stay current through [Dependabot](.github/dependabot.yml) (Go modules and GitHub Actions). Dependabot does not bump the `toolchain` line, so a weekly workflow ([`.github/workflows/go-toolchain.yml`](.github/workflows/go-toolchain.yml)) opens a pull request when a newer Go 1.27.x patch release exists.
+Dependencies stay current through [Dependabot](.github/dependabot.yml) (Go modules, GitHub Actions and the generator's Python requirements). Dependabot does not bump the `toolchain` line, so a weekly workflow ([`.github/workflows/go-toolchain.yml`](.github/workflows/go-toolchain.yml)) opens a pull request when a newer Go 1.27.x patch release exists.
 
-The embedded union catalog is generated, never edited by hand: [`scripts/gen-union-catalog.py`](scripts/gen-union-catalog.py) rebuilds it from the OpenAPI spec of every Langfuse release tag since v3.0.0 (needs git, network and PyYAML; `python3 scripts/test_gen_union_catalog.py` tests it offline), and a weekly workflow ([`.github/workflows/union-catalog.yml`](.github/workflows/union-catalog.yml)) runs it and opens a pull request when the output changed. Pull-request CI never fetches release specs: it runs those generator tests, and the `internal/catalog` tests check the committed file offline, including the operation set each deployment-profile fixture resolves to. When a regeneration adds or drops an operation, triage it against [ADR-0004](docs/adr/0004-endpoint-scope.md) and update those fixtures in the same pull request.
+The embedded union catalog is generated, never edited by hand: [`scripts/gen-union-catalog.py`](scripts/gen-union-catalog.py) rebuilds it from the OpenAPI spec of every Langfuse release tag since v3.0.0 (needs git, network and PyYAML, pinned with hashes in [`scripts/requirements.txt`](scripts/requirements.txt): `pip install --require-hashes -r scripts/requirements.txt`; `python3 scripts/test_gen_union_catalog.py` tests it offline), and a weekly workflow ([`.github/workflows/union-catalog.yml`](.github/workflows/union-catalog.yml)) runs it and opens a pull request when the output changed. Pull-request CI never fetches release specs: it runs those generator tests, and the `internal/catalog` tests check the committed file offline, including the operation set each deployment-profile fixture resolves to. When a regeneration adds or drops an operation, triage it against [ADR-0004](docs/adr/0004-endpoint-scope.md) and update those fixtures in the same pull request.
 
 The small-model discovery eval, [`scripts/small-model-eval.py`](scripts/small-model-eval.py), checks that Haiku 4.5 reaches the right operation from a plain-language intent using only `search_operations`, `describe_operation`, `execute_read` and `get_trace_tree`. It runs 11 intents covering traces, observations, scores, prompts, datasets and metrics, and prints one PASS/FAIL line per intent and the total. An intent passes when the model makes the expected call and the server accepts it. The system prompt names the run date (UTC), as agent hosts do, and the metrics intent passes only when its query's time window is the last 7 days before that date; `python3 scripts/test_small_model_eval.py` checks that matcher offline, in CI too. The expected operation IDs and key parameters are literals in the script. The server runs against a fake Langfuse on `127.0.0.1` that answers as 4.46.0 `events_only` with no data, so no real Langfuse key or project is involved. Run it by hand with `ANTHROPIC_API_KEY` set (standard library only; it builds the server with `go build` unless you pass `--server`). The key is read only from the environment and never printed or passed to the server. Paste the output into the pull request, and file every failing intent as a follow-up issue on M3 or M6 (the first recorded run is tracked in [#88](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/88)). It is not a CI gate: it costs API tokens and a model's answers can vary. Without an API key, [`scripts/small-model-eval-local.sh`](scripts/small-model-eval-local.sh) runs it against a local `qwen3:8b` through Ollama (see "Container stacks"); `--only 2,5` reruns chosen intents. The first recorded run used that local model instead of Haiku 4.5, because the maintainer chose not to use a paid API: 7/11 passed on 2026-09-27 ([output](docs/research/raw/2026-09-27-small-model-eval-qwen3-8b.md); failing intents filed as #97, #98, #99, #100). A later full run at the current code passes 8/11 (02 and 03 still fail, #97 and #98; 08 now fails, #114), and a comparison of local models on the same 12 GB GPU keeps `qwen3:8b` Q4_K_M as the default: `qwen3:14b` passes 9/11 but fails intent 11, which the default passes, and needs a quantized KV cache to fit ([output](docs/research/raw/2026-09-27-small-model-eval-local-model-vram.md)).
+
+**The release pipeline runs in snapshot mode.** [`.github/workflows/release.yml`](.github/workflows/release.yml) runs on pull requests that touch `packaging/`, `scripts/pack-mcpb.sh`, `cmd/langfuse-mcp/`, `go.mod`/`go.sum` or the workflow itself, on every push to `main` and weekly. GoReleaser ([`packaging/.goreleaser.yaml`](packaging/.goreleaser.yaml)) builds the six archives with the version `0.0.0-SNAPSHOT-<short commit>`, the checksums file and one SPDX JSON SBOM per archive (syft); then the installed-artifact smoke checks the archive for its runner against `checksums.txt`, extracts it on Linux, macOS and Windows, and runs `TestInstalledArtifact` (build tag `smoke`, `cmd/langfuse-mcp/installed_test.go`) against the extracted binary: `initialize` reports the snapshot's version, `tools/list` returns the read tool set, one `execute_read` against a fake TLS Langfuse trusted only through `LANGFUSE_CA_CERT` returns its payload stripped of hidden and bidi characters inside the untrusted-data envelope, the same read without `LANGFUSE_CA_CERT` is refused as `tls_untrusted_certificate`, and an invalid `LANGFUSE_BASE_URL` stops startup naming the variable, never the value. The same run builds the container image ([`packaging/Dockerfile`](packaging/Dockerfile)) for `linux/amd64` and `linux/arm64` without pushing it, checks each for the non-root user, the binary as entrypoint and no shell, writes its SPDX JSON SBOM with syft, and runs `TestInstalledArtifact` on a Linux runner against `docker run -i --network host` with the private CA mounted read-only (`LANGFUSE_MCP_SMOKE_CA_DIR`). The packaging script [`packaging/npm/pack.mjs`](packaging/npm/pack.mjs) turns GoReleaser's binaries into the seven npm packages and packs them with `npm pack` (the workflow checks that every version is the snapshot's and that no package has a script); on Linux, macOS and Windows runners the launcher's own tests run (`node --test packaging/npm/shim.test.mjs`: arguments and environment byte-for-byte, exit code, signal forwarding on Linux and macOS, unsupported platform), then a local registry ([`packaging/npm/smoke-registry.mjs`](packaging/npm/smoke-registry.mjs)) serves the tarballs, `npx -y langfuse-api-mcp@<version>` installs from it with scripts off, the job checks that only the runner's platform package was installed, and `TestInstalledArtifact` runs against `npx`. Every channel also proves that keys full of shell metacharacters reach Langfuse byte-for-byte and that a failed startup exits with code 1 and its one log line. The same assertions run in `go test ./...` against a binary built with an injected version. To run the pipeline locally, install GoReleaser v2.18.2 and syft v1.52.0 (the versions the workflow pins) and Docker with buildx (for the image), then:
+
+```bash
+goreleaser release --snapshot --clean --config packaging/.goreleaser.yaml
+mkdir -p /tmp/lfmcp && tar -xzf dist/langfuse-mcp_*_linux_amd64.tar.gz -C /tmp/lfmcp
+LANGFUSE_MCP_SMOKE_COMMAND='["/tmp/lfmcp/langfuse-mcp"]' \
+LANGFUSE_MCP_SMOKE_VERSION="$(jq -r .version dist/metadata.json)" \
+  go test -tags smoke -count=1 -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
+```
+
+The npx channel, with Node.js 24 and npm (after the snapshot above):
+
+```bash
+node --test packaging/npm/shim.test.mjs
+node packaging/npm/pack.mjs dist /tmp/lfmcp-npm
+node packaging/npm/smoke-registry.mjs /tmp/lfmcp-npm > /tmp/lfmcp-registry.url &   # stop it afterwards
+export npm_config_registry="$(head -n 1 /tmp/lfmcp-registry.url)" npm_config_cache=/tmp/lfmcp-npm-cache
+version="$(jq -r .version dist/metadata.json)"
+npm exec --yes --package="langfuse-api-mcp@$version" -- node -e 0   # install once
+LANGFUSE_MCP_SMOKE_COMMAND="[\"npx\",\"-y\",\"langfuse-api-mcp@$version\"]" LANGFUSE_MCP_SMOKE_VERSION="$version" \
+  go test -tags smoke -count=1 -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
+```
+
+The same run packs the MCPB bundle with [`scripts/pack-mcpb.sh`](scripts/pack-mcpb.sh): it puts GoReleaser's universal macOS binary and the `windows/amd64` binary next to [`packaging/mcpb/manifest.json`](packaging/mcpb/manifest.json) (its `version` set to the build's), then runs `mcpb validate` and `mcpb pack` from the MCPB CLI pinned in `packaging/mcpb/package-lock.json` (Node 24). A workflow step checks the manifest's install dialog and variable mapping; the smoke unpacks the bundle on macOS and Windows runners, checks that the macOS binary is universal, and runs `TestInstalledArtifact` against the command the manifest names for that OS. Locally, after the GoReleaser run above:
+
+```bash
+(cd packaging/mcpb && npm ci --ignore-scripts)
+scripts/pack-mcpb.sh   # prints dist/langfuse-mcp_<version>.mcpb
+```
+
+**On a release tag the same pipeline publishes (Planned, M7).** A `v*` tag push runs the same build with the tag's version (`vX.Y.Z` only; any other `v*` tag fails the build before anything is signed) and the same smoke against those artifacts; only when every smoke passes do the tag-only jobs run, each with only the permissions it needs, signing first so nothing is public before its signatures exist: `sign-blobs` (cosign keyless signatures and `actions/attest` build provenance for the archives, `checksums.txt` and the `.mcpb`; `id-token`, `attestations`), `publish-image` (pushes the two images the smoke built and joins them into the multi-arch `ghcr.io/rodrigorjsf/langfuse-api-mcp:<version>`, signs and attests it by digest; `packages`, `id-token`, `attestations`), `publish-npm` (the six platform packages, then the main one; `id-token`) and `github-release` (the GitHub release with every archive, SBOM, signature and the bundle; `contents: write`). On a pull request, `main` or the weekly run they show as skipped. See [Verify what you run](#verify-what-you-run-planned) for what a user checks.
+
+#### Cutting a release (maintainer, M7)
+
+Nothing below exists yet, on purpose: no secret or environment is created while the repository is private. Before the first tag:
+
+1. **Make the repository public.** GitHub artifact attestations need a public repository (or GitHub Enterprise Cloud), and npm provenance needs a public source repository.
+2. **Protect `v*` tags** with a tag ruleset (Settings → Rules → Rulesets, target tags `v*`: restrict creation, update and deletion to administrators), so only the maintainer can start a release; `sign-blobs` and `github-release` do not run in the environment below.
+3. **Create the `release` environment** (Settings → Environments) with the deployment rule "Selected branches and tags" allowing only tags matching `v*`. `publish-image` and `publish-npm` run in it, so a workflow on any other ref, a pull request that edits the workflow included, cannot reach its secrets.
+4. **Check the npm names** `langfuse-api-mcp` and `langfuse-api-mcp-{linux,darwin,win32}-{x64,arm64}` are still free (the spec checked `langfuse-api-mcp` on 2026-09-27); if one is taken, the package name is reopened.
+5. **npm authentication, first release.** npm trusted publishing (OIDC from this workflow, no long-lived token) is configured per package on npmjs.com, and the npm documentation describes it only for packages that already exist. So publish the first release with a granular access token: create one on npmjs.com with read and write access to packages and a short expiry, and store it as the secret `NPM_TOKEN` of the `release` environment only (never a repository secret).
+6. **Tag and push** `vX.Y.Z` from `main`, then watch the Release run.
+7. **After the first release:** make the GHCR package public (Packages → `langfuse-api-mcp` → Package settings → Change visibility; a newly pushed package is private) and link it to the repository if it is not already. On npmjs.com, add a trusted publisher to each of the seven packages (repository `rodrigorjsf/langfuse-api-mcp`, workflow `release.yml`, environment `release`), then delete the `NPM_TOKEN` secret and revoke the token: `publish-npm` authenticates through OIDC from then on (its `NODE_AUTH_TOKEN` is then empty; if the second release's `npm publish` still asks for a token, remove that line from the job).
+8. **Check the release** with the commands in [Verify what you run](#verify-what-you-run-planned) and remove the Planned marks from the README.
 
 **A toolchain bump PR shows no CI until you re-trigger it.** The workflow opens its pull request with the repository's `GITHUB_TOKEN`, and GitHub does not start workflows for events that token creates, so `CI` does not run on the PR by itself. The same holds for the union catalog PR (`deps/union-catalog-*`). Close and reopen the PR (or push a commit to its `deps/toolchain-*` or `deps/union-catalog-*` branch) to run CI, and merge only once it is green. The workflow also relies on the repository setting "Allow GitHub Actions to create and approve pull requests" (Settings → Actions → General); without it the PR is not created. See [#24](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/24).
 

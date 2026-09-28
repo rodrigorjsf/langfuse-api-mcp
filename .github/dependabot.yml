@@ -1,4 +1,5 @@
-# Dependabot: Go module requirements and GitHub Actions (pinned by SHA).
+# Dependabot: Go module requirements, GitHub Actions (pinned by SHA), the container base image, the MCPB CLI and the
+# union catalog generator's hash-pinned Python requirements (scripts/requirements.txt, #92).
 # Dependabot does not bump the go.mod `toolchain` directive
 # (https://github.com/dependabot/dependabot-core/issues/13520, open as of 2026-09-25);
 # .github/workflows/go-toolchain.yml covers it.
@@ -12,6 +13,26 @@ updates:
       prefix: "build(deps)"
   - package-ecosystem: github-actions
     directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci(deps)"
+  # The container image's base (packaging/Dockerfile), pinned by digest (#122).
+  - package-ecosystem: docker
+    directory: /packaging
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "build(deps)"
+  # The MCPB CLI that validates and packs the Claude Desktop bundle (packaging/mcpb/package-lock.json, #124).
+  - package-ecosystem: npm
+    directory: /packaging/mcpb
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "build(deps)"
+  - package-ecosystem: pip
+    directory: /scripts
     schedule:
       interval: weekly
     commit-message:

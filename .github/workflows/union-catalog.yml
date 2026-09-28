@@ -8,7 +8,7 @@
 # When nothing changed, it does nothing. Pull-request CI never regenerates the catalog: it
 # checks the committed file offline (internal/catalog tests) and runs the generator's
 # offline unit tests (ci.yml, job "generator", #89).
-# The PyYAML pin below is shared with ci.yml; change both together (one shared file: #92).
+# PyYAML comes from the hash-checked scripts/requirements.txt, shared with ci.yml (#92).
 #
 # A new or removed operation changes the deployment-profile fixtures in
 # internal/catalog/resolve_test.go ("newer than any known version"), and a new
@@ -37,11 +37,11 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install PyYAML
+      - name: Install the generator's dependencies
         run: |
           set -euo pipefail
           python3 -m venv "$RUNNER_TEMP/venv"
-          "$RUNNER_TEMP/venv/bin/pip" install --quiet pyyaml==6.0.3
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet --require-hashes -r scripts/requirements.txt
       - name: Test the generator
         run: |
           set -euo pipefail

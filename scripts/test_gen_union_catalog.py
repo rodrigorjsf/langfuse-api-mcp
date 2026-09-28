@@ -13,7 +13,8 @@
 #       "generator", #89), before each weekly regeneration
 #       (.github/workflows/union-catalog.yml), and by hand after changing the
 #       generator.
-# HOW:  python3 scripts/test_gen_union_catalog.py   (needs PyYAML, like the generator)
+# HOW:  python3 scripts/test_gen_union_catalog.py   (needs PyYAML, like the generator:
+#       pip install --require-hashes -r scripts/requirements.txt)
 
 import importlib.util
 import os

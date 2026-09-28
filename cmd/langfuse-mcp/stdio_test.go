@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"os/exec"
 	"slices"
 	"strings"
@@ -45,19 +44,21 @@ func startStdio(t *testing.T, env ...string) *stdioSession {
 // at the documented location for the running OS; "" means no config file.
 func startStdioWithConfigFile(t *testing.T, content string, env ...string) *stdioSession {
 	t.Helper()
+	return startCommand(t, testBinary(t), content, env...)
+}
+
+// startCommand starts the launch command argv (never through a shell) as a
+// child speaking MCP over stdio, with a config file holding content ("" means
+// none) and the extra environment entries (later entries win).
+func startCommand(t *testing.T, argv []string, content string, env ...string) *stdioSession {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
-	exe, err := os.Executable()
-	if err != nil {
-		t.Fatalf("locate test binary: %v", err)
-	}
 	configEnv, path := userConfigLocation(t)
 	if content != "" {
 		writeConfigFile(t, path, content)
 	}
-	cmd := exec.CommandContext(ctx, exe, "-test.run=^$") //nolint:gosec // G204: exe is this test binary, not external input
-	cmd.Env = append(append(append(os.Environ(), runMainEnv+"=1"), hermeticEnv...), connectionEnv...)
-	cmd.Env = append(append(cmd.Env, configEnv...), env...)
+	cmd := newChildCommand(ctx, argv, append(configEnv, env...))
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		t.Fatalf("stdin pipe: %v", err)
@@ -114,20 +115,32 @@ func (s *stdioSession) send(method string, params any, request bool) json.RawMes
 	return resp.Result
 }
 
-// initialize runs the MCP initialization handshake.
-func (s *stdioSession) initialize() {
+// initialize runs the MCP initialization handshake and returns the version
+// the server reported for itself.
+func (s *stdioSession) initialize() (serverVersion string) {
 	s.t.Helper()
-	s.send("initialize", map[string]any{
+	var result struct {
+		ServerInfo struct {
+			Version string `json:"version"`
+		} `json:"serverInfo"`
+	}
+	if err := json.Unmarshal(s.send("initialize", map[string]any{
 		"protocolVersion": "2025-06-18", "capabilities": map[string]any{},
 		"clientInfo": map[string]any{"name": "s2-test", "version": "0"},
-	}, true)
+	}, true), &result); err != nil {
+		s.t.Fatalf("decode initialize: %v", err)
+	}
 	s.send("notifications/initialized", map[string]any{}, false)
+	return result.ServerInfo.Version
 }
 
 // toolCall is the part of a tools/call result the tests read.
 type toolCall struct {
 	IsError           bool           `json:"isError"`
 	StructuredContent map[string]any `json:"structuredContent"`
+	Content           []struct {
+		Text string `json:"text"`
+	} `json:"content"`
 }
 
 // callTraceGet calls execute_read for trace trace-1 on an initialized session.
@@ -157,13 +170,23 @@ func (s *stdioSession) stop(checks ...func()) {
 	}
 }
 
+// health4460 is the health body of a Langfuse 4.46.0 deployment.
+const health4460 = `{"status":"OK","version":"4.46.0"}`
+
 // deploymentLangfuse is a fake Langfuse that answers the deployment profile
 // detection (ADR-0012 §3): health with healthBody, each family sentinel with
 // 200, except the paths in unavailable, answered with the Langfuse v4
 // events_only 404. Every other request goes to next.
 func deploymentLangfuse(t *testing.T, healthBody string, unavailable []string, next http.HandlerFunc) *httptest.Server {
 	t.Helper()
-	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	fake := httptest.NewServer(deploymentHandler(healthBody, unavailable, next))
+	t.Cleanup(fake.Close)
+	return fake
+}
+
+// deploymentHandler is the handler of deploymentLangfuse.
+func deploymentHandler(healthBody string, unavailable []string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.URL.Path == "/api/public/health":
@@ -177,9 +200,7 @@ func deploymentLangfuse(t *testing.T, healthBody string, unavailable []string, n
 		default:
 			next(w, r)
 		}
-	}))
-	t.Cleanup(fake.Close)
-	return fake
+	}
 }
 
 // profileLogLine returns the startup log line naming the deployment profile.
@@ -197,7 +218,7 @@ func profileLogLine(t *testing.T, stderr []byte) map[string]any {
 func TestExecutableServesTheDiscoveryToolsExecuteReadAndGetTraceTreeOverStdio(t *testing.T) {
 	t.Parallel()
 	gotAuth := make(chan string, 1)
-	fake := deploymentLangfuse(t, `{"status":"OK","version":"4.46.0"}`, nil, func(w http.ResponseWriter, r *http.Request) {
+	fake := deploymentLangfuse(t, health4460, nil, func(w http.ResponseWriter, r *http.Request) {
 		user, password, _ := r.BasicAuth()
 		gotAuth <- r.Method + " " + r.URL.Path + " " + user + ":" + password
 		_, _ = io.WriteString(w, `{"id":"trace-1","name":"checkout"}`) // a failed write fails the call below
@@ -327,7 +348,7 @@ func TestExecutableReachesAnOperationOnlyAnOlderReleaseSpecListsWhenTheVersionIs
 func TestExecutableOffersOnlyTheOperationsOfTheDetectedDeploymentProfile(t *testing.T) {
 	t.Parallel()
 	gotRequest := make(chan string, 1)
-	fake := deploymentLangfuse(t, `{"status":"OK","version":"4.46.0"}`, []string{"/api/public/traces"}, func(w http.ResponseWriter, r *http.Request) {
+	fake := deploymentLangfuse(t, health4460, []string{"/api/public/traces"}, func(w http.ResponseWriter, r *http.Request) {
 		gotRequest <- r.Method + " " + r.URL.RequestURI()
 		_, _ = io.WriteString(w, `{}`) // a failed write fails the call below
 	})
@@ -432,7 +453,7 @@ func TestExecutableLogsWhichFamiliesAreOnWithoutAnAnswer(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/api/public/health":
-			_, _ = io.WriteString(w, `{"status":"OK","version":"4.46.0"}`) // a failed write leaves the version unknown, which the test sees
+			_, _ = io.WriteString(w, health4460) // a failed write leaves the version unknown, which the test sees
 		case "/api/public/experiments":
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = io.WriteString(w, `{"message":"boom"}`) // as above

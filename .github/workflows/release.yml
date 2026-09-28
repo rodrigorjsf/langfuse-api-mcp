@@ -1,0 +1,707 @@
+# Release pipeline (spec #119), snapshot mode: GoReleaser builds the release archives for six targets
+# (linux, darwin, windows x amd64, arm64) with a checksums file and one SPDX JSON SBOM per archive
+# (packaging/.goreleaser.yaml), then the smoke (seam S2, cmd/langfuse-mcp/installed_test.go, build
+# tag `smoke`) installs the archive on clean Linux, macOS and Windows runners the way README
+# "Install and run" says (checksum check, extract) and talks MCP to the extracted binary. The same
+# run builds the container image (distroless static, non-root, amd64 and arm64, not pushed) with one
+# SPDX JSON SBOM, and the smoke runs the amd64 image with `docker run -i` on a Linux runner. The
+# project's packaging script (packaging/npm/pack.mjs) turns the same binaries into the npm packages
+# (`npm pack`, not published), and the smoke runs them with `npx` on Linux, macOS and Windows. It also
+# packs the one MCPB bundle for Claude Desktop (scripts/pack-mcpb.sh: the universal macOS binary and
+# the windows/amd64 binary, `mcpb validate` + `mcpb pack`), and the smoke unpacks it on macOS and
+# Windows runners and runs the binary its manifest names for that OS.
+# windows/arm64 is built, not CI-tested (no runner in this matrix).
+# Runs on pull requests that touch packaging, the executable's entry point, the module files or this
+# workflow; on every push to main; and weekly, so a toolchain or tool change is caught without a commit.
+# Those snapshot runs publish nothing. On a `v*` tag (#126) the same build runs with the tag's version,
+# the same smoke proves every artifact, and only then the tag-only jobs run: sign-blobs (cosign
+# keyless signatures and GitHub build provenance for the archives, checksums file and MCPB bundle),
+# publish-image (push to GHCR, cosign signature and provenance of the multi-arch image by digest),
+# publish-npm (`npm publish` of the platform packages, then the main one) and github-release (the
+# GitHub release holding the archives, SBOMs, checksums, bundle and signatures). Each is gated by a job
+# `if` on the tag, so a snapshot run shows it skipped, and holds only the permissions it needs; the
+# publish jobs run in the `release` environment, which alone will hold the npm token (Planned, M7:
+# the maintainer creates it restricted to `v*` tags, README "Cutting a release").
+# Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current. Tool
+# versions (GoReleaser, syft) are pinned below and in packaging/.goreleaser.yaml's header; Node and
+# cosign in `env` below,
+# and the MCPB CLI with its dependency tree in packaging/mcpb/package-lock.json.
+# The npm registry is a supply-chain dependency of the npm channel only: nothing else installs
+# from it, and in this workflow npm reads only a local registry serving the packed tarballs.
+name: Release
+
+on:
+  pull_request:
+    paths:
+      - "packaging/**"
+      - "scripts/pack-mcpb.sh"
+      - "cmd/langfuse-mcp/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/release.yml"
+  push:
+    branches: [main]
+    tags: ["v*"] # the release (#126); the tag-only jobs below run for nothing else
+  schedule:
+    - cron: "29 4 * * 3"
+
+permissions:
+  contents: read
+
+env:
+  # Node packs the npm packages, runs the npx smoke and the MCPB CLI (spec #119); Node 24.21.0 (LTS),
+  # the one pin for every job below, bumped by hand like GoReleaser and syft.
+  NODE_VERSION: 24.21.0
+  # cosign signs the release on a `v*` tag only (#126); v3.1.3, installed by sigstore/cosign-installer
+  # and bumped by hand.
+  COSIGN_VERSION: v3.1.3
+
+concurrency:
+  group: release-${{ github.ref }}
+  # Never cancel a release half-published; a newer snapshot run may cancel an older one.
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      IMAGE: ghcr.io/rodrigorjsf/langfuse-api-mcp # the image name in packaging/.goreleaser.yaml
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # GoReleaser derives the version from the tags and the commit
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod # the release is built with the module's pinned toolchain
+          cache-dependency-path: go.mod
+      # syft writes the SPDX JSON SBOM of each archive (spec #119); Anchore's own download action,
+      # pinned to syft v1.52.0. GoReleaser runs `syft` from PATH.
+      - uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        id: syft
+        with:
+          syft-version: v1.52.0
+      - name: Put syft on PATH
+        env:
+          SYFT: ${{ steps.syft.outputs.cmd }}
+        run: dirname "$SYFT" >> "$GITHUB_PATH"
+      # On a `v*` tag the build carries the tag's version (packaging/.goreleaser.yaml reads
+      # RELEASE_VERSION); only vX.Y.Z is a release, so any other `v*` tag fails here, before anything
+      # is built, signed or published. Never set RELEASE_VERSION empty: GoReleaser refuses it.
+      - name: Release version
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::tag $GITHUB_REF_NAME is not vX.Y.Z"; exit 1; }
+          echo "RELEASE_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+      # GoReleaser OSS is the single build driver (spec #119); pinned to v2.18.2. Always --snapshot:
+      # GoReleaser only builds, the tag-only jobs below publish (#126).
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: v2.18.2
+          args: release --snapshot --clean --config packaging/.goreleaser.yaml
+      - name: Snapshot version
+        id: version
+        run: |
+          set -euo pipefail
+          version=$(jq -r .version dist/metadata.json)
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            # The release: the tag without its `v`, e.g. 1.2.3.
+            [ "$version" = "${GITHUB_REF_NAME#v}" ] || { echo "::error::built version $version, tag $GITHUB_REF_NAME"; exit 1; }
+          else
+            # A SemVer pre-release derived from the commit, e.g. 0.0.0-SNAPSHOT-0a1b2c3.
+            [[ "$version" =~ ^0\.0\.0-SNAPSHOT-[0-9a-f]+$ ]] || { echo "::error::unexpected snapshot version $version"; exit 1; }
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      # GitHub's own artifact actions hand the archives, their SBOMs and the checksums file from this
+      # job to the smoke jobs on other runners (no other way to share files between jobs).
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-archives
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sbom.json
+            dist/checksums.txt
+          if-no-files-found: error
+          retention-days: 7
+      # Node packs the npm packages and runs the MCPB CLI (spec #119); GitHub's own setup action,
+      # Node pinned by NODE_VERSION above.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      # The npm packages (packaging/npm/pack.mjs): the main package with the shim, one package per
+      # target with its binary. Check what they promise (spec #119): every version is the snapshot's
+      # and no package has a script, so an install runs nothing.
+      - name: Pack the npm packages
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          node packaging/npm/pack.mjs dist npm
+          count=0
+          for f in npm/*.tgz; do
+            tar -xzOf "$f" package/package.json | jq -e --arg v "$VERSION" '
+              .version == $v and (has("scripts") | not) and
+              ([(.optionalDependencies // {})[]] | all(. == $v))' >/dev/null ||
+              { echo "::error::$f: a version other than $VERSION, or a script"; exit 1; }
+            count=$((count + 1))
+          done
+          [ "$count" -eq 7 ] || { echo "::error::want 7 npm packages, got $count"; exit 1; }
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-packages
+          path: npm/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+      # The container image (packaging/Dockerfile): GoReleaser built one local image per platform,
+      # tagged <version>-amd64 and <version>-arm64, and pushed nothing. Check what the image promises
+      # (spec #119): the platform, the non-root user, the binary as entrypoint and no shell.
+      - name: Check the images
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          for arch in amd64 arm64; do
+            image="$IMAGE:$VERSION-$arch"
+            got=$(docker image inspect -f '{{.Os}}/{{.Architecture}} {{.Config.User}} {{json .Config.Entrypoint}}' "$image")
+            want="linux/$arch nonroot:nonroot [\"/usr/local/bin/langfuse-mcp\"]"
+            [ "$got" = "$want" ] || { echo "::error::$image: got '$got', want '$want'"; exit 1; }
+            # Only "no such file" counts as no shell: any other failure is not proof.
+            if out=$(docker run --rm --entrypoint /bin/sh "$image" -c true 2>&1); then
+              echo "::error::$image has a shell"; exit 1
+            fi
+            grep -q 'no such file or directory' <<<"$out" || { echo "::error::$image: unexpected failure: $out"; exit 1; }
+          done
+      # One SPDX JSON SBOM for the image (spec #119), written by the same pinned syft as the archives'.
+      # It describes the amd64 image; the arm64 image holds the same base and the same binary built
+      # for arm64.
+      - name: Image SBOM and image file
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p image
+          syft scan "docker:$IMAGE:$VERSION-amd64" -o "spdx-json=image/langfuse-mcp_${VERSION}_image.sbom.json"
+          jq -e '.spdxVersion' "image/langfuse-mcp_${VERSION}_image.sbom.json"
+          # Both images: the smoke runs amd64; on a tag publish-image pushes both (#126).
+          for arch in amd64 arm64; do docker save -o "image/image-$arch.tar" "$IMAGE:$VERSION-$arch"; done
+      # The container smoke and, on a tag, publish-image run on fresh runners from the saved images
+      # (upload-artifact as above); on a tag github-release attaches the image SBOM, so it also gets
+      # an artifact of its own.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: container-image
+          path: image/
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: image-sbom
+          path: image/*.sbom.json
+          if-no-files-found: error
+          retention-days: 7
+      # The MCPB CLI (@anthropic-ai/mcpb 2.1.2, Anthropic's reference packer and validator), installed
+      # from its lockfile with integrity hashes and no install scripts.
+      - name: Install the MCPB CLI
+        working-directory: packaging/mcpb
+        run: npm ci --ignore-scripts
+      - name: Pack the MCPB bundle
+        id: mcpb
+        run: |
+          set -euo pipefail
+          bundle=$(scripts/pack-mcpb.sh) # a failed pack fails this step, not a later one
+          echo "bundle=$bundle" >> "$GITHUB_OUTPUT"
+      # What the install dialog promises (spec #119): the version is the build's; exactly the four
+      # user_config fields, the keys sensitive and required, the base URL required, the CA an
+      # optional file; they reach the server only as the four LANGFUSE_* variables; no write-mode
+      # option; macOS and Windows only, the Windows command overridden.
+      - name: Check the MCPB manifest
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BUNDLE: ${{ steps.mcpb.outputs.bundle }}
+        run: |
+          set -euo pipefail
+          jq -e --arg v "$VERSION" '
+            .manifest_version == "0.4" and .version == $v and .server.type == "binary"
+            and .compatibility.platforms == ["darwin", "win32"]
+            and .server.mcp_config.command == "${__dirname}/server/langfuse-mcp"
+            and (.server.mcp_config.platform_overrides | keys) == ["win32"]
+            and .server.mcp_config.platform_overrides.win32 == {"command": "${__dirname}/server/langfuse-mcp.exe"}
+            and (.server.mcp_config.args // []) == []
+            and .server.mcp_config.env == {
+              "LANGFUSE_PUBLIC_KEY": "${user_config.public_key}",
+              "LANGFUSE_SECRET_KEY": "${user_config.secret_key}",
+              "LANGFUSE_BASE_URL": "${user_config.base_url}",
+              "LANGFUSE_CA_CERT": "${user_config.ca_cert}"}
+            and (.user_config | keys) == ["base_url", "ca_cert", "public_key", "secret_key"]
+            and ([.user_config.public_key, .user_config.secret_key]
+                 | all(.type == "string" and .sensitive == true and .required == true))
+            and .user_config.base_url.type == "string" and .user_config.base_url.required == true
+            and (.user_config.base_url.sensitive // false) == false
+            and .user_config.ca_cert.type == "file" and .user_config.ca_cert.required == false
+            and .user_config.ca_cert.default == ""
+          ' dist/mcpb/manifest.json
+          # The bundle holds exactly the manifest, the license and the two binaries.
+          got=$(unzip -Z1 "$BUNDLE" | sort | tr '\n' ' ')
+          want="LICENSE manifest.json server/langfuse-mcp server/langfuse-mcp.exe "
+          [ "$got" = "$want" ] || { echo "::error::bundle holds '$got', want '$want'"; exit 1; }
+      # The MCPB smoke unpacks the bundle on fresh macOS and Windows runners (upload-artifact as above).
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mcpb-bundle
+          path: ${{ steps.mcpb.outputs.bundle }}
+          if-no-files-found: error
+          retention-days: 7
+
+  smoke-archive:
+    name: smoke-archive (${{ matrix.target }})
+    needs: snapshot
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux_amd64
+            archive: tar.gz
+          - os: macos-latest
+            target: darwin_arm64
+            archive: tar.gz
+          - os: windows-latest
+            target: windows_amd64
+            archive: zip
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      ARCHIVE: langfuse-mcp_${{ needs.snapshot.outputs.version }}_${{ matrix.target }}.${{ matrix.archive }}
+      LANGFUSE_MCP_SMOKE_VERSION: ${{ needs.snapshot.outputs.version }}
+    steps:
+      # The checkout carries only the smoke's test sources; the binary under test is the archive's.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.mod
+      # The snapshot job's archives (see upload-artifact above).
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-archives
+          path: ${{ runner.temp }}/release
+      # README "Install and run": check the archive against checksums.txt before extracting it.
+      - name: Verify the checksum
+        shell: bash
+        working-directory: ${{ runner.temp }}/release
+        run: |
+          set -euo pipefail
+          line=$(awk -v f="$ARCHIVE" '$2 == f' checksums.txt)
+          [ -n "$line" ] || { echo "::error::$ARCHIVE is not in checksums.txt"; exit 1; }
+          if command -v sha256sum >/dev/null; then echo "$line" | sha256sum -c -; else echo "$line" | shasum -a 256 -c -; fi
+      - name: Extract the archive (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/install"
+          tar -xzf "$RUNNER_TEMP/release/$ARCHIVE" -C "$RUNNER_TEMP/install"
+          echo "SMOKE_BINARY=$RUNNER_TEMP/install/langfuse-mcp" >> "$GITHUB_ENV"
+      - name: Extract the archive (zip)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          Expand-Archive -Path "$env:RUNNER_TEMP\release\$env:ARCHIVE" -DestinationPath "$env:RUNNER_TEMP\install"
+          "SMOKE_BINARY=$env:RUNNER_TEMP\install\langfuse-mcp.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      # Windows only: the same narrow retry as ci.yml's test step (#102, golang/go#81238), in
+      # scripts/go-test-windows-retry.sh. Remove with #102.
+      - name: Smoke (seam S2) against the extracted binary
+        shell: bash
+        run: |
+          set -o pipefail
+          LANGFUSE_MCP_SMOKE_COMMAND=$(jq -cn --arg bin "$SMOKE_BINARY" '[$bin]')
+          export LANGFUSE_MCP_SMOKE_COMMAND
+          bash scripts/go-test-windows-retry.sh -tags smoke -count=1 -v -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
+
+  # The container channel (README "Install and run", Docker): `docker run -i` with the keys and base
+  # URL passed by `-e`, and the private CA mounted read-only with LANGFUSE_CA_CERT naming it (#28).
+  # The smoke writes its private CA into SMOKE_CA_DIR, mounted at the same path, so LANGFUSE_CA_CERT
+  # names the file inside the container too; the case without the CA file proves the image adds no
+  # trust of its own. `--network host` lets the container reach the fake Langfuse on 127.0.0.1.
+  # Linux runner only: the image is linux/amd64 here (arm64 is built and checked, not run).
+  smoke-container:
+    needs: snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      IMAGE_REF: ghcr.io/rodrigorjsf/langfuse-api-mcp:${{ needs.snapshot.outputs.version }}-amd64
+      LANGFUSE_MCP_SMOKE_VERSION: ${{ needs.snapshot.outputs.version }}
+    steps:
+      # The checkout carries only the smoke's test sources; the binary under test is the image's.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.mod
+      # The snapshot job's saved image (see upload-artifact above).
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: container-image
+          path: ${{ runner.temp }}/image
+      - name: Load the image
+        run: docker load -i "$RUNNER_TEMP/image/image-amd64.tar"
+      - name: Smoke (seam S2) against the container
+        run: |
+          set -euo pipefail
+          ca_dir="$RUNNER_TEMP/smoke-ca"
+          mkdir -m 0755 "$ca_dir" # the image's non-root user must read the CA file
+          export LANGFUSE_MCP_SMOKE_CA_DIR="$ca_dir"
+          LANGFUSE_MCP_SMOKE_COMMAND=$(jq -cn --arg ca "$ca_dir" --arg image "$IMAGE_REF" '[
+            "docker", "run", "-i", "--rm", "--network", "host",
+            "-e", "LANGFUSE_PUBLIC_KEY", "-e", "LANGFUSE_SECRET_KEY",
+            "-e", "LANGFUSE_BASE_URL", "-e", "LANGFUSE_CA_CERT",
+            "-v", ($ca + ":" + $ca + ":ro"), $image]')
+          export LANGFUSE_MCP_SMOKE_COMMAND
+          go test -tags smoke -count=1 -v -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
+
+  # The npx channel (README "Install and run", npx): `npx -y langfuse-api-mcp@<version>` against a
+  # local registry serving the packed tarballs (packaging/npm/smoke-registry.mjs), so npm resolves
+  # the optional platform packages exactly as it will from registry.npmjs.org. Scripts are off for
+  # the whole job (npm_config_ignore_scripts), which proves an install with --ignore-scripts works.
+  smoke-npx:
+    name: smoke-npx (${{ matrix.os }})
+    needs: snapshot
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      PACKAGE: langfuse-api-mcp@${{ needs.snapshot.outputs.version }}
+      LANGFUSE_MCP_SMOKE_VERSION: ${{ needs.snapshot.outputs.version }}
+      npm_config_ignore_scripts: "true"
+      npm_config_update_notifier: "false"
+      npm_config_audit: "false"
+      npm_config_fund: "false"
+    steps:
+      # The checkout carries the smoke's test sources, the shim tests and the local registry; the
+      # packages under test are the snapshot job's tarballs.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.mod
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      # The snapshot job's npm packages (see upload-artifact above).
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: npm-packages
+          path: ${{ runner.temp }}/npm
+      # The shim itself: arguments and environment byte-for-byte, exit code, signal forwarding
+      # (POSIX runners), unsupported platform.
+      - name: Shim tests
+        run: node --test packaging/npm/shim.test.mjs
+      # Windows only: the same narrow retry as ci.yml's test step (#102, golang/go#81238), in
+      # scripts/go-test-windows-retry.sh. Remove with #102.
+      - name: Smoke (seam S2) through npx
+        shell: bash
+        run: |
+          set -o pipefail
+          node packaging/npm/smoke-registry.mjs "$RUNNER_TEMP/npm" > "$RUNNER_TEMP/registry.url" &
+          registry_pid=$!
+          trap 'kill "$registry_pid"' EXIT
+          for _ in $(seq 50); do [ -s "$RUNNER_TEMP/registry.url" ] && break; sleep 0.2; done
+          npm_config_registry=$(head -n 1 "$RUNNER_TEMP/registry.url")
+          # Never fall back to registry.npmjs.org: the smoke installs only the packed tarballs.
+          [ -n "$npm_config_registry" ] || { echo "::error::the local registry did not start"; exit 1; }
+          export npm_config_registry
+          # A fresh npm cache: the npx install below is the only one. The smoke's children get
+          # their own HOME/AppData (userConfigLocation), so the cache is named explicitly.
+          export npm_config_cache="$RUNNER_TEMP/npm-cache"
+          # Install once before the parallel smoke cases share the npx cache.
+          npm exec --yes --package="$PACKAGE" -- node -e 0 || exit 1
+          # npm installed the main package and only this platform's binary package. Listed by node,
+          # not a shell glob: RUNNER_TEMP holds backslashes on Windows.
+          want="langfuse-api-mcp langfuse-api-mcp-$(node -p 'process.platform + "-" + process.arch')"
+          got=$(node -e '
+            const { readdirSync } = require("node:fs"), { join } = require("node:path");
+            const npx = join(process.env.npm_config_cache, "_npx");
+            const names = readdirSync(npx).flatMap((d) => readdirSync(join(npx, d, "node_modules")));
+            console.log(names.filter((n) => n.startsWith("langfuse-api-mcp")).sort().join(" "));')
+          [ "$got" = "$want" ] || { echo "::error::installed packages '$got', want '$want'"; exit 1; }
+          LANGFUSE_MCP_SMOKE_COMMAND=$(jq -cn --arg p "$PACKAGE" '["npx", "-y", $p]')
+          export LANGFUSE_MCP_SMOKE_COMMAND
+          bash scripts/go-test-windows-retry.sh -tags smoke -count=1 -v -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
+
+  # The MCPB channel (README "Install and run", Claude Desktop): the bundle is unpacked with the
+  # pinned MCPB CLI, and the smoke runs the command its manifest names for this OS (the universal
+  # binary on macOS, platform_overrides.win32 on Windows), `${__dirname}` resolved to the unpacked
+  # directory as Claude Desktop does. The smoke hands the server the same four LANGFUSE_* variables
+  # the manifest maps the install dialog's values to, so its invalid-base-URL case is the MCPB's
+  # value reaching the server's startup validation (the "Check the MCPB manifest" step proves the
+  # mapping). The Claude Desktop install itself is proven by hand (docs/research/raw/).
+  smoke-mcpb:
+    name: smoke-mcpb (${{ matrix.platform }})
+    needs: snapshot
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin
+          - os: windows-latest
+            platform: win32
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      BUNDLE: langfuse-mcp_${{ needs.snapshot.outputs.version }}.mcpb
+      PLATFORM: ${{ matrix.platform }}
+      LANGFUSE_MCP_SMOKE_VERSION: ${{ needs.snapshot.outputs.version }}
+    steps:
+      # The checkout carries the smoke's test sources and the MCPB CLI's lockfile; the binary under
+      # test is the bundle's.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.mod
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install the MCPB CLI
+        working-directory: packaging/mcpb
+        run: npm ci --ignore-scripts
+      # The snapshot job's bundle (see upload-artifact above).
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: mcpb-bundle
+          path: ${{ runner.temp }}/release
+      - name: Unpack the bundle and resolve its command
+        shell: bash
+        run: |
+          set -euo pipefail
+          release="$RUNNER_TEMP/release" dir="$RUNNER_TEMP/mcpb"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            # D:/a/_temp form: understood alike by bash, Node and Go.
+            release=$(cygpath -m "$release") dir=$(cygpath -m "$dir")
+          fi
+          (cd packaging/mcpb && npx --no-install mcpb unpack "$release/$BUNDLE" "$dir")
+          command=$(jq -er --arg os "$PLATFORM" \
+            '.server.mcp_config | (.platform_overrides[$os].command // .command)' "$dir/manifest.json")
+          command=${command//'${__dirname}'/"$dir"}
+          [ -f "$command" ] || { echo "::error::the manifest's command for $PLATFORM is not in the bundle"; exit 1; }
+          echo "SMOKE_BINARY=$command" >> "$GITHUB_ENV"
+      # One bundle serves both Mac architectures (spec #119): the binary must be universal.
+      - name: Check the universal macOS binary
+        if: matrix.platform == 'darwin'
+        run: |
+          set -euo pipefail
+          archs=$(lipo -archs "$SMOKE_BINARY")
+          [ "$archs" = "x86_64 arm64" ] || { echo "::error::want a universal x86_64 arm64 binary, got '$archs'"; exit 1; }
+      # Windows only: the same narrow retry as ci.yml's test step (#102, golang/go#81238), in
+      # scripts/go-test-windows-retry.sh. Remove with #102.
+      - name: Smoke (seam S2) against the bundle's binary
+        shell: bash
+        run: |
+          set -o pipefail
+          LANGFUSE_MCP_SMOKE_COMMAND=$(jq -cn --arg bin "$SMOKE_BINARY" '[$bin]')
+          export LANGFUSE_MCP_SMOKE_COMMAND
+          bash scripts/go-test-windows-retry.sh -tags smoke -count=1 -v -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
+
+  # ---------------------------------------------------------------------------------------------
+  # Tag-only jobs (#126). Each runs only on a `v*` tag push (the job `if`, so any other run shows it
+  # skipped), only after every smoke passed on the tag's own artifacts (sign-blobs waits for them,
+  # everything else waits for sign-blobs, so nothing is public before the signatures exist), and with only the
+  # permissions it needs (a job-level block replaces the workflow's `contents: read`). Their first
+  # execution is the M7 release: a cosign keyless signature writes a permanent entry naming this
+  # repository and workflow to the public Rekor log, and GitHub attestations need a public repository.
+  # Pins: sigstore/cosign-installer (Sigstore's own installer, verifies the cosign binary it fetches)
+  # with cosign v3.1.3; actions/attest (GitHub's own action for build provenance). `docker`, `docker
+  # buildx` and `gh` are the runner image's: GitHub-maintained, and they only push, join and upload
+  # what this run built.
+
+  # cosign keyless signatures (one Sigstore bundle, <file>.sigstore.json, per file) and GitHub build
+  # provenance for every archive, the checksums file and the MCPB bundle.
+  sign-blobs:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [snapshot, smoke-archive, smoke-container, smoke-npx, smoke-mcpb]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      id-token: write # the OIDC token cosign and actions/attest exchange for a signing certificate
+      attestations: write # store the build provenance attestations
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-archives
+          path: release
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: mcpb-bundle
+          path: release
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+      - name: Sign the archives, checksums and bundle
+        working-directory: release
+        run: |
+          set -euo pipefail
+          for f in *.tar.gz *.zip checksums.txt *.mcpb; do
+            cosign sign-blob --yes --bundle "$f.sigstore.json" "$f"
+          done
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            release/*.tar.gz
+            release/*.zip
+            release/checksums.txt
+            release/*.mcpb
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signed-release
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+
+  # The image the container smoke ran, pushed as-is: both per-architecture images, joined into the
+  # multi-arch image ghcr.io/rodrigorjsf/langfuse-api-mcp:<version>, signed with cosign keyless by
+  # digest (every platform manifest too) and attested with build provenance pushed to the registry.
+  publish-image:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [snapshot, sign-blobs]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release # to be restricted by the maintainer to `v*` tags (M7)
+    permissions:
+      packages: write # push to ghcr.io with this run's GITHUB_TOKEN
+      id-token: write # the OIDC token for the cosign signature and the attestation
+      attestations: write # store the build provenance attestation
+    env:
+      IMAGE: ghcr.io/rodrigorjsf/langfuse-api-mcp # the image name in packaging/.goreleaser.yaml
+      VERSION: ${{ needs.snapshot.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: container-image
+          path: ${{ runner.temp }}/image
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+      - name: Push the image
+        id: push
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin <<<"$REGISTRY_TOKEN"
+          for arch in amd64 arm64; do
+            docker load -i "$RUNNER_TEMP/image/image-$arch.tar"
+            docker push "$IMAGE:$VERSION-$arch"
+          done
+          docker buildx imagetools create -t "$IMAGE:$VERSION" "$IMAGE:$VERSION-amd64" "$IMAGE:$VERSION-arm64"
+          digest=$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Manifest}}' | jq -r .digest)
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::no digest for $IMAGE:$VERSION"; exit 1; }
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Sign the image
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: cosign sign --yes --recursive "$IMAGE@$DIGEST"
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false # would need artifact-metadata: write; not needed to verify
+
+  # `npm publish` of the six platform packages, then the main package that depends on them, from the
+  # tarballs the npx smoke installed. Authentication: npm trusted publishing (OIDC, id-token) once it
+  # is configured on npmjs.com; until then the `release` environment's NPM_TOKEN secret (README
+  # "Cutting a release"; once the secret is deleted NODE_AUTH_TOKEN is empty and npm uses OIDC). npm
+  # adds provenance either way. A package version already on the registry is
+  # skipped, so a re-run after a partial failure finishes the set instead of failing on it.
+  publish-npm:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [snapshot, sign-blobs]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: release # to be restricted to `v*` tags and to hold NPM_TOKEN (M7)
+    permissions:
+      id-token: write # npm trusted publishing and npm provenance
+    env:
+      VERSION: ${{ needs.snapshot.outputs.version }}
+      npm_config_ignore_scripts: "true"
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: npm-packages
+          path: ${{ runner.temp }}/npm
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }} # its npm (11.x) supports trusted publishing
+          package-manager-cache: false
+          registry-url: https://registry.npmjs.org
+      - name: Publish the npm packages
+        working-directory: ${{ runner.temp }}/npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          main="langfuse-api-mcp-$VERSION.tgz"
+          [ -f "$main" ] || { echo "::error::$main is missing"; exit 1; }
+          publish() {
+            local name
+            name=$(tar -xzOf "$1" package/package.json | jq -r .name)
+            if npm view "$name@$VERSION" version >/dev/null 2>&1; then
+              echo "$name@$VERSION is already published; skipped"
+              return
+            fi
+            npm publish --access public --provenance "$1"
+          }
+          # The platform packages first: the main package's optionalDependencies name them.
+          for f in ./*.tgz; do
+            [ "$f" = "./$main" ] || publish "$f"
+          done
+          publish "./$main"
+
+  # The GitHub release for the tag, created once every channel is published: the archives, their
+  # SBOMs, the checksums file, the MCPB bundle, the image SBOM and every Sigstore bundle.
+  github-release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [snapshot, sign-blobs, publish-image, publish-npm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # create the release and upload its files
+    env:
+      VERSION: ${{ needs.snapshot.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: signed-release
+          path: release
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: image-sbom
+          path: release
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [ -f "release/langfuse-mcp_${VERSION}_image.sbom.json" ] || { echo "::error::the image SBOM is missing"; exit 1; }
+          gh release create "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --verify-tag \
+            --title "$GITHUB_REF_NAME" --generate-notes release/*
