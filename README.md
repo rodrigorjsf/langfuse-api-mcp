@@ -341,7 +341,7 @@ docker run -i --rm \
   ghcr.io/rodrigorjsf/langfuse-api-mcp:<version>
 ```
 
-`-e NAME` without a value passes the variable from the environment that runs `docker`, so the keys never appear in the command line; set them there, or in your MCP client's `"env"`. Behind a corporate CA, mount the CA file read-only and point `LANGFUSE_CA_CERT` at it; the file must be readable by any user (the image does not run as you):
+`-e NAME` without a value passes the variable from the environment that runs `docker`, so the keys never appear in the command line; set them there, or in your MCP client's `"env"` (a key exported in the shell that starts the client reaches the agent's own commands too: [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment)). Behind a corporate CA, mount the CA file read-only and point `LANGFUSE_CA_CERT` at it; the file must be readable by any user (the image does not run as you):
 
 ```bash
 docker run -i --rm \
@@ -415,7 +415,7 @@ claude mcp add \
   --transport stdio langfuse -- npx -y langfuse-api-mcp
 ```
 
-This stores the keys in `~/.claude.json` (local or user scope). For a project `.mcp.json` shared through git, reference the variables instead; Claude Code expands `${VAR}` and `${VAR:-default}` in `env`. A variable that is not set and has no default is passed on as the literal text `${VAR}`, which the server rejects at startup as a key without its `pk-lf-`/`sk-lf-` prefix; `claude mcp list` warns about it:
+This stores the keys in `~/.claude.json` (local or user scope). For a project `.mcp.json` shared through git, you can reference the variables instead (see the trade-off below the snippet); Claude Code expands `${VAR}` and `${VAR:-default}` in `env`. A variable that is not set and has no default is passed on as the literal text `${VAR}`, which the server rejects at startup as a key without its `pk-lf-`/`sk-lf-` prefix; `claude mcp list` warns about it:
 
 ```json
 {
@@ -581,7 +581,7 @@ The server reads its own process environment, then an optional config file. Whet
 | Gemini CLI | yes, but **hides names containing `KEY`/`SECRET`/`TOKEN`** (observed on Linux: without `env` the server gets no keys and stops) | declare the keys explicitly in `"env"`: `"LANGFUSE_SECRET_KEY": "$LANGFUSE_SECRET_KEY"` |
 | Docker | only what you pass with `-e` | `-e LANGFUSE_PUBLIC_KEY -e LANGFUSE_SECRET_KEY …` |
 
-Every answer in the last column that reads a key from the client's environment (`${VAR}`, `${env:NAME}`, `$NAME`, `env_vars`) needs the key exported where the client starts, and the agent's own shell and tools inherit it from there: see [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment).
+Every answer in the last column that reads a key from the client's environment ("nothing", `${VAR}`, `${env:NAME}`, `$NAME`, `env_vars`) needs the key exported where the client starts, and the agent's own shell and tools inherit it from there: see [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment).
 
 ### Config file (non-secret settings)
 
