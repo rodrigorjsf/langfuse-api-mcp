@@ -379,8 +379,10 @@ class Deployment:
         self.httpd.server_close()
 
 
-def setup_key(item):
-    """Intents with equal keys share one Deployment."""
+def deployment_key(item):
+    """The key under which main caches the intent's Deployment: its write mode
+    and the bodies its fake Langfuse serves. Intents with equal keys share one
+    Deployment."""
     return (bool(item.get("write_mode")), json.dumps(item.get("serves") or {}, sort_keys=True))
 
 
@@ -636,10 +638,10 @@ def main():
             passed = 0
             for number in args.selected:
                 item = INTENTS[number - 1]
-                setup = setup_key(item)
-                deployment = deployments.get(setup)
+                cache_key = deployment_key(item)
+                deployment = deployments.get(cache_key)
                 if deployment is None:
-                    deployment = deployments[setup] = Deployment(binary, workdir, item)
+                    deployment = deployments[cache_key] = Deployment(binary, workdir, item)
                     print(f"server write mode {'on' if deployment.write_mode else 'off'}; "
                           f"tools {', '.join(deployment.names)}")
                 ok, calls, ended = run_intent(deployment.server, deployment.tools, endpoint, key, args, item, today)
