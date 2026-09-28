@@ -11,7 +11,7 @@ Find the spike with one aggregate first, then list only the observations inside 
    - a time dimension of an hour or a day, so the spike shows as one bucket;
    - grouped by the model or by the observation name, to see which one moved. Group only by a field with a few values; grouping by any ID field, a user's or a session's included, is refused by Langfuse.
 3. **Pick the window.** Take the bucket (or buckets) where the value jumps, and the model or name behind it.
-4. **List what ran in it.** Call `execute_read` `observations_getMany` with that bucket as its start-time window, plus the model or name from step 3 as a filter. For a latency spike, also filter on latency above the threshold you found, converted to seconds (see below). Rows carry only the field groups you ask for: set `fields` to `core,basic,usage,model,metrics`, so the rows hold the cost, the model and the latency. Confirm the filter format with `describe_operation observations_getMany` first.
+4. **List what ran in it.** Call `execute_read` `observations_getMany` with that bucket as its start-time window, plus the model or name from step 3 as a filter. For a latency spike, also filter on latency above the threshold you found, converted to seconds (see below). Rows carry only the field groups you ask for, so ask for the groups that hold the cost, the model and the latency besides the default ones. `describe_operation observations_getMany` lists the field groups and the filter format: read it first.
 5. **Explain.** Name the model, name or trace that caused the spike. Open a suspicious trace with `get_trace_tree`.
 
 ## The latency unit trap
