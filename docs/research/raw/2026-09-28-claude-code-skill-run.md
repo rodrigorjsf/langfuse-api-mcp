@@ -1,6 +1,6 @@
 # Claude Code loads the user skill and completes the M6 workflows against a local Langfuse (2026-09-28)
 
-This is the M6 exit proof 3 of spec #132 (ticket #140), run on Linux (WSL2) on 2026-09-28 between 06:15 and 06:25 UTC. Tool calls are copied verbatim from Claude Code's `stream-json` output, and from the session transcript for the interactive run. The scratch path is shown as `<project>`. No key appears in any output.
+This is manual proof 3 of spec #132 (ROADMAP M6 exit criterion 4; ticket #140), run on Linux (WSL2) on 2026-09-28 between 06:15 and 06:25 UTC. Tool calls are copied verbatim from Claude Code's `stream-json` output, and from the session transcript for the interactive run. The scratch path is shown as `<project>`. No key appears in any output.
 
 ## Setup
 
@@ -126,7 +126,7 @@ init: model claude-sonnet-5 | mcp [('langfuse', 'connected')] | langfuse skills:
 result: success turns 5 cost_usd 0.0393406 duration_ms 10172
 ```
 
-The cost run's metrics query and the observations filter are cut above at 400 characters by the extraction script. They were a `totalCost` sum per hour by `providedModelName` over 24 hours, then `observations_getMany` for the spike hour filtered to `gpt-4o`.
+No line above is cut. In words, the cost run sent a `totalCost` sum per hour by `providedModelName` over 24 hours, then `observations_getMany` for the spike hour filtered to `gpt-4o`.
 
 ### Prompt promote, interactive (tmux), transcript tool calls
 
@@ -260,5 +260,5 @@ Spend jumped in the hour starting **2026-09-28 01:00 UTC** (22:00 on 09-27 in GM
 ## What this does not prove
 
 - Other models (Haiku, Opus) and other MCP clients were not run.
-- The repository form of `npx skills add` was not run after the merge; it is to be appended after the merge.
+- The repository form of `npx skills add` installs nothing until spec #132 merges to `main`; its re-run after the merge is an open M6 item in `ROADMAP.md`.
 - The trace workflow did not call `get_trace_tree`. The session listing already held the failing observation, and the model said so. The experiments run exercised `get_trace_tree`.

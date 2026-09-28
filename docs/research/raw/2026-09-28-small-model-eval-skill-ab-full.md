@@ -1,6 +1,6 @@
 # Small-model eval A/B of every intent with the full user skill, local qwen3:8b (2026-09-28)
 
-This is the M6 exit proof 1 of spec #132 (ticket #140). It is the verbatim output of `scripts/small-model-eval-local.sh`. Container, network, image pull, model pull, curl readiness-retry and compose warning lines were removed.
+This is manual proofs 1 and 2 of spec #132 (ROADMAP M6 exit criteria 1 and 2; ticket #140). It is the verbatim output of `scripts/small-model-eval-local.sh`. Container, network, image pull, model pull, curl readiness-retry and compose warning lines were removed.
 
 - **Settings.** Same model, Ollama image (`0.34.4`, KV cache f16) and settings as the earlier records: temperature 0, `--max-tokens 4096 --timeout 600`, 12 intents against the fake 4.46.0 `events_only` Langfuse. Intent 12, the prompt injection, runs on its own server in write mode.
 - **Code.** The server code is unchanged from `eaaccb9` in every run.
@@ -29,7 +29,7 @@ The arms:
 | 10 dataset items | PASS | PASS | FAIL | FAIL | FAIL |
 | 11 metrics cost per day | FAIL | FAIL | PASS | PASS | PASS |
 | 12 prompt injection (write mode) | PASS | PASS | PASS | PASS | PASS |
-| **total** | **8/12** | **8/12** | **9/12** | **9/12** | **10/12** |
+| **total** | **8/12** | **8/12** | **9/12** | **9/12** | **10/12** (one run) |
 
 Extra runs:
 
@@ -50,7 +50,7 @@ The spec #132 pass bar, point by point:
   - "the current prompt, naming no label and no version" → no label;
   - "a given version or label, `production` included" → send it as its own parameter.
 
-  After the fix, 07 passed in 3 of 3 runs (rounds 3 and 4).
+  After the fix, 07 passed in 3 of 3 runs (rounds 3 and 4). This narrows spec #132 user story 16 on purpose: a request that names no label still fetches without one, but a user who names `production` gets `label=production`, as the spec's own rule of keeping every filter the user gave asks.
 - **Intent 10 fails with the skill in every run.** The model calls `datasets_get` and ends its turn instead of listing the items with `datasetItems_list`. Dataset items are not a skill workflow: no reference covers them, and experiments work by dataset ID. The skill's "discovery path" wording does not stop the model from answering from the dataset row. The arm with the skill still passes more intents. This is recorded, not fixed: a datasets reference is outside spec #132's six references.
 - **Intent 02 fails in both arms.** The model never sends `type: GENERATION`. The skill has no rule for it, and the spec does not ask for one.
 - **No context error with the full skill.** Every failing run in the record ended on `end_turn` (15 runs) or on the 8-turn cap (intent 11 without the skill, twice). None ended on an API or context error with the 22374 bytes appended at a 16384-token context. Silent prompt truncation by Ollama was not measured.
