@@ -124,15 +124,22 @@ func runCommandOutput(t *testing.T, argv, env []string) (stdout, stderr []byte, 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	cmd := newChildCommand(ctx, argv, env)
+	var out, errOut bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &errOut
+	err = cmd.Run()
+	return out.Bytes(), errOut.Bytes(), err
+}
+
+// newChildCommand builds the launch command argv (never through a shell) as a
+// child with the hermetic environment plus the extra entries (later entries win).
+func newChildCommand(ctx context.Context, argv, env []string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) //nolint:gosec // G204: argv is this test binary or the artifact under test, not external input
 	cmd.Env = childEnv(env)
 	// A launcher (npx on Windows is cmd.exe) may leave the executable holding
 	// the output pipes after a kill: stop waiting for them rather than hang.
 	cmd.WaitDelay = 5 * time.Second
-	var out, errOut bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errOut
-	err = cmd.Run()
-	return out.Bytes(), errOut.Bytes(), err
+	return cmd
 }
 
 // childEnv is the environment of a child: this process's, marked to run
