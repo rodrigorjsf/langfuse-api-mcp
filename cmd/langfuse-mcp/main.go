@@ -24,7 +24,7 @@ import (
 // version is the version this executable was built with, reported in
 // initialize and in the startup log. Release builds set it through the linker
 // (-X main.version=…, packaging/.goreleaser.yaml); it is never changed at run
-// time.
+// time. A go install build therefore reports DevVersion (see #127).
 var version = server.DevVersion
 
 func main() {

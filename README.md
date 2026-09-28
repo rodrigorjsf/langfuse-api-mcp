@@ -325,7 +325,7 @@ Then point your MCP client at the extracted binary (see [Client configuration](#
 go install github.com/rodrigorjsf/langfuse-api-mcp/cmd/langfuse-mcp@<version>
 ```
 
-The binary lands in `$(go env GOPATH)/bin`. A `go install` build carries no injected version, so it reports `0.0.0-dev`; use a release archive when you need the version in bug reports.
+The binary lands in `$(go env GOPATH)/bin`. A `go install` build carries no injected version, so it reports `0.0.0-dev`; use a release archive when you need the version in bug reports (see [#127](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/127)).
 
 ### Client configuration
 
