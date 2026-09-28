@@ -117,13 +117,16 @@ def catalog_operation_ids():
                      if isinstance(op, dict) and "operationId" in op)
 
 
+def frontmatter_block(text):
+    """Return the text of a leading --- block (empty if none)."""
+    m = re.match(r"---\n(.*?)\n---\n", text, re.S)
+    return m.group(1) if m else ""
+
+
 def frontmatter(text):
     """Return the `key: value` pairs of a leading --- block (empty if none)."""
-    m = re.match(r"---\n(.*?)\n---\n", text, re.S)
-    if not m:
-        return {}
     fields = {}
-    for line in m.group(1).splitlines():
+    for line in frontmatter_block(text).splitlines():
         key, sep, value = line.partition(":")
         if sep and not line.startswith((" ", "\t")):
             fields[key.strip()] = value.strip().strip('"\'')
@@ -161,7 +164,7 @@ def check_skill(skill_dir):
     elif len(fields["description"]) > MAX_DESCRIPTION:
         problems.append(f"{ENTRY}: frontmatter description has {len(fields['description'])} characters; "
                         f"Claude Desktop's upload takes at most {MAX_DESCRIPTION}")
-    raw = re.search(r"(?m)^description:[ \t]*(.*)$", entry)
+    raw = re.search(r"(?m)^description:[ \t]*(.*)$", frontmatter_block(entry))
     if raw and not raw.group(1).startswith(("'", '"')) and (": " in raw.group(1) or " #" in raw.group(1)):
         # A YAML plain scalar ends at ": " or " #": a real loader rejects or cuts the description.
         problems.append(f"{ENTRY}: frontmatter description holds ': ' or ' #' unquoted; quote it or reword it")
