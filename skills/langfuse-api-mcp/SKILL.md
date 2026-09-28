@@ -26,3 +26,4 @@ Read the reference for the workflow the user asks about:
 - Scores, score configs, score distributions, a user's scores: [references/scores.md](references/scores.md)
 - A cost or latency spike, what caused it: [references/cost-latency.md](references/cost-latency.md)
 - Comparing experiments on a dataset, an experiment regression: [references/experiments.md](references/experiments.md)
+- Prompts, prompt versions and labels (fetch, compare, promote): [references/prompts.md](references/prompts.md)
