@@ -103,8 +103,8 @@ class FrontmatterTest(unittest.TestCase):
 class CitedReferenceTest(unittest.TestCase):
     def test_a_linked_reference_that_does_not_exist_fails(self):
         fx = SkillFixture(self)
-        fx.append("SKILL.md", "- Cost and latency: [references/cost-latency.md](references/cost-latency.md)")
-        self.assertIn("SKILL.md: cites references/cost-latency.md, which does not exist",
+        fx.append("SKILL.md", "- Billing: [references/no-such-billing.md](references/no-such-billing.md)")
+        self.assertIn("SKILL.md: cites references/no-such-billing.md, which does not exist",
                       checkmod.check_skill(fx.dir))
 
     def test_a_deleted_reference_the_entry_file_links_fails(self):
@@ -115,8 +115,8 @@ class CitedReferenceTest(unittest.TestCase):
 
     def test_a_reference_named_in_backticks_that_does_not_exist_fails(self):
         fx = SkillFixture(self)
-        fx.append("SKILL.md", "Prompts: read `references/prompts.md`.")
-        self.assertIn("SKILL.md: cites references/prompts.md, which does not exist",
+        fx.append("SKILL.md", "Billing: read `references/no-such-billing.md`.")
+        self.assertIn("SKILL.md: cites references/no-such-billing.md, which does not exist",
                       checkmod.check_skill(fx.dir))
 
     def test_a_references_path_inside_a_url_is_not_a_reference(self):
