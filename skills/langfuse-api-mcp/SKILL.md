@@ -1,6 +1,6 @@
 ---
 name: langfuse-api-mcp
-description: Load before any langfuse-api-mcp tool call (search_operations, describe_operation, execute_read, get_trace_tree, execute_write) on Langfuse traces, sessions, scores, cost, experiments or prompts.
+description: Investigate Langfuse traces, scores, prompts, datasets, metrics with langfuse-api-mcp tools (search_operations, describe_operation, execute_read, get_trace_tree, execute_write). Load before any call.
 ---
 
 # Langfuse through langfuse-api-mcp
