@@ -99,9 +99,11 @@ jobs:
             got=$(docker image inspect -f '{{.Os}}/{{.Architecture}} {{.Config.User}} {{json .Config.Entrypoint}}' "$image")
             want="linux/$arch nonroot:nonroot [\"/usr/local/bin/langfuse-mcp\"]"
             [ "$got" = "$want" ] || { echo "::error::$image: got '$got', want '$want'"; exit 1; }
-            if docker run --rm --entrypoint /bin/sh "$image" -c true 2>/dev/null; then
+            # Only "no such file" counts as no shell: any other failure is not proof.
+            if out=$(docker run --rm --entrypoint /bin/sh "$image" -c true 2>&1); then
               echo "::error::$image has a shell"; exit 1
             fi
+            grep -q 'no such file or directory' <<<"$out" || { echo "::error::$image: unexpected failure: $out"; exit 1; }
           done
       # One SPDX JSON SBOM for the image (spec #119), written by the same pinned syft as the archives'.
       # It describes the amd64 image; the arm64 image holds the same base and the same binary built
@@ -210,7 +212,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      IMAGE: ghcr.io/rodrigorjsf/langfuse-api-mcp:${{ needs.snapshot.outputs.version }}-amd64
+      IMAGE_REF: ghcr.io/rodrigorjsf/langfuse-api-mcp:${{ needs.snapshot.outputs.version }}-amd64
       LANGFUSE_MCP_SMOKE_VERSION: ${{ needs.snapshot.outputs.version }}
     steps:
       # The checkout carries only the smoke's test sources; the binary under test is the image's.
@@ -234,7 +236,7 @@ jobs:
           ca_dir="$RUNNER_TEMP/smoke-ca"
           mkdir -m 0755 "$ca_dir" # the image's non-root user must read the CA file
           export LANGFUSE_MCP_SMOKE_CA_DIR="$ca_dir"
-          LANGFUSE_MCP_SMOKE_COMMAND=$(jq -cn --arg ca "$ca_dir" --arg image "$IMAGE" '[
+          LANGFUSE_MCP_SMOKE_COMMAND=$(jq -cn --arg ca "$ca_dir" --arg image "$IMAGE_REF" '[
             "docker", "run", "-i", "--rm", "--network", "host",
             "-e", "LANGFUSE_PUBLIC_KEY", "-e", "LANGFUSE_SECRET_KEY",
             "-e", "LANGFUSE_BASE_URL", "-e", "LANGFUSE_CA_CERT",

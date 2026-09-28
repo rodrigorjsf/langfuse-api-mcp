@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strings"
@@ -155,7 +156,17 @@ func checkReadsThroughAPrivateCA(t *testing.T, argv []string, caDir string) {
 	fake := privateCALangfuse(t)
 	caFile := writePrivateCAFile(t, caDir, fake)
 
-	raw := callTraceGet(t, argv, "LANGFUSE_BASE_URL="+fake.URL, "LANGFUSE_CA_CERT="+caFile)
+	raw, stderr := runTraceGet(t, argv, "LANGFUSE_BASE_URL="+fake.URL, "LANGFUSE_CA_CERT="+caFile)
+
+	// The CA file is loaded as an explicit source (#28). Other sources may be
+	// logged too: the container's base image sets SSL_CERT_FILE to its bundle.
+	want := map[string]any{
+		"variable": "LANGFUSE_CA_CERT", "path": caFile, "kind": "explicit", "origin": "environment",
+		"certificates": float64(1),
+	}
+	if got := loggedSources(t, stderr); !slices.ContainsFunc(got, func(s any) bool { return reflect.DeepEqual(s, want) }) {
+		t.Errorf("logged CA sources = %v, want them to include %v", got, want)
+	}
 
 	var call struct {
 		IsError           bool `json:"isError"`
@@ -192,14 +203,9 @@ func checkRefusesAnUntrustedCertificate(t *testing.T, argv []string) {
 	t.Helper()
 	fake := privateCALangfuse(t)
 
-	raw := callTraceGet(t, argv, "LANGFUSE_BASE_URL="+fake.URL)
+	raw, _ := runTraceGet(t, argv, "LANGFUSE_BASE_URL="+fake.URL)
 
-	var call struct {
-		IsError bool `json:"isError"`
-		Content []struct {
-			Text string `json:"text"`
-		} `json:"content"`
-	}
+	var call toolCall
 	if err := json.Unmarshal(raw, &call); err != nil {
 		t.Fatalf("decode tools/call: %v", err)
 	}
@@ -264,9 +270,9 @@ func writePrivateCAFile(t *testing.T, dir string, fake *httptest.Server) string 
 	return f.Name()
 }
 
-// callTraceGet starts the executable with env, makes one execute_read of
-// trace_get and returns the tools/call result.
-func callTraceGet(t *testing.T, argv []string, env ...string) json.RawMessage {
+// runTraceGet starts the executable with env, makes one execute_read of
+// trace_get, stops it and returns the tools/call result and its stderr.
+func runTraceGet(t *testing.T, argv []string, env ...string) (result json.RawMessage, stderr []byte) {
 	t.Helper()
 	s := startCommand(t, argv, "", env...)
 	s.initialize()
@@ -276,7 +282,7 @@ func callTraceGet(t *testing.T, argv []string, env ...string) json.RawMessage {
 		},
 	}, true)
 	s.stop()
-	return raw
+	return raw, s.stderr.Bytes()
 }
 
 // checkRefusesAnInvalidBaseURL proves an invalid base URL stops startup with
