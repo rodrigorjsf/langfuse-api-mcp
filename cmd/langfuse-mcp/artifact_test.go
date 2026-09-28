@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -118,6 +120,10 @@ func checkInstalledArtifact(t *testing.T, argv []string, wantVersion, caDir stri
 	t.Run("an invalid base URL stops startup naming the variable, never the value", func(t *testing.T) {
 		t.Parallel()
 		checkRefusesAnInvalidBaseURL(t, argv)
+	})
+	t.Run("keys carrying shell metacharacters reach Langfuse byte-for-byte", func(t *testing.T) {
+		t.Parallel()
+		checkPassesTheKeysUnchanged(t, argv)
 	})
 }
 
@@ -293,8 +299,10 @@ func checkRefusesAnInvalidBaseURL(t *testing.T, argv []string) {
 	configEnv, _ := userConfigLocation(t)
 	stdout, stderr, err := runCommandOutput(t, argv, append(configEnv, "LANGFUSE_BASE_URL="+invalid))
 
-	if err == nil {
-		t.Fatalf("executable exited 0 with an invalid base URL; stderr:\n%s", stderr)
+	// Exactly the executable's exit code, 1: a launcher in between (the npx shim) must not change it.
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 1 {
+		t.Fatalf("executable ended with %v, want exit code 1 with an invalid base URL; stderr:\n%s", err, stderr)
 	}
 	if msg := startupError(t, stderr); !strings.Contains(msg, "LANGFUSE_BASE_URL") {
 		t.Errorf("startup error %q does not name LANGFUSE_BASE_URL", msg)
@@ -304,5 +312,44 @@ func checkRefusesAnInvalidBaseURL(t *testing.T, argv []string) {
 	}
 	if len(stdout) != 0 {
 		t.Errorf("a failed startup wrote to stdout: %q", stdout)
+	}
+}
+
+// shellHostileKeys is a key pair whose values a shell would rewrite in every way
+// it can: command substitution, variables (sh and cmd.exe), globs, separators,
+// redirections, quotes and escapes. A launcher that passes the environment
+// through a shell (spec #119: the npx shim must not) changes them.
+const (
+	shellHostilePublicKey = "pk-lf-a b;$(echo pwned)`id`|&>out<in *?~ $HOME %PATH% ^! 'q' \"dq\" \\#end"
+	shellHostileSecretKey = "sk-lf-$SECRET && exit 7 || %COMSPEC% `whoami` ; rm -rf * >nul" //nolint:gosec // G101: a fake key for the fake Langfuse
+)
+
+// checkPassesTheKeysUnchanged proves the key pair reaches Langfuse exactly as
+// the host set it in the environment: the Basic auth of an execute_read
+// carries both keys byte-for-byte.
+func checkPassesTheKeysUnchanged(t *testing.T, argv []string) {
+	t.Helper()
+	var mu sync.Mutex
+	var user, password string
+	var seen bool
+	fake := deploymentLangfuse(t, `{"status":"OK","version":"4.46.0"}`, nil, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		user, password, seen = r.BasicAuth()
+		mu.Unlock()
+		_, _ = io.WriteString(w, `{"id":"trace-1"}`) // a failed write fails the call
+	})
+
+	s := startCommand(t, argv, "", "LANGFUSE_BASE_URL="+fake.URL,
+		"LANGFUSE_PUBLIC_KEY="+shellHostilePublicKey, "LANGFUSE_SECRET_KEY="+shellHostileSecretKey)
+	s.initialize()
+	if call := s.callTraceGet(); call.IsError {
+		t.Fatalf("execute_read failed: %+v\nstderr:\n%s", call, s.stderr)
+	}
+	s.stop()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if !seen || user != shellHostilePublicKey || password != shellHostileSecretKey {
+		t.Errorf("Basic auth = (%q, %q, %v), want the keys unchanged (%q, %q)", user, password, seen, shellHostilePublicKey, shellHostileSecretKey)
 	}
 }
