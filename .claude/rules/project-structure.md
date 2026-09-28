@@ -28,7 +28,7 @@ Packages are organized **by domain concept** (terms from `CONTEXT.md`), never by
 └── .claude/                 rules/, hooks/, settings.json; handoffs/ (session handoff notes) is local, gitignored
 ```
 
-Go tooling files that must sit at the root stay there: `go.mod`, `go.sum`, `.golangci.yml`, `.gitattributes`, `.gitignore`, `LICENSE`, `README.md`, `CONTEXT.md`, `ROADMAP.md`, `CLAUDE.md`.
+Go tooling files that must sit at the root stay there: `go.mod`, `go.sum`, `.golangci.yml`, `.gitattributes`, `.gitignore`, `LICENSE`, `README.md`, `CONTEXT.md`, `ROADMAP.md`, `CLAUDE.md`. `SECURITY.md` (the vulnerability reporting policy) sits at the root because GitHub reads it there.
 Platform-mandated locations are not design choices and need no ADR: `.github/` holds `workflows/` (CI, toolchain bump) and `dependabot.yml`.
 
 ## Placement table — "the logic is about…"
