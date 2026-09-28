@@ -3,7 +3,8 @@
 # runner's system trust store (spec #7).
 # The generator job runs the union catalog generator's offline unit tests (#89).
 # Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current.
-# The generator job also runs the user skill check (#134, spec #132 S3).
+# The generator job also runs the user skill check (#134, spec #132 S3) and the skill ZIP pack
+# script's tests (#139, S4).
 # A push or pull request that only changes docs (Markdown, docs/, .claude/, LICENSE) starts no run:
 # nothing in those paths is compiled or embedded (the only go:embed is internal/catalog/spec/*.json).
 # The user skill's Markdown under skills/ is the exception: the skill check guards it, so an edit
@@ -147,6 +148,12 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/check-skill.py
+      # The pack script of the skill ZIP for Claude Desktop (spec #132 S4, #139): the skill folder as
+      # the ZIP's root, every file of the skill, the same bytes every time. The release workflow runs it.
+      - name: Test the skill ZIP pack script
+        run: |
+          set -euo pipefail
+          python3 scripts/test_pack_skill.py
       # The eval's Ollama stack takes OLLAMA_KV_CACHE_TYPE from the caller's environment; a typo in
       # the compose file or its interpolation fails here, not at the next hand-run eval. Parse only:
       # nothing is pulled or started (the stack needs an NVIDIA GPU that runners lack).

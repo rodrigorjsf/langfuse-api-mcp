@@ -2,8 +2,9 @@
 #
 # WHAT: the offline check of a user skill (spec #132 seam S3, ticket #134). For
 #       each skill directory it fails when:
-#       - the entry SKILL.md frontmatter lacks `name` or `description`, or
-#         `name` is not the directory's name;
+#       - the entry SKILL.md frontmatter lacks `name` or `description`,
+#         `name` is not the directory's name, or `description` is over the
+#         200 characters Claude Desktop's upload takes (#139);
 #       - a reference the entry file cites does not exist;
 #       - a snake_case word in the text is neither a tool name nor an error
 #         code the server has (KNOWN_TOOLS, KNOWN_ERROR_CODES below) nor an
@@ -39,6 +40,9 @@ import sys
 
 ENTRY = "SKILL.md"
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Claude Desktop's skill upload (the release ZIP, #139) takes a description of
+# at most 200 characters (support.claude.com "How to create custom Skills").
+MAX_DESCRIPTION = 200
 CATALOG = os.path.join(ROOT, "internal", "catalog", "spec", "langfuse-union-catalog.json")
 
 # Keep in step with the tools internal/server registers (server.go, write.go,
@@ -153,6 +157,9 @@ def check_skill(skill_dir):
         problems.append(f"{ENTRY}: frontmatter name '{fields['name']}' is not the directory name '{dirname}'")
     if not fields.get("description"):
         problems.append(f"{ENTRY}: frontmatter has no description")
+    elif len(fields["description"]) > MAX_DESCRIPTION:
+        problems.append(f"{ENTRY}: frontmatter description has {len(fields['description'])} characters; "
+                        f"Claude Desktop's upload takes at most {MAX_DESCRIPTION}")
     for rel in cited_files(entry):
         if not os.path.isfile(os.path.join(skill_dir, rel)):
             problems.append(f"{ENTRY}: cites {rel}, which does not exist")
