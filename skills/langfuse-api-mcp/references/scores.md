@@ -1,12 +1,12 @@
 # Scores
 
-A score is one evaluation result (a number, a boolean, a category or a text) attached to one trace, observation, session or experiment. It has a `name`, such as `helpfulness`.
+A score is one evaluation result (a number, a boolean or a string) attached to one trace, observation, session or experiment. It has a `name`, such as `helpfulness`.
 
-**Keep every filter the user gave.** Each thing the user names becomes its own parameter on the same call. Scores named `helpfulness` on trace `tr-88` is one `scoresV3_getManyV3` call with **both** `traceId` `tr-88` and `name` `helpfulness`, never `traceId` alone. Opening the trace with `get_trace_tree` does not replace that call.
+**Keep every filter the user gave.** Each thing the user names becomes its own parameter on the same call. Scores named `helpfulness` on trace `tr-88` is one `scoresV3_getManyV3` call with **both** `traceId` `tr-88` and `name` `helpfulness`, never `traceId` alone. Opening the trace with `get_trace_tree` does not replace that call. A call filtered by a trace, session or observation ID is already bounded: add a time window only when the user named one, or it hides that trace's older scores.
 
 | The user asks for | Call |
 |---|---|
-| scores of a trace, a session or an observation, maybe by name | `execute_read` `scoresV3_getManyV3` with `traceId` (or `sessionId`, or `traceId` plus `observationId`) and every other filter named: `name`, source, data type, value |
+| scores of a trace, a session or an observation, maybe by name | `execute_read` `scoresV3_getManyV3` with `traceId` (or `sessionId`, or `traceId` plus `observationId`) and every other filter named: `name`, `source`, `dataType`, `value` |
 | the score configs defined in the project | `execute_read` `scoreConfigs_get` |
 | a distribution: the average, the true-rate, the count per category, a trend over time | `execute_read` `metrics_metrics` with a scores view, not pages of rows |
 | a user's scores, as rows | first `execute_read` `observations_getMany` with `userId` and `isRootObservation` `true` in a bounded window; collect the distinct `traceId` values; then `scoresV3_getManyV3` with those trace IDs in `traceId`, joined with commas |
