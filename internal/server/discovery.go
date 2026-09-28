@@ -407,7 +407,7 @@ func operationDescriptionSchema() map[string]any {
 						"default":   map[string]any{},
 						"guidance": map[string]any{"type": "string", "description": "How to fill the parameter: static text " +
 							"written by this server, not from the Langfuse spec; present only where the spec's type " +
-							"does not say it, e.g. the metrics query JSON."},
+							"does not say it, e.g. the metrics query JSON, or which prompts_list parameter filters by tag."},
 					},
 				},
 			},

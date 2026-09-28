@@ -227,16 +227,11 @@ const metricsQueryExample = `{"view":"observations","metrics":[{"measure":"total
 	`"filters":[{"column":"traceName","operator":"=","value":"checkout","type":"string"}],` +
 	`"timeDimension":{"granularity":"day"},"fromTimestamp":"2025-01-01T00:00:00Z","toTimestamp":"2025-01-08T00:00:00Z"}`
 
-// ParamGuidance returns static guidance on how to fill parameter p of the
-// operation, or "" when there is none (#104). Only the query of
-// metrics_metrics has guidance: the Langfuse spec types it as a plain string,
-// so nothing else tells an agent its shape. The text is compiled into the
-// binary, never built from API data, and its key list is the validator's
-// own (metricsQueryKeys), so the two cannot drift.
-func (o Operation) ParamGuidance(p Param) string {
-	if !o.isMetricsV2Query(p) {
-		return ""
-	}
+// metricsQueryGuidance is the guidance on the query of metrics_metrics
+// (#104): the Langfuse spec types it as a plain string, so nothing else tells
+// an agent its shape. Its key list is the validator's own
+// (metricsQueryKeys), so the two cannot drift.
+func metricsQueryGuidance() string {
 	typed := make([]string, len(metricsQueryKeyNames))
 	for i, k := range metricsQueryKeyNames {
 		typed[i] = k + " (" + metricsQueryKeys[k].String() + ")"
@@ -255,9 +250,4 @@ func (o Operation) ParamGuidance(p Param) string {
 		strconv.Itoa(MaxRowLimit) + ", default " + strconv.Itoa(DefaultRowLimit) + ". " +
 		"Example, the total cost per day of the observations of traces named checkout, " +
 		"for the week to 2025-01-08 (set fromTimestamp and toTimestamp to the window you need): " + metricsQueryExample
-}
-
-// HasGuidance reports whether any parameter of the operation has guidance.
-func (o Operation) HasGuidance() bool {
-	return slices.ContainsFunc(o.Params, func(p Param) bool { return o.ParamGuidance(p) != "" })
 }
