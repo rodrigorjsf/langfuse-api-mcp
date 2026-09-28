@@ -60,6 +60,9 @@ func startCommand(t *testing.T, argv []string, content string, env ...string) *s
 	}
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) //nolint:gosec // G204: argv is this test binary or the artifact under test, not external input
 	cmd.Env = childEnv(append(configEnv, env...))
+	// A launcher (npx on Windows is cmd.exe) may leave the executable holding
+	// the output pipes after a kill: stop waiting for them rather than hang.
+	cmd.WaitDelay = 5 * time.Second
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		t.Fatalf("stdin pipe: %v", err)

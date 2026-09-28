@@ -285,7 +285,7 @@ Every build reports the version it was built with: `initialize` returns it as th
 | [`go install`](#go-install) | **Planned**: works once the repository is public (M7); `@<version>` once a release tag exists |
 | [Docker](#docker) (linux/amd64, linux/arm64; stdio only) | built and smoke-tested on every change to packaging or the executable; **publishing Planned**: the image is pushed to GHCR with the first release (M7) |
 | Claude Desktop | **Planned**: `.mcpb` bundle (double-click install) |
-| npm | **Planned**: `npx -y langfuse-api-mcp` |
+| [npx](#npx) (Linux, macOS, Windows × x64, arm64) | built on every change to packaging or the executable, and smoke-tested on Linux x64, macOS arm64 and Windows x64 (the other three platform packages are built, not CI-tested); **publishing Planned**: `npm publish` runs with the first release (M7) |
 
 ### Release archive
 
@@ -353,6 +353,32 @@ docker run -i --rm \
 The image trusts its base image's CA bundle plus the file you mount, nothing else (the base image sets `SSL_CERT_FILE` to its bundle, so the startup `CA sources loaded` line lists it as an ambient source next to your file): without the file, a Langfuse host signed by a private CA is refused with `tls_untrusted_certificate`. In an MCP client, the `command` is `docker` and `args` is the list above. To cap the server's memory, give the container a limit and pass the matching Go soft limit, for example `--memory 256m -e GOMEMLIMIT=200MiB`: the Go runtime reads `GOMEMLIMIT` and collects garbage harder as it nears it, instead of being killed at the container limit.
 
 **The image serves stdio only.** The loopback HTTP transport (`LANGFUSE_MCP_TRANSPORT=http`, **Planned**) binds `127.0.0.1` only, which inside a container is the container's own loopback: it cannot be reached from outside, and it is not meant to be exposed.
+
+### npx
+
+**Planned until the first release** (M7): the release pipeline already packs the npm packages for every change to packaging or the executable and proves them with `npx` on clean Linux, macOS and Windows runners, but nothing is published yet.
+
+Configure the server in your MCP client as `npx -y langfuse-api-mcp` (pin a version with `langfuse-api-mcp@<version>`); it needs Node.js with npm, nothing else:
+
+```json
+{
+  "mcpServers": {
+    "langfuse": {
+      "command": "npx",
+      "args": ["-y", "langfuse-api-mcp"],
+      "env": {
+        "LANGFUSE_PUBLIC_KEY": "pk-lf-...",
+        "LANGFUSE_SECRET_KEY": "sk-lf-...",
+        "LANGFUSE_BASE_URL": "https://cloud.langfuse.com"
+      }
+    }
+  }
+}
+```
+
+The package carries the Go binary; nothing is downloaded at install time and no install script runs, so it installs wherever npm can reach its registry, also with `--ignore-scripts`. `langfuse-api-mcp` holds only a small Node launcher, `langfuse-mcp`, and lists one optional dependency per platform: `langfuse-api-mcp-<platform>-<arch>` for `linux`, `darwin` and `win32` × `x64` and `arm64`, each restricted to its OS and CPU and holding only that platform's binary, so npm installs the one for your machine and skips the others. All of them carry the same version as the release. The launcher starts the binary with your arguments and environment unchanged, never through a shell, with stdin, stdout and stderr passed straight through; it forwards `SIGINT`, `SIGTERM` and `SIGHUP` to the binary and exits with the binary's exit code, or of the same signal (proven on Linux and macOS; Windows has no such signals, and there a stop request ends the binary too). On Windows, `npx` itself is a `.cmd` script that npm runs through `cmd.exe`, so arguments you put after the package name pass through npm's own command-line handling before they reach the launcher; the server takes no arguments, and your keys and settings travel in the environment, which no shell rewrites. On any other platform it exits with an error naming your platform and the supported ones: use a [release archive](#release-archive) or [Docker](#docker) there. An install with `--omit=optional` leaves the binary out, and the launcher says so.
+
+The npm registry and Node.js are dependencies of this channel only: the other channels do not touch them.
 
 ### Client configuration
 
@@ -465,7 +491,7 @@ Recommendations: create a dedicated Langfuse key for the agent, set an expiry da
 
 ### Verify what you run **(Planned)**
 
-Releases will ship with checksums, an SBOM, cosign keyless signatures and GitHub build provenance (`gh attestation verify`). The one Python dependency of the maintainer tooling (PyYAML, used by the union catalog generator in CI only) is pinned with hashes in [`scripts/requirements.txt`](scripts/requirements.txt), installed with `--require-hashes` and kept current by Dependabot.
+Releases will ship with checksums, an SBOM, cosign keyless signatures and GitHub build provenance (`gh attestation verify`). The [npx](#npx) channel adds the npm registry and Node.js as dependencies of that channel only; its packages depend on nothing but their own platform packages and run no install script. The one Python dependency of the maintainer tooling (PyYAML, used by the union catalog generator in CI only) is pinned with hashes in [`scripts/requirements.txt`](scripts/requirements.txt), installed with `--require-hashes` and kept current by Dependabot.
 
 ## Stack
 
@@ -521,13 +547,26 @@ The embedded union catalog is generated, never edited by hand: [`scripts/gen-uni
 
 The small-model discovery eval, [`scripts/small-model-eval.py`](scripts/small-model-eval.py), checks that Haiku 4.5 reaches the right operation from a plain-language intent using only `search_operations`, `describe_operation`, `execute_read` and `get_trace_tree`. It runs 11 intents covering traces, observations, scores, prompts, datasets and metrics, and prints one PASS/FAIL line per intent and the total. An intent passes when the model makes the expected call and the server accepts it. The system prompt names the run date (UTC), as agent hosts do, and the metrics intent passes only when its query's time window is the last 7 days before that date; `python3 scripts/test_small_model_eval.py` checks that matcher offline, in CI too. The expected operation IDs and key parameters are literals in the script. The server runs against a fake Langfuse on `127.0.0.1` that answers as 4.46.0 `events_only` with no data, so no real Langfuse key or project is involved. Run it by hand with `ANTHROPIC_API_KEY` set (standard library only; it builds the server with `go build` unless you pass `--server`). The key is read only from the environment and never printed or passed to the server. Paste the output into the pull request, and file every failing intent as a follow-up issue on M3 or M6 (the first recorded run is tracked in [#88](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/88)). It is not a CI gate: it costs API tokens and a model's answers can vary. Without an API key, [`scripts/small-model-eval-local.sh`](scripts/small-model-eval-local.sh) runs it against a local `qwen3:8b` through Ollama (see "Container stacks"); `--only 2,5` reruns chosen intents. The first recorded run used that local model instead of Haiku 4.5, because the maintainer chose not to use a paid API: 7/11 passed on 2026-09-27 ([output](docs/research/raw/2026-09-27-small-model-eval-qwen3-8b.md); failing intents filed as #97, #98, #99, #100). A later full run at the current code passes 8/11 (02 and 03 still fail, #97 and #98; 08 now fails, #114), and a comparison of local models on the same 12 GB GPU keeps `qwen3:8b` Q4_K_M as the default: `qwen3:14b` passes 9/11 but fails intent 11, which the default passes, and needs a quantized KV cache to fit ([output](docs/research/raw/2026-09-27-small-model-eval-local-model-vram.md)).
 
-**The release pipeline runs in snapshot mode.** [`.github/workflows/release.yml`](.github/workflows/release.yml) runs on pull requests that touch `packaging/`, `cmd/langfuse-mcp/`, `go.mod`/`go.sum` or the workflow itself, on every push to `main` and weekly. GoReleaser ([`packaging/.goreleaser.yaml`](packaging/.goreleaser.yaml)) builds the six archives with the version `0.0.0-SNAPSHOT-<short commit>`, the checksums file and one SPDX JSON SBOM per archive (syft); then the installed-artifact smoke checks the archive for its runner against `checksums.txt`, extracts it on Linux, macOS and Windows, and runs `TestInstalledArtifact` (build tag `smoke`, `cmd/langfuse-mcp/installed_test.go`) against the extracted binary: `initialize` reports the snapshot's version, `tools/list` returns the read tool set, one `execute_read` against a fake TLS Langfuse trusted only through `LANGFUSE_CA_CERT` returns its payload stripped of hidden and bidi characters inside the untrusted-data envelope, the same read without `LANGFUSE_CA_CERT` is refused as `tls_untrusted_certificate`, and an invalid `LANGFUSE_BASE_URL` stops startup naming the variable, never the value. The same run builds the container image ([`packaging/Dockerfile`](packaging/Dockerfile)) for `linux/amd64` and `linux/arm64` without pushing it, checks each for the non-root user, the binary as entrypoint and no shell, writes its SPDX JSON SBOM with syft, and runs `TestInstalledArtifact` on a Linux runner against `docker run -i --network host` with the private CA mounted read-only (`LANGFUSE_MCP_SMOKE_CA_DIR`). The same assertions run in `go test ./...` against a binary built with an injected version. To run the pipeline locally, install GoReleaser v2.18.2 and syft v1.52.0 (the versions the workflow pins) and Docker with buildx (for the image), then:
+**The release pipeline runs in snapshot mode.** [`.github/workflows/release.yml`](.github/workflows/release.yml) runs on pull requests that touch `packaging/`, `cmd/langfuse-mcp/`, `go.mod`/`go.sum` or the workflow itself, on every push to `main` and weekly. GoReleaser ([`packaging/.goreleaser.yaml`](packaging/.goreleaser.yaml)) builds the six archives with the version `0.0.0-SNAPSHOT-<short commit>`, the checksums file and one SPDX JSON SBOM per archive (syft); then the installed-artifact smoke checks the archive for its runner against `checksums.txt`, extracts it on Linux, macOS and Windows, and runs `TestInstalledArtifact` (build tag `smoke`, `cmd/langfuse-mcp/installed_test.go`) against the extracted binary: `initialize` reports the snapshot's version, `tools/list` returns the read tool set, one `execute_read` against a fake TLS Langfuse trusted only through `LANGFUSE_CA_CERT` returns its payload stripped of hidden and bidi characters inside the untrusted-data envelope, the same read without `LANGFUSE_CA_CERT` is refused as `tls_untrusted_certificate`, and an invalid `LANGFUSE_BASE_URL` stops startup naming the variable, never the value. The same run builds the container image ([`packaging/Dockerfile`](packaging/Dockerfile)) for `linux/amd64` and `linux/arm64` without pushing it, checks each for the non-root user, the binary as entrypoint and no shell, writes its SPDX JSON SBOM with syft, and runs `TestInstalledArtifact` on a Linux runner against `docker run -i --network host` with the private CA mounted read-only (`LANGFUSE_MCP_SMOKE_CA_DIR`). The packaging script [`packaging/npm/pack.mjs`](packaging/npm/pack.mjs) turns GoReleaser's binaries into the seven npm packages and packs them with `npm pack` (the workflow checks that every version is the snapshot's and that no package has a script); on Linux, macOS and Windows runners the launcher's own tests run (`node --test packaging/npm/shim.test.mjs`: arguments and environment byte-for-byte, exit code, signal forwarding on Linux and macOS, unsupported platform), then a local registry ([`packaging/npm/smoke-registry.mjs`](packaging/npm/smoke-registry.mjs)) serves the tarballs, `npx -y langfuse-api-mcp@<version>` installs from it with scripts off, the job checks that only the runner's platform package was installed, and `TestInstalledArtifact` runs against `npx`. Every channel also proves that keys full of shell metacharacters reach Langfuse byte-for-byte and that a failed startup exits with code 1 and its one log line. The same assertions run in `go test ./...` against a binary built with an injected version. To run the pipeline locally, install GoReleaser v2.18.2 and syft v1.52.0 (the versions the workflow pins) and Docker with buildx (for the image), then:
 
 ```bash
 goreleaser release --snapshot --clean --config packaging/.goreleaser.yaml
 mkdir -p /tmp/lfmcp && tar -xzf dist/langfuse-mcp_*_linux_amd64.tar.gz -C /tmp/lfmcp
 LANGFUSE_MCP_SMOKE_COMMAND='["/tmp/lfmcp/langfuse-mcp"]' \
 LANGFUSE_MCP_SMOKE_VERSION="$(jq -r .version dist/metadata.json)" \
+  go test -tags smoke -count=1 -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
+```
+
+The npx channel, with Node.js 24 and npm (after the snapshot above):
+
+```bash
+node --test packaging/npm/shim.test.mjs
+node packaging/npm/pack.mjs dist /tmp/lfmcp-npm
+node packaging/npm/smoke-registry.mjs /tmp/lfmcp-npm > /tmp/lfmcp-registry.url &   # stop it afterwards
+export npm_config_registry="$(head -n 1 /tmp/lfmcp-registry.url)" npm_config_cache=/tmp/lfmcp-npm-cache
+version="$(jq -r .version dist/metadata.json)"
+npm exec --yes --package="langfuse-api-mcp@$version" -- node -e 0   # install once
+LANGFUSE_MCP_SMOKE_COMMAND="[\"npx\",\"-y\",\"langfuse-api-mcp@$version\"]" LANGFUSE_MCP_SMOKE_VERSION="$version" \
   go test -tags smoke -count=1 -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
 ```
 
