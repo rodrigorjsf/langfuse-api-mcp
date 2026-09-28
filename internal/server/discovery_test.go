@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"slices"
 	"strings"
 	"testing"
 
@@ -434,11 +435,101 @@ func TestSearchOperationsAboutTracesOnAV4DeploymentNamesTheTraceReads(t *testing
 	}
 }
 
-func TestSearchOperationsThatMatchesNothingReturnsTheTraceReadsHint(t *testing.T) {
+// #114: a no-match query that is not about traces gets no trace reads hint, so
+// the result ends with the search-again text and a small model searches again
+// instead of reading the trace-only hint as "nothing here for you".
+func TestSearchOperationsThatMatchesNothingWithoutAskingAboutTracesEndsWithTheSearchAgainText(t *testing.T) {
+	t.Parallel()
+	// "billing" is eval intent 08's first query (#114); it names no tag, operation or line.
+	for _, query := range []string{"billing", "zqxj-nothing-matches"} {
+		t.Run(query, func(t *testing.T) {
+			t.Parallel()
+			cs := connectResolved(t, "4.46.0-events_only")
+
+			res := callTool(t, cs, "search_operations", map[string]any{"query": query})
+
+			idx := operationIndexOf(t, res)
+			if idx.Count != 0 {
+				t.Fatalf("query %q matches %d operations on this profile, want none", query, idx.Count)
+			}
+			if got := hintOf(t, res); got != "" {
+				t.Errorf("hint = %q, want none", got)
+			}
+			text := resultText(t, res)
+			const suffix = "Call search_operations again without query to list every operation, or with other keywords."
+			if !strings.HasPrefix(text, "No operation matches the query.") || !strings.HasSuffix(text, suffix) {
+				t.Errorf("text does not say nothing matched and end with the search-again text:\n%s", text)
+			}
+		})
+	}
+}
+
+// #114: without the trace reads hint, a no-match result on a v4 deployment
+// still names the tags to search by.
+func TestSearchOperationsThatMatchesNothingWithoutAskingAboutTracesNamesTheTags(t *testing.T) {
+	t.Parallel()
+	for _, query := range []string{"billing", "zqxj-nothing-matches"} {
+		t.Run(query, func(t *testing.T) {
+			t.Parallel()
+			cs := connectResolved(t, "4.46.0-events_only")
+
+			res := callTool(t, cs, "search_operations", map[string]any{"query": query})
+
+			idx := operationIndexOf(t, res)
+			text := resultText(t, res)
+			if !strings.Contains(text, "Prompts") || !slices.Contains(idx.Tags, "Prompts") {
+				t.Errorf("result (tags %v) does not name the Prompts tag:\n%s", idx.Tags, text)
+			}
+		})
+	}
+}
+
+// #114: a no-match result without the trace reads hint never echoes the query.
+func TestSearchOperationsThatMatchesNothingWithoutAskingAboutTracesDoesNotEchoTheQuery(t *testing.T) {
+	t.Parallel()
+	for _, query := range []string{"billing", "zqxj-nothing-matches"} {
+		t.Run(query, func(t *testing.T) {
+			t.Parallel()
+			cs := connectResolved(t, "4.46.0-events_only")
+
+			res := callTool(t, cs, "search_operations", map[string]any{"query": query})
+
+			if text := resultText(t, res); strings.Contains(text, query) {
+				t.Errorf("result echoes the query %q:\n%s", query, text)
+			}
+		})
+	}
+}
+
+// #100, #114: a query that asks about traces and matches operations keeps the
+// hint beside the index.
+func TestSearchOperationsThatMatchesAndAsksAboutTracesReturnsTheTraceReadsHint(t *testing.T) {
 	t.Parallel()
 	cs := connectResolved(t, "4.46.0-events_only")
 
-	res := callTool(t, cs, "search_operations", map[string]any{"query": "zqxj-nothing-matches"})
+	res := callTool(t, cs, "search_operations", map[string]any{"query": "trace"})
+
+	if operationIndexOf(t, res).Count == 0 {
+		t.Fatal("query matches nothing on this profile, want operations")
+	}
+	if got := hintOf(t, res); got != traceReadsHint {
+		t.Fatalf("hint = %q, want %q", got, traceReadsHint)
+	}
+	if text := resultText(t, res); !strings.HasSuffix(text, "\n\n"+traceReadsHint) {
+		t.Errorf("text does not end with the hint:\n%s", text)
+	}
+}
+
+// #100, #114: a no-match query that asks about traces keeps the hint.
+func TestSearchOperationsThatMatchesNothingAboutTracesReturnsTheTraceReadsHint(t *testing.T) {
+	t.Parallel()
+	cs := connectResolved(t, "4.46.0-events_only")
+
+	res := callTool(t, cs, "search_operations", map[string]any{"query": "traces zqxj-nothing-matches"})
+
+	if operationIndexOf(t, res).Count != 0 {
+		t.Fatal("query matches operations on this profile, want none")
+	}
 
 	if got := hintOf(t, res); got != traceReadsHint {
 		t.Fatalf("hint = %q, want %q", got, traceReadsHint)
@@ -499,7 +590,7 @@ func TestSearchOperationsNamesNoTraceReadTheDeploymentDoesNotOffer(t *testing.T)
 	t.Parallel()
 	cs := connectResolved(t, "3.225.11")
 
-	res := callTool(t, cs, "search_operations", map[string]any{"query": "zqxj-nothing-matches"})
+	res := callTool(t, cs, "search_operations", map[string]any{"query": "traces zqxj-nothing-matches"})
 
 	text := resultText(t, res)
 	for _, route := range []string{"metrics_metrics", "observations_getMany", "get_trace_tree"} {
@@ -534,7 +625,7 @@ func TestSearchOperationsHintLeavesOutAnOperationTheCatalogDoesNotOffer(t *testi
 	legacyOnly := resolvedFor(t, pinnedDeployments["3.225.11"])
 	cs := startCatalog(t, legacyOnly, nil, slog.New(slog.DiscardHandler), server.Secrets{Keys: testKeys()}, v4Profile)
 
-	res := callTool(t, cs, "search_operations", map[string]any{"query": "zqxj-nothing-matches"})
+	res := callTool(t, cs, "search_operations", map[string]any{"query": "traces zqxj-nothing-matches"})
 
 	const want = "Trace data is read with: one trace by its ID: get_trace_tree. " +
 		"describe_operation returns an operation's parameters."

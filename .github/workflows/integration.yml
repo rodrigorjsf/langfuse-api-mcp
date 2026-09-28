@@ -25,7 +25,8 @@
 #   First green Cloud run without the goleak ignores (#41): workflow_dispatch run 36244125560
 #   (2026-09-26, main at 988b3d2, #51).
 # Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current.
-# A pull request that only changes docs (same paths-ignore list as ci.yml) starts no run.
+# A pull request that only changes docs (Markdown, docs/, .claude/, LICENSE) starts no run. Unlike
+# ci.yml, Markdown under skills/ is not re-included: the user skill check runs in ci.yml only.
 name: Integration
 
 on:

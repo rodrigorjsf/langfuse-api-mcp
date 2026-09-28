@@ -21,6 +21,7 @@ text extracted locally from the OWASP PDF. Text without quotation marks is a par
    - The community PR that would have added "read-only access permission for project API keys" (langfuse/langfuse#13384) was **closed unmerged** on 2026-04-28.
    - The Langfuse RBAC page says project API keys "are not tied to a user". RBAC roles govern who may *manage* keys, not what a key can do.
    - Consequence: `readOnlyHint` and `destructiveHint` are hints to the client (see §5). The only guarantee that a read-only deployment cannot write is **not registering `execute_write`** plus a GET-only `execute_read`.
+   - Residual risk (#146, `[verified]` 2026-09-28): that gate covers only calls made through the server. Keys exported in the environment the MCP host starts with are inherited by the agent's own shell; with the server down, Claude Code moved a prompt label through `npx langfuse-cli` with no confirmation. Mitigation is operator guidance (README "Keep the keys out of the agent's environment"), not a server control.
 2. **Organization-scoped Langfuse keys can create and delete projects and API keys** (`POST/DELETE /api/public/projects…`, `…/apiKeys`, "requires organization-scoped API key"). `[sourced]` Source: Langfuse API reference, via the langfuse-docs MCP search.
    - The operation catalog must exclude every org-key-only operation.
 3. **The Anthropic Directory "API ownership" rule** ("Your server must call your own first-party APIs, or APIs you legitimately proxy") may block a third-party Langfuse wrapper from being listed. `[sourced]`
