@@ -174,25 +174,15 @@ func checkReadsThroughAPrivateCA(t *testing.T, argv []string, caDir string) {
 		t.Errorf("logged CA sources = %v, want them to include %v", got, want)
 	}
 
-	var call struct {
-		IsError           bool `json:"isError"`
-		StructuredContent struct {
-			Label string `json:"label"`
-			Data  struct {
-				Name string `json:"name"`
-			} `json:"data"`
-		} `json:"structuredContent"`
-		Content []struct {
-			Text string `json:"text"`
-		} `json:"content"`
-	}
+	var call toolCall
 	if err := json.Unmarshal(raw, &call); err != nil {
 		t.Fatalf("decode tools/call: %v", err)
 	}
-	if call.IsError || call.StructuredContent.Label != untrustedLabel {
+	if call.IsError || call.StructuredContent["label"] != untrustedLabel {
 		t.Fatalf("tools/call result = %s, want the trace inside the untrusted-data envelope", raw)
 	}
-	if got := call.StructuredContent.Data.Name; got != strippedTraceName {
+	data, _ := call.StructuredContent["data"].(map[string]any)
+	if got, _ := data["name"].(string); got != strippedTraceName {
 		t.Errorf("trace name = %+q, want %+q: hidden and bidi characters stripped, markup kept as text", got, strippedTraceName)
 	}
 	for _, c := range call.Content {
@@ -215,19 +205,9 @@ func checkRefusesAnUntrustedCertificate(t *testing.T, argv []string) {
 	if err := json.Unmarshal(raw, &call); err != nil {
 		t.Fatalf("decode tools/call: %v", err)
 	}
-	if !call.IsError || len(call.Content) == 0 {
-		t.Fatalf("tools/call result = %s, want a tool error", raw)
-	}
-	var body struct {
-		Error struct {
-			Code string `json:"code"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal([]byte(call.Content[0].Text), &body); err != nil {
-		t.Fatalf("decode tool error %q: %v", call.Content[0].Text, err)
-	}
-	if body.Error.Code != "tls_untrusted_certificate" {
-		t.Errorf("error code = %q, want tls_untrusted_certificate; result %s", body.Error.Code, raw)
+	toolErr, _ := call.StructuredContent["error"].(map[string]any)
+	if code, _ := toolErr["code"].(string); !call.IsError || code != "tls_untrusted_certificate" {
+		t.Errorf("tools/call result = %s, want a tls_untrusted_certificate tool error", raw)
 	}
 }
 
