@@ -29,6 +29,9 @@ _Avoid_: admin mode, unsafe mode
 
 **Workflow tool**: a dedicated read tool for a high-traffic agent workflow (e.g. trace investigation), as opposed to the generic `execute_*` tools.
 
+**User skill**: an Agent Skill shipped by this project that the agent's client loads, teaching the agent how to reach its goal with this server's tools; it runs nothing itself, and the server can neither load it nor rely on it being loaded.
+_Avoid_: Agent Skill (Langfuse's own skill for its CLI), prompt (an MCP prompt is a user-invoked command), workflow tool
+
 **Tool error**: a tool result with `isError: true` carrying a stable error code, message, hint and retryability (ADR-0008).
 _Avoid_: exception, failure response
 
