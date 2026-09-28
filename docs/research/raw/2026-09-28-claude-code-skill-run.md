@@ -68,7 +68,7 @@ IDENTICAL
 
 Cost as reported by `claude -p` (`total_cost_usd`): trace $0.197, cost $0.231, experiments $0.250, prompt read $0.155 and $0.039. The interactive run shows no dollar figure: `/cost` shows only plan usage.
 
-**The gap: the prompt workflow completes, but the skill does not load for it.** Follow-up #142.
+**The gap: the prompt workflow completes, but the skill does not load for it.** Follow-up #142, since closed by a new description: Claude Code now loads the skill for both prompt requests ([record](2026-09-28-claude-code-skill-trigger.md)).
 - The other three workflows load the skill on the first turn. In every session the model chose `langfuse-api-mcp` over Langfuse's own `langfuse` skill, which was also offered.
 - For the prompt requests, the model went straight to the tools. It still followed the discovery path the skill teaches: `describe_operation` before the first call, the body taken from `describe_operation promptVersion_update`, and the `staging` label kept.
 

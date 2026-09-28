@@ -125,6 +125,20 @@ class FrontmatterTest(unittest.TestCase):
         fx.write("SKILL.md", re.sub(r"(?m)^description: .*$", "description: " + "x" * 200, text, count=1))
         self.assertEqual([], checkmod.check_skill(fx.dir))
 
+    def test_an_unquoted_description_holding_a_colon_and_space_fails(self):
+        # YAML ends a plain scalar's key at ": ", so a real loader rejects or misreads it (#142).
+        fx = SkillFixture(self)
+        text = fx.read("SKILL.md")
+        fx.write("SKILL.md", re.sub(r"(?m)^description: .*$", "description: Langfuse tools: traces", text, count=1))
+        self.assertIn("SKILL.md: frontmatter description holds ': ' or ' #' unquoted; quote it or "
+                      "reword it", checkmod.check_skill(fx.dir))
+
+    def test_a_quoted_description_holding_a_colon_and_space_passes(self):
+        fx = SkillFixture(self)
+        text = fx.read("SKILL.md")
+        fx.write("SKILL.md", re.sub(r"(?m)^description: .*$", 'description: "Langfuse tools: traces"', text, count=1))
+        self.assertEqual([], checkmod.check_skill(fx.dir))
+
     def test_an_entry_file_without_frontmatter_fails(self):
         fx = SkillFixture(self)
         fx.write("SKILL.md", "# Langfuse\n\nNo frontmatter here.\n")
