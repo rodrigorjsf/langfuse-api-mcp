@@ -29,7 +29,7 @@ const searchOperationsDescription = "Lists the Langfuse operations this server c
 	"(the API area: Trace, Prompts, Datasets…).\n\n" +
 	"With query, keeps only the operations where every whitespace-separated keyword appears, ignoring case, " +
 	"in the operation ID, the tag or the description line. Without query, lists every operation. " +
-	"When nothing matches, or the query asks about traces, a hint names how trace data is read on this " +
+	"When the query asks about traces, a hint names how trace data is read on this " +
 	"deployment: one trace, filtered lists, aggregates such as cost per day.\n\n" +
 	"Reads the server's built-in catalog only: it does not call Langfuse and does not run any operation. " +
 	"describe_operation returns one operation's parameters; execute_read runs a read operation."
@@ -109,8 +109,8 @@ func operationIndexSchema() map[string]any {
 			},
 			"hint": map[string]any{
 				"type": "string",
-				"description": "How trace data is read on this deployment; present only when nothing matched the query " +
-					"or the query asks about traces.",
+				"description": "How trace data is read on this deployment; present only when the query asks about traces " +
+					"(the word trace or traces).",
 			},
 		},
 	}
@@ -183,7 +183,11 @@ func (d discovery) searchOperations(_ context.Context, req *mcp.CallToolRequest,
 	if idx.Count == 0 {
 		idx.Tags = d.tags()
 	}
-	if idx.Count == 0 || asksAboutTraces(query) {
+	// Only a query about traces gets the trace reads hint (#100), with or
+	// without matches: on a no-match query about anything else, a small model
+	// read the trace-only hint as "nothing here" and stopped instead of
+	// searching again (#114).
+	if asksAboutTraces(query) {
 		idx.Hint = d.traceReadsHint()
 	}
 	return indexResult(idx, d.writeMode)
@@ -200,8 +204,8 @@ func asksAboutTraces(query string) bool {
 	})
 }
 
-// traceReadsHint returns the hint of a search that matched nothing or asks
-// about traces (#100): a v4 deployment has no Trace tag, so it names how trace
+// traceReadsHint returns the hint of a search that asks about traces (#100,
+// #114): a v4 deployment has no Trace tag, so it names how trace
 // data is read instead. It is static text naming only the tools and
 // operations this deployment offers, never the query, and "" when it offers
 // none of them.
