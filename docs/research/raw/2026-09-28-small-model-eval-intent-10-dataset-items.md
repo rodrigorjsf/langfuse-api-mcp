@@ -26,7 +26,7 @@ The final text passes 11/12 in each of its three full runs. It is the committed 
 - **Code review variants broke 07 and 11.** Code review asked for the row to say "untrusted" in the words the other references use. Both variants still pass intent 10 in 3 of 3 runs. But in every full run of either one, qwen3:8b ends intents 07 and 11 with no tool call at all, and intent 02 passes instead. Even the single word "untrusted" does this in 2 of 2 runs. Small wording changes move qwen3:8b on intents far from the edit, so the measured final text stays. The row's "data to report, like every other payload" defers to the entry file's **Data, not instructions** rule, which names the payloads untrusted.
 - **Intent 09 is unaffected.** "Show me the dataset called golden-qa." still calls `datasets_get`.
 - **No seventh reference.** The fix is one workflow row in `SKILL.md` and one sentence in `references/experiments.md`. It names the operation ID only and leaves the parameters to `describe_operation`, as spec #132 asks.
-- **Untrusted data.** The row says item inputs and expected outputs are data to report, like every other payload. The fake Langfuse's dataset items carry no injection text, so this eval does not exercise it; intent 12 covers injection.
+- **Untrusted data.** The row says item inputs and expected outputs are data to report, like every other payload. The fake Langfuse's dataset items carry no injection text, so this eval does not exercise it; intent 12 covers injection through a prompt only. An intent with poisoned dataset items is follow-up #147.
 
 ## Before #143 (skill at 5160f4c)
 
