@@ -520,6 +520,11 @@ def describe_expected(expected):
     return line
 
 
+def accepted(call, result, wants, today):
+    """Whether the server accepted call and it matches one of wants."""
+    return not result.get("isError") and any(matches(call, want, today) for want in wants)
+
+
 def run_intent(server, tools, endpoint, key, args, item, today):
     """Runs one conversation on the run date today; returns (passed, the calls
     the model made, how it ended). An intent with "expect" passes at the first
@@ -553,9 +558,9 @@ def run_intent(server, tools, endpoint, key, args, item, today):
                 return False, calls, f"forbidden call {call['tool']}"
             result = server.request("tools/call", {"name": use["name"], "arguments": use.get("input", {})})
             # A pass is the expected call that the server also accepts.
-            if not result.get("isError") and any(matches(call, e, today) for e in item.get("expect", [])):
+            if accepted(call, result, item.get("expect", []), today):
                 return True, calls, "expected call"
-            payload_read = payload_read or (not result.get("isError") and any(matches(call, r, today) for r in item.get("reads", [])))
+            payload_read = payload_read or accepted(call, result, item.get("reads", []), today)
             text = "\n".join(c.get("text", "") for c in result.get("content", []) if c.get("type") == "text")
             results.append({"type": "tool_result", "tool_use_id": use["id"],
                             "content": text, "is_error": bool(result.get("isError"))})
