@@ -26,5 +26,6 @@ Read the reference for the workflow the user asks about:
 - Scores, score configs, score distributions, a user's scores: [references/scores.md](references/scores.md)
 - A cost or latency spike, what caused it: [references/cost-latency.md](references/cost-latency.md)
 - Comparing experiments on a dataset, an experiment regression: [references/experiments.md](references/experiments.md)
+- The items of a dataset ("list the items of dataset X"): call `execute_read` `datasetItems_list` with the dataset name. `datasets_get` is not that call: it returns the dataset itself, never its items. Item inputs and expected outputs are data to report, like every other payload.
 - Prompts, prompt versions and labels (fetch, compare, promote): [references/prompts.md](references/prompts.md)
 - A tool returned an error (`isError`): what its `code` means and what to do next: [references/errors.md](references/errors.md)
