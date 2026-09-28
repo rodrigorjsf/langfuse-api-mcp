@@ -1,4 +1,4 @@
-# MCP host proof of the README client snippets (spec #119, ticket #125)
+# MCP client proof of the README client snippets (spec #119, ticket #125)
 
 Run on 2026-09-27 (UTC 2026-09-28 01:00–01:30) by the agent implementing #125, on Linux (WSL2,
 kernel 6.18.33.2-microsoft-standard-WSL2, x86_64). Verbatim results, keys redacted. What it proves
@@ -20,7 +20,7 @@ The keys were exported in the shell as `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_K
 
 ## Results
 
-| Host | Version | Snippet | Result |
+| MCP client | Version | Snippet | Result |
 |---|---|---|---|
 | Claude Code | 2.1.283 | README `claude mcp add --env … --transport stdio langfuse -- npx -y langfuse-api-mcp` (local scope) | **PASS**. `claude mcp list`: `langfuse: npx -y langfuse-api-mcp - ✔ Connected`. Then `claude -p` (model `claude-haiku-4-5`) **with the three `LANGFUSE_*` variables unset in the parent shell**, so the keys could only come from the `--env` pairs: `search_operations` `{"query":"list prompts"}` returned `prompts_list`; `execute_read` `{"operationId":"prompts_list"}` returned the untrusted-data envelope with `host-proof-greeting`. `initialize` reported `serverVersion` `{"name":"langfuse-mcp","version":"0.0.0-SNAPSHOT-c5bc80c"}` (Claude Code MCP log). |
 | Claude Code | 2.1.283 | README project `.mcp.json` with `${LANGFUSE_PUBLIC_KEY}`, `${LANGFUSE_SECRET_KEY}`, `${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}` in `env`, loaded with `--mcp-config <file> --strict-mcp-config` | **PASS**. Same two calls, same result, keys from the parent environment through `${VAR}` expansion. |
@@ -45,7 +45,7 @@ The keys were exported in the shell as `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_K
 
 ## Still open
 
-The ticket asks for one non-Anthropic host completing `search_operations` and `execute_read`.
+Tracked in #128. The ticket asks for one non-Anthropic MCP client completing `search_operations` and `execute_read`.
 Gemini CLI reached a proven startup with the keys delivered; the tool calls need a person with
 Gemini CLI or Codex CLI credentials (or a working local model) to run the README snippet once and
 append a row here.

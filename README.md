@@ -401,7 +401,7 @@ One snippet per MCP client. Every snippet uses the [npx](#npx) channel (**Planne
 
 Each client starts the server with its own view of your environment, and several do not pass your shell's variables on (details and sources: [docs/research/mcp-hosts-env.md](docs/research/mcp-hosts-env.md)). So every snippet names the three variables the server needs in the client's own `env` mechanism, the one place a key may go. Settings that are not secret (`LANGFUSE_CA_CERT`, the proxy, the request limits) can go in the client's `env` as well, or once for every client in the [config file](#config-file-non-secret-settings). **Never put `LANGFUSE_PUBLIC_KEY` or `LANGFUSE_SECRET_KEY` in the config file**: the server refuses to start if it finds them there ([ADR-0011](docs/adr/0011-non-secret-config-file.md)).
 
-`pk-lf-...` and `sk-lf-...` below stand for your keys. Where a snippet reads `${LANGFUSE_SECRET_KEY}` or similar, the client copies the value from its own environment when it starts the server, so the key never sits in the file. The snippets were checked against each client's official docs on 2026-09-25. On Linux on 2026-09-27 ([records](docs/research/raw/2026-09-27-mcp-host-proof.md)), the one marked **proven** ran end to end (`search_operations`, then `execute_read`, against a local Langfuse); the one marked **startup proven** started the server with its keys, but no tool call was made through it.
+`pk-lf-...` and `sk-lf-...` below stand for your keys. Where a snippet reads `${LANGFUSE_SECRET_KEY}` or similar, the client copies the value from its own environment when it starts the server, so the key never sits in the file. The snippets were checked against each client's official docs on 2026-09-25. On Linux on 2026-09-27 ([records](docs/research/raw/2026-09-27-mcp-host-proof.md)), the one marked **proven** ran end to end (`search_operations`, then `execute_read`, against a local Langfuse); the one marked **startup proven** started the server with its keys, but no tool call was made through it (a non-Anthropic client's tool calls are still to be recorded, [#128](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/128)).
 
 #### Claude Code — proven
 
@@ -415,7 +415,7 @@ claude mcp add \
   --transport stdio langfuse -- npx -y langfuse-api-mcp
 ```
 
-This stores the keys in `~/.claude.json` (local or user scope). For a project `.mcp.json` shared through git, reference the variables instead; Claude Code expands `${VAR}` and `${VAR:-default}` in `env`:
+This stores the keys in `~/.claude.json` (local or user scope). For a project `.mcp.json` shared through git, reference the variables instead; Claude Code expands `${VAR}` and `${VAR:-default}` in `env`. A variable that is not set and has no default is passed on as the literal text `${VAR}`, which the server rejects at startup as a key without its `pk-lf-`/`sk-lf-` prefix; `claude mcp list` warns about it:
 
 ```json
 {
@@ -479,7 +479,7 @@ Cursor must itself have been started with those variables set (for example from 
 
 #### VS Code (GitHub Copilot)
 
-Source: [code.visualstudio.com/docs/copilot/reference/mcp-configuration](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration). **Pitfall:** VS Code passes its full environment, but a VS Code started from the Dock or Start menu may not have your shell's exports, and `.vscode/mcp.json` is usually committed. **Workaround:** declare the keys as `inputs` with `"password": true`: VS Code asks for them the first time the server starts and stores them securely. The file uses `servers`, not `mcpServers`:
+Source: [code.visualstudio.com/docs/copilot/reference/mcp-configuration](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration). **Pitfall:** VS Code passes its full environment, but a VS Code started from the Dock or Start menu may not have your shell's exports, and `.vscode/mcp.json` is usually committed. **Workaround:** declare the keys as `inputs` with `"password": true`: VS Code asks for them the first time the server starts and stores them securely. VS Code does not forward a server that needs `${input:...}` to its Agent Host, so there use `"LANGFUSE_SECRET_KEY": "${env:LANGFUSE_SECRET_KEY}"` (and the same for the other two) instead. The file uses `servers`, not `mcpServers`:
 
 ```json
 {
@@ -513,7 +513,7 @@ args = ["-y", "langfuse-api-mcp"]
 env_vars = ["LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_BASE_URL"]
 ```
 
-Or set literal values with `codex mcp add --env LANGFUSE_PUBLIC_KEY=pk-lf-... --env LANGFUSE_SECRET_KEY=sk-lf-... --env LANGFUSE_BASE_URL=https://cloud.langfuse.com langfuse -- npx -y langfuse-api-mcp`, which stores them in `config.toml`. The same clearing applies to npm's own settings: if npm needs a proxy or a private registry, add `HTTPS_PROXY`, `npm_config_registry` or the like to `env_vars` too.
+Or set literal values with `codex mcp add --env LANGFUSE_PUBLIC_KEY=pk-lf-... --env LANGFUSE_SECRET_KEY=sk-lf-... --env LANGFUSE_BASE_URL=https://cloud.langfuse.com langfuse -- npx -y langfuse-api-mcp`, which stores them in plain text in `config.toml`; keep such a file out of the repository (a project `.codex/config.toml` is often committed). The same clearing applies to npm's own settings: if npm needs a proxy or a private registry, add `HTTPS_PROXY`, `npm_config_registry` or the like to `env_vars` too.
 
 #### Gemini CLI — startup proven
 
@@ -539,7 +539,7 @@ An unset variable becomes an empty string, which the server refuses at startup n
 
 #### Windsurf
 
-Source: [docs.windsurf.com/windsurf/cascade/mcp](https://docs.windsurf.com/windsurf/cascade/mcp) (now served at docs.devin.ai). **Pitfall:** the docs do not say whether Windsurf passes its environment to the server. **Workaround:** forward each variable with `${env:NAME}` in `env`, in `~/.config/devin/mcp_config.json` (macOS and Linux; `%APPDATA%\devin\mcp_config.json` on Windows; older builds used `~/.codeium/windsurf/mcp_config.json`):
+Source: [docs.windsurf.com/windsurf/cascade/mcp](https://docs.windsurf.com/windsurf/cascade/mcp) (now served at docs.devin.ai). **Pitfall:** the docs do not say whether Windsurf passes its environment to the server. **Workaround:** forward each variable with `${env:NAME}` in `env`, in `~/.config/devin/mcp_config.json` (macOS and Linux; `%APPDATA%\devin\mcp_config.json` on Windows; older Windsurf builds may use `~/.codeium/windsurf/mcp_config.json`, a path the current docs no longer name):
 
 ```json
 {
@@ -561,7 +561,7 @@ Windsurf also reads `${file:/path}`, which puts the trimmed content of a file (f
 
 #### Docker as the command
 
-In any client, `command` can be `docker` with the [Docker](#docker) `args`. The container sees only the variables named with `-e` in `args`, and `-e NAME` takes the value from the environment of the `docker` process, which is the client's `env` block: put the keys there, never as `-e NAME=value` in `args`.
+In any client, `command` can be `docker` with the [Docker](#docker) `args`. The container sees only the variables named with `-e` in `args`, and `-e NAME` takes the value from the environment of the `docker` process, which is what the client passes it: put the keys in the client's `env` block (for Codex CLI, list them in `env_vars`), never as `-e NAME=value` in `args`.
 
 ### Where do environment variables come from?
 
