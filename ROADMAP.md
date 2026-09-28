@@ -76,7 +76,7 @@ Deferred past the first public release; every open issue here carries the GitHub
 - #56: OS proxy settings and PAC files.
 - #49: the dataset runs routes have no live Folder-name test, blocked on langfuse/langfuse#13933.
 - #42: triage workflow tools (errors, latency, cost) with the payload-query guard, only if the M3 small-model eval shows agents need them.
-- The HTTP transport (`LANGFUSE_MCP_TRANSPORT=http`, README **Planned**): **Planned**, its issue to be filed by the security mapping slice of M7 (#155).
+- The HTTP transport (`LANGFUSE_MCP_TRANSPORT=http`, marked **Planned** in the README): its issue is not filed yet; the security mapping slice of M7 (#155) files it and links it from the README marks.
 - More install channels (Homebrew, Scoop, winget), only if users ask; Apple notarization and Authenticode signing if browser-download friction proves real (M5 grilling).
 - Legacy-family adapters for the workflow tools, so self-hosted v3 (patched until January 2027) gets guided flows too (ADR-0012 §6).
 - An operation allowlist/denylist in config (M4 grilling).
