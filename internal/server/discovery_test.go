@@ -465,8 +465,8 @@ func TestSearchOperationsThatMatchesNothingWithoutAskingAboutTracesEndsWithTheSe
 }
 
 // #114: without the trace reads hint, a no-match result on a v4 deployment
-// still names the tags to search by, and never echoes the query.
-func TestSearchOperationsThatMatchesNothingWithoutAskingAboutTracesNamesTheTagsWithoutEchoingTheQuery(t *testing.T) {
+// still names the tags to search by.
+func TestSearchOperationsThatMatchesNothingWithoutAskingAboutTracesNamesTheTags(t *testing.T) {
 	t.Parallel()
 	for _, query := range []string{"billing", "zqxj-nothing-matches"} {
 		t.Run(query, func(t *testing.T) {
@@ -477,8 +477,25 @@ func TestSearchOperationsThatMatchesNothingWithoutAskingAboutTracesNamesTheTagsW
 
 			idx := operationIndexOf(t, res)
 			text := resultText(t, res)
-			if !strings.Contains(text, "Prompts") || !slices.Contains(idx.Tags, "Prompts") || strings.Contains(text, query) {
-				t.Errorf("result (tags %v) does not name the Prompts tag, or echoes the query:\n%s", idx.Tags, text)
+			if !strings.Contains(text, "Prompts") || !slices.Contains(idx.Tags, "Prompts") {
+				t.Errorf("result (tags %v) does not name the Prompts tag:\n%s", idx.Tags, text)
+			}
+		})
+	}
+}
+
+// #114: a no-match result without the trace reads hint never echoes the query.
+func TestSearchOperationsThatMatchesNothingWithoutAskingAboutTracesDoesNotEchoTheQuery(t *testing.T) {
+	t.Parallel()
+	for _, query := range []string{"billing", "zqxj-nothing-matches"} {
+		t.Run(query, func(t *testing.T) {
+			t.Parallel()
+			cs := connectResolved(t, "4.46.0-events_only")
+
+			res := callTool(t, cs, "search_operations", map[string]any{"query": query})
+
+			if text := resultText(t, res); strings.Contains(text, query) {
+				t.Errorf("result echoes the query %q:\n%s", query, text)
 			}
 		})
 	}
