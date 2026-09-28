@@ -35,6 +35,8 @@ Evidence behind the ADRs. Labels: `[verified 3-0]` passed 3-vote adversarial che
 | `raw/2026-09-28-claude-code-skill-run.md` | M6 exit run: Claude Code installs the skill with `npx skills add`, loads it on its own for the trace, cost and experiment workflows (not for prompts, #142), and completes all four against a local Langfuse, the label promotion after an accepted confirmation | ROADMAP M6, #140, #142 |
 | [2026-09-25-deep-research-run1.md](2026-09-25-deep-research-run1.md) | raw verified findings + all extracted claims of the first deep-research run | all of the above |
 
+Records under `raw/` are verbatim, with one edit: before publication (#151), local home directory paths were replaced by `~`.
+
 ## Open questions
 
 - Version-aware catalog decisions (floor version, Cloud legacy until 2026-11-16, workflow tools per family, schemas for removed operations) — #16, `langfuse-api-versions.md`.
