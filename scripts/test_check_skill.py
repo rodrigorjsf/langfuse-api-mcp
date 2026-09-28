@@ -115,13 +115,13 @@ class CitedReferenceTest(unittest.TestCase):
 
     def test_a_reference_named_in_backticks_that_does_not_exist_fails(self):
         fx = SkillFixture(self)
-        fx.append("SKILL.md", "Prompts: read `references/prompts.md`.")
-        self.assertIn("SKILL.md: cites references/prompts.md, which does not exist",
+        fx.append("SKILL.md", "Prompts: read `references/no-such-workflow.md`.")
+        self.assertIn("SKILL.md: cites references/no-such-workflow.md, which does not exist",
                       checkmod.check_skill(fx.dir))
 
     def test_a_references_path_inside_a_url_is_not_a_reference(self):
         fx = SkillFixture(self)
-        fx.append("SKILL.md", "Upstream keeps its own at https://example.com/skills/references/prompts.md.")
+        fx.append("SKILL.md", "Upstream keeps its own at https://example.com/skills/references/no-such-workflow.md.")
         self.assertEqual([], checkmod.check_skill(fx.dir))
 
     def test_an_external_link_is_not_a_reference(self):
