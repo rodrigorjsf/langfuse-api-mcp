@@ -3,7 +3,7 @@
 Verbatim output of `scripts/small-model-eval-local.sh --only 8` (#133), with container, image pull and model pull
 lines removed. Same model, Ollama image (`0.34.4`, KV cache f16) and settings as
 [2026-09-28-small-model-eval-intent-08-no-match-hint.md](2026-09-28-small-model-eval-intent-08-no-match-hint.md)
-(temperature 0, `--max-tokens 4096 --timeout 600`). Code: `3489a63` (the #114 fix, merged into the spec #132 work
+(temperature 0, `--max-tokens 4096 --timeout 600`). Code at `3489a63` (includes the #114 fix `ce6a26f` + `bbd9fe4`, merged into the spec #132 work
 branch), branch `spec/132-spec-m6-user-skill-langfuse-api-mcp-skil--133`.
 
 ## Summary
@@ -17,7 +17,8 @@ branch), branch `spec/132-spec-m6-user-skill-langfuse-api-mcp-skil--133`.
   applies: the run date is still in the prompt, and the model no longer stops there.
 - **The failure left is a parameter choice, not a stop.** `prompts_list` in the bundled catalog (4.46.0) has a
   `filter` query parameter next to `tag`. The Langfuse OpenAPI spec gives neither parameter a description, and the
-  current Langfuse API reference does not list `filter` at all. After `describe_operation` the model sees two
+  current Langfuse API reference for `GET /api/public/v2/prompts` (https://api.reference.langfuse.com, read
+  through the `langfuse-docs` MCP on 2026-09-28) does not list `filter` at all. After `describe_operation` the model sees two
   undocumented string parameters and picks `filter`. The call is valid, the fake Langfuse answers it, and the model
   ends its turn with an answer. No hint or no-match text reaches this step. Closing it takes either the user skill
   (spec #132, "describe, then execute; never guess a parameter", re-measured by the eval A/B) or a new line of

@@ -18,9 +18,10 @@ Evidence behind the ADRs. Labels: `[verified 3-0]` passed 3-vote adversarial che
 | `raw/2026-09-27-small-model-eval-intent-11-metrics-guidance.md` | intent 11 rerun four times while the metrics query guidance was worded (qwen3:8b; shipped wording passes) | ROADMAP M3, #104, follow-up #105 |
 | `raw/2026-09-27-small-model-eval-intent-11-run-date.md` | intent 11 rerun with the run date in the prompt and the time window checked (qwen3:8b: window right, query sent over-escaped or as an object; FAIL) | ROADMAP M3, #105, follow-up #106 |
 | `raw/2026-09-27-small-model-eval-intent-11-query-encoding.md` | intent 11 rerun after both metrics query refusals and the guidance got one query-encoding wording (qwen3:8b: PASS, window from the run date; a first wording saying "escaped" failed) | ROADMAP M3, #106 |
-| `raw/2026-09-28-small-model-eval-intent-08-filter-parameter.md` | intent 08 rerun three times after the #114 no-match hint fix (qwen3:8b: searches again, then sends `prompts_list` `filter` instead of `tag`; FAIL) | ROADMAP M6, #133, follow-up #141 |
 | `raw/2026-09-27-mcp-host-proof.md` | the README client snippets run on Linux: Claude Code end to end over npx against a local Langfuse (PASS, two forms), Gemini CLI startup with and without `env` (keys redacted without it), Codex CLI not completed (no credentials, local model did not load) | README "Client configuration", #125 |
 | `raw/2026-09-27-small-model-eval-local-model-vram.md` | four local model configurations on an RTX 3060 12 GB, all 11 intents: qwen3:8b Q4_K_M stays the default (8/11); qwen3:14b with a q8_0 KV cache 9/11 but regresses intent 11 | ROADMAP M3, #114 |
+| `raw/2026-09-28-small-model-eval-intent-08-no-match-hint.md` | intent 08 (and 09, 11) rerun five times around the #114 fix: before it qwen3:8b stops after the "billing" no-match, after it searches again every run; 08 passes 1 run in 4 | ROADMAP M6, #114 |
+| `raw/2026-09-28-small-model-eval-intent-08-filter-parameter.md` | intent 08 rerun three times after the #114 no-match hint fix (qwen3:8b: searches again, then sends `prompts_list` `filter` instead of `tag`; FAIL) | ROADMAP M6, #133, follow-up #141 |
 | [2026-09-25-deep-research-run1.md](2026-09-25-deep-research-run1.md) | raw verified findings + all extracted claims of the first deep-research run | all of the above |
 
 ## Open questions
