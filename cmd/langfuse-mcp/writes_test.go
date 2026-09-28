@@ -67,7 +67,7 @@ func TestExecutableListsExecuteWriteOnlyInWriteMode(t *testing.T) {
 	} {
 		t.Run(setting, func(t *testing.T) {
 			t.Parallel()
-			fake := deploymentLangfuse(t, `{"status":"OK","version":"4.46.0"}`, nil, func(w http.ResponseWriter, _ *http.Request) {
+			fake := deploymentLangfuse(t, health4460, nil, func(w http.ResponseWriter, _ *http.Request) {
 				_, _ = io.WriteString(w, `{}`) // no call reaches it in this test
 			})
 			s := startStdio(t, "LANGFUSE_BASE_URL="+fake.URL, setting)

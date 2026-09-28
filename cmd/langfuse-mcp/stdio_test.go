@@ -170,6 +170,9 @@ func (s *stdioSession) stop(checks ...func()) {
 	}
 }
 
+// health4460 is the health body of a Langfuse 4.46.0 deployment.
+const health4460 = `{"status":"OK","version":"4.46.0"}`
+
 // deploymentLangfuse is a fake Langfuse that answers the deployment profile
 // detection (ADR-0012 §3): health with healthBody, each family sentinel with
 // 200, except the paths in unavailable, answered with the Langfuse v4
@@ -215,7 +218,7 @@ func profileLogLine(t *testing.T, stderr []byte) map[string]any {
 func TestExecutableServesTheDiscoveryToolsExecuteReadAndGetTraceTreeOverStdio(t *testing.T) {
 	t.Parallel()
 	gotAuth := make(chan string, 1)
-	fake := deploymentLangfuse(t, `{"status":"OK","version":"4.46.0"}`, nil, func(w http.ResponseWriter, r *http.Request) {
+	fake := deploymentLangfuse(t, health4460, nil, func(w http.ResponseWriter, r *http.Request) {
 		user, password, _ := r.BasicAuth()
 		gotAuth <- r.Method + " " + r.URL.Path + " " + user + ":" + password
 		_, _ = io.WriteString(w, `{"id":"trace-1","name":"checkout"}`) // a failed write fails the call below
@@ -345,7 +348,7 @@ func TestExecutableReachesAnOperationOnlyAnOlderReleaseSpecListsWhenTheVersionIs
 func TestExecutableOffersOnlyTheOperationsOfTheDetectedDeploymentProfile(t *testing.T) {
 	t.Parallel()
 	gotRequest := make(chan string, 1)
-	fake := deploymentLangfuse(t, `{"status":"OK","version":"4.46.0"}`, []string{"/api/public/traces"}, func(w http.ResponseWriter, r *http.Request) {
+	fake := deploymentLangfuse(t, health4460, []string{"/api/public/traces"}, func(w http.ResponseWriter, r *http.Request) {
 		gotRequest <- r.Method + " " + r.URL.RequestURI()
 		_, _ = io.WriteString(w, `{}`) // a failed write fails the call below
 	})
@@ -450,7 +453,7 @@ func TestExecutableLogsWhichFamiliesAreOnWithoutAnAnswer(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/api/public/health":
-			_, _ = io.WriteString(w, `{"status":"OK","version":"4.46.0"}`) // a failed write leaves the version unknown, which the test sees
+			_, _ = io.WriteString(w, health4460) // a failed write leaves the version unknown, which the test sees
 		case "/api/public/experiments":
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = io.WriteString(w, `{"message":"boom"}`) // as above

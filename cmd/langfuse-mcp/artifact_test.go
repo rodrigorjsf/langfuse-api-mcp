@@ -131,7 +131,7 @@ func checkInstalledArtifact(t *testing.T, argv []string, wantVersion, caDir stri
 // set when write mode is off.
 func checkListsTheReadToolSet(t *testing.T, argv []string) {
 	t.Helper()
-	fake := deploymentLangfuse(t, `{"status":"OK","version":"4.46.0"}`, nil, http.NotFound)
+	fake := deploymentLangfuse(t, health4460, nil, http.NotFound)
 	s := startCommand(t, argv, "", "LANGFUSE_BASE_URL="+fake.URL)
 	s.initialize()
 	var list struct {
@@ -220,7 +220,7 @@ func privateCALangfuse(t *testing.T) *httptest.Server {
 	if err != nil {
 		t.Fatalf("encode payload: %v", err)
 	}
-	fake := httptest.NewUnstartedServer(deploymentHandler(`{"status":"OK","version":"4.46.0"}`, nil,
+	fake := httptest.NewUnstartedServer(deploymentHandler(health4460, nil,
 		func(w http.ResponseWriter, _ *http.Request) {
 			_, _ = w.Write(payload) // a failed write fails the call
 		}))
@@ -312,7 +312,7 @@ func checkPassesTheKeysUnchanged(t *testing.T, argv []string) {
 	var mu sync.Mutex
 	var user, password string
 	var seen bool
-	fake := deploymentLangfuse(t, `{"status":"OK","version":"4.46.0"}`, nil, func(w http.ResponseWriter, r *http.Request) {
+	fake := deploymentLangfuse(t, health4460, nil, func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		user, password, seen = r.BasicAuth()
 		mu.Unlock()

@@ -49,7 +49,7 @@ func tunnelLangfuse(t *testing.T, ca certAuthority) *httptest.Server {
 	fake := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/api/public/health" {
-			_, _ = io.WriteString(w, `{"status":"OK","version":"4.46.0"}`) // a failed write leaves the version unknown
+			_, _ = io.WriteString(w, health4460) // a failed write leaves the version unknown
 			return
 		}
 		_, _ = io.WriteString(w, `{"id":"trace-1","name":"checkout"}`) // a failed write fails the call
