@@ -18,11 +18,10 @@
 # Those snapshot runs publish nothing. On a `v*` tag (#126) the same build runs with the tag's version,
 # the same smoke proves every artifact, and only then the tag-only jobs run: sign-blobs (cosign
 # keyless signatures and GitHub build provenance for the archives, checksums file, MCPB bundle and
-# skill ZIP),
-# publish-image (push to GHCR, cosign signature and provenance of the multi-arch image by digest),
-# publish-npm (`npm publish` of the platform packages, then the main one) and github-release (the
-# GitHub release holding the archives, SBOMs, checksums, bundle, skill ZIP and signatures). Each is gated by a job
-# `if` on the tag, so a snapshot run shows it skipped, and holds only the permissions it needs; the
+# skill ZIP), publish-image (push to GHCR, cosign signature and provenance of the multi-arch image
+# by digest), publish-npm (`npm publish` of the platform packages, then the main one) and
+# github-release (the GitHub release holding the archives, SBOMs, checksums, bundle, skill ZIP and
+# signatures). Each is gated by a job `if` on the tag, so a snapshot run shows it skipped, and holds only the permissions it needs; the
 # publish jobs run in the `release` environment, which alone will hold the npm token (Planned, M7:
 # the maintainer creates it restricted to `v*` tags, README "Cutting a release").
 # Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current. Tool

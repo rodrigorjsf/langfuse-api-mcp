@@ -16,6 +16,7 @@ import importlib.util
 import io
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -39,7 +40,7 @@ def tempdir(test):
     return tmp
 
 
-def pack(test, argv):
+def pack(argv):
     """Run main(argv); return (exit status, stdout)."""
     out = io.StringIO()
     with redirect_stdout(out):
@@ -61,7 +62,7 @@ def small_skill(test):
 class PackTest(unittest.TestCase):
     def test_the_zip_holds_the_skill_folder_as_its_root(self):
         out_dir = tempdir(self)
-        status, stdout = pack(self, ["1.2.3", out_dir, small_skill(self)])
+        status, stdout = pack(["1.2.3", out_dir, small_skill(self)])
         self.assertEqual(0, status)
         path = os.path.join(out_dir, "demo-skill-skill_1.2.3.zip")
         self.assertEqual(path + "\n", stdout)
@@ -71,23 +72,23 @@ class PackTest(unittest.TestCase):
 
     def test_the_real_skill_zip_holds_every_file_of_the_skill(self):
         out_dir = tempdir(self)
-        status, _ = pack(self, ["0.0.0-SNAPSHOT-abc1234", out_dir])
+        status, _ = pack(["0.0.0-SNAPSHOT-abc1234", out_dir])
         self.assertEqual(0, status)
         with zipfile.ZipFile(os.path.join(out_dir, "langfuse-api-mcp-skill_0.0.0-SNAPSHOT-abc1234.zip")) as z:
             names = z.namelist()
         self.assertIn("langfuse-api-mcp/SKILL.md", names)
         self.assertIn("langfuse-api-mcp/references/traces.md", names)
-        on_disk = sorted(
-            "langfuse-api-mcp/" + os.path.relpath(os.path.join(d, f), REAL_SKILL).replace(os.sep, "/")
-            for d, _, files in os.walk(REAL_SKILL) for f in files)
-        self.assertEqual(on_disk, sorted(names))
+        # The independent source of truth: the files git tracks under the skill.
+        tracked = subprocess.run(["git", "-C", ROOT, "ls-files", "skills/langfuse-api-mcp"],
+                                 capture_output=True, text=True, check=True).stdout.split()
+        self.assertEqual(sorted(t.removeprefix("skills/") for t in tracked), sorted(names))
 
     def test_packing_twice_gives_the_same_bytes(self):
         skill = small_skill(self)
         a, b = tempdir(self), tempdir(self)
-        pack(self, ["1.0.0", a, skill])
+        pack(["1.0.0", a, skill])
         os.utime(os.path.join(skill, "SKILL.md"), (0, 0))
-        pack(self, ["1.0.0", b, skill])
+        pack(["1.0.0", b, skill])
         with open(os.path.join(a, "demo-skill-skill_1.0.0.zip"), "rb") as fa, \
                 open(os.path.join(b, "demo-skill-skill_1.0.0.zip"), "rb") as fb:
             self.assertEqual(fa.read(), fb.read())
@@ -96,12 +97,12 @@ class PackTest(unittest.TestCase):
         skill = small_skill(self)
         os.remove(os.path.join(skill, "SKILL.md"))
         out_dir = tempdir(self)
-        status, _ = pack(self, ["1.0.0", out_dir, skill])
+        status, _ = pack(["1.0.0", out_dir, skill])
         self.assertEqual(1, status)
         self.assertEqual([], os.listdir(out_dir))
 
     def test_a_missing_argument_is_refused(self):
-        status, _ = pack(self, ["1.0.0"])
+        status, _ = pack(["1.0.0"])
         self.assertEqual(2, status)
 
 

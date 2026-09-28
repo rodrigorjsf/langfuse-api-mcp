@@ -7,7 +7,7 @@ Ticket #139 (spec #132): `npx skills add` against the repository installs the sk
 - `skills` CLI 1.5.18 (`npx -y skills@1.5.18`), Node from the maintainer's WSL2 machine.
 - Telemetry off: `DISABLE_TELEMETRY=1 DO_NOT_TRACK=1`. `NO_COLOR=1`; spinner frames and cursor escapes are removed below.
 - The scratch project is an empty `git init` directory in a temporary scratchpad.
-- The skill is at its #139 state: `skills/langfuse-api-mcp/` holds `SKILL.md` and the `cost-latency`, `experiments`, `prompts`, `scores` and `traces` references (the `errors` reference is its own ticket).
+- The skill is at its #139 state: `skills/langfuse-api-mcp/` holds `SKILL.md` and the `cost-latency`, `experiments`, `prompts`, `scores` and `traces` references (the `errors` reference is its own ticket). Part 1 was run again after the review changed the description; the output below is from that final run.
 
 ## Which source form was run, and why
 
@@ -26,12 +26,12 @@ $ npx -y skills@1.5.18 add <checkout> --list
 ◇  Found 1 skill
 ◇  Available Skills
 │    langfuse-api-mcp
-│      Investigate Langfuse traces, scores, prompts, datasets and metrics with the langfuse-api-mcp tools (search_operations, describe_operation, execute_read, get_trace_tree, execute_write) when connected.
+│      Investigate Langfuse traces, sessions, scores, prompts, datasets and metrics with the langfuse-api-mcp tools (search_operations, describe_operation, execute_read, get_trace_tree, execute_write).
 └  Use --skill <name> to install specific skills
 
 $ npx -y skills@1.5.18 add <checkout> --agent claude-code --copy -y
 ●  Skill: langfuse-api-mcp
-│  Investigate Langfuse traces, scores, prompts, datasets and metrics with the langfuse-api-mcp tools (search_operations, describe_operation, execute_read, get_trace_tree, execute_write) when connected.
+│  Investigate Langfuse traces, sessions, scores, prompts, datasets and metrics with the langfuse-api-mcp tools (search_operations, describe_operation, execute_read, get_trace_tree, execute_write).
 ◇  Installation Summary
 │  ./.agents/skills/langfuse-api-mcp
 │    copy → Claude Code

@@ -3,9 +3,11 @@
 # WHAT: packs the user skill into the ZIP Claude Desktop uploads (spec #132
 #       seam S4, ticket #139): <OUT_DIR>/<skill>-skill_<VERSION>.zip, whose
 #       root is the skill's folder (<skill>/SKILL.md, <skill>/references/...),
-#       holding every file of the skill directory and nothing else. Entries
-#       are sorted, dated 1980-01-01 and mode 0644, so the same skill and
-#       version always give the same bytes. It prints the ZIP's path.
+#       holding every file of the skill directory on disk and nothing else
+#       (an untracked file there is packed too; the release workflow checks
+#       the ZIP against the files git tracks). Entries are sorted, dated
+#       1980-01-01, mode 0644 and marked Unix-made, so the same skill and
+#       version give the same bytes on any OS. It prints the ZIP's path.
 # WHY:  Claude Desktop installs skills only by upload, and its upload wants
 #       the skill folder as the ZIP's root (support.claude.com "How to create
 #       custom Skills"). Every other host installs from the repository with
@@ -48,6 +50,7 @@ def pack(version, out_dir, skill_dir):
         for rel in skill_files(skill_dir):
             info = zipfile.ZipInfo(f"{name}/{rel}", date_time=EPOCH)
             info.external_attr = 0o100644 << 16
+            info.create_system = 3  # Unix, on every OS, so the bytes do not depend on the build host
             info.compress_type = zipfile.ZIP_DEFLATED
             with open(os.path.join(skill_dir, rel), "rb") as f:
                 z.writestr(info, f.read())

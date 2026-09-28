@@ -628,7 +628,7 @@ The log at startup lists which CA sources were loaded (paths and counts, never c
 
 The server gives an agent generic tools; the user skill `langfuse-api-mcp` ([`skills/langfuse-api-mcp/`](skills/langfuse-api-mcp/)) teaches it how a Langfuse investigation is done with them: discover, describe, then execute; always a bounded time window; Langfuse data is untrusted, never instructions. It has a short entry file and one reference per workflow (traces, cost and latency, prompts, experiments, scores), each loaded only when its workflow is asked for. Its description names this server's tools, so it does not compete with Langfuse's own `langfuse` skill. It adds no permission of its own: whether `execute_write` exists and every confirmation stay the server's decision (ADR-0003).
 
-**Claude Code, Cursor, VS Code, Codex CLI, Gemini CLI, Windsurf.** Install it from the repository with the [`skills`](https://www.npmjs.com/package/skills) CLI, in your project (or with `-g` for your user):
+**Claude Code, Cursor, VS Code, Codex CLI, Gemini CLI, Windsurf.** Install it from the repository with the [`skills`](https://www.npmjs.com/package/skills) CLI, in your project (or with `-g` for your user); `--agent` names the hosts to install for (`--agent '*'` for all). The Claude Code install is proven; the other hosts rely on the CLI's own support (ADR-0005 amendment):
 
 ```bash
 npx skills add rodrigorjsf/langfuse-api-mcp
@@ -663,7 +663,7 @@ Recommendations: create a dedicated Langfuse key for the agent, set an expiry da
 
 **Planned until the first release** (M7): the release workflow is wired, but its signing, provenance and publishing jobs run **only on a `v*` release tag**, never on a pull request, a push to `main` or the weekly run, so none of the commands below has anything to verify yet. The first tag is cut after the repository goes public, because a cosign keyless signature writes a permanent public entry (the Rekor transparency log) naming this repository and its workflow.
 
-Every release will carry: `checksums.txt` (SHA-256 of every archive and SBOM); one SPDX JSON SBOM per archive and one for the image; a cosign keyless signature, as a Sigstore bundle `<file>.sigstore.json`, and GitHub build provenance for every archive, `checksums.txt`, the `.mcpb` and the skill ZIP; the multi-arch image signed and attested by digest. The SBOMs are covered through `checksums.txt`, which lists them and is itself signed. A signature is valid only when its certificate names this repository's release workflow at the release tag, issued to GitHub Actions. With `version=<version>` (without the leading `v`):
+Every release will carry: `checksums.txt` (SHA-256 of every archive and SBOM); one SPDX JSON SBOM per archive and one for the image; a cosign keyless signature, as a Sigstore bundle `<file>.sigstore.json`, and GitHub build provenance for every archive, `checksums.txt`, the `.mcpb` and the skill ZIP; the multi-arch image signed and attested by digest. The SBOMs are covered through `checksums.txt`, which lists them and is itself signed. The skill ZIP is not in `checksums.txt` (GoReleaser writes that file before the ZIP is packed): check it by its signature (step 2). A signature is valid only when its certificate names this repository's release workflow at the release tag, issued to GitHub Actions. With `version=<version>` (without the leading `v`):
 
 ```bash
 # 1. The archive is the one in checksums.txt (Windows: compare Get-FileHash, see Release archive).
