@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"os/exec"
 	"slices"
 	"strings"
@@ -45,19 +44,22 @@ func startStdio(t *testing.T, env ...string) *stdioSession {
 // at the documented location for the running OS; "" means no config file.
 func startStdioWithConfigFile(t *testing.T, content string, env ...string) *stdioSession {
 	t.Helper()
+	return startCommand(t, testBinary(t), content, env...)
+}
+
+// startCommand starts the launch command argv (never through a shell) as a
+// child speaking MCP over stdio, with a config file holding content ("" means
+// none) and the extra environment entries (later entries win).
+func startCommand(t *testing.T, argv []string, content string, env ...string) *stdioSession {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
-	exe, err := os.Executable()
-	if err != nil {
-		t.Fatalf("locate test binary: %v", err)
-	}
 	configEnv, path := userConfigLocation(t)
 	if content != "" {
 		writeConfigFile(t, path, content)
 	}
-	cmd := exec.CommandContext(ctx, exe, "-test.run=^$") //nolint:gosec // G204: exe is this test binary, not external input
-	cmd.Env = append(append(append(os.Environ(), runMainEnv+"=1"), hermeticEnv...), connectionEnv...)
-	cmd.Env = append(append(cmd.Env, configEnv...), env...)
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) //nolint:gosec // G204: argv is this test binary or the artifact under test, not external input
+	cmd.Env = childEnv(append(configEnv, env...))
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		t.Fatalf("stdin pipe: %v", err)
@@ -114,14 +116,23 @@ func (s *stdioSession) send(method string, params any, request bool) json.RawMes
 	return resp.Result
 }
 
-// initialize runs the MCP initialization handshake.
-func (s *stdioSession) initialize() {
+// initialize runs the MCP initialization handshake and returns the version
+// the server reported for itself.
+func (s *stdioSession) initialize() (serverVersion string) {
 	s.t.Helper()
-	s.send("initialize", map[string]any{
+	var result struct {
+		ServerInfo struct {
+			Version string `json:"version"`
+		} `json:"serverInfo"`
+	}
+	if err := json.Unmarshal(s.send("initialize", map[string]any{
 		"protocolVersion": "2025-06-18", "capabilities": map[string]any{},
 		"clientInfo": map[string]any{"name": "s2-test", "version": "0"},
-	}, true)
+	}, true), &result); err != nil {
+		s.t.Fatalf("decode initialize: %v", err)
+	}
 	s.send("notifications/initialized", map[string]any{}, false)
+	return result.ServerInfo.Version
 }
 
 // toolCall is the part of a tools/call result the tests read.
@@ -163,7 +174,14 @@ func (s *stdioSession) stop(checks ...func()) {
 // events_only 404. Every other request goes to next.
 func deploymentLangfuse(t *testing.T, healthBody string, unavailable []string, next http.HandlerFunc) *httptest.Server {
 	t.Helper()
-	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	fake := httptest.NewServer(deploymentHandler(healthBody, unavailable, next))
+	t.Cleanup(fake.Close)
+	return fake
+}
+
+// deploymentHandler is the handler of deploymentLangfuse.
+func deploymentHandler(healthBody string, unavailable []string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.URL.Path == "/api/public/health":
@@ -177,9 +195,7 @@ func deploymentLangfuse(t *testing.T, healthBody string, unavailable []string, n
 		default:
 			next(w, r)
 		}
-	}))
-	t.Cleanup(fake.Close)
-	return fake
+	}
 }
 
 // profileLogLine returns the startup log line naming the deployment profile.

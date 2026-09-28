@@ -1,0 +1,61 @@
+# GoReleaser (OSS) configuration: the single build driver of the release pipeline (spec #119).
+# Run from the repository root, always with this file passed explicitly:
+#   goreleaser release --snapshot --clean --config packaging/.goreleaser.yaml
+# Pinned tool versions (supply chain, .claude/rules/security.md), bumped by hand:
+#   GoReleaser v2.18.2 (OSS; the npm publisher is Pro-only and is not used)
+#   syft v1.52.0 (SPDX JSON SBOM per archive; GoReleaser runs it from PATH)
+# Both pins live in .github/workflows/release.yml; change them there together with this header.
+# Nothing is published from here: `release` is disabled, so a tag build also only builds (#126 wires
+# signing, provenance and publishing to a `v*` tag).
+version: 2
+
+project_name: langfuse-mcp
+
+builds:
+  - id: langfuse-mcp
+    main: ./cmd/langfuse-mcp
+    binary: langfuse-mcp
+    env:
+      - CGO_ENABLED=0 # static binary; the server uses no cgo (.claude/rules/go.md)
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      # main.version is what initialize and the startup log report (spec #119, seam S1).
+      - -s -w -X main.version={{ .Version }}
+    # Reproducible builds: the file times come from the commit, not the build machine.
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: langfuse-mcp
+    ids: [langfuse-mcp]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+sboms:
+  - id: archives
+    artifacts: archive
+    # syft's default for GoReleaser is SPDX JSON: one <archive>.sbom.json per archive.
+    documents:
+      - "{{ .ArtifactName }}.sbom.json"
+
+snapshot:
+  # A SemVer pre-release derived from the commit (spec #119), e.g. 0.0.0-SNAPSHOT-0a1b2c3.
+  version_template: "0.0.0-SNAPSHOT-{{ .ShortCommit }}"
+
+changelog:
+  disable: true
+
+release:
+  disable: true

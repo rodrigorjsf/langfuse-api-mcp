@@ -1,0 +1,160 @@
+# Release pipeline (spec #119), snapshot mode: GoReleaser builds the release archives for six targets
+# (linux, darwin, windows x amd64, arm64) with a checksums file and one SPDX JSON SBOM per archive
+# (packaging/.goreleaser.yaml), then the smoke (seam S2, cmd/langfuse-mcp/installed_test.go, build
+# tag `smoke`) installs the archive on clean Linux, macOS and Windows runners the way README
+# "Install and run" says (checksum check, extract) and talks MCP to the extracted binary.
+# windows/arm64 is built, not CI-tested (no runner in this matrix).
+# Nothing is published: signing, provenance and publishing run only on a `v*` tag, wired by #126.
+# Runs on pull requests that touch packaging, the executable's entry point, the module files or this
+# workflow; on every push to main; and weekly, so a toolchain or tool change is caught without a commit.
+# Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current. Tool
+# versions (GoReleaser, syft) are pinned below and in packaging/.goreleaser.yaml's header.
+name: Release
+
+on:
+  pull_request:
+    paths:
+      - "packaging/**"
+      - "cmd/langfuse-mcp/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/release.yml"
+  push:
+    branches: [main]
+  schedule:
+    - cron: "29 4 * * 3"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # GoReleaser derives the version from the tags and the commit
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod # the release is built with the module's pinned toolchain
+          cache-dependency-path: go.mod
+      # syft writes the SPDX JSON SBOM of each archive (spec #119); Anchore's own download action,
+      # pinned to syft v1.52.0. GoReleaser runs `syft` from PATH.
+      - uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        id: syft
+        with:
+          syft-version: v1.52.0
+      - name: Put syft on PATH
+        env:
+          SYFT: ${{ steps.syft.outputs.cmd }}
+        run: dirname "$SYFT" >> "$GITHUB_PATH"
+      # GoReleaser OSS is the single build driver (spec #119); pinned to v2.18.2.
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: v2.18.2
+          args: release --snapshot --clean --config packaging/.goreleaser.yaml
+      - name: Snapshot version
+        id: version
+        run: |
+          set -euo pipefail
+          version=$(jq -r .version dist/metadata.json)
+          # A SemVer pre-release derived from the commit, e.g. 0.0.0-SNAPSHOT-0a1b2c3.
+          [[ "$version" =~ ^0\.0\.0-SNAPSHOT-[0-9a-f]+$ ]] || { echo "::error::unexpected snapshot version $version"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      # GitHub's own artifact actions hand the archives, their SBOMs and the checksums file from this
+      # job to the smoke jobs on other runners (no other way to share files between jobs).
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-archives
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sbom.json
+            dist/checksums.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  smoke-archive:
+    name: smoke-archive (${{ matrix.target }})
+    needs: snapshot
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux_amd64
+            archive: tar.gz
+          - os: macos-latest
+            target: darwin_arm64
+            archive: tar.gz
+          - os: windows-latest
+            target: windows_amd64
+            archive: zip
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      ARCHIVE: langfuse-mcp_${{ needs.snapshot.outputs.version }}_${{ matrix.target }}.${{ matrix.archive }}
+      LANGFUSE_MCP_SMOKE_VERSION: ${{ needs.snapshot.outputs.version }}
+    steps:
+      # The checkout carries only the smoke's test sources; the binary under test is the archive's.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.mod
+      # The snapshot job's archives (see upload-artifact above).
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-archives
+          path: ${{ runner.temp }}/release
+      # README "Install and run": check the archive against checksums.txt before extracting it.
+      - name: Verify the checksum
+        shell: bash
+        working-directory: ${{ runner.temp }}/release
+        run: |
+          set -euo pipefail
+          line=$(awk -v f="$ARCHIVE" '$2 == f' checksums.txt)
+          [ -n "$line" ] || { echo "::error::$ARCHIVE is not in checksums.txt"; exit 1; }
+          if command -v sha256sum >/dev/null; then echo "$line" | sha256sum -c -; else echo "$line" | shasum -a 256 -c -; fi
+      - name: Extract the archive (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/install"
+          tar -xzf "$RUNNER_TEMP/release/$ARCHIVE" -C "$RUNNER_TEMP/install"
+          echo "SMOKE_BINARY=$RUNNER_TEMP/install/langfuse-mcp" >> "$GITHUB_ENV"
+      - name: Extract the archive (zip)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          Expand-Archive -Path "$env:RUNNER_TEMP\release\$env:ARCHIVE" -DestinationPath "$env:RUNNER_TEMP\install"
+          "SMOKE_BINARY=$env:RUNNER_TEMP\install\langfuse-mcp.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      # Windows only: the same narrow retry as ci.yml's test step (#102, golang/go#81238), unchanged:
+      # retry once, and only when the log carries the Go runtime crash signature. Remove with #102.
+      - name: Smoke (seam S2) against the extracted binary
+        shell: bash
+        run: |
+          set -o pipefail
+          LANGFUSE_MCP_SMOKE_COMMAND=$(jq -cn --arg bin "$SMOKE_BINARY" '[$bin]')
+          export LANGFUSE_MCP_SMOKE_COMMAND
+          log="$RUNNER_TEMP/go-test.log"
+          if go test -tags smoke -count=1 -v -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/ 2>&1 | tee "$log"; then exit 0; fi
+          if [ "$RUNNER_OS" = "Windows" ] &&
+            grep -qE 'fatal error: (unknown caller pc|fault)|unexpected return pc' "$log"; then
+            echo "::warning::Go runtime crash on a Windows runner (golang/go#81238, #102); retrying once"
+            go test -tags smoke -count=1 -v -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
+          else
+            exit 1
+          fi

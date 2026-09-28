@@ -102,20 +102,42 @@ func runChild(t *testing.T, env []string) ([]byte, error) {
 // entries (later entries win) and returns its stdout, stderr and exit error.
 func runChildOutput(t *testing.T, env []string) (stdout, stderr []byte, err error) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	return runCommandOutput(t, testBinary(t), env)
+}
 
+// testBinary is the launch command that runs this test binary as the
+// executable: the child runs main() (runMainEnv), not the tests.
+func testBinary(t *testing.T) []string {
+	t.Helper()
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatalf("locate test binary: %v", err)
 	}
-	cmd := exec.CommandContext(ctx, exe, "-test.run=^$") //nolint:gosec // G204: exe is this test binary, not external input
-	cmd.Env = append(append(append(os.Environ(), runMainEnv+"=1"), hermeticEnv...), connectionEnv...)
-	cmd.Env = append(cmd.Env, env...)
+	return []string{exe, "-test.run=^$"}
+}
+
+// runCommandOutput runs the launch command argv (never through a shell) as a
+// child with the hermetic environment plus the extra entries (later entries
+// win), and returns its stdout, stderr and exit error.
+func runCommandOutput(t *testing.T, argv, env []string) (stdout, stderr []byte, err error) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) //nolint:gosec // G204: argv is this test binary or the artifact under test, not external input
+	cmd.Env = childEnv(env)
 	var out, errOut bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errOut
 	err = cmd.Run()
 	return out.Bytes(), errOut.Bytes(), err
+}
+
+// childEnv is the environment of a child: this process's, marked to run
+// main(), cleared of CA and proxy variables, with a valid connection, then
+// the extra entries (later entries win).
+func childEnv(extra []string) []string {
+	env := append(append(append(os.Environ(), runMainEnv+"=1"), hermeticEnv...), connectionEnv...)
+	return append(env, extra...)
 }
 
 // hermeticEnv clears the CA and proxy variables the developer's or runner's

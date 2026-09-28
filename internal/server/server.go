@@ -85,6 +85,7 @@ type Option func(*options)
 
 type options struct {
 	writeMode bool
+	version   string
 	// now is the clock that dates confirmation states; tests replace it.
 	now func() time.Time
 }
@@ -95,6 +96,14 @@ type options struct {
 // (ADR-0003).
 func WithWriteMode() Option { return func(o *options) { o.writeMode = true } }
 
+// DevVersion is the version a server built without WithVersion reports: a
+// development build, never a release.
+const DevVersion = "0.0.0-dev"
+
+// WithVersion sets the version the server reports as its implementation
+// version in initialize; the executable passes the version it was built with.
+func WithVersion(version string) Option { return func(o *options) { o.version = version } }
+
 // New returns the MCP server exposing the discovery tools and execute_read
 // over the catalog, and execute_write in write mode. The tool set is fixed
 // here, at startup, and is the same for every client. log receives one audit line per tool call; it must write
@@ -104,11 +113,11 @@ func WithWriteMode() Option { return func(o *options) { o.writeMode = true } }
 func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets Secrets,
 	profile langfuse.DeploymentProfile, opts ...Option,
 ) *mcp.Server {
-	o := options{now: time.Now}
+	o := options{now: time.Now, version: DevVersion}
 	for _, opt := range opts {
 		opt(&o)
 	}
-	s := mcp.NewServer(&mcp.Implementation{Name: "langfuse-mcp", Version: "0.0.0-dev"}, nil)
+	s := mcp.NewServer(&mcp.Implementation{Name: "langfuse-mcp", Version: o.version}, nil)
 	redact := secrets.redactor()
 	ex := executor{catalog: cat, client: client, redact: redact, profile: profile, writeMode: o.writeMode,
 		confirmer: newConfirmer(o.now)}
