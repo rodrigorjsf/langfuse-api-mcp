@@ -23,3 +23,4 @@ Rules for every workflow:
 Read the reference for the workflow the user asks about:
 
 - Traces, observations, errors, a session's or a user's traces: [references/traces.md](references/traces.md)
+- Scores, score configs, score distributions, a user's scores: [references/scores.md](references/scores.md)

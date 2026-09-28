@@ -384,6 +384,10 @@ To add production cases: `POST /dataset-items` with `sourceTraceId` and `sourceO
 - Rows: `GET /v3/scores?name=a,b&source=EVAL&dataType=NUMERIC&valueMax=0.5&fields=details,subject`. `[sourced]` public-api
 - Score by user: v3 has no `userId`. Resolve the trace IDs with Observations v2 `userId=`, then pass them to v3
   `traceId=a,b,…`. `[sourced]` `/faq/all/deprecated-api-migration#scores`
+- Aggregates by user: the Metrics v2 score views carry `userId` ("User ID from trace") as a filter, not a grouping
+  dimension; the migration guide names them as the replacement of the v2 `userId` score filter. `[sourced]`
+  `/docs/metrics/features/metrics-api#v2`, `/faq/all/deprecated-api-migration#scores` (checked with the
+  `langfuse-docs` MCP, 2026-09-28, #135)
 - Configure automated evaluation:
   - `GET/POST /v2/evaluators`, then `POST /v2/evaluation-rules`.
   - LLM connections must exist first (`/llm-connections`).
