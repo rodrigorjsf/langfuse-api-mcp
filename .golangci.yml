@@ -11,9 +11,11 @@
 version: "2"
 
 run:
-  # Lint the integration suite too (.claude/rules/testing.md); it compiles only with this tag.
+  # Lint the tagged suites too (.claude/rules/testing.md); each compiles only with its tag:
+  # integration (live Langfuse) and smoke (seam S2, the installed artifact).
   build-tags:
     - integration
+    - smoke
 
 linters:
   default: standard # errcheck, govet, ineffassign, staticcheck, unused
@@ -34,7 +36,8 @@ linters:
     depguard:
       rules:
         # Production code never shells out and never uses unsafe (.claude/rules/go.md).
-        # Tests may re-execute the test binary as a child process (spec #7, seam S2).
+        # Tests may start child processes: the test binary itself (spec #7), a binary they build
+        # with `go build`, or the artifact under test (spec #119, seam S2).
         no-exec-or-unsafe:
           files:
             - "$all"
