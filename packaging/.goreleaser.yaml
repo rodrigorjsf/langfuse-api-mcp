@@ -5,8 +5,11 @@
 #   GoReleaser v2.18.2 (OSS; the npm publisher is Pro-only and is not used)
 #   syft v1.52.0 (SPDX JSON SBOM per archive; GoReleaser runs it from PATH)
 # Both pins live in .github/workflows/release.yml; change them there together with this header.
-# Nothing is published from here: `release` is disabled, and the workflow runs snapshot builds only
-# (#126 wires signing, provenance and publishing, the image push included, to a `v*` tag).
+# Nothing is published from here: GoReleaser only builds. `release` is disabled and the workflow
+# always runs it with --snapshot; on a `v*` tag the version comes from the tag (RELEASE_VERSION,
+# below), and the workflow's tag-only jobs sign, attest and publish exactly the files and images the
+# smoke tested (#126). A non-snapshot run is not used: with publishing skipped, dockers_v2 builds no
+# image at all, and with publishing on it would push an image before any smoke ran.
 version: 2
 
 project_name: langfuse-mcp
@@ -53,8 +56,8 @@ archives:
 
 # The container image (spec #119): distroless static, non-root, no shell, amd64 and arm64
 # (packaging/Dockerfile). In snapshot mode GoReleaser builds one local image per platform, tagged
-# <version>-amd64 and <version>-arm64, and pushes nothing; a non-snapshot run would build the
-# multi-arch manifest and push it, which only a `v*` tag may do (#126). The image's SBOM is written
+# <version>-amd64 and <version>-arm64, and pushes nothing; on a `v*` tag the workflow's
+# publish-image job pushes both and joins them into the multi-arch image (#126). The image's SBOM is written
 # by syft in the release workflow (SPDX JSON, like the archives'), so buildx attestations are off.
 dockers_v2:
   - id: langfuse-mcp
@@ -86,8 +89,10 @@ sboms:
       - "{{ .ArtifactName }}.sbom.json"
 
 snapshot:
-  # A SemVer pre-release derived from the commit (spec #119), e.g. 0.0.0-SNAPSHOT-0a1b2c3.
-  version_template: "0.0.0-SNAPSHOT-{{ .ShortCommit }}"
+  # A SemVer pre-release derived from the commit (spec #119), e.g. 0.0.0-SNAPSHOT-0a1b2c3; on a `v*`
+  # tag the workflow sets RELEASE_VERSION to the tag without its `v` (e.g. 1.2.3). Leave it unset
+  # otherwise: an empty value is an error, not the snapshot version.
+  version_template: '{{ envOrDefault "RELEASE_VERSION" (printf "0.0.0-SNAPSHOT-%s" .ShortCommit) }}'
 
 changelog:
   disable: true

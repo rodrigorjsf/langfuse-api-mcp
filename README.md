@@ -646,7 +646,35 @@ Recommendations: create a dedicated Langfuse key for the agent, set an expiry da
 
 ### Verify what you run **(Planned)**
 
-Releases will ship with checksums, an SBOM, cosign keyless signatures and GitHub build provenance (`gh attestation verify`). The [npx](#npx) channel adds the npm registry and Node.js as dependencies of that channel only; its packages depend on nothing but their own platform packages and run no install script. The one Python dependency of the maintainer tooling (PyYAML, used by the union catalog generator in CI only) is pinned with hashes in [`scripts/requirements.txt`](scripts/requirements.txt), installed with `--require-hashes` and kept current by Dependabot. The MCPB CLI that validates and packs the Claude Desktop bundle is pinned with its whole dependency tree and integrity hashes in [`packaging/mcpb/package-lock.json`](packaging/mcpb/package-lock.json), installed with `npm ci --ignore-scripts` and kept current by Dependabot.
+**Planned until the first release** (M7): the release workflow is wired, but its signing, provenance and publishing jobs run **only on a `v*` release tag**, never on a pull request, a push to `main` or the weekly run, so none of the commands below has anything to verify yet. The first tag is cut after the repository goes public, because a cosign keyless signature writes a permanent public entry (the Rekor transparency log) naming this repository and its workflow.
+
+Every release will carry: `checksums.txt` (SHA-256 of every archive and SBOM); one SPDX JSON SBOM per archive and one for the image; a cosign keyless signature, as a Sigstore bundle `<file>.sigstore.json`, and GitHub build provenance for every archive, `checksums.txt` and the `.mcpb`; the multi-arch image signed and attested by digest. The SBOMs are covered through `checksums.txt`, which lists them and is itself signed. A signature is valid only when its certificate names this repository's release workflow at the release tag, issued to GitHub Actions. With `version=<version>` (without the leading `v`):
+
+```bash
+# 1. The archive is the one in checksums.txt (Windows: compare Get-FileHash, see Release archive).
+awk -v f="$archive" '$2 == f' checksums.txt | sha256sum -c -   # macOS: … | shasum -a 256 -c -
+
+# 2. The archive, checksums.txt or the .mcpb was signed by this repository's release workflow.
+identity="https://github.com/rodrigorjsf/langfuse-api-mcp/.github/workflows/release.yml@refs/tags/v$version"
+for f in "$archive" checksums.txt "langfuse-mcp_${version}.mcpb"; do
+  cosign verify-blob --bundle "$f.sigstore.json" \
+    --certificate-identity "$identity" \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com "$f"
+done
+
+# 3. The image was signed by the same workflow.
+cosign verify ghcr.io/rodrigorjsf/langfuse-api-mcp:$version \
+  --certificate-identity "$identity" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+# 4. GitHub build provenance: built by this repository's workflow from the tagged commit.
+gh attestation verify "$archive" -R rodrigorjsf/langfuse-api-mcp
+gh attestation verify oci://ghcr.io/rodrigorjsf/langfuse-api-mcp:$version -R rodrigorjsf/langfuse-api-mcp
+```
+
+The npm packages are published with npm provenance: `npm audit signatures` in a project that installed `langfuse-api-mcp` checks them.
+
+The [npx](#npx) channel adds the npm registry and Node.js as dependencies of that channel only; its packages depend on nothing but their own platform packages and run no install script. The one Python dependency of the maintainer tooling (PyYAML, used by the union catalog generator in CI only) is pinned with hashes in [`scripts/requirements.txt`](scripts/requirements.txt), installed with `--require-hashes` and kept current by Dependabot. The MCPB CLI that validates and packs the Claude Desktop bundle is pinned with its whole dependency tree and integrity hashes in [`packaging/mcpb/package-lock.json`](packaging/mcpb/package-lock.json), installed with `npm ci --ignore-scripts` and kept current by Dependabot.
 
 ## Stack
 
@@ -731,6 +759,21 @@ The same run packs the MCPB bundle with [`scripts/pack-mcpb.sh`](scripts/pack-mc
 (cd packaging/mcpb && npm ci --ignore-scripts)
 scripts/pack-mcpb.sh   # prints dist/langfuse-mcp_<version>.mcpb
 ```
+
+**On a release tag the same pipeline publishes (Planned, M7).** A `v*` tag push runs the same build with the tag's version (`vX.Y.Z` only; any other `v*` tag fails the build before anything is signed) and the same smoke against those artifacts; only when every smoke passes do the tag-only jobs run, each with only the permissions it needs, signing first so nothing is public before its signatures exist: `sign-blobs` (cosign keyless signatures and `actions/attest` build provenance for the archives, `checksums.txt` and the `.mcpb`; `id-token`, `attestations`), `publish-image` (pushes the two images the smoke built and joins them into the multi-arch `ghcr.io/rodrigorjsf/langfuse-api-mcp:<version>`, signs and attests it by digest; `packages`, `id-token`, `attestations`), `publish-npm` (the six platform packages, then the main one; `id-token`) and `github-release` (the GitHub release with every archive, SBOM, signature and the bundle; `contents: write`). On a pull request, `main` or the weekly run they show as skipped. See [Verify what you run](#verify-what-you-run-planned) for what a user checks.
+
+#### Cutting a release (maintainer, M7)
+
+Nothing below exists yet, on purpose: no secret or environment is created while the repository is private. Before the first tag:
+
+1. **Make the repository public.** GitHub artifact attestations need a public repository (or GitHub Enterprise Cloud), and npm provenance needs a public source repository.
+2. **Protect `v*` tags** with a tag ruleset (Settings → Rules → Rulesets, target tags `v*`: restrict creation, update and deletion to administrators), so only the maintainer can start a release; `sign-blobs` and `github-release` do not run in the environment below.
+3. **Create the `release` environment** (Settings → Environments) with the deployment rule "Selected branches and tags" allowing only tags matching `v*`. `publish-image` and `publish-npm` run in it, so a workflow on any other ref, a pull request that edits the workflow included, cannot reach its secrets.
+4. **Check the npm names** `langfuse-api-mcp` and `langfuse-api-mcp-{linux,darwin,win32}-{x64,arm64}` are still free (the spec checked `langfuse-api-mcp` on 2026-09-27); if one is taken, the package name is reopened.
+5. **npm authentication, first release.** npm trusted publishing (OIDC from this workflow, no long-lived token) is configured per package on npmjs.com, and the npm documentation describes it only for packages that already exist. So publish the first release with a granular access token: create one on npmjs.com with read and write access to packages and a short expiry, and store it as the secret `NPM_TOKEN` of the `release` environment only (never a repository secret).
+6. **Tag and push** `vX.Y.Z` from `main`, then watch the Release run.
+7. **After the first release:** make the GHCR package public (Packages → `langfuse-api-mcp` → Package settings → Change visibility; a newly pushed package is private) and link it to the repository if it is not already. On npmjs.com, add a trusted publisher to each of the seven packages (repository `rodrigorjsf/langfuse-api-mcp`, workflow `release.yml`, environment `release`), then delete the `NPM_TOKEN` secret and revoke the token: `publish-npm` authenticates through OIDC from then on (its `NODE_AUTH_TOKEN` is then empty; if the second release's `npm publish` still asks for a token, remove that line from the job).
+8. **Check the release** with the commands in [Verify what you run](#verify-what-you-run-planned) and remove the Planned marks from the README.
 
 **A toolchain bump PR shows no CI until you re-trigger it.** The workflow opens its pull request with the repository's `GITHUB_TOKEN`, and GitHub does not start workflows for events that token creates, so `CI` does not run on the PR by itself. The same holds for the union catalog PR (`deps/union-catalog-*`). Close and reopen the PR (or push a commit to its `deps/toolchain-*` or `deps/union-catalog-*` branch) to run CI, and merge only once it is green. The workflow also relies on the repository setting "Allow GitHub Actions to create and approve pull requests" (Settings → Actions → General); without it the PR is not created. See [#24](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/24).
 
