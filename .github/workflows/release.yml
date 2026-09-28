@@ -4,19 +4,24 @@
 # tag `smoke`) installs the archive on clean Linux, macOS and Windows runners the way README
 # "Install and run" says (checksum check, extract) and talks MCP to the extracted binary. The same
 # run builds the container image (distroless static, non-root, amd64 and arm64, not pushed) with one
-# SPDX JSON SBOM, and the smoke runs the amd64 image with `docker run -i` on a Linux runner.
+# SPDX JSON SBOM, and the smoke runs the amd64 image with `docker run -i` on a Linux runner. It also
+# packs the one MCPB bundle for Claude Desktop (scripts/pack-mcpb.sh: the universal macOS binary and
+# the windows/amd64 binary, `mcpb validate` + `mcpb pack`), and the smoke unpacks it on macOS and
+# Windows runners and runs the binary its manifest names for that OS.
 # windows/arm64 is built, not CI-tested (no runner in this matrix).
 # Nothing is published: signing, provenance and publishing run only on a `v*` tag, wired by #126.
 # Runs on pull requests that touch packaging, the executable's entry point, the module files or this
 # workflow; on every push to main; and weekly, so a toolchain or tool change is caught without a commit.
 # Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current. Tool
-# versions (GoReleaser, syft) are pinned below and in packaging/.goreleaser.yaml's header.
+# versions (GoReleaser, syft) are pinned below and in packaging/.goreleaser.yaml's header; Node below,
+# and the MCPB CLI with its dependency tree in packaging/mcpb/package-lock.json.
 name: Release
 
 on:
   pull_request:
     paths:
       - "packaging/**"
+      - "scripts/pack-mcpb.sh"
       - "cmd/langfuse-mcp/**"
       - "go.mod"
       - "go.sum"
@@ -122,6 +127,60 @@ jobs:
         with:
           name: container-image
           path: image/
+          if-no-files-found: error
+          retention-days: 7
+      # Node runs the MCPB CLI (spec #119); GitHub's own setup action, pinned to Node 24.21.0 (LTS).
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+          package-manager-cache: false
+      # The MCPB CLI (@anthropic-ai/mcpb 2.1.2, Anthropic's reference packer and validator), installed
+      # from its lockfile with integrity hashes and no install scripts.
+      - name: Install the MCPB CLI
+        working-directory: packaging/mcpb
+        run: npm ci --ignore-scripts
+      - name: Pack the MCPB bundle
+        id: mcpb
+        run: echo "bundle=$(scripts/pack-mcpb.sh)" >> "$GITHUB_OUTPUT"
+      # What the install dialog promises (spec #119): the version is the build's; exactly the four
+      # user_config fields, the keys sensitive and required, the base URL required, the CA an
+      # optional file; they reach the server only as the four LANGFUSE_* variables; no write-mode
+      # option; macOS and Windows only, the Windows command overridden.
+      - name: Check the MCPB manifest
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BUNDLE: ${{ steps.mcpb.outputs.bundle }}
+        run: |
+          set -euo pipefail
+          jq -e --arg v "$VERSION" '
+            .manifest_version == "0.4" and .version == $v and .server.type == "binary"
+            and .compatibility.platforms == ["darwin", "win32"]
+            and .server.mcp_config.command == "${__dirname}/server/langfuse-mcp"
+            and (.server.mcp_config.platform_overrides | keys) == ["win32"]
+            and .server.mcp_config.platform_overrides.win32 == {"command": "${__dirname}/server/langfuse-mcp.exe"}
+            and (.server.mcp_config.args // []) == []
+            and .server.mcp_config.env == {
+              "LANGFUSE_PUBLIC_KEY": "${user_config.public_key}",
+              "LANGFUSE_SECRET_KEY": "${user_config.secret_key}",
+              "LANGFUSE_BASE_URL": "${user_config.base_url}",
+              "LANGFUSE_CA_CERT": "${user_config.ca_cert}"}
+            and (.user_config | keys) == ["base_url", "ca_cert", "public_key", "secret_key"]
+            and ([.user_config.public_key, .user_config.secret_key]
+                 | all(.type == "string" and .sensitive == true and .required == true))
+            and .user_config.base_url.type == "string" and .user_config.base_url.required == true
+            and (.user_config.base_url.sensitive // false) == false
+            and .user_config.ca_cert.type == "file" and .user_config.ca_cert.required == false
+            and .user_config.ca_cert.default == ""
+          ' dist/mcpb/manifest.json
+          # The bundle holds exactly the manifest, the license and the two binaries.
+          got=$(unzip -Z1 "$BUNDLE" | sort | tr '\n' ' ')
+          want="LICENSE manifest.json server/langfuse-mcp server/langfuse-mcp.exe "
+          [ "$got" = "$want" ] || { echo "::error::bundle holds '$got', want '$want'"; exit 1; }
+      # The MCPB smoke unpacks the bundle on fresh macOS and Windows runners (upload-artifact as above).
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mcpb-bundle
+          path: ${{ steps.mcpb.outputs.bundle }}
           if-no-files-found: error
           retention-days: 7
 
@@ -243,3 +302,89 @@ jobs:
             "-v", ($ca + ":" + $ca + ":ro"), $image]')
           export LANGFUSE_MCP_SMOKE_COMMAND
           go test -tags smoke -count=1 -v -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
+
+  # The MCPB channel (README "Install and run", Claude Desktop): the bundle is unpacked with the
+  # pinned MCPB CLI, and the smoke runs the command its manifest names for this OS (the universal
+  # binary on macOS, platform_overrides.win32 on Windows), `${__dirname}` resolved to the unpacked
+  # directory as Claude Desktop does. The smoke hands the server the same four LANGFUSE_* variables
+  # the manifest maps the install dialog's values to, so its invalid-base-URL case is the MCPB's
+  # value reaching the server's startup validation (the "Check the MCPB manifest" step proves the
+  # mapping). The Claude Desktop install itself is proven by hand (docs/research/raw/).
+  smoke-mcpb:
+    name: smoke-mcpb (${{ matrix.platform }})
+    needs: snapshot
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin
+          - os: windows-latest
+            platform: win32
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      BUNDLE: langfuse-mcp_${{ needs.snapshot.outputs.version }}.mcpb
+      PLATFORM: ${{ matrix.platform }}
+      LANGFUSE_MCP_SMOKE_VERSION: ${{ needs.snapshot.outputs.version }}
+    steps:
+      # The checkout carries the smoke's test sources and the MCPB CLI's lockfile; the binary under
+      # test is the bundle's.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.mod
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+          package-manager-cache: false
+      - name: Install the MCPB CLI
+        working-directory: packaging/mcpb
+        run: npm ci --ignore-scripts
+      # The snapshot job's bundle (see upload-artifact above).
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: mcpb-bundle
+          path: ${{ runner.temp }}/release
+      - name: Unpack the bundle and resolve its command
+        shell: bash
+        run: |
+          set -euo pipefail
+          release="$RUNNER_TEMP/release" dir="$RUNNER_TEMP/mcpb"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            # D:/a/_temp form: understood alike by bash, Node and Go.
+            release=$(cygpath -m "$release") dir=$(cygpath -m "$dir")
+          fi
+          (cd packaging/mcpb && npx --no-install mcpb unpack "$release/$BUNDLE" "$dir")
+          command=$(jq -er --arg os "$PLATFORM" \
+            '.server.mcp_config | (.platform_overrides[$os].command // .command)' "$dir/manifest.json")
+          command=${command//'${__dirname}'/"$dir"}
+          [ -f "$command" ] || { echo "::error::the manifest's command for $PLATFORM is not in the bundle"; exit 1; }
+          echo "SMOKE_BINARY=$command" >> "$GITHUB_ENV"
+      # One bundle serves both Mac architectures (spec #119): the binary must be universal.
+      - name: Check the universal macOS binary
+        if: matrix.platform == 'darwin'
+        run: |
+          set -euo pipefail
+          archs=$(lipo -archs "$SMOKE_BINARY")
+          [ "$archs" = "x86_64 arm64" ] || { echo "::error::want a universal x86_64 arm64 binary, got '$archs'"; exit 1; }
+      # Windows only: the same narrow retry as ci.yml's test step (#102, golang/go#81238), unchanged:
+      # retry once, and only when the log carries the Go runtime crash signature. Remove with #102.
+      - name: Smoke (seam S2) against the bundle's binary
+        shell: bash
+        run: |
+          set -o pipefail
+          LANGFUSE_MCP_SMOKE_COMMAND=$(jq -cn --arg bin "$SMOKE_BINARY" '[$bin]')
+          export LANGFUSE_MCP_SMOKE_COMMAND
+          log="$RUNNER_TEMP/go-test.log"
+          if go test -tags smoke -count=1 -v -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/ 2>&1 | tee "$log"; then exit 0; fi
+          if [ "$RUNNER_OS" = "Windows" ] &&
+            grep -qE 'fatal error: (unknown caller pc|fault)|unexpected return pc' "$log"; then
+            echo "::warning::Go runtime crash on a Windows runner (golang/go#81238, #102); retrying once"
+            go test -tags smoke -count=1 -v -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
+          else
+            exit 1
+          fi
