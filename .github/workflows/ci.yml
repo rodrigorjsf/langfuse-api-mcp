@@ -79,21 +79,12 @@ jobs:
       # Windows only: a Go runtime bug (golang/go#81238, not fixed in any release yet) corrupts a
       # goroutine stack on AMX Intel runners of the windows-latest pool, so the test binary dies
       # with a runtime fatal error for any commit. Retry once, and only when the log carries that
-      # crash signature; a real test failure still fails the first attempt. Remove with #102, together with
-      # its copies in release.yml (smoke-archive, smoke-npx and smoke-mcpb jobs).
+      # crash signature; a real test failure still fails the first attempt. The retry lives in
+      # scripts/go-test-windows-retry.sh, shared with release.yml's smoke jobs; remove with #102.
       - name: Test (race detector)
         shell: bash
         run: |
-          set -o pipefail
-          log="$RUNNER_TEMP/go-test.log"
-          if go test -race -count=1 ./... 2>&1 | tee "$log"; then exit 0; fi
-          if [ "$RUNNER_OS" = "Windows" ] &&
-            grep -qE 'fatal error: (unknown caller pc|fault)|unexpected return pc' "$log"; then
-            echo "::warning::Go runtime crash on a Windows runner (golang/go#81238, #102); retrying once"
-            go test -race -count=1 ./...
-          else
-            exit 1
-          fi
+          bash scripts/go-test-windows-retry.sh -race -count=1 ./...
         env:
           LANGFUSE_MCP_TEST_OS_CA_DIR: ${{ runner.temp }}/os-test-ca
 

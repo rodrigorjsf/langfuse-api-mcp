@@ -317,23 +317,15 @@ jobs:
         run: |
           Expand-Archive -Path "$env:RUNNER_TEMP\release\$env:ARCHIVE" -DestinationPath "$env:RUNNER_TEMP\install"
           "SMOKE_BINARY=$env:RUNNER_TEMP\install\langfuse-mcp.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-      # Windows only: the same narrow retry as ci.yml's test step (#102, golang/go#81238), unchanged:
-      # retry once, and only when the log carries the Go runtime crash signature. Remove with #102.
+      # Windows only: the same narrow retry as ci.yml's test step (#102, golang/go#81238), in
+      # scripts/go-test-windows-retry.sh. Remove with #102.
       - name: Smoke (seam S2) against the extracted binary
         shell: bash
         run: |
           set -o pipefail
           LANGFUSE_MCP_SMOKE_COMMAND=$(jq -cn --arg bin "$SMOKE_BINARY" '[$bin]')
           export LANGFUSE_MCP_SMOKE_COMMAND
-          log="$RUNNER_TEMP/go-test.log"
-          if go test -tags smoke -count=1 -v -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/ 2>&1 | tee "$log"; then exit 0; fi
-          if [ "$RUNNER_OS" = "Windows" ] &&
-            grep -qE 'fatal error: (unknown caller pc|fault)|unexpected return pc' "$log"; then
-            echo "::warning::Go runtime crash on a Windows runner (golang/go#81238, #102); retrying once"
-            go test -tags smoke -count=1 -v -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
-          else
-            exit 1
-          fi
+          bash scripts/go-test-windows-retry.sh -tags smoke -count=1 -v -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
 
   # The container channel (README "Install and run", Docker): `docker run -i` with the keys and base
   # URL passed by `-e`, and the private CA mounted read-only with LANGFUSE_CA_CERT naming it (#28).
@@ -420,8 +412,8 @@ jobs:
       # (POSIX runners), unsupported platform.
       - name: Shim tests
         run: node --test packaging/npm/shim.test.mjs
-      # Windows only: the same narrow retry as ci.yml's test step (#102, golang/go#81238), unchanged:
-      # retry once, and only when the log carries the Go runtime crash signature. Remove with #102.
+      # Windows only: the same narrow retry as ci.yml's test step (#102, golang/go#81238), in
+      # scripts/go-test-windows-retry.sh. Remove with #102.
       - name: Smoke (seam S2) through npx
         shell: bash
         run: |
@@ -450,15 +442,7 @@ jobs:
           [ "$got" = "$want" ] || { echo "::error::installed packages '$got', want '$want'"; exit 1; }
           LANGFUSE_MCP_SMOKE_COMMAND=$(jq -cn --arg p "$PACKAGE" '["npx", "-y", $p]')
           export LANGFUSE_MCP_SMOKE_COMMAND
-          log="$RUNNER_TEMP/go-test.log"
-          if go test -tags smoke -count=1 -v -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/ 2>&1 | tee "$log"; then exit 0; fi
-          if [ "$RUNNER_OS" = "Windows" ] &&
-            grep -qE 'fatal error: (unknown caller pc|fault)|unexpected return pc' "$log"; then
-            echo "::warning::Go runtime crash on a Windows runner (golang/go#81238, #102); retrying once"
-            go test -tags smoke -count=1 -v -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
-          else
-            exit 1
-          fi
+          bash scripts/go-test-windows-retry.sh -tags smoke -count=1 -v -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
 
   # The MCPB channel (README "Install and run", Claude Desktop): the bundle is unpacked with the
   # pinned MCPB CLI, and the smoke runs the command its manifest names for this OS (the universal
@@ -528,23 +512,15 @@ jobs:
           set -euo pipefail
           archs=$(lipo -archs "$SMOKE_BINARY")
           [ "$archs" = "x86_64 arm64" ] || { echo "::error::want a universal x86_64 arm64 binary, got '$archs'"; exit 1; }
-      # Windows only: the same narrow retry as ci.yml's test step (#102, golang/go#81238), unchanged:
-      # retry once, and only when the log carries the Go runtime crash signature. Remove with #102.
+      # Windows only: the same narrow retry as ci.yml's test step (#102, golang/go#81238), in
+      # scripts/go-test-windows-retry.sh. Remove with #102.
       - name: Smoke (seam S2) against the bundle's binary
         shell: bash
         run: |
           set -o pipefail
           LANGFUSE_MCP_SMOKE_COMMAND=$(jq -cn --arg bin "$SMOKE_BINARY" '[$bin]')
           export LANGFUSE_MCP_SMOKE_COMMAND
-          log="$RUNNER_TEMP/go-test.log"
-          if go test -tags smoke -count=1 -v -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/ 2>&1 | tee "$log"; then exit 0; fi
-          if [ "$RUNNER_OS" = "Windows" ] &&
-            grep -qE 'fatal error: (unknown caller pc|fault)|unexpected return pc' "$log"; then
-            echo "::warning::Go runtime crash on a Windows runner (golang/go#81238, #102); retrying once"
-            go test -tags smoke -count=1 -v -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
-          else
-            exit 1
-          fi
+          bash scripts/go-test-windows-retry.sh -tags smoke -count=1 -v -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
 
   # ---------------------------------------------------------------------------------------------
   # Tag-only jobs (#126). Each runs only on a `v*` tag push (the job `if`, so any other run shows it
