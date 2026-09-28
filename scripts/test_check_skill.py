@@ -125,6 +125,33 @@ class FrontmatterTest(unittest.TestCase):
         fx.write("SKILL.md", re.sub(r"(?m)^description: .*$", "description: " + "x" * 200, text, count=1))
         self.assertEqual([], checkmod.check_skill(fx.dir))
 
+    def test_an_unquoted_description_holding_a_colon_and_space_fails(self):
+        # A YAML plain scalar ends at ": " or " #", so a real loader rejects or cuts the description (#142).
+        fx = SkillFixture(self)
+        text = fx.read("SKILL.md")
+        fx.write("SKILL.md", re.sub(r"(?m)^description: .*$", "description: Langfuse tools: traces", text, count=1))
+        self.assertIn("SKILL.md: frontmatter description holds ': ' or ' #' unquoted; quote it or "
+                      "reword it", checkmod.check_skill(fx.dir))
+
+    def test_an_unquoted_description_holding_a_space_and_hash_fails(self):
+        fx = SkillFixture(self)
+        text = fx.read("SKILL.md")
+        fx.write("SKILL.md", re.sub(r"(?m)^description: .*$", "description: Langfuse tools #traces", text, count=1))
+        self.assertIn("SKILL.md: frontmatter description holds ': ' or ' #' unquoted; quote it or "
+                      "reword it", checkmod.check_skill(fx.dir))
+
+    def test_a_body_line_starting_with_description_is_not_the_frontmatter(self):
+        fx = SkillFixture(self)
+        text = re.sub(r"(?m)^description: .*\n", "", fx.read("SKILL.md"), count=1)
+        fx.write("SKILL.md", text + "\ndescription: a body line: not frontmatter\n")
+        self.assertEqual(["SKILL.md: frontmatter has no description"], checkmod.check_skill(fx.dir))
+
+    def test_a_quoted_description_holding_a_colon_and_space_passes(self):
+        fx = SkillFixture(self)
+        text = fx.read("SKILL.md")
+        fx.write("SKILL.md", re.sub(r"(?m)^description: .*$", 'description: "Langfuse tools: traces"', text, count=1))
+        self.assertEqual([], checkmod.check_skill(fx.dir))
+
     def test_an_entry_file_without_frontmatter_fails(self):
         fx = SkillFixture(self)
         fx.write("SKILL.md", "# Langfuse\n\nNo frontmatter here.\n")
