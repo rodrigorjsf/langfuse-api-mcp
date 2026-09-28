@@ -2,9 +2,9 @@ package catalog
 
 import "slices"
 
-// PromptsListOperationID is the operation that lists prompts; its tag and
+// promptsListOperationID is the operation that lists prompts; its tag and
 // filter parameters have static guidance (ParamGuidance).
-const PromptsListOperationID = "prompts_list"
+const promptsListOperationID = "prompts_list"
 
 // The guidance on the tag and filter query parameters of prompts_list (#141).
 // The Langfuse spec describes neither, and its current API reference lists
@@ -25,9 +25,9 @@ func (o Operation) ParamGuidance(p Param) string {
 	switch {
 	case o.isMetricsV2Query(p):
 		return metricsQueryGuidance()
-	case o.ID == PromptsListOperationID && p.In == "query" && p.Name == "tag":
+	case o.ID == promptsListOperationID && p.In == "query" && p.Name == "tag":
 		return promptsTagGuidance
-	case o.ID == PromptsListOperationID && p.In == "query" && p.Name == "filter":
+	case o.ID == promptsListOperationID && p.In == "query" && p.Name == "filter":
 		return promptsFilterGuidance
 	}
 	return ""

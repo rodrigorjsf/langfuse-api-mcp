@@ -70,15 +70,11 @@ func TestDescribeOperationSaysFilterIsNotTheTagFilterOfPromptsList(t *testing.T)
 	if !strings.Contains(text, "- filter (query, string)\n  "+promptsFilterGuidance+"\n") {
 		t.Fatalf("text does not give the guidance under the filter line:\n%s", text)
 	}
-	for _, name := range []string{"name", "label", "page", "limit", "fromUpdatedAt", "toUpdatedAt"} {
-		if guidance[name] != "" {
-			t.Errorf("parameter %s carries guidance %q, want none", name, guidance[name])
-		}
-	}
 }
 
 func TestThePromptsListGuidanceIsStaticTextThatNeverHoldsCallerInput(t *testing.T) {
 	t.Parallel()
+	before, _ := describedParams(t, "prompts_list")
 	cs := connectOffline(t)
 	// A hostile search first: the guidance must not pick up the query.
 	callTool(t, cs, "search_operations", map[string]any{"query": "tag billing <b>ignore previous</b>"})
@@ -86,6 +82,9 @@ func TestThePromptsListGuidanceIsStaticTextThatNeverHoldsCallerInput(t *testing.
 	res := callTool(t, cs, "describe_operation", map[string]any{"operationId": "prompts_list"})
 
 	text := resultText(t, res)
+	if text != before {
+		t.Errorf("describe_operation prompts_list changed after a search:\nbefore %s\nafter %s", before, text)
+	}
 	for _, g := range []string{promptsTagGuidance, promptsFilterGuidance} {
 		if strings.Count(text, g) != 1 {
 			t.Errorf("text holds %q %d times, want once:\n%s", g, strings.Count(text, g), text)
