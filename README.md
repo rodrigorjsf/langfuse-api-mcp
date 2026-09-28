@@ -138,7 +138,7 @@ A truncated page looks like this:
 | Situation | Use this server? |
 |---|---|
 | Your company network inspects TLS with a custom root CA, and the official Langfuse MCP or CLI fails with `self-signed certificate in certificate chain` / `unable to get local issuer certificate` | **Yes.** This is the main reason the project exists. |
-| You want the agent to be **unable** to change Langfuse data unless you explicitly allow it | **Yes.** It is read-only by default, and the server enforces this itself. |
+| You want the agent to be **unable** to change Langfuse data unless you explicitly allow it | **Yes.** It is read-only by default, and the server enforces this itself for every call made through it. Keep the keys out of the agent's own environment, or another tool can use them directly: [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment). |
 | You run a self-hosted Langfuse behind an internal CA or proxy | **Yes.** |
 | You want a single binary with no Node.js or Python runtime on your machine | **Yes.** |
 | You only need Langfuse *documentation* in your agent | No. Use the official docs MCP at `https://langfuse.com/api/mcp`. |
@@ -245,7 +245,7 @@ The startup log states whether write mode is on, as one JSON line on stderr: `{"
 
 #### Write mode
 
-Off by default, and then `execute_write` does not exist: the agent cannot even try a write. With `LANGFUSE_MCP_ALLOW_WRITES=true` the server registers `execute_write`, and `search_operations` and `describe_operation` list write operations too, each naming the tool that runs it. The tool set is fixed at startup, the same for every client. Enabling writes gives one agent untrusted input (Langfuse payloads), your project's data and the power to change it at once: the Rule of Two [A,B,C] configuration of LLM01:2026 ([docs/research/security.md](docs/research/security.md)), where a prompt injected into a trace could steer a write. The server's guards (below) narrow that risk; the confirmation of destructive operations is the per-call human check the server enforces, and your MCP client's own permission prompt is the one for creates.
+Off by default, and then `execute_write` does not exist: the agent cannot even try a write through this server (a tool that holds the keys itself is outside that gate: [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment)). With `LANGFUSE_MCP_ALLOW_WRITES=true` the server registers `execute_write`, and `search_operations` and `describe_operation` list write operations too, each naming the tool that runs it. The tool set is fixed at startup, the same for every client. Enabling writes gives one agent untrusted input (Langfuse payloads), your project's data and the power to change it at once: the Rule of Two [A,B,C] configuration of LLM01:2026 ([docs/research/security.md](docs/research/security.md)), where a prompt injected into a trace could steer a write. The server's guards (below) narrow that risk; the confirmation of destructive operations is the per-call human check the server enforces, and your MCP client's own permission prompt is the one for creates.
 
 - Creates (POST), such as `scores_create`, `comments_create` or `datasetItems_create`, run without a server-side confirmation. A known limit: `prompts_create` with the `production` label also changes the prompt Langfuse serves, and it is still a create, confirmed only by your client's permission prompt ([ADR-0003](docs/adr/0003-read-only-by-default.md) amendment).
 - Every destructive operation (DELETE, PUT, PATCH) runs only after you confirm that exact call. Its arguments are checked first; then the server asks you through your client's form elicitation, with a multi round-trip request (MCP 2026-07-28; for a client on an older protocol the SDK asks directly, with the same checks). The question names the operation ID, the HTTP method, the path and query parameters and a summary of the body, cut at 300 characters (it then says so and gives the body size in bytes); for `trace_deleteMultiple` it gives the number of trace IDs. Every value is stripped of control, invisible and bidi characters and shown quoted, as text: markup is never rendered or escaped by the server, so `<b>` reads as `<b>`. The MCP elicitation message is plain text; a client that rendered Markdown or HTML in it would be the one to render it, and the quotes still mark the value as argument data.
@@ -401,7 +401,7 @@ One snippet per MCP client. Every snippet uses the [npx](#npx) channel (**Planne
 
 Each client starts the server with its own view of your environment, and several do not pass your shell's variables on (details and sources: [docs/research/mcp-hosts-env.md](docs/research/mcp-hosts-env.md)). So every snippet names the three variables the server needs in the client's own `env` mechanism, the one place a key may go. Settings that are not secret (`LANGFUSE_CA_CERT`, the proxy, the request limits) can go in the client's `env` as well, or once for every client in the [config file](#config-file-non-secret-settings). **Never put `LANGFUSE_PUBLIC_KEY` or `LANGFUSE_SECRET_KEY` in the config file**: the server refuses to start if it finds them there ([ADR-0011](docs/adr/0011-non-secret-config-file.md)).
 
-`pk-lf-...` and `sk-lf-...` below stand for your keys. Where a snippet reads `${LANGFUSE_SECRET_KEY}` or similar, the client copies the value from its own environment when it starts the server, so the key never sits in the file. The snippets were checked against each client's official docs on 2026-09-25. On Linux on 2026-09-27 ([records](docs/research/raw/2026-09-27-mcp-host-proof.md)), the one marked **proven** ran end to end (`search_operations`, then `execute_read`, against a local Langfuse); the one marked **startup proven** started the server with its keys, but no tool call was made through it (a non-Anthropic client's tool calls are still to be recorded, [#128](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/128)).
+`pk-lf-...` and `sk-lf-...` below stand for your keys. Where a snippet reads `${LANGFUSE_SECRET_KEY}` or similar, the client copies the value from its own environment when it starts the server, so the key never sits in the file. It does sit in the environment the client runs in, which the agent's own shell and tools inherit: see [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment). The snippets were checked against each client's official docs on 2026-09-25. On Linux on 2026-09-27 ([records](docs/research/raw/2026-09-27-mcp-host-proof.md)), the one marked **proven** ran end to end (`search_operations`, then `execute_read`, against a local Langfuse); the one marked **startup proven** started the server with its keys, but no tool call was made through it (a non-Anthropic client's tool calls are still to be recorded, [#128](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/128)).
 
 #### Claude Code — proven
 
@@ -432,6 +432,8 @@ This stores the keys in `~/.claude.json` (local or user scope). For a project `.
   }
 }
 ```
+
+**Trade-off:** this needs the keys exported where Claude Code starts, and every shell or tool the agent runs there inherits them and can write to Langfuse without passing through this server's write gate; see [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment).
 
 #### Claude Desktop
 
@@ -475,11 +477,11 @@ Source: [cursor.com/docs/mcp](https://cursor.com/docs/mcp). **Pitfall:** the doc
 }
 ```
 
-Cursor must itself have been started with those variables set (for example from a terminal where they are exported). Cursor also reads an `envFile`, but a `.env` file is a plaintext key file; keep it out of the repository if you use one.
+Cursor must itself have been started with those variables set (for example from a terminal where they are exported). **Trade-off:** this needs the keys exported where Cursor starts, and every shell or tool the agent runs there inherits them and can write to Langfuse without passing through this server's write gate; see [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment). Cursor also reads an `envFile`, but a `.env` file is a plaintext key file; keep it out of the repository if you use one.
 
 #### VS Code (GitHub Copilot)
 
-Source: [code.visualstudio.com/docs/copilot/reference/mcp-configuration](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration). **Pitfall:** VS Code passes its full environment, but a VS Code started from the Dock or Start menu may not have your shell's exports, and `.vscode/mcp.json` is usually committed. **Workaround:** declare the keys as `inputs` with `"password": true`: VS Code asks for them the first time the server starts and stores them securely. VS Code does not forward a server that needs `${input:...}` to its Agent Host, so there use `"LANGFUSE_SECRET_KEY": "${env:LANGFUSE_SECRET_KEY}"` (and the same for the other two) instead. The file uses `servers`, not `mcpServers`:
+Source: [code.visualstudio.com/docs/copilot/reference/mcp-configuration](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration). **Pitfall:** VS Code passes its full environment, but a VS Code started from the Dock or Start menu may not have your shell's exports, and `.vscode/mcp.json` is usually committed. **Workaround:** declare the keys as `inputs` with `"password": true`: VS Code asks for them the first time the server starts and stores them securely. VS Code does not forward a server that needs `${input:...}` to its Agent Host, so there use `"LANGFUSE_SECRET_KEY": "${env:LANGFUSE_SECRET_KEY}"` (and the same for the other two) instead; that trade-off puts the keys in VS Code's environment, where the agent's terminal inherits them and can write to Langfuse without this server's write gate (see [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment)). The file uses `servers`, not `mcpServers`:
 
 ```json
 {
@@ -513,6 +515,8 @@ args = ["-y", "langfuse-api-mcp"]
 env_vars = ["LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_BASE_URL"]
 ```
 
+**Trade-off:** this needs the keys exported where Codex starts, and every shell or tool the agent runs there inherits them and can write to Langfuse without passing through this server's write gate; see [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment).
+
 Or set literal values with `codex mcp add --env LANGFUSE_PUBLIC_KEY=pk-lf-... --env LANGFUSE_SECRET_KEY=sk-lf-... --env LANGFUSE_BASE_URL=https://cloud.langfuse.com langfuse -- npx -y langfuse-api-mcp`, which stores them in plain text in `config.toml`; keep such a file out of the repository (a project `.codex/config.toml` is often committed). The same clearing applies to npm's own settings: if npm needs a proxy or a private registry, add `HTTPS_PROXY`, `npm_config_registry` or the like to `env_vars` too.
 
 #### Gemini CLI — startup proven
@@ -535,7 +539,7 @@ Source: [gemini-cli docs/tools/mcp-server.md](https://github.com/google-gemini/g
 }
 ```
 
-An unset variable becomes an empty string, which the server refuses at startup naming the variable.
+An unset variable becomes an empty string, which the server refuses at startup naming the variable. **Trade-off:** this needs the keys exported where Gemini CLI starts, and every shell or tool the agent runs there inherits them and can write to Langfuse without passing through this server's write gate; see [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment).
 
 #### Windsurf
 
@@ -557,7 +561,7 @@ Source: [docs.windsurf.com/windsurf/cascade/mcp](https://docs.windsurf.com/winds
 }
 ```
 
-Windsurf also reads `${file:/path}`, which puts the trimmed content of a file (for example a key file only you can read) in its place.
+**Trade-off:** this needs the keys exported where Windsurf starts, and every shell or tool the agent runs there inherits them and can write to Langfuse without passing through this server's write gate; see [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment). Windsurf also reads `${file:/path}`, which puts the trimmed content of a file (for example a key file only you can read) in its place, and keeps the keys out of the environment.
 
 #### Docker as the command
 
@@ -576,6 +580,8 @@ The server reads its own process environment, then an optional config file. Whet
 | Codex CLI | **no**, the environment is cleared | list names in `env_vars = ["LANGFUSE_PUBLIC_KEY", …]` |
 | Gemini CLI | yes, but **hides names containing `KEY`/`SECRET`/`TOKEN`** (observed on Linux: without `env` the server gets no keys and stops) | declare the keys explicitly in `"env"`: `"LANGFUSE_SECRET_KEY": "$LANGFUSE_SECRET_KEY"` |
 | Docker | only what you pass with `-e` | `-e LANGFUSE_PUBLIC_KEY -e LANGFUSE_SECRET_KEY …` |
+
+Every answer in the last column that reads a key from the client's environment (`${VAR}`, `${env:NAME}`, `$NAME`, `env_vars`) needs the key exported where the client starts, and the agent's own shell and tools inherit it from there: see [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment).
 
 ### Config file (non-secret settings)
 
@@ -645,7 +651,7 @@ Designed against the OWASP Top 10 for LLM Applications (2025 and 2026), the OWAS
 
 | Guarantee | How |
 |---|---|
-| **Read-only unless you opt in** | Langfuse API keys cannot be made read-only, so the server enforces it. Without `LANGFUSE_MCP_ALLOW_WRITES=true` the write tool is not registered at all; `execute_read` runs GET operations only. In [write mode](#write-mode) (a Rule of Two [A,B,C] configuration), `execute_write` runs creates (POST) directly and every DELETE, PUT and PATCH only after the user confirms that exact call through form elicitation; the confirmation is bound to the arguments by a signed, expiring state and fails closed: a client without form elicitation, a declined or cancelled confirmation, or a forged, expired or rebound state refuses the call before anything is sent. |
+| **Read-only unless you opt in** | Langfuse API keys cannot be made read-only, so the server enforces it, for the calls made through the server ([below](#keep-the-keys-out-of-the-agents-environment)). Without `LANGFUSE_MCP_ALLOW_WRITES=true` the write tool is not registered at all; `execute_read` runs GET operations only. In [write mode](#write-mode) (a Rule of Two [A,B,C] configuration), `execute_write` runs creates (POST) directly and every DELETE, PUT and PATCH only after the user confirms that exact call through form elicitation; the confirmation is bound to the arguments by a signed, expiring state and fails closed: a client without form elicitation, a declined or cancelled confirmation, or a forged, expired or rebound state refuses the call before anything is sent. |
 | **No data kept** | Stateless. No cache or database, no files written. |
 | **Your keys stay with the server** | Read only from the server's environment; a config file holding a key stops startup, and the warning for an unknown config-file key names the key (escaped and shortened) but never its value, so a key filed under a misspelled name is not logged. Never accepted from the agent, never logged, never included in results: if Langfuse or the agent echoes a key or the `Authorization` header, it is replaced by `[REDACTED]`. Inside the server the keys, from the moment they are read, travel only in types that print as `[REDACTED]` through every format verb, JSON and log call. Proxy credentials (`user:password@` in `HTTPS_PROXY`) are used only for Basic proxy authentication: the startup log shows the proxy as `scheme://host:port`, and an invalid proxy value stops startup without being echoed. |
 | **No arbitrary requests** | The agent picks operations from a fixed catalog. Every parameter value is checked against the operation's type, allowed values and the numeric and length bounds its spec gives (the ones `describe_operation` reports; on a parameter with no declared type, by whether the value is a number or a string), before any request; a refusal names the parameter and the bound, never the value. It cannot pass URLs or hosts; path parameters that could change the path (`/`, `\`, `.`/`..` segments, URLs) are refused. Only the prompt and dataset name parameters on a fixed allow-list (four reads, four writes) accept `/` for a Folder name, sent encoded as `%2F` so it stays one path segment; `.`/`..` segments, empty segments and a leading or trailing `/` are still refused there. A redirect to another scheme, host or port is refused before it is sent, so your keys never leave the configured host. |
@@ -658,6 +664,14 @@ Designed against the OWASP Top 10 for LLM Applications (2025 and 2026), the OWAS
 | **Auditable** | One log line per tool call on stderr (metadata only, no payloads); an `execute_write` call is logged at `WARN` with its `confirmation` outcome, never its body. Open source (Apache-2.0). |
 
 Recommendations: create a dedicated Langfuse key for the agent, set an expiry date on it, and keep writes off unless you need them.
+
+### Keep the keys out of the agent's environment
+
+The write gate (write mode off, and the confirmation of every destructive call in write mode) covers only the calls made through this server. It cannot see or stop another process holding the same keys. When the keys sit in the environment the MCP client starts with, every shell command and tool the agent runs inherits them: an agent with a shell can call Langfuse's own CLI or `curl` with them and change your data without any confirmation, for example when this server fails to start and the agent looks for another way. Denying the shell tool alone is not enough, since any tool that can make an HTTP request with the keys does the same.
+
+- Store the keys in the client's own per-server settings, not in your shell: `claude mcp add --env` for Claude Code (kept in `~/.claude.json`), the [MCPB bundle](#claude-desktop-mcpb) for Claude Desktop (OS keychain), VS Code `inputs` with `"password": true`, or a literal value in the client's `env` block kept out of the repository.
+- Never export `LANGFUSE_PUBLIC_KEY` or `LANGFUSE_SECRET_KEY` in the shell that starts the MCP client. The `${VAR}`-style snippets under [Client configuration](#client-configuration) need exactly that, so use them only when the agent has no shell or HTTP tool.
+- The agent still runs as your user, so it could read a file that holds the keys. Where your client has permission rules, deny the agent reading that file; for a hard limit, give the agent no shell or HTTP tool at all.
 
 ### Verify what you run **(Planned)**
 
