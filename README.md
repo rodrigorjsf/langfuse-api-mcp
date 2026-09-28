@@ -665,6 +665,8 @@ Designed against the OWASP Top 10 for LLM Applications (2025 and 2026), the OWAS
 
 Recommendations: create a dedicated Langfuse key for the agent, set an expiry date on it, and keep writes off unless you need them.
 
+Found a vulnerability? Report it privately, never in a public issue: see [SECURITY.md](SECURITY.md).
+
 ### Keep the keys out of the agent's environment
 
 The write gate (write mode off, and the confirmation of every destructive call in write mode) covers only the calls made through this server. It cannot see or stop another process holding the same keys. When the keys sit in the environment the MCP client starts with, every shell command and tool the agent runs inherits them: an agent with a shell can call Langfuse's own CLI or `curl` with them and change your data without any confirmation, for example when this server fails to start and the agent looks for another way. Denying the shell tool alone is not enough: any tool that starts a process inheriting that environment (a script runner, a code interpreter, a plugin) does the same.

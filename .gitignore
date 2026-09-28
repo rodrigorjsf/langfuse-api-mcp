@@ -16,3 +16,6 @@ __pycache__/
 
 # npm tooling installed by `npm ci` (packaging/mcpb: the pinned MCPB CLI)
 node_modules/
+
+# Session handoff notes are local scratch, never published
+.claude/handoffs/

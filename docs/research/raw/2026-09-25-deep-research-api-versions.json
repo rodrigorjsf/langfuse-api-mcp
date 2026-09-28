@@ -20,7 +20,7 @@
     "https://langfuse.com/docs/api-and-data-platform/features/observations-api",
     "https://langfuse.com/docs/metrics/features/metrics-api",
     "https://langfuse.com/docs/compatibility",
-    "/home/rodrigo/Workspace/langfuse-api-mcp/docs/adr/0012-legacy-reads-on-v3-deployments.md"
+    "~/Workspace/langfuse-api-mcp/docs/adr/0012-legacy-reads-on-v3-deployments.md"
    ],
    "evidence": "Changelog: 'available on Langfuse Cloud and on self-hosted deployments running Langfuse v4'. Availability tables: 'Self Hosted | Langfuse v4+'. Compatibility matrix: Unsupported on OSS v2/v3, Full on OSS v4. Repo evidence: self-hosted 3.80.0 returns an HTML 404 for /v2/observations and /v2/metrics.",
    "vote": "3-0 (claims 9, 11, 15 merged)"

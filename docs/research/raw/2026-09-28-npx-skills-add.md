@@ -16,7 +16,7 @@ The README form is `npx skills add rodrigorjsf/langfuse-api-mcp`. It clones the 
 1. **The skill itself** was installed from the local checkout of the ticket's branch: `npx skills add <checkout path>`. The CLI reads that source the same way it reads a clone.
 2. **The repository form** was run against `origin`. It proves that the CLI clones the private repository with the git credentials already on the machine (no token passed, `GIT_TERMINAL_PROMPT=0`). It also shows that `main` has no skill yet.
 
-The repository form installs the skill only once the spec branch is merged to `main`. Re-run step 2 after that merge.
+The repository form installs the skill only once the spec branch is merged to `main`. Step 3 re-runs it after that merge.
 
 ## 1. Install from the checkout into a scratch project
 
@@ -67,6 +67,37 @@ $ GIT_TERMINAL_PROMPT=0 npx -y skills@1.5.18 add rodrigorjsf/langfuse-api-mcp --
 ```
 
 The private repository clones with the machine's existing git credentials. "No skills found" is expected: `main` does not have `skills/` yet.
+
+## 3. The repository form after the merge (#151)
+
+Spec #132 merged to `main` through PR #144 (`main` at `a7bf07a`). The repository form was re-run into a new empty `git init` scratch project, same CLI version and environment as above:
+
+```console
+$ GIT_TERMINAL_PROMPT=0 npx -y skills@1.5.18 add rodrigorjsf/langfuse-api-mcp --agent claude-code --copy -y
+◇  Repository cloned
+◇  Found 1 skill
+●  Skill: langfuse-api-mcp
+│  Investigate Langfuse traces, scores, prompts, datasets, metrics with langfuse-api-mcp tools (search_operations, describe_operation, execute_read, get_trace_tree, execute_write). Load before any call.
+◇  Installation complete
+◇  Installed 1 skill
+│  ✓ langfuse-api-mcp (copied)
+│    → ./.claude/skills/langfuse-api-mcp
+└  Done!  Review skills before use; they run with full agent permissions.
+
+$ find .claude -type f | sort
+.claude/skills/langfuse-api-mcp/SKILL.md
+.claude/skills/langfuse-api-mcp/references/cost-latency.md
+.claude/skills/langfuse-api-mcp/references/errors.md
+.claude/skills/langfuse-api-mcp/references/experiments.md
+.claude/skills/langfuse-api-mcp/references/prompts.md
+.claude/skills/langfuse-api-mcp/references/scores.md
+.claude/skills/langfuse-api-mcp/references/traces.md
+
+$ diff -r .claude/skills/langfuse-api-mcp <checkout at a7bf07a>/skills/langfuse-api-mcp && echo IDENTICAL
+IDENTICAL
+```
+
+The repository form now finds the skill on `main` and installs all seven files byte for byte. The clone still used the machine's git credentials, because the repository was private at the time of this run.
 
 ## Not proven here
 

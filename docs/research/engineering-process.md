@@ -6,7 +6,7 @@ Every concept below comes from the installed skill files, and each entry cites t
 from. The one exception is §6, which is labelled **application, not sourced**.
 
 **Source root.** Every path in this document is relative to
-`/home/rodrigo/.claude/plugins/cache/claude-plugins-official/mattpocock-skills/1.2.3/skills/`
+`~/.claude/plugins/cache/claude-plugins-official/mattpocock-skills/1.2.3/skills/`
 (plugin version `1.2.3`, read 2026-09-25). Paths are cited without line numbers so the citations
 stay valid when the files change.
 
