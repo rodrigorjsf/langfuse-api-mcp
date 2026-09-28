@@ -4,7 +4,9 @@
 #       #134): the check passes on the real user skill and fails on one fixture
 #       per rule (frontmatter name and description, a cited reference that does
 #       not exist, an unknown tool name or error code, each forbidden phrase),
-#       and its known tool and error-code lists match the server's.
+#       and its known tool and error-code lists match the server's. The real
+#       skill's errors reference has an entry for every one of those error
+#       codes (#138).
 # WHY:  the skill is text an agent obeys. An edit that tells the agent to act
 #       on Langfuse data, enable write mode or work around a confirmation, or
 #       that points it at a tool or file that does not exist, must fail CI.
@@ -68,6 +70,23 @@ class SkillFixture:
 class RealSkillTest(unittest.TestCase):
     def test_the_real_skill_passes(self):
         self.assertEqual([], checkmod.check_skill(REAL_SKILL))
+
+
+class ErrorsReferenceTest(unittest.TestCase):
+    """The errors reference (#138) maps every ADR-0008 error code to an action."""
+
+    def read(self, rel):
+        with open(os.path.join(REAL_SKILL, rel), encoding="utf-8") as f:
+            return f.read()
+
+    def test_the_entry_file_cites_the_errors_reference(self):
+        self.assertIn("references/errors.md", checkmod.cited_files(self.read("SKILL.md")))
+
+    def test_every_server_error_code_has_its_own_entry(self):
+        text = self.read("references/errors.md")
+        missing = sorted(code for code in checkmod.KNOWN_ERROR_CODES
+                         if not re.search(rf"^\| `{code}`", text, re.M))
+        self.assertEqual([], missing)
 
 
 class FrontmatterTest(unittest.TestCase):
