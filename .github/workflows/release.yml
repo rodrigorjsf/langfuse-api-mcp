@@ -9,17 +9,19 @@
 # (`npm pack`, not published), and the smoke runs them with `npx` on Linux, macOS and Windows. It also
 # packs the one MCPB bundle for Claude Desktop (scripts/pack-mcpb.sh: the universal macOS binary and
 # the windows/amd64 binary, `mcpb validate` + `mcpb pack`), and the smoke unpacks it on macOS and
-# Windows runners and runs the binary its manifest names for that OS.
+# Windows runners and runs the binary its manifest names for that OS. It packs the user skill ZIP for
+# Claude Desktop too (scripts/pack-skill.py, #139): the skill folder as the ZIP's root, holding every
+# file of skills/langfuse-api-mcp/.
 # windows/arm64 is built, not CI-tested (no runner in this matrix).
 # Runs on pull requests that touch packaging, the executable's entry point, the module files or this
 # workflow; on every push to main; and weekly, so a toolchain or tool change is caught without a commit.
 # Those snapshot runs publish nothing. On a `v*` tag (#126) the same build runs with the tag's version,
 # the same smoke proves every artifact, and only then the tag-only jobs run: sign-blobs (cosign
-# keyless signatures and GitHub build provenance for the archives, checksums file and MCPB bundle),
-# publish-image (push to GHCR, cosign signature and provenance of the multi-arch image by digest),
-# publish-npm (`npm publish` of the platform packages, then the main one) and github-release (the
-# GitHub release holding the archives, SBOMs, checksums, bundle and signatures). Each is gated by a job
-# `if` on the tag, so a snapshot run shows it skipped, and holds only the permissions it needs; the
+# keyless signatures and GitHub build provenance for the archives, checksums file, MCPB bundle and
+# skill ZIP), publish-image (push to GHCR, cosign signature and provenance of the multi-arch image
+# by digest), publish-npm (`npm publish` of the platform packages, then the main one) and
+# github-release (the GitHub release holding the archives, SBOMs, checksums, bundle, skill ZIP and
+# signatures). Each is gated by a job `if` on the tag, so a snapshot run shows it skipped, and holds only the permissions it needs; the
 # publish jobs run in the `release` environment, which alone will hold the npm token (Planned, M7:
 # the maintainer creates it restricted to `v*` tags, README "Cutting a release").
 # Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current. Tool
@@ -35,6 +37,7 @@ on:
     paths:
       - "packaging/**"
       - "scripts/pack-mcpb.sh"
+      - "scripts/pack-skill.py"
       - "cmd/langfuse-mcp/**"
       - "go.mod"
       - "go.sum"
@@ -256,6 +259,34 @@ jobs:
         with:
           name: mcpb-bundle
           path: ${{ steps.mcpb.outputs.bundle }}
+          if-no-files-found: error
+          retention-days: 7
+      # The user skill ZIP for Claude Desktop (#139, spec #132 S4), in its own directory so no
+      # dist/*.zip glob above takes it for a release archive.
+      - name: Pack the skill ZIP
+        id: skill
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          zip=$(python3 scripts/pack-skill.py "$VERSION" dist/skill) # a failed pack fails this step
+          echo "zip=$zip" >> "$GITHUB_OUTPUT"
+      # What Claude Desktop's upload expects: the skill folder as the ZIP's root, holding the entry
+      # file and every file git tracks under skills/langfuse-api-mcp/ (every reference), nothing else.
+      - name: Check the skill ZIP
+        env:
+          ZIP: ${{ steps.skill.outputs.zip }}
+        run: |
+          set -euo pipefail
+          got=$(unzip -Z1 "$ZIP" | sort)
+          want=$(git ls-files skills/langfuse-api-mcp | sed 's|^skills/||' | sort)
+          [ "$got" = "$want" ] || { echo "::error::skill ZIP holds '$got', want '$want'"; exit 1; }
+          grep -qx 'langfuse-api-mcp/SKILL.md' <<<"$got" || { echo "::error::skill ZIP has no langfuse-api-mcp/SKILL.md"; exit 1; }
+      # Only sign-blobs takes it, and only on a tag; a snapshot run attaches it nowhere.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: skill-zip
+          path: ${{ steps.skill.outputs.zip }}
           if-no-files-found: error
           retention-days: 7
 
@@ -535,7 +566,8 @@ jobs:
   # what this run built.
 
   # cosign keyless signatures (one Sigstore bundle, <file>.sigstore.json, per file) and GitHub build
-  # provenance for every archive, the checksums file and the MCPB bundle.
+  # provenance for every archive, the checksums file, the MCPB bundle and the skill ZIP (its `*.zip`
+  # glob and the attest glob below take it; checksums.txt is GoReleaser's and does not list it).
   sign-blobs:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [snapshot, smoke-archive, smoke-container, smoke-npx, smoke-mcpb]
@@ -553,10 +585,14 @@ jobs:
         with:
           name: mcpb-bundle
           path: release
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: skill-zip
+          path: release
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: ${{ env.COSIGN_VERSION }}
-      - name: Sign the archives, checksums and bundle
+      - name: Sign the archives, checksums, bundle and skill ZIP
         working-directory: release
         run: |
           set -euo pipefail
@@ -678,7 +714,7 @@ jobs:
           publish "./$main"
 
   # The GitHub release for the tag, created once every channel is published: the archives, their
-  # SBOMs, the checksums file, the MCPB bundle, the image SBOM and every Sigstore bundle.
+  # SBOMs, the checksums file, the MCPB bundle, the skill ZIP, the image SBOM and every Sigstore bundle.
   github-release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [snapshot, sign-blobs, publish-image, publish-npm]

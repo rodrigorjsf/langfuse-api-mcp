@@ -111,6 +111,20 @@ class FrontmatterTest(unittest.TestCase):
         fx.replace("SKILL.md", "name: langfuse-api-mcp\n", 'name: "langfuse-api-mcp"\n')
         self.assertEqual([], checkmod.check_skill(fx.dir))
 
+    def test_a_description_over_200_characters_fails(self):
+        # Claude Desktop's skill upload caps the description at 200 characters (#139).
+        fx = SkillFixture(self)
+        text = fx.read("SKILL.md")
+        fx.write("SKILL.md", re.sub(r"(?m)^description: .*$", "description: " + "x" * 201, text, count=1))
+        self.assertIn("SKILL.md: frontmatter description has 201 characters; Claude Desktop's upload "
+                      "takes at most 200", checkmod.check_skill(fx.dir))
+
+    def test_a_description_of_exactly_200_characters_passes(self):
+        fx = SkillFixture(self)
+        text = fx.read("SKILL.md")
+        fx.write("SKILL.md", re.sub(r"(?m)^description: .*$", "description: " + "x" * 200, text, count=1))
+        self.assertEqual([], checkmod.check_skill(fx.dir))
+
     def test_an_entry_file_without_frontmatter_fails(self):
         fx = SkillFixture(self)
         fx.write("SKILL.md", "# Langfuse\n\nNo frontmatter here.\n")

@@ -1,6 +1,6 @@
 ---
 name: langfuse-api-mcp
-description: Investigate Langfuse traces, observations, sessions, scores, prompts, datasets and metrics through the langfuse-api-mcp server's tools (search_operations, describe_operation, execute_read, get_trace_tree, execute_write). Use when those tools are connected and the user asks about their LLM application's Langfuse data.
+description: Investigate Langfuse traces, sessions, scores, prompts, datasets and metrics with the langfuse-api-mcp tools (search_operations, describe_operation, execute_read, get_trace_tree, execute_write).
 ---
 
 # Langfuse through langfuse-api-mcp
