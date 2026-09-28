@@ -494,7 +494,6 @@ def parse_args(argv=None):
 
 def main():
     args = parse_args()
-    selected = args.selected
 
     key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not key:
@@ -521,7 +520,7 @@ def main():
                   f"run date {today.isoformat()} UTC; tools {', '.join(sorted(names))}; "
                   f"system prompt append {len(args.system_append.encode())} bytes")
             passed = 0
-            for number in selected:
+            for number in args.selected:
                 item = INTENTS[number - 1]
                 ok, calls, ended = run_intent(server, tools, endpoint, key, args, item, today)
                 passed += ok
@@ -531,8 +530,8 @@ def main():
                 if not ok:
                     print(f"       ended: {ended}")
                     print(f"       want: {' | '.join(describe_expected(e) for e in item['expect'])}")
-            print(f"TOTAL {passed}/{len(selected)} passed")
-            return 0 if passed == len(selected) else 1
+            print(f"TOTAL {passed}/{len(args.selected)} passed")
+            return 0 if passed == len(args.selected) else 1
         except SetupError as err:
             print(f"eval aborted: {err}", file=sys.stderr)
             return 2

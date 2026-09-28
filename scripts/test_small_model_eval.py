@@ -21,6 +21,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.dont_write_bytecode = True  # no scripts/__pycache__ left behind
 
@@ -60,46 +61,33 @@ class SystemPromptTest(unittest.TestCase):
             "Do not ask the user questions; if a detail is missing, choose a sensible default.",
             prompt)
 
-    def test_the_appended_file_text_reaches_the_system_prompt_the_eval_sends(self):
-        skill = "# Skill\nA session ID is never a trace ID.\n"
-        with tempfile.TemporaryDirectory() as tmp:
-            path = os.path.join(tmp, "skill.md")
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(skill)
-            sent = []
-
-            def fake_create_message(endpoint, key, body, timeout):
-                sent.append(body["system"])
-                return {"content": [{"type": "text", "text": "done"}], "stop_reason": "end_turn"}
-
-            args = evalmod.parse_args(["--system-append", path])
-            original = evalmod.create_message
-            evalmod.create_message = fake_create_message
-            try:
-                evalmod.run_intent(None, [], "http://127.0.0.1/v1/messages", "k", args,
-                                   evalmod.INTENTS[2], datetime.date(2026, 10, 15))
-            finally:
-                evalmod.create_message = original
-        self.assertEqual(1, len(sent))
-        self.assertTrue(sent[0].startswith("Today is 2026-10-15 (UTC). "))
-        self.assertTrue(sent[0].endswith("\n\n# Skill\nA session ID is never a trace ID.\n"))
-
-    def test_without_the_option_the_eval_sends_the_unchanged_prompt(self):
-        args = evalmod.parse_args([])
+    def sent_system_prompt(self, argv):
+        """The system prompt the eval sends for intent 03 under the given flags,
+        with the Messages API faked (a true external)."""
         sent = []
 
         def fake_create_message(endpoint, key, body, timeout):
             sent.append(body["system"])
             return {"content": [{"type": "text", "text": "done"}], "stop_reason": "end_turn"}
 
-        original = evalmod.create_message
-        evalmod.create_message = fake_create_message
-        try:
+        args = evalmod.parse_args(argv)
+        with mock.patch.object(evalmod, "create_message", fake_create_message):
             evalmod.run_intent(None, [], "http://127.0.0.1/v1/messages", "k", args,
                                evalmod.INTENTS[2], datetime.date(2026, 10, 15))
-        finally:
-            evalmod.create_message = original
-        self.assertEqual([evalmod.system_prompt(datetime.date(2026, 10, 15))], sent)
+        self.assertEqual(1, len(sent))
+        return sent[0]
+
+    def test_the_appended_file_text_reaches_the_system_prompt_the_eval_sends(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "skill.md")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("# Skill\nA session ID is never a trace ID.\n")
+            sent = self.sent_system_prompt(["--system-append", path])
+        self.assertTrue(sent.startswith("Today is 2026-10-15 (UTC). "))
+        self.assertTrue(sent.endswith("\n\n# Skill\nA session ID is never a trace ID.\n"))
+
+    def test_without_the_option_the_eval_sends_the_unchanged_prompt(self):
+        self.assertEqual(evalmod.system_prompt(datetime.date(2026, 10, 15)), self.sent_system_prompt([]))
 
 
 class MetricsWindowTest(unittest.TestCase):
