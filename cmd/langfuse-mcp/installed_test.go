@@ -16,12 +16,17 @@ import (
 //	                            (an argv, never a shell string), e.g.
 //	                            ["/tmp/x/langfuse-mcp"]
 //	LANGFUSE_MCP_SMOKE_VERSION  the version the artifact must report
+//	LANGFUSE_MCP_SMOKE_CA_DIR   optional: an existing directory the private CA
+//	                            file is written to; the container adapter
+//	                            mounts it read-only at the same path, so
+//	                            LANGFUSE_CA_CERT names the file inside too
 //
 // Run: go test -tags smoke -count=1 -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
 // The release workflow (.github/workflows/release.yml) runs it on each runner.
 const (
 	smokeCommandEnv = "LANGFUSE_MCP_SMOKE_COMMAND"
 	smokeVersionEnv = "LANGFUSE_MCP_SMOKE_VERSION"
+	smokeCADirEnv   = "LANGFUSE_MCP_SMOKE_CA_DIR"
 )
 
 func TestInstalledArtifact(t *testing.T) {
@@ -34,5 +39,5 @@ func TestInstalledArtifact(t *testing.T) {
 	if version == "" {
 		t.Fatalf("%s must hold the version the artifact reports", smokeVersionEnv)
 	}
-	checkInstalledArtifact(t, argv, version)
+	checkInstalledArtifact(t, argv, version, os.Getenv(smokeCADirEnv))
 }

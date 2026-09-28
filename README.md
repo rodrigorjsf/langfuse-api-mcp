@@ -265,7 +265,7 @@ Off by default, and then `execute_write` does not exist: the agent cannot even t
 | You were given a folder of certificates | `LANGFUSE_CA_CERTS_PATH=/path/to/certs/` |
 | `NODE_EXTRA_CA_CERTS` or `REQUESTS_CA_BUNDLE` is already set on your machine for other tools | Nothing. They are picked up automatically. |
 | You are behind an HTTP proxy | Set `HTTPS_PROXY` (and `NO_PROXY` for internal hosts) in the environment or the config file; see [Proxy](#certificates-and-proxy) |
-| Docker | Mount the file and point the variable at it (see below). The image is **Planned** (M5); the mounted-CA proof is tracked in [#28](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/28) |
+| Docker | Mount the file read-only and point the variable at it: `-v /path/to/corp.pem:/certs/corp.pem:ro -e LANGFUSE_CA_CERT=/certs/corp.pem` (see [Docker](#docker)). The image trusts its base image's CA bundle plus that file, nothing else |
 
 Get your company's root CA in PEM format:
 
@@ -283,7 +283,7 @@ Every build reports the version it was built with: `initialize` returns it as th
 |---|---|
 | [Release archive](#release-archive) (Linux, macOS, Windows × amd64, arm64) | built and smoke-tested on every change to packaging or the executable; **publishing Planned**: the first release is cut in M7, after the repository goes public |
 | [`go install`](#go-install) | **Planned**: works once the repository is public (M7); `@<version>` once a release tag exists |
-| Docker | **Planned**: `docker run -i --rm -e LANGFUSE_PUBLIC_KEY -e LANGFUSE_SECRET_KEY -e LANGFUSE_BASE_URL -e LANGFUSE_CA_CERT=/certs/corp.pem -v /path/to/corp.pem:/certs/corp.pem:ro ghcr.io/rodrigorjsf/langfuse-api-mcp` |
+| [Docker](#docker) (linux/amd64, linux/arm64; stdio only) | built and smoke-tested on every change to packaging or the executable; **publishing Planned**: the image is pushed to GHCR with the first release (M7) |
 | Claude Desktop | **Planned**: `.mcpb` bundle (double-click install) |
 | npm | **Planned**: `npx -y langfuse-api-mcp` |
 
@@ -326,6 +326,33 @@ go install github.com/rodrigorjsf/langfuse-api-mcp/cmd/langfuse-mcp@<version>
 ```
 
 The binary lands in `$(go env GOPATH)/bin`. A `go install` build carries no injected version, so it reports `0.0.0-dev`; use a release archive when you need the version in bug reports (see [#127](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/127)).
+
+### Docker
+
+**Planned until the first release** (M7): the release pipeline already builds the image for every change to packaging or the executable and proves the amd64 image with `docker run -i` on a clean Linux runner, but nothing is pushed yet.
+
+The image `ghcr.io/rodrigorjsf/langfuse-api-mcp:<version>` is minimal: based on `gcr.io/distroless/static-debian12:nonroot` pinned by digest, the binary is the entrypoint, it runs as the non-root user `nonroot`, and it holds no shell. It is built for `linux/amd64` and `linux/arm64` and will be published as one multi-arch image, so an arm64 machine runs it natively (a snapshot build tags one local image per architecture, `<version>-amd64` and `<version>-arm64`, since a multi-arch image exists only once pushed). One SPDX JSON SBOM describes it (`langfuse-mcp_<version>_image.sbom.json`, scanned from the amd64 image; the arm64 image holds the same base and the same binary built for arm64).
+
+Pass the keys and the base URL with `-e`, and keep `-i` (the server speaks MCP over stdin and stdout):
+
+```bash
+docker run -i --rm \
+  -e LANGFUSE_PUBLIC_KEY -e LANGFUSE_SECRET_KEY -e LANGFUSE_BASE_URL \
+  ghcr.io/rodrigorjsf/langfuse-api-mcp:<version>
+```
+
+`-e NAME` without a value passes the variable from the environment that runs `docker`, so the keys never appear in the command line; set them there, or in your MCP client's `"env"`. Behind a corporate CA, mount the CA file read-only and point `LANGFUSE_CA_CERT` at it; the file must be readable by any user (the image does not run as you):
+
+```bash
+docker run -i --rm \
+  -e LANGFUSE_PUBLIC_KEY -e LANGFUSE_SECRET_KEY -e LANGFUSE_BASE_URL \
+  -e LANGFUSE_CA_CERT=/certs/corp.pem -v /path/to/corp.pem:/certs/corp.pem:ro \
+  ghcr.io/rodrigorjsf/langfuse-api-mcp:<version>
+```
+
+The image trusts its base image's CA bundle plus the file you mount, nothing else (the base image sets `SSL_CERT_FILE` to its bundle, so the startup `CA sources loaded` line lists it as an ambient source next to your file): without the file, a Langfuse host signed by a private CA is refused with `tls_untrusted_certificate`. In an MCP client, the `command` is `docker` and `args` is the list above. To cap the server's memory, give the container a limit and pass the matching Go soft limit, for example `--memory 256m -e GOMEMLIMIT=200MiB`: the Go runtime reads `GOMEMLIMIT` and collects garbage harder as it nears it, instead of being killed at the container limit.
+
+**The image serves stdio only.** The loopback HTTP transport (`LANGFUSE_MCP_TRANSPORT=http`, **Planned**) binds `127.0.0.1` only, which inside a container is the container's own loopback: it cannot be reached from outside, and it is not meant to be exposed.
 
 ### Client configuration
 
@@ -494,7 +521,7 @@ The embedded union catalog is generated, never edited by hand: [`scripts/gen-uni
 
 The small-model discovery eval, [`scripts/small-model-eval.py`](scripts/small-model-eval.py), checks that Haiku 4.5 reaches the right operation from a plain-language intent using only `search_operations`, `describe_operation`, `execute_read` and `get_trace_tree`. It runs 11 intents covering traces, observations, scores, prompts, datasets and metrics, and prints one PASS/FAIL line per intent and the total. An intent passes when the model makes the expected call and the server accepts it. The system prompt names the run date (UTC), as agent hosts do, and the metrics intent passes only when its query's time window is the last 7 days before that date; `python3 scripts/test_small_model_eval.py` checks that matcher offline, in CI too. The expected operation IDs and key parameters are literals in the script. The server runs against a fake Langfuse on `127.0.0.1` that answers as 4.46.0 `events_only` with no data, so no real Langfuse key or project is involved. Run it by hand with `ANTHROPIC_API_KEY` set (standard library only; it builds the server with `go build` unless you pass `--server`). The key is read only from the environment and never printed or passed to the server. Paste the output into the pull request, and file every failing intent as a follow-up issue on M3 or M6 (the first recorded run is tracked in [#88](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/88)). It is not a CI gate: it costs API tokens and a model's answers can vary. Without an API key, [`scripts/small-model-eval-local.sh`](scripts/small-model-eval-local.sh) runs it against a local `qwen3:8b` through Ollama (see "Container stacks"); `--only 2,5` reruns chosen intents. The first recorded run used that local model instead of Haiku 4.5, because the maintainer chose not to use a paid API: 7/11 passed on 2026-09-27 ([output](docs/research/raw/2026-09-27-small-model-eval-qwen3-8b.md); failing intents filed as #97, #98, #99, #100). A later full run at the current code passes 8/11 (02 and 03 still fail, #97 and #98; 08 now fails, #114), and a comparison of local models on the same 12 GB GPU keeps `qwen3:8b` Q4_K_M as the default: `qwen3:14b` passes 9/11 but fails intent 11, which the default passes, and needs a quantized KV cache to fit ([output](docs/research/raw/2026-09-27-small-model-eval-local-model-vram.md)).
 
-**The release pipeline runs in snapshot mode.** [`.github/workflows/release.yml`](.github/workflows/release.yml) runs on pull requests that touch `packaging/`, `cmd/langfuse-mcp/`, `go.mod`/`go.sum` or the workflow itself, on every push to `main` and weekly. GoReleaser ([`packaging/.goreleaser.yaml`](packaging/.goreleaser.yaml)) builds the six archives with the version `0.0.0-SNAPSHOT-<short commit>`, the checksums file and one SPDX JSON SBOM per archive (syft); then the installed-artifact smoke checks the archive for its runner against `checksums.txt`, extracts it on Linux, macOS and Windows, and runs `TestInstalledArtifact` (build tag `smoke`, `cmd/langfuse-mcp/installed_test.go`) against the extracted binary: `initialize` reports the snapshot's version, `tools/list` returns the read tool set, one `execute_read` against a fake TLS Langfuse trusted only through `LANGFUSE_CA_CERT` returns its payload stripped of hidden and bidi characters inside the untrusted-data envelope, and an invalid `LANGFUSE_BASE_URL` stops startup naming the variable, never the value. The same assertions run in `go test ./...` against a binary built with an injected version. To run the pipeline locally, install GoReleaser v2.18.2 and syft v1.52.0 (the versions the workflow pins), then:
+**The release pipeline runs in snapshot mode.** [`.github/workflows/release.yml`](.github/workflows/release.yml) runs on pull requests that touch `packaging/`, `cmd/langfuse-mcp/`, `go.mod`/`go.sum` or the workflow itself, on every push to `main` and weekly. GoReleaser ([`packaging/.goreleaser.yaml`](packaging/.goreleaser.yaml)) builds the six archives with the version `0.0.0-SNAPSHOT-<short commit>`, the checksums file and one SPDX JSON SBOM per archive (syft); then the installed-artifact smoke checks the archive for its runner against `checksums.txt`, extracts it on Linux, macOS and Windows, and runs `TestInstalledArtifact` (build tag `smoke`, `cmd/langfuse-mcp/installed_test.go`) against the extracted binary: `initialize` reports the snapshot's version, `tools/list` returns the read tool set, one `execute_read` against a fake TLS Langfuse trusted only through `LANGFUSE_CA_CERT` returns its payload stripped of hidden and bidi characters inside the untrusted-data envelope, the same read without `LANGFUSE_CA_CERT` is refused as `tls_untrusted_certificate`, and an invalid `LANGFUSE_BASE_URL` stops startup naming the variable, never the value. The same run builds the container image ([`packaging/Dockerfile`](packaging/Dockerfile)) for `linux/amd64` and `linux/arm64` without pushing it, checks each for the non-root user, the binary as entrypoint and no shell, writes its SPDX JSON SBOM with syft, and runs `TestInstalledArtifact` on a Linux runner against `docker run -i --network host` with the private CA mounted read-only (`LANGFUSE_MCP_SMOKE_CA_DIR`). The same assertions run in `go test ./...` against a binary built with an injected version. To run the pipeline locally, install GoReleaser v2.18.2 and syft v1.52.0 (the versions the workflow pins) and Docker with buildx (for the image), then:
 
 ```bash
 goreleaser release --snapshot --clean --config packaging/.goreleaser.yaml

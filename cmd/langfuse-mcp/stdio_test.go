@@ -139,6 +139,9 @@ func (s *stdioSession) initialize() (serverVersion string) {
 type toolCall struct {
 	IsError           bool           `json:"isError"`
 	StructuredContent map[string]any `json:"structuredContent"`
+	Content           []struct {
+		Text string `json:"text"`
+	} `json:"content"`
 }
 
 // callTraceGet calls execute_read for trace trace-1 on an initialized session.
