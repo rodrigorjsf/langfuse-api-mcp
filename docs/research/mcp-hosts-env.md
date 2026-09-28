@@ -3,7 +3,9 @@
 Fact-finding only, no decisions. Access date for every source: **2026-09-25**.
 Labels: `[sourced]` = quoted from an official doc or the host's own source code;
 `[sourced — unverified]` = inferred from official text that does not say it outright, or
-not found in official docs. No claim here is run-verified: no host was executed for this note.
+not found in official docs; `[run-verified]` = observed by running the host (2026-09-27, Linux,
+[raw/2026-09-27-mcp-host-proof.md](raw/2026-09-27-mcp-host-proof.md)). Only the claims marked
+`[run-verified]` were run; the rest of this note is from the sources.
 
 **Why it matters for a Langfuse MCP server.** The server needs `LANGFUSE_PUBLIC_KEY`,
 `LANGFUSE_SECRET_KEY` and `LANGFUSE_HOST` (or equivalents). Whether a key exported in
@@ -68,6 +70,10 @@ small default set (see below).
   servers get "access to the same environment variables as manually configured servers". Because
   Claude Code runs from a terminal, its process env normally includes shell-profile exports.
   Full pass-through is likely but not documented; test it before relying on it.
+- `[run-verified]` Claude Code 2.1.283 on Linux passed its own environment to a stdio server:
+  `npm_config_registry`, set only in the shell that started it, reached the `npx` it launched.
+  The `--env` pairs and the `.mcp.json` `${VAR}` expansion both delivered the Langfuse keys, and
+  `--env` followed directly by the server name fails with `Invalid environment variable format`.
 
 ### 2. Claude Desktop
 
@@ -186,6 +192,11 @@ Source: https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-ser
 - `[sourced]` > "By default, the CLI redacts sensitive environment variables from the base environment (inherited from the host process). ... This includes: Core project keys: `GEMINI_API_KEY`, `GOOGLE_API_KEY`, etc. Variables matching sensitive patterns: `*TOKEN*`, `*SECRET*`, `*PASSWORD*`, `*KEY*`, `*AUTH*`, `*CREDENTIAL*`."
   > "If an environment variable must be passed to an MCP server, you must explicitly state it in the `env` property of the server configuration in `settings.json` ... Explicitly defined variables (including those from extensions) are trusted and are **not** subjected to the automatic redaction process."
   Recommended form: `"MY_KEY": "$MY_KEY"`.
+- `[run-verified]` Gemini CLI 0.61.0 on Linux: with `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`
+  exported, a server without `env` shows `Disconnected` (the keys were removed, so the server
+  stopped at startup) and the same server with `"LANGFUSE_SECRET_KEY": "$LANGFUSE_SECRET_KEY"`
+  (and the other two) shows `Connected`. A project `.gemini/settings.json` is read only in a trusted
+  folder (`gemini mcp list` shows the server `Disabled` otherwise).
 
 ### 6b. Windsurf (Cascade)
 

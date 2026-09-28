@@ -397,44 +397,184 @@ Those four variables are all the bundle sets; the server validates them at start
 
 ### Client configuration
 
-Generic `mcpServers` JSON (Claude Desktop, Cursor and others; the exact file location depends on the client):
+One snippet per MCP client. Every snippet uses the [npx](#npx) channel (**Planned** until `npm publish` in M7); to use a [release archive](#release-archive) instead, replace `"command": "npx", "args": ["-y", "langfuse-api-mcp"]` with `"command": "/absolute/path/to/langfuse-mcp"` and no `args` (`langfuse-mcp.exe` on Windows).
+
+Each client starts the server with its own view of your environment, and several do not pass your shell's variables on (details and sources: [docs/research/mcp-hosts-env.md](docs/research/mcp-hosts-env.md)). So every snippet names the three variables the server needs in the client's own `env` mechanism, the one place a key may go. Settings that are not secret (`LANGFUSE_CA_CERT`, the proxy, the request limits) can go in the client's `env` as well, or once for every client in the [config file](#config-file-non-secret-settings). **Never put `LANGFUSE_PUBLIC_KEY` or `LANGFUSE_SECRET_KEY` in the config file**: the server refuses to start if it finds them there ([ADR-0011](docs/adr/0011-non-secret-config-file.md)).
+
+`pk-lf-...` and `sk-lf-...` below stand for your keys. Where a snippet reads `${LANGFUSE_SECRET_KEY}` or similar, the client copies the value from its own environment when it starts the server, so the key never sits in the file. The snippets were checked against each client's official docs on 2026-09-25. On Linux on 2026-09-27 ([records](docs/research/raw/2026-09-27-mcp-host-proof.md)), the one marked **proven** ran end to end (`search_operations`, then `execute_read`, against a local Langfuse); the one marked **startup proven** started the server with its keys, but no tool call was made through it.
+
+#### Claude Code — proven
+
+Source: [code.claude.com/docs/en/mcp](https://code.claude.com/docs/en/mcp). **Pitfall:** Claude Code passes its own environment to the server, but that environment is only what the shell that started Claude Code exported; a variable set elsewhere is missing. **Workaround:** pass the keys with `--env`. `--env` takes several `KEY=value` pairs and reads the next word as one more pair, so an option (here `--transport stdio`) must sit between the last `--env` and the server name, or the command fails with `Invalid environment variable format`:
+
+```bash
+claude mcp add \
+  --env LANGFUSE_PUBLIC_KEY=pk-lf-... \
+  --env LANGFUSE_SECRET_KEY=sk-lf-... \
+  --env LANGFUSE_BASE_URL=https://cloud.langfuse.com \
+  --transport stdio langfuse -- npx -y langfuse-api-mcp
+```
+
+This stores the keys in `~/.claude.json` (local or user scope). For a project `.mcp.json` shared through git, reference the variables instead; Claude Code expands `${VAR}` and `${VAR:-default}` in `env`:
 
 ```json
 {
   "mcpServers": {
     "langfuse": {
-      "command": "langfuse-mcp",
+      "command": "npx",
+      "args": ["-y", "langfuse-api-mcp"],
       "env": {
-        "LANGFUSE_PUBLIC_KEY": "pk-lf-...",
-        "LANGFUSE_SECRET_KEY": "sk-lf-...",
-        "LANGFUSE_BASE_URL": "https://cloud.langfuse.com",
-        "LANGFUSE_CA_CERT": "/path/to/corp-root.pem"
+        "LANGFUSE_PUBLIC_KEY": "${LANGFUSE_PUBLIC_KEY}",
+        "LANGFUSE_SECRET_KEY": "${LANGFUSE_SECRET_KEY}",
+        "LANGFUSE_BASE_URL": "${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}"
       }
     }
   }
 }
 ```
 
-Claude Code:
+#### Claude Desktop
 
-```bash
-claude mcp add langfuse -- langfuse-mcp   # uses the variables already exported in your shell
+Source: [modelcontextprotocol.io/docs/develop/connect-local-servers](https://modelcontextprotocol.io/docs/develop/connect-local-servers) and [modelcontextprotocol.io/docs/tools/debugging](https://modelcontextprotocol.io/docs/tools/debugging). **Pitfall:** Claude Desktop passes the server only "a limited subset of environment variables"; your shell exports never reach it, and on macOS an app started from the Dock does not see the `PATH` your shell profile builds (nvm, Homebrew), so a bare `npx` may not be found. **Workaround:** prefer the [MCPB bundle](#claude-desktop-mcpb), which stores the keys in the OS keychain. To configure it by hand, edit `claude_desktop_config.json` (macOS `~/Library/Application Support/Claude/`, Windows `%APPDATA%\Claude\`), put the keys in `env`, and give `command` as an absolute path (`which npx` on macOS, `where npx` on Windows, or the path of the extracted `langfuse-mcp` binary):
+
+```json
+{
+  "mcpServers": {
+    "langfuse": {
+      "command": "/absolute/path/to/npx",
+      "args": ["-y", "langfuse-api-mcp"],
+      "env": {
+        "LANGFUSE_PUBLIC_KEY": "pk-lf-...",
+        "LANGFUSE_SECRET_KEY": "sk-lf-...",
+        "LANGFUSE_BASE_URL": "https://cloud.langfuse.com"
+      }
+    }
+  }
+}
 ```
 
-Per-client snippets (Claude Code, Claude Desktop, Cursor, VS Code, Codex) will be copied from each client's official docs and dated when M1 ships.
+This file holds the keys in plain text; that is why the MCPB bundle is the better choice here.
+
+#### Cursor
+
+Source: [cursor.com/docs/mcp](https://cursor.com/docs/mcp). **Pitfall:** the docs do not say whether Cursor passes its environment to the server. **Workaround:** forward each variable explicitly with `${env:NAME}` in `env`, in `~/.cursor/mcp.json` (every project) or `.cursor/mcp.json` (one project):
+
+```json
+{
+  "mcpServers": {
+    "langfuse": {
+      "command": "npx",
+      "args": ["-y", "langfuse-api-mcp"],
+      "env": {
+        "LANGFUSE_PUBLIC_KEY": "${env:LANGFUSE_PUBLIC_KEY}",
+        "LANGFUSE_SECRET_KEY": "${env:LANGFUSE_SECRET_KEY}",
+        "LANGFUSE_BASE_URL": "${env:LANGFUSE_BASE_URL}"
+      }
+    }
+  }
+}
+```
+
+Cursor must itself have been started with those variables set (for example from a terminal where they are exported). Cursor also reads an `envFile`, but a `.env` file is a plaintext key file; keep it out of the repository if you use one.
+
+#### VS Code (GitHub Copilot)
+
+Source: [code.visualstudio.com/docs/copilot/reference/mcp-configuration](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration). **Pitfall:** VS Code passes its full environment, but a VS Code started from the Dock or Start menu may not have your shell's exports, and `.vscode/mcp.json` is usually committed. **Workaround:** declare the keys as `inputs` with `"password": true`: VS Code asks for them the first time the server starts and stores them securely. The file uses `servers`, not `mcpServers`:
+
+```json
+{
+  "inputs": [
+    { "type": "promptString", "id": "langfuse-public-key", "description": "Langfuse public key", "password": true },
+    { "type": "promptString", "id": "langfuse-secret-key", "description": "Langfuse secret key", "password": true }
+  ],
+  "servers": {
+    "langfuse": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "langfuse-api-mcp"],
+      "env": {
+        "LANGFUSE_PUBLIC_KEY": "${input:langfuse-public-key}",
+        "LANGFUSE_SECRET_KEY": "${input:langfuse-secret-key}",
+        "LANGFUSE_BASE_URL": "https://cloud.langfuse.com"
+      }
+    }
+  }
+}
+```
+
+#### Codex CLI
+
+Source: [learn.chatgpt.com/docs/extend/mcp?surface=cli](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) and the [config reference](https://learn.chatgpt.com/docs/config-file/config-reference). **Pitfall:** Codex clears the environment before it starts the server and passes on only a fixed list (`HOME`, `PATH`, `LANG`, …); an exported `LANGFUSE_SECRET_KEY` never arrives. **Workaround:** list the variable names in `env_vars` in `~/.codex/config.toml` (or a project `.codex/config.toml`); Codex then forwards their values from its own environment, and no key is written in the file:
+
+```toml
+[mcp_servers.langfuse]
+command = "npx"
+args = ["-y", "langfuse-api-mcp"]
+env_vars = ["LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_BASE_URL"]
+```
+
+Or set literal values with `codex mcp add --env LANGFUSE_PUBLIC_KEY=pk-lf-... --env LANGFUSE_SECRET_KEY=sk-lf-... --env LANGFUSE_BASE_URL=https://cloud.langfuse.com langfuse -- npx -y langfuse-api-mcp`, which stores them in `config.toml`. The same clearing applies to npm's own settings: if npm needs a proxy or a private registry, add `HTTPS_PROXY`, `npm_config_registry` or the like to `env_vars` too.
+
+#### Gemini CLI — startup proven
+
+Source: [gemini-cli docs/tools/mcp-server.md](https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md). **Pitfall:** Gemini CLI passes its environment but removes every variable whose name contains `KEY`, `SECRET`, `TOKEN` (and a few more), so both Langfuse keys are dropped and the server stops at startup. **Workaround:** name the keys in `env`; variables named there are not removed. In `~/.gemini/settings.json` (or a project `.gemini/settings.json`, which Gemini CLI reads only in a trusted folder):
+
+```json
+{
+  "mcpServers": {
+    "langfuse": {
+      "command": "npx",
+      "args": ["-y", "langfuse-api-mcp"],
+      "env": {
+        "LANGFUSE_PUBLIC_KEY": "$LANGFUSE_PUBLIC_KEY",
+        "LANGFUSE_SECRET_KEY": "$LANGFUSE_SECRET_KEY",
+        "LANGFUSE_BASE_URL": "$LANGFUSE_BASE_URL"
+      }
+    }
+  }
+}
+```
+
+An unset variable becomes an empty string, which the server refuses at startup naming the variable.
+
+#### Windsurf
+
+Source: [docs.windsurf.com/windsurf/cascade/mcp](https://docs.windsurf.com/windsurf/cascade/mcp) (now served at docs.devin.ai). **Pitfall:** the docs do not say whether Windsurf passes its environment to the server. **Workaround:** forward each variable with `${env:NAME}` in `env`, in `~/.config/devin/mcp_config.json` (macOS and Linux; `%APPDATA%\devin\mcp_config.json` on Windows; older builds used `~/.codeium/windsurf/mcp_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "langfuse": {
+      "command": "npx",
+      "args": ["-y", "langfuse-api-mcp"],
+      "env": {
+        "LANGFUSE_PUBLIC_KEY": "${env:LANGFUSE_PUBLIC_KEY}",
+        "LANGFUSE_SECRET_KEY": "${env:LANGFUSE_SECRET_KEY}",
+        "LANGFUSE_BASE_URL": "${env:LANGFUSE_BASE_URL}"
+      }
+    }
+  }
+}
+```
+
+Windsurf also reads `${file:/path}`, which puts the trimmed content of a file (for example a key file only you can read) in its place.
+
+#### Docker as the command
+
+In any client, `command` can be `docker` with the [Docker](#docker) `args`. The container sees only the variables named with `-e` in `args`, and `-e NAME` takes the value from the environment of the `docker` process, which is the client's `env` block: put the keys there, never as `-e NAME=value` in `args`.
 
 ### Where do environment variables come from?
 
-The server reads its own process environment, then an optional config file. Whether your *system* variables reach the process depends on the MCP client (facts and sources: [docs/research/mcp-hosts-env.md](docs/research/mcp-hosts-env.md), checked 2026-09-25):
+The server reads its own process environment, then an optional config file. Whether your *system* variables reach the process depends on the MCP client (facts and sources: [docs/research/mcp-hosts-env.md](docs/research/mcp-hosts-env.md), checked 2026-09-25; Claude Code and Gemini CLI also run on Linux on 2026-09-27, [records](docs/research/raw/2026-09-27-mcp-host-proof.md)). The [per-client snippets](#client-configuration) above apply the last column:
 
 | Client | Passes your system/shell variables? | What to do |
 |---|---|---|
 | VS Code / GitHub Copilot | yes (full environment) | nothing, or `"env"` / `${env:NAME}` |
-| Claude Code | not documented, likely yes | reference them: `"env": {"LANGFUSE_SECRET_KEY": "${LANGFUSE_SECRET_KEY}"}` |
+| Claude Code | yes, the environment Claude Code was started with (not documented; observed on Linux) | `--env` pairs, or reference them: `"env": {"LANGFUSE_SECRET_KEY": "${LANGFUSE_SECRET_KEY}"}` |
 | Cursor, Windsurf | not documented | reference them with `${env:NAME}` in `"env"` |
 | Claude Desktop | **no**, only a limited subset | put values in `"env"`, or install the `.mcpb` bundle (keys stored in the OS keychain) |
 | Codex CLI | **no**, the environment is cleared | list names in `env_vars = ["LANGFUSE_PUBLIC_KEY", …]` |
-| Gemini CLI | yes, but **hides names containing `KEY`/`SECRET`/`TOKEN`** | declare the keys explicitly in `"env"` |
+| Gemini CLI | yes, but **hides names containing `KEY`/`SECRET`/`TOKEN`** (observed on Linux: without `env` the server gets no keys and stops) | declare the keys explicitly in `"env"`: `"LANGFUSE_SECRET_KEY": "$LANGFUSE_SECRET_KEY"` |
 | Docker | only what you pass with `-e` | `-e LANGFUSE_PUBLIC_KEY -e LANGFUSE_SECRET_KEY …` |
 
 ### Config file (non-secret settings)
