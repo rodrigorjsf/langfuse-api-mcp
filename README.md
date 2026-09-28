@@ -433,7 +433,7 @@ This stores the keys in `~/.claude.json` (local or user scope). For a project `.
 }
 ```
 
-**Trade-off:** this needs the keys exported where Claude Code starts, and every shell or tool the agent runs there inherits them and can write to Langfuse without passing through this server's write gate; see [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment).
+**Trade-off:** the `${VAR}` form needs the keys exported where Claude Code starts, so the agent's own commands inherit them and can write outside this server's write gate: [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment).
 
 #### Claude Desktop
 
@@ -477,7 +477,7 @@ Source: [cursor.com/docs/mcp](https://cursor.com/docs/mcp). **Pitfall:** the doc
 }
 ```
 
-Cursor must itself have been started with those variables set (for example from a terminal where they are exported). **Trade-off:** this needs the keys exported where Cursor starts, and every shell or tool the agent runs there inherits them and can write to Langfuse without passing through this server's write gate; see [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment). Cursor also reads an `envFile`, but a `.env` file is a plaintext key file; keep it out of the repository if you use one.
+Cursor must itself have been started with those variables set (for example from a terminal where they are exported). **Trade-off:** this needs the keys exported where Cursor starts, so the agent's own commands inherit them and can write outside this server's write gate: [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment). Cursor also reads an `envFile`, but a `.env` file is a plaintext key file; keep it out of the repository if you use one.
 
 #### VS Code (GitHub Copilot)
 
@@ -515,7 +515,7 @@ args = ["-y", "langfuse-api-mcp"]
 env_vars = ["LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_BASE_URL"]
 ```
 
-**Trade-off:** this needs the keys exported where Codex starts, and every shell or tool the agent runs there inherits them and can write to Langfuse without passing through this server's write gate; see [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment).
+**Trade-off:** this needs the keys exported where Codex starts, so the agent's own commands inherit them and can write outside this server's write gate: [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment).
 
 Or set literal values with `codex mcp add --env LANGFUSE_PUBLIC_KEY=pk-lf-... --env LANGFUSE_SECRET_KEY=sk-lf-... --env LANGFUSE_BASE_URL=https://cloud.langfuse.com langfuse -- npx -y langfuse-api-mcp`, which stores them in plain text in `config.toml`; keep such a file out of the repository (a project `.codex/config.toml` is often committed). The same clearing applies to npm's own settings: if npm needs a proxy or a private registry, add `HTTPS_PROXY`, `npm_config_registry` or the like to `env_vars` too.
 
@@ -539,7 +539,7 @@ Source: [gemini-cli docs/tools/mcp-server.md](https://github.com/google-gemini/g
 }
 ```
 
-An unset variable becomes an empty string, which the server refuses at startup naming the variable. **Trade-off:** this needs the keys exported where Gemini CLI starts, and every shell or tool the agent runs there inherits them and can write to Langfuse without passing through this server's write gate; see [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment).
+An unset variable becomes an empty string, which the server refuses at startup naming the variable. **Trade-off:** this needs the keys exported where Gemini CLI starts, so the agent's own commands inherit them and can write outside this server's write gate: [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment).
 
 #### Windsurf
 
@@ -561,7 +561,7 @@ Source: [docs.windsurf.com/windsurf/cascade/mcp](https://docs.windsurf.com/winds
 }
 ```
 
-**Trade-off:** this needs the keys exported where Windsurf starts, and every shell or tool the agent runs there inherits them and can write to Langfuse without passing through this server's write gate; see [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment). Windsurf also reads `${file:/path}`, which puts the trimmed content of a file (for example a key file only you can read) in its place, and keeps the keys out of the environment.
+**Trade-off:** this needs the keys exported where Windsurf starts, so the agent's own commands inherit them and can write outside this server's write gate: [Keep the keys out of the agent's environment](#keep-the-keys-out-of-the-agents-environment). Windsurf also reads `${file:/path}`, which puts the trimmed content of a file (for example a key file only you can read) in its place, and keeps the keys out of the environment.
 
 #### Docker as the command
 
@@ -667,11 +667,11 @@ Recommendations: create a dedicated Langfuse key for the agent, set an expiry da
 
 ### Keep the keys out of the agent's environment
 
-The write gate (write mode off, and the confirmation of every destructive call in write mode) covers only the calls made through this server. It cannot see or stop another process holding the same keys. When the keys sit in the environment the MCP client starts with, every shell command and tool the agent runs inherits them: an agent with a shell can call Langfuse's own CLI or `curl` with them and change your data without any confirmation, for example when this server fails to start and the agent looks for another way. Denying the shell tool alone is not enough, since any tool that can make an HTTP request with the keys does the same.
+The write gate (write mode off, and the confirmation of every destructive call in write mode) covers only the calls made through this server. It cannot see or stop another process holding the same keys. When the keys sit in the environment the MCP client starts with, every shell command and tool the agent runs inherits them: an agent with a shell can call Langfuse's own CLI or `curl` with them and change your data without any confirmation, for example when this server fails to start and the agent looks for another way. Denying the shell tool alone is not enough: any tool that starts a process inheriting that environment (a script runner, a code interpreter, a plugin) does the same.
 
-- Store the keys in the client's own per-server settings, not in your shell: `claude mcp add --env` for Claude Code (kept in `~/.claude.json`), the [MCPB bundle](#claude-desktop-mcpb) for Claude Desktop (OS keychain), VS Code `inputs` with `"password": true`, or a literal value in the client's `env` block kept out of the repository.
-- Never export `LANGFUSE_PUBLIC_KEY` or `LANGFUSE_SECRET_KEY` in the shell that starts the MCP client. The `${VAR}`-style snippets under [Client configuration](#client-configuration) need exactly that, so use them only when the agent has no shell or HTTP tool.
-- The agent still runs as your user, so it could read a file that holds the keys. Where your client has permission rules, deny the agent reading that file; for a hard limit, give the agent no shell or HTTP tool at all.
+- Store the keys in the client's own per-server settings, not in your shell: `claude mcp add --env` for Claude Code (kept in `~/.claude.json`), the [MCPB bundle](#claude-desktop-mcpb) for Claude Desktop (OS keychain; **Planned** until the first release), VS Code `inputs` with `"password": true`, or a literal value in the client's `env` block kept out of the repository.
+- Never export `LANGFUSE_PUBLIC_KEY` or `LANGFUSE_SECRET_KEY` in the shell that starts the MCP client. The `${VAR}`-style snippets under [Client configuration](#client-configuration) need exactly that, so use them only when the agent cannot run commands.
+- The agent still runs as your user, so it could read a file that holds the keys. Where your client has permission rules, deny the agent reading that file; for a hard limit, give the agent no way to run commands at all.
 
 ### Verify what you run **(Planned)**
 

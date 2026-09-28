@@ -3,7 +3,7 @@
 Full risk→control mapping with sources: `docs/research/security.md`. Cite OWASP IDs **with the year** (IDs were renumbered: Excessive Agency = LLM06:2025 = LLM03:2026). Run `/security-review` before merging anything touching the areas below.
 
 **Credentials**
-- Langfuse keys come only from the server's environment/config — never from tool arguments, never forwarded from the MCP client (no token passthrough). Langfuse keys cannot be read-only, so the server is the only write gate for calls through the server; keys in the agent's own environment bypass it, so the README tells operators to keep them out of it (#146).
+- Langfuse keys come only from the server's environment/config — never from tool arguments, never forwarded from the MCP client (no token passthrough). Langfuse keys cannot be read-only, so the server is the only write gate for calls through the server; keys in the agent's own environment bypass it (#146).
 - The config file (ADR-0011) must never hold keys: reject `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` found there with a startup error; tests prove it.
 - An unknown config-file key only draws a startup warning naming file, line and key (escaped, cut to 64 runes), never its value (#26); tests prove it.
 - Redact `Authorization`, `sk-lf-…`, `pk-lf-…`, the HTTP bearer token and proxy credentials (`user:password@` in a proxy URL; used only for Basic proxy auth, logged as `scheme://host:port`) from logs, errors, hints, the audit line and tool output. A startup error for an invalid proxy value names the variable and its source, never the value.
