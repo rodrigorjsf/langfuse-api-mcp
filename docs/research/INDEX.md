@@ -20,6 +20,7 @@ Evidence behind the ADRs. Labels: `[verified 3-0]` passed 3-vote adversarial che
 | `raw/2026-09-27-small-model-eval-intent-11-query-encoding.md` | intent 11 rerun after both metrics query refusals and the guidance got one query-encoding wording (qwen3:8b: PASS, window from the run date; a first wording saying "escaped" failed) | ROADMAP M3, #106 |
 | `raw/2026-09-27-mcp-host-proof.md` | the README client snippets run on Linux: Claude Code end to end over npx against a local Langfuse (PASS, two forms), Gemini CLI startup with and without `env` (keys redacted without it), Codex CLI not completed (no credentials, local model did not load) | README "Client configuration", #125 |
 | `raw/2026-09-27-small-model-eval-local-model-vram.md` | four local model configurations on an RTX 3060 12 GB, all 11 intents: qwen3:8b Q4_K_M stays the default (8/11); qwen3:14b with a q8_0 KV cache 9/11 but regresses intent 11 | ROADMAP M3, #114 |
+| `raw/2026-09-28-small-model-eval-intent-03-skill-ab.md` | intent 03 A/B with and without the user skill appended to the system prompt (qwen3:8b: 0/2 without, 2/2 with; no server text needed) | ROADMAP M6, #98, spec #132 |
 | [2026-09-25-deep-research-run1.md](2026-09-25-deep-research-run1.md) | raw verified findings + all extracted claims of the first deep-research run | all of the above |
 
 ## Open questions

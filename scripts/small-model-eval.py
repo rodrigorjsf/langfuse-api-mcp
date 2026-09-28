@@ -20,6 +20,7 @@
 # HOW:  (Python 3.11 or later: timestamps ending in Z are parsed natively)
 #       ANTHROPIC_API_KEY=... python3 scripts/small-model-eval.py [--server BIN]
 #           [--model ID] [--max-turns N] [--max-tokens N] [--timeout S]
+#           [--only N,...] [--system-append FILE]
 #       --server     prebuilt langfuse-mcp binary (default: go build from this
 #                    checkout into a temporary directory)
 #       --model      default claude-haiku-4-5
@@ -29,6 +30,11 @@
 #       --timeout    seconds to wait for one model turn (default 120)
 #       --only       comma-separated intent numbers to run (default: all), to
 #                    rerun a failing intent once before calling it a failure
+#       --system-append  append FILE's text (UTF-8) to the system prompt after
+#                    a blank line: the arm with the user skill (spec #132),
+#                    the entry SKILL.md plus the references the intents need,
+#                    concatenated by the caller; without it the prompt is
+#                    unchanged. The run header prints its size in bytes.
 #
 #       First recorded run (2026-09-27, #88): the local qwen3:8b instead of Haiku
 #       4.5, by the maintainer's choice (no paid API), 7/11 passed; output in
@@ -75,15 +81,18 @@ FAKE_VERSION = "4.46.0"
 MCP_PROTOCOL_VERSION = "2025-06-18"
 
 
-def system_prompt(today):
+def system_prompt(today, append=""):
     """The system prompt of every conversation. It names the run date, as agent
-    hosts do, so a relative window ("the last 7 days") can be computed (#105)."""
-    return (
+    hosts do, so a relative window ("the last 7 days") can be computed (#105).
+    append, the text of the --system-append file, follows after a blank line;
+    without it the prompt is unchanged (the arm without the skill)."""
+    prompt = (
         f"Today is {today.isoformat()} (UTC). "
         "You help a user investigate their LLM application's observability data "
         "through the tools you are given. Use the tools to answer the request. "
         "Do not ask the user questions; if a detail is missing, choose a sensible default."
     )
+    return f"{prompt}\n\n{append}" if append else prompt
 
 # Each intent lists the calls that count as reaching it: a tool, the operationId
 # (for execute_read) and the key parameters that call must carry. Every value is
@@ -415,7 +424,7 @@ def run_intent(server, tools, endpoint, key, args, item, today):
             "model": args.model,
             "max_tokens": args.max_tokens,
             "temperature": 0,
-            "system": system_prompt(today),
+            "system": system_prompt(today, args.system_append),
             "tools": tools,
             "messages": messages,
         }, args.timeout)
@@ -450,7 +459,16 @@ def build_server(workdir):
     return binary
 
 
-def main():
+def read_append_file(path):
+    """The --system-append file's text, read as UTF-8."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except (OSError, UnicodeDecodeError) as err:
+        raise argparse.ArgumentTypeError(f"cannot read {path}: {err}") from None
+
+
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="Small-model discovery eval (spec #68).")
     parser.add_argument("--server", help="prebuilt langfuse-mcp binary")
     parser.add_argument("--model", default=DEFAULT_MODEL)
@@ -458,7 +476,10 @@ def main():
     parser.add_argument("--max-tokens", type=int, default=1024)
     parser.add_argument("--timeout", type=float, default=120)
     parser.add_argument("--only", help="comma-separated intent numbers to run (default: all)")
-    args = parser.parse_args()
+    parser.add_argument("--system-append", type=read_append_file, metavar="FILE",
+                        help="append this file's text to the system prompt (the arm with the skill)")
+    args = parser.parse_args(argv)
+    args.system_append = args.system_append or ""  # argparse would run the type on a string default
     selected = list(range(1, len(INTENTS) + 1))
     if args.only:
         try:
@@ -467,6 +488,12 @@ def main():
             parser.error("--only takes comma-separated intent numbers")
         if not all(1 <= n <= len(INTENTS) for n in selected):
             parser.error(f"--only takes intent numbers from 1 to {len(INTENTS)}")
+    args.selected = selected
+    return args
+
+
+def main():
+    args = parse_args()
 
     key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not key:
@@ -490,9 +517,10 @@ def main():
             # One run date for the whole run: the prompt and the matcher agree.
             today = datetime.datetime.now(datetime.timezone.utc).date()
             print(f"model {args.model}; max tokens {args.max_tokens}; fake Langfuse {FAKE_VERSION} events_only; "
-                  f"run date {today.isoformat()} UTC; tools {', '.join(sorted(names))}")
+                  f"run date {today.isoformat()} UTC; tools {', '.join(sorted(names))}; "
+                  f"system prompt append {len(args.system_append.encode())} bytes")
             passed = 0
-            for number in selected:
+            for number in args.selected:
                 item = INTENTS[number - 1]
                 ok, calls, ended = run_intent(server, tools, endpoint, key, args, item, today)
                 passed += ok
@@ -502,8 +530,8 @@ def main():
                 if not ok:
                     print(f"       ended: {ended}")
                     print(f"       want: {' | '.join(describe_expected(e) for e in item['expect'])}")
-            print(f"TOTAL {passed}/{len(selected)} passed")
-            return 0 if passed == len(selected) else 1
+            print(f"TOTAL {passed}/{len(args.selected)} passed")
+            return 0 if passed == len(args.selected) else 1
         except SetupError as err:
             print(f"eval aborted: {err}", file=sys.stderr)
             return 2
