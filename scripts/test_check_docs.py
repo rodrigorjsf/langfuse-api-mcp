@@ -172,7 +172,7 @@ class FailureRuleTest(unittest.TestCase):
         self.assertTrue(problems[0].startswith(f"line {line}:"), problems)
 
 
-ISSUE_URL = "https://github.com/rodrigorjsf/langfuse-api-mcp/issues/160"
+SAMPLE_ISSUE_URL = "https://github.com/rodrigorjsf/langfuse-api-mcp/issues/160"
 
 
 class ReadmeRuleTest(unittest.TestCase):
@@ -183,7 +183,7 @@ class ReadmeRuleTest(unittest.TestCase):
             self.assertEqual([], checkmod.check_readme(f.read()))
 
     def test_a_planned_line_linking_an_issue_passes(self):
-        text = f"# T\n\n| HTTP | **Planned**, [#160]({ISSUE_URL}) |\nA line without the mark.\n"
+        text = f"# T\n\n| HTTP | **Planned**, [#160]({SAMPLE_ISSUE_URL}) |\nA line without the mark.\n"
         self.assertEqual([], checkmod.check_readme(text))
 
     def test_a_planned_line_linking_no_issue_fails_and_names_its_line(self):
@@ -196,6 +196,12 @@ class ReadmeRuleTest(unittest.TestCase):
         # GitHub renders a repository file without turning #N into a link.
         problems = checkmod.check_readme("Publishing **Planned** (#150).\n")
         self.assertEqual(1, len(problems), problems)
+
+    def test_the_word_quoted_in_a_code_span_is_not_a_mark(self):
+        self.assertEqual([], checkmod.check_readme("It fails on a line holding the word `Planned`.\n"))
+
+    def test_a_mark_beside_a_code_span_still_counts(self):
+        self.assertEqual(1, len(checkmod.check_readme("`LANGFUSE_MCP_TRANSPORT` is **Planned**.\n")))
 
     def test_a_lower_case_anchor_is_not_a_mark(self):
         self.assertEqual([], checkmod.check_readme("See [Verify](#verify-what-you-run-planned).\n"))

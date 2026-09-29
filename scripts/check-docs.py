@@ -11,8 +11,9 @@
 #         scripts' Python tests (scripts/test_*.py);
 #       - a `planned` row links no issue (`#N` or a GitHub `/issues/N` URL);
 #       - an `accepted-risk` row gives no reason;
-#       - a README.md line holding the word `Planned` links no issue by its GitHub URL
-#         (`/issues/N`; GitHub does not turn a bare #N into a link in a repository file) (#157).
+#       - a README.md line holding the word `Planned` (outside a code span, which quotes it) links
+#         no issue by its GitHub URL (`/issues/N`; GitHub does not turn a bare #N into a link in
+#         a repository file) (#157).
 #       It prints one line per problem, or "OK <file>" per file, and exits 1 on any problem.
 # WHY:  the M7 exit criterion "security mapping all green" is measurable only while each row's
 #       status is true: a `tested` row must name tests that exist, and a `planned` row must link
@@ -20,7 +21,7 @@
 #       every `Planned` mark links the issue that delivers it. The check is offline: it never asks GitHub whether an
 #       issue is open (the whole-codebase security review, #156, checks that once by hand).
 # WHEN: on every push and pull request (.github/workflows/ci.yml, job "generator"), and by hand
-#       after editing the mapping. Offline tests: scripts/test_check_docs.py.
+#       after editing the mapping or a README Planned mark. Offline tests: scripts/test_check_docs.py.
 # HOW:  python3 scripts/check-docs.py [MAPPING_FILE [README_FILE]]
 #       (Python 3.11+, standard library only; defaults: docs/research/security.md, README.md)
 
@@ -41,6 +42,7 @@ CITED_TEST = re.compile(r"`((?:Test|Fuzz)\w+|test_\w+)`")
 ISSUE_LINK = re.compile(r"(?:/issues/|#)\d+\b")
 PLANNED_MARK = re.compile(r"\bPlanned\b")
 ISSUE_URL = re.compile(r"/issues/\d+\b")
+CODE_SPAN = re.compile(r"`[^`]*`")
 STATUS_CELL = re.compile(r"^`?([\w-]+)`?:(.*)$", re.S)
 
 
@@ -141,10 +143,11 @@ def check_mapping(text, known):
 
 
 def check_readme(text):
-    """Return the README lines holding a `Planned` mark but no issue URL, as printable lines."""
+    """Return the README lines holding a `Planned` mark but no issue URL, as printable lines.
+    The word quoted in a code span is a mention, not a mark."""
     return [f"line {n}: a Planned mark links no issue (a GitHub /issues/N link)"
             for n, line in enumerate(text.splitlines(), start=1)
-            if PLANNED_MARK.search(line) and not ISSUE_URL.search(line)]
+            if PLANNED_MARK.search(CODE_SPAN.sub("", line)) and not ISSUE_URL.search(line)]
 
 
 def main(argv):
