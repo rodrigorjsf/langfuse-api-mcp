@@ -10,6 +10,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -210,16 +211,33 @@ func logWriteMode(log *slog.Logger, w config.WriteMode) {
 }
 
 // envMap turns "KEY=value" entries into a map; the last entry for a key wins.
-// Keys keep their stored spelling, also on Windows, where names are
-// case-insensitive: see #62.
+// On Windows, where variable names are case-insensitive, each name is keyed as
+// windowsEnvName gives it, so a setting stored with any casing is found (#62).
+// On Linux and macOS names stay as stored: there HTTPS_PROXY and https_proxy
+// are distinct variables with Go's upper-over-lower order.
 func envMap(environ []string) map[string]string {
 	env := make(map[string]string, len(environ))
 	for _, kv := range environ {
 		if k, v, ok := strings.Cut(kv, "="); ok {
+			if runtime.GOOS == "windows" {
+				k = windowsEnvName(k)
+			}
 			env[k] = v
 		}
 	}
 	return env
+}
+
+// windowsEnvName is the name config looks a Windows variable up under: the
+// name upper-cased, except the lower-case proxy spellings, kept so the startup
+// log names the variable as stored. On Windows a lower-case proxy spelling
+// cannot coexist with its upper-case one, so neither shadows the other.
+func windowsEnvName(name string) string {
+	switch name {
+	case config.EnvHTTPSProxyLower, config.EnvHTTPProxyLower, config.EnvNoProxyLower:
+		return name
+	}
+	return strings.ToUpper(name)
 }
 
 // ambientInFile returns the CA sources named by the ambient variables set in
