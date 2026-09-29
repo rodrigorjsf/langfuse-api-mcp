@@ -30,7 +30,7 @@ const sessionlessProtocol = "2026-07-28"
 // stdin only after deployment profile detection; a host that times out its
 // `server/discover` probe (Claude Code: 3 s) queues a legacy initialize
 // behind it, and go-sdk v1.8.0 rejects that initialize as a duplicate when
-// the probe negotiated protocol 2026-07-28. Revert once the SDK accepts it.
+// the probe negotiated protocol 2026-07-28. Revert once the SDK accepts it (#162).
 type legacyStdio struct{ mcp.StdioTransport }
 
 // SupportsProtocolVersion implements [mcp.ProtocolVersionSupporter].

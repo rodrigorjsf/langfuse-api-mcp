@@ -117,7 +117,7 @@ The double logged no request other than GETs. The confirmation reaches Claude Co
 
 ## Upstream report draft (option D, not posted)
 
-Spec #150 says the go-sdk issue is posted only after the maintainer approves its text. This is the draft.
+Spec #150 says the go-sdk issue is posted only after the maintainer approves its text. This is the draft; posting it and reverting the workaround are tracked in #162.
 
 > **Title:** Legacy `initialize` after a `server/discover` probe on the same stdio session is refused as a duplicate
 >
