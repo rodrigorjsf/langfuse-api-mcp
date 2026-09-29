@@ -41,7 +41,7 @@ Measure before optimizing; never trade a security control for speed. Error handl
 - `log/slog` JSON handler to **stderr** only (stdout is the stdio transport). Metadata only: tool, operationId, status, latency, bytes. Never payloads, never secrets.
 
 ## Cross-platform
-- `filepath` for file paths, `os.ReadFile`/`os.ReadDir` for CA sources; OS-specific code only in `_windows.go`/`_unix.go` files; path-list variables split with `filepath.SplitList`.
+- `filepath` for file paths, `os.ReadFile`/`os.ReadDir` for CA sources; OS-specific code only in `_windows.go` files and their `_other.go` twins under `//go:build !windows` (Go reads no `_unix` filename suffix); path-list variables split with `filepath.SplitList`.
 
 ## Tests
 - Details in `testing.md`: table-driven, `t.Parallel()` where safe, `httptest.Server` for Langfuse, no network in unit tests.
