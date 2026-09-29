@@ -275,6 +275,8 @@ func TestSearchOperationsRefusesAnInvalidQueryWithoutEchoingIt(t *testing.T) {
 		"an invisible character":        {"query": "trace\u200blist"},
 		"a bidi override":               {"query": "trace\u202elist"},
 		"a tag character":               {"query": "trace\U000E0041list"},
+		"a variation selector (#156)":   {"query": "trace\uFE0Flist"},
+		"a Hangul filler (#156)":        {"query": "trace\u3164list"},
 		"a query that is not a string":  {"query": 42},
 		"an unknown argument":           {"query": "trace", "operationId": "trace_list"},
 	}

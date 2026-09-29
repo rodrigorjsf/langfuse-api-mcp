@@ -31,3 +31,13 @@ func FuzzMessage(f *testing.F) {
 		}
 	})
 }
+
+// #156: a Langfuse error message loses its variation selectors and invisible
+// fillers like its zero-width characters.
+func TestMessageDropsVariationSelectorsAndInvisibleFillers(t *testing.T) {
+	t.Parallel()
+	got := sanitize.Message("ok️\U000E0100\U000E01EFayㅤᅟﾠ͏")
+	if got != "okay" {
+		t.Fatalf("Message = %q, want %q", got, "okay")
+	}
+}
