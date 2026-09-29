@@ -22,7 +22,7 @@ Packages are organized **by domain concept** (terms from `CONTEXT.md`), never by
 │   │                        search/execute handlers, the ONLY translation of errors into tool errors (ADR-0008)
 │   └── transport/           stdio start-up; loopback Streamable HTTP: bind, bearer token, Origin/Host checks
 ├── skills/<skill-name>/     M6 user-facing skills (SKILL.md + references), authored with /writing-great-skills
-├── packaging/               release inputs: .goreleaser.yaml (archives, checksums, SBOMs; #120), Dockerfile (container image; #122), npm/ (npx shim, packaging script, smoke registry; #123), mcpb/ (MCPB manifest + the pinned MCPB CLI lockfile; #124)
+├── packaging/               release inputs: .goreleaser.yaml (archives, checksums, SBOMs; #120), Dockerfile (container image; #122), npm/ (npx shim, packaging script, smoke registry; #123), mcpb/ (MCPB manifest + the pinned MCPB CLI lockfile; #124), server.json (the MCP Registry entry template; #154)
 ├── scripts/                 repeatable maintainer procedures (WHAT/WHY/WHEN/HOW header), e.g. setup-ci-langfuse-cloud.sh
 ├── docs/                    adr/, architecture/, research/, agents/ — no code
 └── .claude/                 rules/, hooks/, settings.json; handoffs/ (session handoff notes) is local, gitignored

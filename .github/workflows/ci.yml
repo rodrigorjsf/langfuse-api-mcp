@@ -3,8 +3,8 @@
 # runner's system trust store (spec #7).
 # The generator job runs the union catalog generator's offline unit tests (#89).
 # Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current.
-# The generator job also runs the user skill check (#134, spec #132 S3) and the skill ZIP pack
-# script's tests (#139, S4).
+# The generator job also runs the user skill check (#134, spec #132 S3), the skill ZIP pack
+# script's tests (#139, S4) and the release workflow's tag-only job tests (#154).
 # A push or pull request that only changes docs (Markdown, docs/, .claude/, LICENSE) starts no run:
 # nothing in those paths is compiled or embedded (the only go:embed is internal/catalog/spec/*.json).
 # The user skill's Markdown under skills/ is the exception: the skill check guards it, so an edit
@@ -132,6 +132,13 @@ jobs:
         run: |
           set -euo pipefail
           "$RUNNER_TEMP/venv/bin/python" scripts/test_gen_union_catalog.py
+      # The tag-only jobs of release.yml (#126, #154): each runs only on a `v*` tag push, and the
+      # MCP Registry job holds only its two permissions, cannot fail the release and runs a
+      # checksum-pinned mcp-publisher. PyYAML from the venv above.
+      - name: Test the release workflow's tag-only jobs
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/venv/bin/python" scripts/test_release_workflow.py
       # The small-model eval's offline matcher tests (#105): standard library only, no model.
       - name: Test the small-model eval matcher
         run: |
