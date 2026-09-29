@@ -31,12 +31,12 @@ import (
 var version string
 
 // releaseTag is a SemVer release or pre-release tag as Go records a module
-// version: a leading v, no build metadata (a "+dirty" local build is not a
+// version: a leading v, no leading zero in a numeric identifier, no build metadata (a "+dirty" local build is not a
 // release). pseudoVersion is Go's pseudo-version, which also matches
 // releaseTag when it follows a pre-release tag (golang.org/x/mod's pattern,
 // without build metadata).
 var (
-	releaseTag    = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$`)
+	releaseTag    = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?$`)
 	pseudoVersion = regexp.MustCompile(`^v[0-9]+\.(0\.0-|[0-9]+\.[0-9]+-([^+]*\.)?0\.)[0-9]{14}-[A-Za-z0-9]+$`)
 )
 
@@ -161,8 +161,8 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 	profile := detection.Profile
 	resolved := cat.Resolve(catalogProfile(profile))
 	logProfile(log, detection, len(resolved.Operations()))
-	buildVersion := reportedVersion(version, moduleVersion())
-	opts := []server.Option{server.WithVersion(buildVersion)}
+	reported := reportedVersion(version, moduleVersion())
+	opts := []server.Option{server.WithVersion(reported)}
 	if cfg.AllowWrites.On {
 		opts = append(opts, server.WithWriteMode())
 	}
@@ -173,7 +173,7 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 		defer client.CloseIdleConnections()
 		return transport.Stdio(ctx, srv)
 	}
-	log.Info("server started", "version", buildVersion, "transport", "stdio")
+	log.Info("server started", "version", reported, "transport", "stdio")
 	return app{log: log, pool: pool, serve: serve}, nil
 }
 

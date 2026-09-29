@@ -24,6 +24,8 @@ func TestReportedVersionMapsTheBuildVersion(t *testing.T) {
 		{"no leading v", "", "0.1.0", developmentVersion},
 		{"leading zero", "", "v0.01.0", developmentVersion},
 		{"two parts", "", "v0.1", developmentVersion},
+		{"leading zero in a numeric pre-release identifier", "", "v0.1.0-rc.01", developmentVersion},
+		{"alphanumeric pre-release identifier starting with a zero", "", "v0.1.0-0rc", "0.1.0-0rc"},
 		{"injected text after a tag", "", "v0.1.0\n{\"msg\":\"forged\"}", developmentVersion},
 		{"markup in a pre-release", "", "v0.1.0-<b>x</b>", developmentVersion},
 		{"control character in a pre-release", "", "v0.1.0-rc\x1b[31m", developmentVersion},
