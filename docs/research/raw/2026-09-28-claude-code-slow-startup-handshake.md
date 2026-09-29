@@ -1,13 +1,13 @@
 # Claude Code's handshake during a slow startup, before and after stdio stops advertising 2026-07-28 (2026-09-28)
 
-This record is for #145 (spec #150). It was run on Linux (WSL2) on 2026-09-28. Every line is copied from a stdio shim that timestamps each JSON-RPC line in both directions; each line is cut at about 300 characters, and `…` marks a cut. No key appears in any output (fake keys `pk-lf-capture`/`sk-lf-capture`, checked with `grep`).
+This record is for #145 (spec #150). It was run on Linux (WSL2) on 2026-09-28; capture 6 was added on 2026-09-29. Every line is copied from a stdio shim that timestamps each JSON-RPC line in both directions; each line is cut at about 300 characters, and `…` marks a cut. No key appears in any output (fake keys `pk-lf-capture`/`sk-lf-capture`, checked with `grep`).
 
 ## Setup
 
 | Item | Value |
 |---|---|
-| Claude Code | `claude -p "Reply with only the word ok." --mcp-config mcp.json --strict-mcp-config --model haiku --output-format stream-json --verbose --max-turns 1`, with the `CLAUDECODE` variables of the calling session unset. Capture 1: 2.1.283. Captures 2 to 5: 2.1.284. |
-| Server | `go build ./cmd/langfuse-mcp`. Capture 1: `3549afd`. Capture 2: `3d9656a` (before the fix). Captures 3 to 5: `3d9656a` plus the fix, in which the stdio transport reports no protocol from 2026-07-28 as supported. |
+| Claude Code | `claude -p "Reply with only the word ok." --mcp-config mcp.json --strict-mcp-config --model haiku --output-format stream-json --verbose --max-turns 1`, with the `CLAUDECODE` variables of the calling session unset. Captures 1 and 6: 2.1.283. Captures 2 to 5: 2.1.284. |
+| Server | `go build ./cmd/langfuse-mcp`. Capture 1: `3549afd`. Capture 2: `3d9656a` (before the fix). Captures 3 to 5: `3d9656a` plus the fix, in which the stdio transport reports no protocol from 2026-07-28 as supported. Capture 6: `d83fe3a`, the fix as committed. |
 | Shim | A Python script between Claude Code and the server. It writes `<time> host->server <line>` and `<time> server->host <line>` to a log, and forwards each line unchanged. |
 | Langfuse | A Python double of Langfuse 4.46.0. `/api/public/health` answers `{"status":"OK","version":"4.46.0"}` after N seconds, and every other GET answers `{"data":[],"meta":{}}`. N = 5 is the "slow" setting: detection then runs its full 5 s budget. N = 0 is the "fast" setting. |
 
@@ -20,12 +20,13 @@ This record is for #145 (spec #150). It was run on Linux (WSL2) on 2026-09-28. E
 | 3 | 2.1.284 | after the fix | 5 s | `server/discover` answered without 2026-07-28; the queued `initialize` succeeds on 2025-11-25 | `connected`, 4 tools |
 | 4 | 2.1.284 | after the fix | 0 s | the same, without the wait | `connected`, 4 tools |
 | 5 | 2.1.284 | after the fix, write mode | 0 s | a destructive `execute_write` asks through `elicitation/create`; `claude -p` cancels it | `confirmation_declined`, nothing sent |
+| 6 | 2.1.283 | after the fix | 5 s | `server/discover` answered without 2026-07-28; the queued `initialize` succeeds on 2025-11-25 | `connected`, 4 tools |
 
 Claude Code does not re-send `initialize`, which was #145's first hypothesis. It probes `server/discover` (protocol 2026-07-28) first. After 3.0 s with no answer, it falls back to one legacy `initialize` on the same pipe. The server reads stdin only after it has detected the deployment profile, so both lines wait in the pipe. go-sdk v1.8.0 `(*Server).discover` stores the probe's parameters on the session, because the stdio transport supports 2026-07-28. `(*ServerSession).initialize` then finds the session initialized and refuses the queued `initialize` as `duplicate "initialize" received`. The limit that matters is Claude Code's 3 s probe timeout, not the 5 s detection budget or the 30 s connection timeout.
 
 After the fix, the stdio transport reports only protocols older than 2026-07-28 as supported. `server/discover` is then answered with `supportedVersions` lacking 2026-07-28, and it stores nothing on the session. The legacy `initialize` succeeds, whether it waited in the pipe or not. The SDK does not refuse the probe with an error: it answers it with the versions stdio offers, and Claude Code falls back to `initialize` because 2026-07-28 is missing.
 
-Claude Code 2.1.284 recovers on its own: capture 2 connects before the fix. It still logs the refused `initialize` first. 2.1.283, the version #145 was found with, does not recover (capture 1). The fix does not rely on the client retrying.
+Claude Code 2.1.284 recovers on its own: capture 2 connects before the fix. It still logs the refused `initialize` first. 2.1.283, the version #145 was found with, does not recover (capture 1), so capture 2 cannot show the fix is what connects a client. Capture 6 does: the same 2.1.283 under the same 5 s delay connects after the fix, and it does not re-probe. The fix does not rely on the client retrying.
 
 ## Capture 1: 2.1.283, before the fix, 5 s (from the #145 failure handoff, attempt 2)
 
@@ -98,6 +99,21 @@ The server ran with `LANGFUSE_MCP_ALLOW_WRITES=true` against a double that logs 
 ```
 
 The double logged no request other than GETs. The confirmation reaches Claude Code through the SDK's older-protocol path, a server-to-client `elicitation/create`. `claude -p` cannot show a form and cancels it (as in the #142 record), so the call ends in `confirmation_declined` and nothing is sent.
+
+## Capture 6: 2.1.283, after the fix, 5 s
+
+```text
+00:05:58.930 shim started
+00:05:58.995 host->server {"jsonrpc":"2.0","id":"server-discover-probe-1","method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28",…
+00:06:02.002 host->server {"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{"roots":{"listChanged":true},"elicitation":{}},"clientInfo":{"name":"claude-code","title":"Claude Code","version":"2.1.283",…},"jsonrpc":"2.0","id":0}
+00:06:03.985 server->host {"jsonrpc":"2.0","id":"server-discover-probe-1","result":{"resultType":"complete", … "supportedVersions":["2025-11-25","2025-06-18","2025-03-26","2024-11-05"],"capabilities":{"lo…
+00:06:03.985 server->host {"jsonrpc":"2.0","id":0,"result":{"capabilities":{"logging":{},"tools":{"listChanged":true}},"protocolVersion":"2025-11-25","serverInfo":{"name":"langfuse-mcp","version":"0.0.0-dev"}}}
+00:06:03.989 host->server {"jsonrpc":"2.0","method":"notifications/initialized"}
+00:06:03.989 host->server {"method":"tools/list","jsonrpc":"2.0","id":1}
+00:06:03.990 server->host {"jsonrpc":"2.0","id":1,"result":{"ttlMs":0,"cacheScope":"public","tools":[…
+```
+
+`init` event: `mcp_servers: [{'name': 'langfuse', 'status': 'connected'}]`, tools `describe_operation`, `execute_read`, `get_trace_tree`, `search_operations`. Against capture 1, only the server changed.
 
 ## Upstream report draft (option D, not posted)
 
