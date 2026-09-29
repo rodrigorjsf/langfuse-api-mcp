@@ -248,8 +248,9 @@ func logWriteMode(log *slog.Logger, w config.WriteMode) {
 }
 
 // envMap turns "KEY=value" entries into a map; the last entry for a key wins.
-// Each name is keyed as envName gives it: upper-cased on Windows, where
-// variable names are case-insensitive, as stored elsewhere (#62).
+// Each name is keyed as envName gives it: on Windows, where variable names
+// are case-insensitive, upper-cased except the lower-case proxy spellings;
+// as stored elsewhere (#62).
 func envMap(environ []string) map[string]string {
 	env := make(map[string]string, len(environ))
 	for _, kv := range environ {
