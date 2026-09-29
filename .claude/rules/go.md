@@ -10,7 +10,7 @@ Measure before optimizing; never trade a security control for speed. Error handl
 
 ## Baseline
 - `go.mod`: `go 1.27` + `toolchain go1.27.1` (`.github/workflows/go-toolchain.yml` bumps it to the latest 1.27.x; Dependabot cannot); CI builds releases with the latest 1.27.x; `gofmt`/`goimports` clean; `go vet ./...`, `golangci-lint run` (with `gosec`, `staticcheck`, `errcheck`, `bodyclose`, `noctx`, `contextcheck`) and `govulncheck ./...` pass.
-- Standard library first (`net/http`, `crypto/*`, `encoding/json`, `log/slog`, `context`). Allowed extras: `golang.org/x/sync` (errgroup), `golang.org/x/time/rate`, `golang.org/x/crypto/x509roots/fallback`, `golang.org/x/net/http/httpproxy` (proxy selection from resolved settings, ADR-0006), test-only `go.uber.org/goleak`, `github.com/google/jsonschema-go` (the go-sdk's own schema library, already pinned): in tests, to validate `structuredContent` against an `outputSchema`; allowed in `internal/catalog` production code for write request body validation against the JSON Schema 2020-12 body schema (no stdlib alternative exists; #111, used since #112). Anything else needs a justification in the PR.
+- Standard library first (`net/http`, `crypto/*`, `encoding/json`, `log/slog`, `context`). Allowed extras: `golang.org/x/sync` (errgroup), `golang.org/x/time/rate`, `golang.org/x/crypto/x509roots/fallback`, `golang.org/x/net/http/httpproxy` (proxy selection from resolved settings, ADR-0006), test-only `go.uber.org/goleak`, `github.com/google/jsonschema-go` (the go-sdk's own schema library, already pinned): in tests, to validate `structuredContent` against an `outputSchema`; allowed in `internal/catalog` production code for write request body validation against the JSON Schema 2020-12 body schema (no stdlib alternative exists; #111, used since #112); allowed in `scripts/registry-server-json` to validate the MCP Registry entry offline against the Registry's published draft-07 schema (#154: the Registry's own `mcp-publisher validate` calls the live Registry, which must never block a release). Anything else needs a justification in the PR.
 - Packages under `internal/`; `cmd/` only wires. No `util`/`common`/`helpers` packages. No package-level mutable state (one exception: `main.version`, the linker's `-X` target, set at build time and never changed at run time); config and catalog are built once at startup and shared **read-only** (no locks needed).
 - Accept interfaces at a seam, return concrete types; declare an interface in the consumer only when two adapters exist.
 
@@ -41,7 +41,7 @@ Measure before optimizing; never trade a security control for speed. Error handl
 - `log/slog` JSON handler to **stderr** only (stdout is the stdio transport). Metadata only: tool, operationId, status, latency, bytes. Never payloads, never secrets.
 
 ## Cross-platform
-- `filepath` for file paths, `os.ReadFile`/`os.ReadDir` for CA sources; OS-specific code only in `_windows.go`/`_unix.go` files; path-list variables split with `filepath.SplitList`.
+- `filepath` for file paths, `os.ReadFile`/`os.ReadDir` for CA sources; OS-specific code only in `_windows.go` files and their `_other.go` twins under `//go:build !windows` (Go reads no `_unix` filename suffix); path-list variables split with `filepath.SplitList`.
 
 ## Tests
 - Details in `testing.md`: table-driven, `t.Parallel()` where safe, `httptest.Server` for Langfuse, no network in unit tests.

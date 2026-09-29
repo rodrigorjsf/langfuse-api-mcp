@@ -259,8 +259,12 @@ func parseFile(file File) (map[string]string, map[string]int, []IgnoredKey, erro
 		if !ok || strings.TrimSpace(k) == "" {
 			return nil, nil, nil, fmt.Errorf("config file %s line %d: expected KEY=VALUE", file.Path, n)
 		}
-		// Accept the dotenv "export KEY=VALUE" form, so it cannot hide a key either.
-		k = strings.TrimSpace(strings.TrimPrefix(k, "export "))
+		// Accept the dotenv "export KEY=VALUE" form, with any blanks after
+		// export as a shell takes them, so it cannot hide a key either (#156).
+		k = strings.TrimSpace(k)
+		if f := strings.Fields(k); len(f) == 2 && f[0] == "export" {
+			k = f[1]
+		}
 		for _, secret := range []string{EnvPublicKey, EnvSecretKey} {
 			if strings.EqualFold(k, secret) { // any spelling: a key must never sit in the file
 				return nil, nil, nil, fmt.Errorf("config file %s line %d: %s is not allowed in the config file; "+

@@ -1,0 +1,75 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.rodrigorjsf/langfuse-api-mcp",
+  "title": "Langfuse API",
+  "description": "Langfuse public API (Cloud and self-hosted): traces, prompts, datasets and gated writes.",
+  "version": "0.0.0-dev",
+  "repository": {
+    "url": "https://github.com/rodrigorjsf/langfuse-api-mcp",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/rodrigorjsf/langfuse-api-mcp",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "langfuse-api-mcp",
+      "version": "0.0.0-dev",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "LANGFUSE_PUBLIC_KEY",
+          "description": "The project's public key (pk-lf-...).",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "LANGFUSE_SECRET_KEY",
+          "description": "The project's secret key (sk-lf-...).",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "LANGFUSE_BASE_URL",
+          "description": "Your Langfuse host, e.g. https://cloud.langfuse.com; https only, http only for localhost.",
+          "isRequired": true
+        },
+        {
+          "name": "LANGFUSE_CA_CERT",
+          "description": "Optional PEM file with your corporate or private CA, added to the system trust store.",
+          "isRequired": false
+        }
+      ]
+    },
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/rodrigorjsf/langfuse-api-mcp:0.0.0-dev",
+      "runtimeHint": "docker",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "LANGFUSE_PUBLIC_KEY",
+          "description": "The project's public key (pk-lf-...).",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "LANGFUSE_SECRET_KEY",
+          "description": "The project's secret key (sk-lf-...).",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "LANGFUSE_BASE_URL",
+          "description": "Your Langfuse host, e.g. https://cloud.langfuse.com; https only, http only for localhost.",
+          "isRequired": true
+        }
+      ]
+    }
+  ]
+}

@@ -271,6 +271,19 @@ func (c *Client) attempt(ctx context.Context, method, escapedPath string, query 
 	return resp, true, err
 }
 
+// withoutURL drops the URL an *url.Error of http.Client.Do carries: the
+// request URL holds the caller's path and query values (a trace ID, a cursor),
+// and a refused redirect's URL is the target Langfuse chose. The error text
+// reaches the audit line, which holds metadata only (#156). The method and the
+// wrapped cause stay, so errors.Is and errors.As still see the cause.
+func withoutURL(err error) error {
+	var ue *url.Error
+	if !errors.As(err, &ue) {
+		return err
+	}
+	return fmt.Errorf("%s: %w", ue.Op, ue.Err)
+}
+
 // errNotJSON marks a 2xx answer whose body is not JSON.
 var errNotJSON = errors.New("response is not JSON")
 
@@ -305,7 +318,7 @@ func (c *Client) send(ctx context.Context, method, escapedPath string, query url
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return Response{}, fmt.Errorf("send request: %w", classifySend(err))
+		return Response{}, fmt.Errorf("send request: %w", classifySend(withoutURL(err)))
 	}
 	defer func() {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, MaxResponseBytes)) // drain so the connection is reused

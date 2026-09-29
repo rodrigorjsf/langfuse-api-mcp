@@ -6,8 +6,9 @@
 // Run from the repository root after `goreleaser release --config packaging/.goreleaser.yaml`. It
 // writes one tarball per package into <output dir>:
 //   langfuse-api-mcp-<version>.tgz                  the main package: the shim (bin/langfuse-mcp.js)
-//                                                   as its only bin entry, langfuse-mcp, and one
-//                                                   optional dependency per platform package
+//                                                   as its only bin entry, langfuse-mcp, one
+//                                                   optional dependency per platform package, and
+//                                                   mcpName, the MCP Registry server name (#154)
 //   langfuse-api-mcp-<platform>-<arch>-<version>.tgz  one per GoReleaser target, restricted by
 //                                                   os/cpu, holding only that target's binary
 // Every version is GoReleaser's (dist/metadata.json). No package has a script of any kind, so an
@@ -38,6 +39,9 @@ const platforms = { linux: "linux", darwin: "darwin", windows: "win32" };
 const archs = { amd64: "x64", arm64: "arm64" };
 
 const { version } = JSON.parse(readFileSync(join(distDir, "metadata.json"), "utf8"));
+// The MCP Registry verifies that the npm package belongs to the server by its mcpName (#154): the
+// server name of packaging/server.json, the one place it is written.
+const { name: mcpName } = JSON.parse(readFileSync(join(here, "..", "server.json"), "utf8"));
 // artifacts.json holds paths relative to the directory GoReleaser ran in: the repository root.
 const binaries = JSON.parse(readFileSync(join(distDir, "artifacts.json"), "utf8"))
   .filter((a) => a.type === "Binary" && a.extra?.ID === buildID);
@@ -87,7 +91,7 @@ chmodSync(join(main, "bin", "langfuse-mcp.js"), 0o755);
 copyFileSync(join(repoRoot, "LICENSE"), join(main, "LICENSE"));
 copyFileSync(join(repoRoot, "README.md"), join(main, "README.md"));
 writeJSON(join(main, "package.json"), {
-  name, version,
+  name, version, mcpName,
   description: "MCP server for the Langfuse public API (Cloud and self-hosted), with corporate CA and proxy support.",
   ...common, bin: { "langfuse-mcp": "bin/langfuse-mcp.js" }, files: ["bin/"],
   optionalDependencies: Object.fromEntries(Object.entries(optionalDependencies).sort()),

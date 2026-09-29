@@ -39,9 +39,9 @@ type Profile struct {
 // family, if any, is on:
 //   - an unknown version keeps every range, so nothing is hidden;
 //   - a version newer than the newest known one is the newest known one;
-//   - a version below the oldest known one (v3.0.0, the supported floor) is
-//     filtered by the ranges alone, taken at the oldest known version, since
-//     the union knows nothing older; its families are ignored.
+//   - a version below SupportedFloor, the union's oldest known one, is
+//     filtered by the ranges alone, taken at the floor, since the union
+//     knows nothing older; its families are ignored.
 //
 // When several kept operations share an ID, the one introduced last wins.
 func (c Catalog) Resolve(p Profile) Catalog {
@@ -51,8 +51,8 @@ func (c Catalog) Resolve(p Profile) Catalog {
 	if known && !u.newest.isZero() && u.newest.less(at) {
 		at = u.newest
 	}
-	if known && at.less(u.oldest) {
-		at, byFamily = u.oldest, false
+	if known && at.less(floor) {
+		at, byFamily = floor, false
 	}
 	byID := map[string]rangedOperation{}
 	for _, op := range u.ops {
@@ -75,11 +75,11 @@ func (c Catalog) Resolve(p Profile) Catalog {
 }
 
 // union is the whole union catalog: every in-scope operation of every known
-// release, and the oldest and newest release versions it was built from
-// (zero when unknown).
+// release, and the newest release version it was built from (zero when
+// unknown); its oldest is SupportedFloor.
 type union struct {
-	ops            []rangedOperation
-	oldest, newest version
+	ops    []rangedOperation
+	newest version
 }
 
 // rangedOperation is an operation and its parsed version range.
@@ -122,7 +122,41 @@ func optionalVersion(s string) (version, error) {
 // version is a parsed Langfuse release version; the zero value means none.
 type version [3]int
 
+// versionPattern is the one version grammar (#94): a plain major.minor.patch
+// of at most five digits per part, such as "3.80.0".
 var versionPattern = regexp.MustCompile(`^([0-9]{1,5})\.([0-9]{1,5})\.([0-9]{1,5})$`)
+
+// SupportedFloor is the oldest supported Langfuse version (ADR-0012 §4) and
+// the oldest release the union catalog is built from: the one Go definition
+// (#94). The generator's FLOOR (scripts/gen-union-catalog.py) must match;
+// load refuses a union catalog whose x-oldest-version differs.
+const SupportedFloor = "3.0.0"
+
+// floor is SupportedFloor parsed; an unparsable floor stops the program.
+var floor = mustParseVersion(SupportedFloor)
+
+func mustParseVersion(s string) version {
+	v, ok := parseVersion(s)
+	if !ok {
+		panic("catalog: version " + s + " is not major.minor.patch")
+	}
+	return v
+}
+
+// IsPlainVersion reports whether s is a plain major.minor.patch version.
+// Anything else, including instruction-like text or hidden characters, is
+// not, so only a plain version may reach text shown to the agent or logged.
+func IsPlainVersion(s string) bool {
+	_, ok := parseVersion(s)
+	return ok
+}
+
+// BelowSupportedFloor reports whether s is a plain version older than
+// SupportedFloor; any other text is not below it.
+func BelowSupportedFloor(s string) bool {
+	v, ok := parseVersion(s)
+	return ok && v.less(floor)
+}
 
 // parseVersion parses a plain "major.minor.patch" version.
 func parseVersion(s string) (version, bool) {

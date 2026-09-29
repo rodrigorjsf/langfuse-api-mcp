@@ -85,7 +85,7 @@ type Operation struct {
 	// Params are the operation's path and query parameters.
 	Params []Param
 	// Introduced is the first Langfuse version whose spec lists the operation
-	// ("3.0.0" when it predates the union catalog), or the earlier floor the
+	// (SupportedFloor when it predates the union catalog), or the earlier floor the
 	// docs state; empty when unknown.
 	Introduced string
 	// Removed is the first Langfuse version whose spec no longer lists the
@@ -176,12 +176,12 @@ func load(spec []byte) (Catalog, error) {
 	if err := json.Unmarshal(spec, &doc); err != nil {
 		return Catalog{}, fmt.Errorf("embedded union catalog: %w", err)
 	}
+	if doc.Oldest != "" && doc.Oldest != SupportedFloor {
+		return Catalog{}, fmt.Errorf("embedded union catalog: oldest version %q is not the supported floor %s", doc.Oldest, SupportedFloor)
+	}
 	var u union
 	var err error
-	if u.oldest, err = optionalVersion(doc.Oldest); err == nil {
-		u.newest, err = optionalVersion(doc.Newest)
-	}
-	if err != nil {
+	if u.newest, err = optionalVersion(doc.Newest); err != nil {
 		return Catalog{}, fmt.Errorf("embedded union catalog: %w", err)
 	}
 	for path, item := range doc.Paths {
@@ -396,8 +396,11 @@ func visibleText(s string) string {
 }
 
 // hidden reports whether r hides or reorders text (see visible).
+// Like sanitize's, it covers the variation selectors and the other
+// default-ignorable code points (#156).
 func hidden(r rune) bool {
-	return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || (r >= 0xE0000 && r <= 0xE007F)
+	return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || (r >= 0xE0000 && r <= 0xE007F) ||
+		unicode.In(r, unicode.Variation_Selector, unicode.Other_Default_Ignorable_Code_Point)
 }
 
 // Lookup returns the in-scope operation with the given ID.

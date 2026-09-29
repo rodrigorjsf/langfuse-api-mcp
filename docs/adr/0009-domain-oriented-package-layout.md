@@ -8,3 +8,7 @@ Packages are cut by domain concept (`config`, `trust`, `langfuse`, `catalog`, `s
 ## Amendment: `langfuse` imports `catalog` for the operation family (2026-09-26, #78)
 
 The operation family (ADR-0012 §2) is catalog data: each operation of the union catalog carries one. The deployment profile, detected in `langfuse`, lists the families that are on. The family type is defined once, in `catalog`, and `langfuse` imports it; `catalog` stays a leaf that imports nothing internal, so the direction stays one-way and acyclic. Two copies bridged by name in `cmd` were rejected: they could drift, and a test was needed only to keep them equal.
+
+## Amendment: `langfuse` also imports the catalog's version rules (2026-09-29, #94)
+
+The deployment profile needs the same version rules the catalog filters by: what a plain major.minor.patch version is and which versions sit below the supported floor (ADR-0012 §4). They are defined once, in `catalog` (`IsPlainVersion`, `BelowSupportedFloor`, `SupportedFloor`), and `langfuse` imports them beside the family type; `catalog` stays a leaf, so the direction stays one-way and acyclic. A second parser in `langfuse` was removed: two parsers of one version could disagree, and the floor was duplicated as a bare major number.

@@ -21,7 +21,7 @@
 # skill ZIP), publish-image (push to GHCR, cosign signature and provenance of the multi-arch image
 # by digest), publish-npm (`npm publish` of the platform packages, then the main one) and
 # github-release (the GitHub release holding the archives, SBOMs, checksums, bundle, skill ZIP and
-# signatures). Each is gated by a job `if` on the tag, so a snapshot run shows it skipped, and holds only the permissions it needs; the
+# signatures), then publish-registry (the MCP Registry entry, #154; allowed to fail). Each is gated by a job `if` on the tag, so a snapshot run shows it skipped, and holds only the permissions it needs; the
 # publish jobs run in the `release` environment, which alone will hold the npm token (Planned, M7:
 # the maintainer creates it restricted to `v*` tags, README "Cutting a release").
 # Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current. Tool
@@ -38,6 +38,7 @@ on:
       - "packaging/**"
       - "scripts/pack-mcpb.sh"
       - "scripts/pack-skill.py"
+      - "scripts/registry-server-json/**"
       - "cmd/langfuse-mcp/**"
       - "go.mod"
       - "go.sum"
@@ -58,6 +59,10 @@ env:
   # cosign signs the release on a `v*` tag only (#126); v3.1.3, installed by sigstore/cosign-installer
   # and bumped by hand.
   COSIGN_VERSION: v3.1.3
+  # mcp-publisher publishes the MCP Registry entry on a `v*` tag only (#154); v1.8.1, the linux/amd64
+  # archive checked against the SHA-256 in the release's registry_1.8.1_checksums.txt, bumped by hand.
+  MCP_PUBLISHER_VERSION: v1.8.1
+  MCP_PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
 
 concurrency:
   group: release-${{ github.ref }}
@@ -254,6 +259,18 @@ jobs:
           got=$(unzip -Z1 "$BUNDLE" | sort | tr '\n' ' ')
           want="LICENSE manifest.json server/langfuse-mcp server/langfuse-mcp.exe "
           [ "$got" = "$want" ] || { echo "::error::bundle holds '$got', want '$want'"; exit 1; }
+      # The MCP Registry entry (#154): packaging/server.json rendered with this build's version and
+      # bundle, and validated offline against the Registry's published schema (embedded in
+      # scripts/registry-server-json), so a broken entry fails here and never needs the Registry.
+      - name: Render and validate the Registry entry
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BUNDLE: ${{ steps.mcpb.outputs.bundle }}
+        run: |
+          set -euo pipefail
+          go run ./scripts/registry-server-json -version "$VERSION" -mcpb "$BUNDLE" packaging/server.json > dist/server.json
+          jq -e --arg v "$VERSION" '.version == $v and ([.packages[].registryType] == ["npm", "oci", "mcpb"])' dist/server.json >/dev/null ||
+            { echo "::error::dist/server.json: unexpected version or packages"; exit 1; }
       # The MCPB smoke unpacks the bundle on fresh macOS and Windows runners (upload-artifact as above).
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -387,6 +404,14 @@ jobs:
           path: ${{ runner.temp }}/image
       - name: Load the image
         run: docker load -i "$RUNNER_TEMP/image/image-amd64.tar"
+      # The MCP Registry verifies the image by this label (#154): it must name the server of
+      # packaging/server.json.
+      - name: Check the Registry label
+        run: |
+          set -euo pipefail
+          want=$(jq -r .name packaging/server.json)
+          got=$(docker image inspect -f '{{index .Config.Labels "io.modelcontextprotocol.server.name"}}' "$IMAGE_REF")
+          [ "$got" = "$want" ] || { echo "::error::$IMAGE_REF: label io.modelcontextprotocol.server.name is '$got', want '$want'"; exit 1; }
       - name: Smoke (seam S2) against the container
         run: |
           set -euo pipefail
@@ -471,6 +496,15 @@ jobs:
             const names = readdirSync(npx).flatMap((d) => readdirSync(join(npx, d, "node_modules")));
             console.log(names.filter((n) => n.startsWith("langfuse-api-mcp")).sort().join(" "));')
           [ "$got" = "$want" ] || { echo "::error::installed packages '$got', want '$want'"; exit 1; }
+          # The MCP Registry verifies the npm package by its mcpName (#154): it must name the server
+          # of packaging/server.json.
+          want=$(jq -r .name packaging/server.json)
+          got=$(node -e '
+            const { readdirSync, readFileSync, existsSync } = require("node:fs"), { join } = require("node:path");
+            const npx = join(process.env.npm_config_cache, "_npx");
+            const pkgs = readdirSync(npx).map((d) => join(npx, d, "node_modules", "langfuse-api-mcp", "package.json")).filter(existsSync);
+            console.log(pkgs.map((p) => JSON.parse(readFileSync(p, "utf8")).mcpName).join(" "));')
+          [ "$got" = "$want" ] || { echo "::error::installed mcpName '$got', want '$want'"; exit 1; }
           LANGFUSE_MCP_SMOKE_COMMAND=$(jq -cn --arg p "$PACKAGE" '["npx", "-y", $p]')
           export LANGFUSE_MCP_SMOKE_COMMAND
           bash scripts/go-test-windows-retry.sh -tags smoke -count=1 -v -run '^TestInstalledArtifact$' ./cmd/langfuse-mcp/
@@ -537,12 +571,14 @@ jobs:
           [ -f "$command" ] || { echo "::error::the manifest's command for $PLATFORM is not in the bundle"; exit 1; }
           echo "SMOKE_BINARY=$command" >> "$GITHUB_ENV"
       # One bundle serves both Mac architectures (spec #119): the binary must be universal.
+      # lipo lists the slices in build order, which GoReleaser does not fix (run 36505490934 got
+      # "arm64 x86_64"), so the check asks lipo for each architecture instead of comparing a string.
       - name: Check the universal macOS binary
         if: matrix.platform == 'darwin'
         run: |
           set -euo pipefail
-          archs=$(lipo -archs "$SMOKE_BINARY")
-          [ "$archs" = "x86_64 arm64" ] || { echo "::error::want a universal x86_64 arm64 binary, got '$archs'"; exit 1; }
+          lipo "$SMOKE_BINARY" -verify_arch x86_64 arm64 ||
+            { echo "::error::want a universal x86_64 arm64 binary, got '$(lipo -archs "$SMOKE_BINARY")'"; exit 1; }
       # Windows only: the same narrow retry as ci.yml's test step (#102, golang/go#81238), in
       # scripts/go-test-windows-retry.sh. Remove with #102.
       - name: Smoke (seam S2) against the bundle's binary
@@ -741,3 +777,60 @@ jobs:
           [ -f "release/langfuse-mcp_${VERSION}_image.sbom.json" ] || { echo "::error::the image SBOM is missing"; exit 1; }
           gh release create "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --verify-tag \
             --title "$GITHUB_REF_NAME" --generate-notes release/*
+
+  # The MCP Registry entry io.github.rodrigorjsf/langfuse-api-mcp (#154), published once the GitHub
+  # release exists: packaging/server.json rendered with the release's version, listing the npm
+  # package, the image and, only if the GitHub release holds one, the MCPB bundle with its
+  # fileSha256 (the hash of the file on the release). `mcp-publisher login github-oidc` proves the
+  # io.github.rodrigorjsf namespace with this run's OIDC token; no secret. The Registry is in
+  # preview, so the job may fail without failing the release run (continue-on-error): re-run it,
+  # or publish by hand with the same two commands. Never on another ref (the job `if`).
+  publish-registry:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [snapshot, github-release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true # the Registry (preview) never fails a release
+    environment: release # restricted by the maintainer to `v*` tags (M7), like the other publish jobs
+    permissions:
+      id-token: write # the OIDC token mcp-publisher exchanges for a Registry token
+      contents: read # the checkout and the GitHub release's asset list
+    env:
+      VERSION: ${{ needs.snapshot.outputs.version }}
+    steps:
+      # The checkout carries the template and its render script.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.mod
+      - name: Render the Registry entry
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/registry"
+          mkdir -p "$dir"
+          bundle=$(gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --json assets \
+            --jq '[.assets[].name | select(endswith(".mcpb"))] | if length > 1 then error("more than one .mcpb") else (.[0] // "") end')
+          mcpb=()
+          if [ -n "$bundle" ]; then
+            gh release download "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" -p "$bundle" -D "$dir"
+            mcpb=(-mcpb "$dir/$bundle")
+          fi
+          go run ./scripts/registry-server-json -version "$VERSION" "${mcpb[@]}" packaging/server.json > "$dir/server.json"
+      - name: Install mcp-publisher
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/mcp-publisher.tar.gz"
+          curl -fsSL -o "$archive" \
+            "https://github.com/modelcontextprotocol/registry/releases/download/$MCP_PUBLISHER_VERSION/mcp-publisher_linux_amd64.tar.gz"
+          echo "$MCP_PUBLISHER_SHA256  $archive" | sha256sum -c -
+          tar -xzf "$archive" -C "$RUNNER_TEMP" mcp-publisher
+      - name: Publish to the MCP Registry
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/mcp-publisher" login github-oidc
+          "$RUNNER_TEMP/mcp-publisher" publish "$RUNNER_TEMP/registry/server.json"

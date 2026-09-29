@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -129,6 +130,50 @@ func TestTheAuditLineCountsEveryRetriedLangfuseRequest(t *testing.T) {
 			}
 			if got := lines[0]["requests"]; got != tc.wantRequests || float64(calls.Load()) != tc.wantRequests {
 				t.Errorf("audit requests = %v, Langfuse received %d, want both %v", got, calls.Load(), tc.wantRequests)
+			}
+		})
+	}
+}
+
+// security.md Audit and Tool results (#93, #156): the audit line of a request
+// that got no Langfuse answer holds metadata only. Go's transport errors carry
+// the request URL, and a refused redirect its Langfuse-chosen target; neither
+// the caller's path and query values nor a redirect target may reach stderr.
+func TestTheAuditLineOfAFailedRequestHoldsNoRequestOrRedirectURL(t *testing.T) {
+	t.Parallel()
+	const (
+		pathValue  = "PATH-VALUE-FROM-THE-CALLER"
+		queryValue = "QUERY-VALUE-FROM-THE-CALLER"
+		target     = "REDIRECT-TARGET-FROM-LANGFUSE"
+	)
+	other, _ := fakeLangfuse(t, http.StatusOK, `{"data":[]}`)
+	redirecting, _ := redirectingLangfuse(t, func(*url.URL) string { return other.URL + "/" + target + "?q=" + target })
+	tests := map[string]struct {
+		host string
+		args map[string]any
+	}{
+		"a refused connection, path value": {host: refusedURL(t),
+			args: map[string]any{"operationId": "trace_get", "parameters": map[string]any{"traceId": pathValue}}},
+		"a refused connection, query value": {host: refusedURL(t),
+			args: map[string]any{"operationId": "trace_list", "parameters": map[string]any{"userId": queryValue}}},
+		"a refused redirect": {host: redirecting.URL,
+			args: map[string]any{"operationId": "trace_list", "parameters": map[string]any{"userId": queryValue}}},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var logs syncBuffer
+			cs := connectClient(t, langfuse.New(testOptions(t, tc.host)), slog.New(slog.NewJSONHandler(&logs, nil)))
+
+			callExecuteRead(t, cs, tc.args)
+
+			if lines := auditLines(t, &logs); len(lines) != 1 || lines[0]["cause"] == nil {
+				t.Fatalf("want exactly 1 audit line with a cause, got:\n%s", logs.String())
+			}
+			for _, leaked := range []string{pathValue, queryValue, target} {
+				if strings.Contains(logs.String(), leaked) {
+					t.Errorf("the audit line carries %s:\n%s", leaked, logs.String())
+				}
 			}
 		})
 	}

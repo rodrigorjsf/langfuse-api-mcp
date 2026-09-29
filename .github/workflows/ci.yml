@@ -3,13 +3,16 @@
 # runner's system trust store (spec #7).
 # The generator job runs the union catalog generator's offline unit tests (#89).
 # Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current.
-# The generator job also runs the user skill check (#134, spec #132 S3) and the skill ZIP pack
-# script's tests (#139, S4).
+# The generator job also runs the user skill check (#134, spec #132 S3), the skill ZIP pack
+# script's tests (#139, S4), the release workflow's tag-only job tests (#154) and the offline docs
+# check of the security mapping's Status column (#155) and of the README's Planned marks (#157).
 # A push or pull request that only changes docs (Markdown, docs/, .claude/, LICENSE) starts no run:
 # nothing in those paths is compiled or embedded (the only go:embed is internal/catalog/spec/*.json).
 # The user skill's Markdown under skills/ is the exception: the skill check guards it, so an edit
-# there starts a run. `paths` is used instead of `paths-ignore` because only `paths` can re-include
-# a path (the last matching pattern wins).
+# there starts a run. So is the security mapping, docs/research/security.md: the docs check
+# (scripts/check-docs.py, #155) guards its Status column, and so is README.md, whose Planned marks
+# the same check guards (#157). `paths` is used instead of
+# `paths-ignore` because only `paths` can re-include a path (the last matching pattern wins).
 name: CI
 
 on:
@@ -21,6 +24,8 @@ on:
       - "!.claude/**"
       - "!LICENSE"
       - "skills/**"
+      - "docs/research/security.md"
+      - "README.md"
   pull_request:
     paths:
       - "**"
@@ -29,6 +34,8 @@ on:
       - "!.claude/**"
       - "!LICENSE"
       - "skills/**"
+      - "docs/research/security.md"
+      - "README.md"
 
 permissions:
   contents: read
@@ -132,6 +139,14 @@ jobs:
         run: |
           set -euo pipefail
           "$RUNNER_TEMP/venv/bin/python" scripts/test_gen_union_catalog.py
+      # The tag-only jobs of release.yml (#126, #154): each runs only on a `v*` tag push, and the
+      # MCP Registry job holds only its two permissions, cannot fail the release and runs a
+      # checksum-pinned mcp-publisher. Every npm and pip install in the workflows is pinned
+      # (`npm ci --ignore-scripts`, `pip install --require-hashes`, #155). PyYAML from the venv above.
+      - name: Test the release workflow's tag-only jobs
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/venv/bin/python" scripts/test_release_workflow.py
       # The small-model eval's offline matcher tests (#105): standard library only, no model.
       - name: Test the small-model eval matcher
         run: |
@@ -148,6 +163,18 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/check-skill.py
+      # The offline docs check (spec #150, #155): every row of the risk-to-control mapping in
+      # docs/research/security.md carries one status; a `tested` row names Go or Python tests that
+      # exist, a `planned` row links an issue; every README.md line holding `Planned` links an issue
+      # (#157). Standard library only; no network.
+      - name: Test the docs check
+        run: |
+          set -euo pipefail
+          python3 scripts/test_check_docs.py
+      - name: Check the security mapping and the README's Planned marks
+        run: |
+          set -euo pipefail
+          python3 scripts/check-docs.py
       # The pack script of the skill ZIP for Claude Desktop (spec #132 S4, #139): the skill folder as
       # the ZIP's root, every file of the skill, the same bytes every time. The release workflow runs it.
       - name: Test the skill ZIP pack script

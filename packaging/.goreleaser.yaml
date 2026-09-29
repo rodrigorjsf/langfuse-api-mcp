@@ -76,6 +76,9 @@ dockers_v2:
       org.opencontainers.image.revision: "{{ .FullCommit }}"
       org.opencontainers.image.version: "{{ .Version }}"
       org.opencontainers.image.licenses: Apache-2.0
+      # The MCP Registry verifies that the image belongs to the server by this label (#154); the
+      # server name of packaging/server.json, checked equal by the container smoke.
+      io.modelcontextprotocol.server.name: io.github.rodrigorjsf/langfuse-api-mcp
 
 checksum:
   name_template: checksums.txt

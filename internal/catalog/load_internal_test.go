@@ -47,7 +47,7 @@ func TestAnIndexLineIsTheSummaryCleanedOfHiddenCharactersLinksBoldAndExcess(t *t
 			want:        "Get list of traces (legacy: prefer observations_getMany when it is available)",
 		},
 		"hidden characters are removed from the summary": {
-			summary: "Get\u200b an x\u0007 (legacy: prefer\u202e y_get when it is available)\U000E0041",
+			summary: "Get\u200b an x\u0007 (legacy: prefer\u202e y_get\uFE0F\U000E0100 when it is available)\U000E0041\u3164",
 			want:    "Get an x (legacy: prefer y_get when it is available)",
 		},
 		"a Markdown link keeps only its text": {
@@ -386,5 +386,20 @@ func TestTheSizeAndDepthCapsRefuseABodyBeforeItsSchemaIsChecked(t *testing.T) {
 	_, err = op.CheckBody(json.RawMessage(`{"x":` + strings.Repeat("[", 40) + strings.Repeat("]", 40) + `}`))
 	if err == nil || !strings.Contains(err.Error(), "32 levels") {
 		t.Errorf("over-deep body: error %v, want the depth cap's refusal", err)
+	}
+}
+
+// #94: the supported floor is defined once, in code; a union catalog built
+// from another oldest release fails to load instead of silently moving it.
+func TestAUnionCatalogWhoseOldestVersionIsNotTheSupportedFloorFailsToLoad(t *testing.T) {
+	t.Parallel()
+	for _, oldest := range []string{"2.0.0", "3.1.0", "3.0"} {
+		spec := []byte(`{"x-oldest-version":"` + oldest + `","x-newest-version":"4.10.0","paths":{}}`)
+		if _, err := load(spec); err == nil {
+			t.Errorf("load with x-oldest-version %q: no error, want one", oldest)
+		}
+	}
+	if _, err := load([]byte(`{"x-oldest-version":"3.0.0","paths":{}}`)); err != nil {
+		t.Errorf("load with x-oldest-version 3.0.0: %v", err)
 	}
 }

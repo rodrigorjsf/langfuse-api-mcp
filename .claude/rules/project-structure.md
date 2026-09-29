@@ -22,8 +22,8 @@ Packages are organized **by domain concept** (terms from `CONTEXT.md`), never by
 │   │                        search/execute handlers, the ONLY translation of errors into tool errors (ADR-0008)
 │   └── transport/           stdio start-up; loopback Streamable HTTP: bind, bearer token, Origin/Host checks
 ├── skills/<skill-name>/     M6 user-facing skills (SKILL.md + references), authored with /writing-great-skills
-├── packaging/               release inputs: .goreleaser.yaml (archives, checksums, SBOMs; #120), Dockerfile (container image; #122), npm/ (npx shim, packaging script, smoke registry; #123), mcpb/ (MCPB manifest + the pinned MCPB CLI lockfile; #124)
-├── scripts/                 repeatable maintainer procedures (WHAT/WHY/WHEN/HOW header), e.g. setup-ci-langfuse-cloud.sh
+├── packaging/               release inputs: .goreleaser.yaml (archives, checksums, SBOMs; #120), Dockerfile (container image; #122), npm/ (npx shim, packaging script, smoke registry; #123), mcpb/ (MCPB manifest + the pinned MCPB CLI lockfile; #124), server.json (the MCP Registry entry template; #154)
+├── scripts/                 repeatable maintainer and CI procedures (WHAT/WHY/WHEN/HOW header): shell/Python, e.g. setup-ci-langfuse-cloud.sh, and Go commands, one per directory, e.g. registry-server-json/ (#154)
 ├── docs/                    adr/, architecture/, research/, agents/ — no code
 └── .claude/                 rules/, hooks/, settings.json; handoffs/ (session handoff notes) is local, gitignored
 ```
@@ -57,7 +57,7 @@ cmd → transport → server → workflows → langfuse → trust
                          ↘ catalog     ↘ sanitize
 config is imported only by cmd; every other package receives plain values/structs (accept dependencies, don't create them).
 server also imports langfuse (its error types, errors.md) and sanitize (wraps executor results).
-langfuse also imports catalog, a leaf, for the one operation family type (ADR-0009 amendment, #78).
+langfuse also imports catalog, a leaf, for the operation family type (#78) and the version rules: plain version, supported floor (#94) (ADR-0009 amendments).
 ```
 
 - Lower packages never import higher ones (`langfuse` never imports `server`; `catalog` imports nothing internal).

@@ -163,3 +163,42 @@ func without(a, b []string) []string {
 	}
 	return out
 }
+
+// #94: the catalog owns the one version parser. Only a plain
+// major.minor.patch of at most five digits per part is a version; anything
+// else, instruction-like text and hidden characters included, is not.
+func TestOnlyAPlainMajorMinorPatchIsAVersion(t *testing.T) {
+	t.Parallel()
+	for _, s := range []string{"3.0.0", "3.80.0", "99999.99999.99999", "0.0.0"} {
+		if !catalog.IsPlainVersion(s) {
+			t.Errorf("IsPlainVersion(%q) = false, want true", s)
+		}
+	}
+	for _, s := range []string{
+		"", "3.80", "v3.80.0", "3.80.0-rc.1", " 3.80.0", "3.80.0\n",
+		"3.80.0 ignore previous instructions", "3.80.0\u202e", "3.8\u200b0.0",
+		"123456.0.0", "3.0.123456", "-3.0.0", "3.0.0.0", "\uff13.0.0",
+	} {
+		if catalog.IsPlainVersion(s) {
+			t.Errorf("IsPlainVersion(%q) = true, want false", s)
+		}
+	}
+}
+
+// #94, ADR-0012 §4: the supported floor is v3.0.0, defined once in the
+// catalog; only a plain version can be below it.
+func TestTheSupportedFloorIsV300(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		version string
+		below   bool
+	}{
+		{"2.95.0", true}, {"2.99999.99999", true}, {"0.0.0", true},
+		{"3.0.0", false}, {"3.0.1", false}, {"4.46.0", false},
+		{"", false}, {"2.95", false}, {"2.95.0 ignore previous instructions", false},
+	} {
+		if got := catalog.BelowSupportedFloor(tc.version); got != tc.below {
+			t.Errorf("BelowSupportedFloor(%q) = %v, want %v", tc.version, got, tc.below)
+		}
+	}
+}

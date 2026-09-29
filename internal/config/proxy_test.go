@@ -395,3 +395,25 @@ func TestLoadRefusesAnInvalidConfigFileProxyValueWithoutEchoingIt(t *testing.T) 
 		}
 	}
 }
+
+// Issue #62 (spec #150): on Windows, where variable names are
+// case-insensitive, a name of any casing is looked up upper-cased, except the
+// lower-case proxy spellings, which keep theirs.
+func TestWindowsEnvNameUpperCasesEveryNameButTheLowerCaseProxySpellings(t *testing.T) {
+	t.Parallel()
+	tests := map[string]string{
+		"Https_Proxy":             "HTTPS_PROXY",
+		"HTTPS_PROXY":             "HTTPS_PROXY",
+		"https_proxy":             "https_proxy",
+		"http_proxy":              "http_proxy",
+		"no_proxy":                "no_proxy",
+		"No_Proxy":                "NO_PROXY",
+		"Langfuse_Mcp_Rate_Limit": "LANGFUSE_MCP_RATE_LIMIT",
+		"langfuse_base_url":       "LANGFUSE_BASE_URL",
+	}
+	for name, want := range tests {
+		if got := config.WindowsEnvName(name); got != want {
+			t.Errorf("WindowsEnvName(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
