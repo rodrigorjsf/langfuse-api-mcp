@@ -50,6 +50,11 @@ class TagOnlyJobs(unittest.TestCase):
         self.assertEqual(self.jobs["publish-registry"]["permissions"],
                          {"id-token": "write", "contents": "read"})
 
+    def test_every_publish_job_runs_in_the_release_environment(self):
+        for name in ["publish-image", "publish-npm", "publish-registry"]:
+            with self.subTest(job=name):
+                self.assertEqual(self.jobs[name].get("environment"), "release")
+
     def test_a_registry_failure_does_not_fail_the_release_run(self):
         self.assertIs(self.jobs["publish-registry"].get("continue-on-error"), True)
 

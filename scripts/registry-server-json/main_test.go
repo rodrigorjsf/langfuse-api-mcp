@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -143,6 +145,15 @@ func TestRefusesATemplateThePublishedSchemaRejects(t *testing.T) {
 	bad, _ := json.Marshal(doc)
 	if _, err := render(bad, "0.1.0", nil); err == nil {
 		t.Error("a 101-character description passed, want a schema error")
+	}
+}
+
+// The embedded schema is the published file byte for byte: the SHA-256 of
+// https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json on 2026-09-28.
+func TestTheEmbeddedSchemaIsThePublishedFile(t *testing.T) {
+	sum := sha256.Sum256(publishedSchema)
+	if got := hex.EncodeToString(sum[:]); got != "3fba09590c99f61735d234822279f4223fab9e300c0a81e81c91ab62a4114de0" {
+		t.Errorf("server.schema.json sha256 = %s: re-download it and update this pin together", got)
 	}
 }
 

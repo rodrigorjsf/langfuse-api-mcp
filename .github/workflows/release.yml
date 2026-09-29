@@ -38,6 +38,7 @@ on:
       - "packaging/**"
       - "scripts/pack-mcpb.sh"
       - "scripts/pack-skill.py"
+      - "scripts/registry-server-json/**"
       - "cmd/langfuse-mcp/**"
       - "go.mod"
       - "go.sum"
@@ -790,6 +791,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     continue-on-error: true # the Registry (preview) never fails a release
+    environment: release # restricted by the maintainer to `v*` tags (M7), like the other publish jobs
     permissions:
       id-token: write # the OIDC token mcp-publisher exchanges for a Registry token
       contents: read # the checkout and the GitHub release's asset list
