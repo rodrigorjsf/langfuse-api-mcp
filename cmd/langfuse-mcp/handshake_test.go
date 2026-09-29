@@ -89,6 +89,18 @@ func (s *stdioSession) listedTools(id string) []string {
 	return names
 }
 
+// initializeWith runs the legacy handshake with the raw client capabilities
+// capabilities and fails the test unless it succeeds.
+func (s *stdioSession) initializeWith(capabilities string) {
+	s.t.Helper()
+	s.writeLine(`{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25",` +
+		`"capabilities":` + capabilities + `,"clientInfo":{"name":"other-client","version":"1"}}}`)
+	if resp := s.readResponses(1)["0"]; resp.Error != nil {
+		s.t.Fatalf("initialize error = %+v, want success", resp.Error)
+	}
+	s.writeLine(`{"jsonrpc":"2.0","method":"notifications/initialized"}`)
+}
+
 // readTools is the tool set with write mode off; writeTools with it on.
 var (
 	readTools  = []string{"describe_operation", "execute_read", "get_trace_tree", "search_operations"}
@@ -153,20 +165,9 @@ func TestExecutableAnswersALegacyInitializeQueuedBehindADiscoverProbeDuringASlow
 	s.stop()
 }
 
-// initializeWith runs the legacy handshake with the raw client capabilities
-// capabilities and fails the test unless it succeeds.
-func (s *stdioSession) initializeWith(capabilities string) {
-	s.t.Helper()
-	s.writeLine(`{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25",` +
-		`"capabilities":` + capabilities + `,"clientInfo":{"name":"other-client","version":"1"}}}`)
-	if resp := s.readResponses(1)["0"]; resp.Error != nil {
-		s.t.Fatalf("initialize error = %+v, want success", resp.Error)
-	}
-	s.writeLine(`{"jsonrpc":"2.0","method":"notifications/initialized"}`)
-}
-
 // Spec #150 security gate for #145: no handshake message changes the tool
-// set or the write-mode gate, which stay fixed at startup (ADR-0012).
+// set or the write-mode gate, which stay fixed at startup (ADR-0003, security
+// rules "Write gating").
 func TestClientCapabilitiesInTheHandshakeChangeNeitherTheToolSetNorTheWriteModeGate(t *testing.T) {
 	t.Parallel()
 	for setting, want := range map[string][]string{
