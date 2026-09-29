@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"os"
 	"regexp"
-	"runtime"
 	"runtime/debug"
 	"slices"
 	"strings"
@@ -249,18 +248,13 @@ func logWriteMode(log *slog.Logger, w config.WriteMode) {
 }
 
 // envMap turns "KEY=value" entries into a map; the last entry for a key wins.
-// On Windows, where variable names are case-insensitive, each name is keyed as
-// config.WindowsEnvName gives it, so a setting stored with any casing is found
-// (#62). On Linux and macOS names stay as stored.
+// Each name is keyed as envName gives it: upper-cased on Windows, where
+// variable names are case-insensitive, as stored elsewhere (#62).
 func envMap(environ []string) map[string]string {
-	name := func(k string) string { return k }
-	if runtime.GOOS == "windows" {
-		name = config.WindowsEnvName
-	}
 	env := make(map[string]string, len(environ))
 	for _, kv := range environ {
 		if k, v, ok := strings.Cut(kv, "="); ok {
-			env[name(k)] = v
+			env[envName(k)] = v
 		}
 	}
 	return env
