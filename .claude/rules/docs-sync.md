@@ -17,4 +17,4 @@ A Stop hook (`.claude/hooks/docs-sync-check.sh`) blocks ending a turn when code 
 
 Before claiming done, run and show fresh output of: `go build ./...`, `go test -race ./...`, `golangci-lint run` (first confirm `golangci-lint version` says built with go1.27+; a silent exit is not a pass — README install note), and a stale-docs check (`git diff --stat` and confirm each affected row above was edited). If a doc gap cannot be closed now, file an issue (`/follow-up-issue`) and link it — do not leave it in a chat summary.
 
-A doc that describes something not yet implemented must say so (`Planned`), never present it as shipped. In `README.md` every line holding `Planned` links the open issue, with a milestone, that delivers it (GitHub `/issues/N` URL); `scripts/check-docs.py` fails CI on one that links none (#157); it is offline, so that the issue is open and has a milestone is checked by hand.
+A doc that describes something not yet implemented must say so (`Planned`), never present it as shipped. `README.md` links no GitHub issue and no ADR: the word `Planned` alone marks unshipped behaviour there, and its tracking lives in the issue tracker and `ROADMAP.md`.

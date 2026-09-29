@@ -10,20 +10,18 @@
 #         `func Test…`/`func Fuzz…` of the repository's Go test files or a `def test_…` of the
 #         scripts' Python tests (scripts/test_*.py);
 #       - a `planned` row links no issue (`#N` or a GitHub `/issues/N` URL);
-#       - an `accepted-risk` row gives no reason;
-#       - a README.md line holding the word `Planned` (outside a code span, which quotes it) links
-#         no issue by its GitHub URL (`/issues/N`; GitHub does not turn a bare #N into a link in
-#         a repository file) (#157).
-#       It prints one line per problem, or "OK <file>" per file, and exits 1 on any problem.
+#       - an `accepted-risk` row gives no reason.
+#       It prints one line per problem, or "OK <file>", and exits 1 on any problem.
+#       README.md is not checked: it links no issue and marks unshipped behaviour with the word
+#       `Planned` alone (.claude/rules/docs-sync.md).
 # WHY:  the M7 exit criterion "security mapping all green" is measurable only while each row's
 #       status is true: a `tested` row must name tests that exist, and a `planned` row must link
-#       the issue that tracks the gap. Likewise a README promise is told from a feature only while
-#       every `Planned` mark links the issue that delivers it. The check is offline: it never asks GitHub whether an
+#       the issue that tracks the gap. The check is offline: it never asks GitHub whether an
 #       issue is open (the whole-codebase security review, #156, checks that once by hand).
 # WHEN: on every push and pull request (.github/workflows/ci.yml, job "generator"), and by hand
-#       after editing the mapping or a README Planned mark. Offline tests: scripts/test_check_docs.py.
-# HOW:  python3 scripts/check-docs.py [MAPPING_FILE [README_FILE]]
-#       (Python 3.11+, standard library only; defaults: docs/research/security.md, README.md)
+#       after editing the mapping. Offline tests: scripts/test_check_docs.py.
+# HOW:  python3 scripts/check-docs.py [MAPPING_FILE]
+#       (Python 3.11+, standard library only; default: docs/research/security.md)
 
 import os
 import re
@@ -31,7 +29,6 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_MAPPING = "docs/research/security.md"
-DEFAULT_README = "README.md"
 MAPPING_HEADING = "## Risk-to-control mapping"
 STATUSES = ("tested", "planned", "accepted-risk")
 SKIP_DIRS = {".git", ".codegraph", "node_modules"}
@@ -40,9 +37,6 @@ GO_TEST_FUNC = re.compile(r"^func ((?:Test|Fuzz)\w+)\(", re.M)
 PY_TEST_FUNC = re.compile(r"^\s*def (test_\w+)\(", re.M)
 CITED_TEST = re.compile(r"`((?:Test|Fuzz)\w+|test_\w+)`")
 ISSUE_LINK = re.compile(r"(?:/issues/|#)\d+\b")
-PLANNED_MARK = re.compile(r"\bPlanned\b")
-ISSUE_URL = re.compile(r"/issues/\d+\b")
-CODE_SPAN = re.compile(r"`[^`]*`")
 STATUS_CELL = re.compile(r"^`?([\w-]+)`?:(.*)$", re.S)
 
 
@@ -142,31 +136,17 @@ def check_mapping(text, known):
     return problems
 
 
-def check_readme(text):
-    """Return the README lines holding a `Planned` mark but no issue URL, as printable lines.
-    The word quoted in a code span is a mention, not a mark."""
-    return [f"line {n}: a Planned mark links no issue (a GitHub /issues/N link)"
-            for n, line in enumerate(text.splitlines(), start=1)
-            if PLANNED_MARK.search(CODE_SPAN.sub("", line)) and not ISSUE_URL.search(line)]
-
-
 def main(argv):
-    """Check the mapping and README files in argv (defaults: docs/research/security.md,
-    README.md); return the exit status."""
-    known = known_test_names(ROOT)
-    checks = ((DEFAULT_MAPPING, lambda text: check_mapping(text, known)), (DEFAULT_README, check_readme))
-    failed = False
-    for i, (default, check) in enumerate(checks):
-        path, label = (argv[i], argv[i]) if i < len(argv) else (os.path.join(ROOT, default), default)
-        with open(path, encoding="utf-8") as f:
-            problems = check(f.read())
-        for problem in problems:
-            print(f"{label}: {problem}")
-        if problems:
-            failed = True
-        else:
-            print(f"OK {label}")
-    return 1 if failed else 0
+    """Check the mapping file in argv (default: docs/research/security.md); return the exit
+    status."""
+    path, label = (argv[0], argv[0]) if argv else (os.path.join(ROOT, DEFAULT_MAPPING), DEFAULT_MAPPING)
+    with open(path, encoding="utf-8") as f:
+        problems = check_mapping(f.read(), known_test_names(ROOT))
+    for problem in problems:
+        print(f"{label}: {problem}")
+    if not problems:
+        print(f"OK {label}")
+    return 1 if problems else 0
 
 
 if __name__ == "__main__":
