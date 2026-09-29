@@ -127,12 +127,21 @@ type version [3]int
 var versionPattern = regexp.MustCompile(`^([0-9]{1,5})\.([0-9]{1,5})\.([0-9]{1,5})$`)
 
 // SupportedFloor is the oldest supported Langfuse version (ADR-0012 §4) and
-// the oldest release the union catalog is built from. It is defined here
-// only (#94).
+// the oldest release the union catalog is built from: the one Go definition
+// (#94). The generator's FLOOR (scripts/gen-union-catalog.py) must match;
+// load refuses a union catalog whose x-oldest-version differs.
 const SupportedFloor = "3.0.0"
 
-// floor is SupportedFloor parsed.
-var floor, _ = parseVersion(SupportedFloor)
+// floor is SupportedFloor parsed; an unparsable floor stops the program.
+var floor = mustParseVersion(SupportedFloor)
+
+func mustParseVersion(s string) version {
+	v, ok := parseVersion(s)
+	if !ok {
+		panic("catalog: version " + s + " is not major.minor.patch")
+	}
+	return v
+}
 
 // IsPlainVersion reports whether s is a plain major.minor.patch version.
 // Anything else, including instruction-like text or hidden characters, is

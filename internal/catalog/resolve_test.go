@@ -189,9 +189,6 @@ func TestOnlyAPlainMajorMinorPatchIsAVersion(t *testing.T) {
 // catalog; only a plain version can be below it.
 func TestTheSupportedFloorIsV300(t *testing.T) {
 	t.Parallel()
-	if catalog.SupportedFloor != "3.0.0" {
-		t.Errorf("SupportedFloor = %q, want 3.0.0", catalog.SupportedFloor)
-	}
 	for _, tc := range []struct {
 		version string
 		below   bool

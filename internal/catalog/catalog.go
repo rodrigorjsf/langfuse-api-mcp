@@ -85,7 +85,7 @@ type Operation struct {
 	// Params are the operation's path and query parameters.
 	Params []Param
 	// Introduced is the first Langfuse version whose spec lists the operation
-	// ("3.0.0" when it predates the union catalog), or the earlier floor the
+	// (SupportedFloor when it predates the union catalog), or the earlier floor the
 	// docs state; empty when unknown.
 	Introduced string
 	// Removed is the first Langfuse version whose spec no longer lists the
@@ -176,14 +176,12 @@ func load(spec []byte) (Catalog, error) {
 	if err := json.Unmarshal(spec, &doc); err != nil {
 		return Catalog{}, fmt.Errorf("embedded union catalog: %w", err)
 	}
+	if doc.Oldest != "" && doc.Oldest != SupportedFloor {
+		return Catalog{}, fmt.Errorf("embedded union catalog: oldest version %q is not the supported floor %s", doc.Oldest, SupportedFloor)
+	}
 	var u union
 	var err error
-	if doc.Oldest != "" && doc.Oldest != SupportedFloor {
-		err = fmt.Errorf("oldest version %q is not the supported floor %s", doc.Oldest, SupportedFloor)
-	} else {
-		u.newest, err = optionalVersion(doc.Newest)
-	}
-	if err != nil {
+	if u.newest, err = optionalVersion(doc.Newest); err != nil {
 		return Catalog{}, fmt.Errorf("embedded union catalog: %w", err)
 	}
 	for path, item := range doc.Paths {
