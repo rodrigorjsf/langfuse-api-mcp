@@ -147,7 +147,7 @@ func detectProfile(log *slog.Logger, client *langfuse.Client) langfuse.Detection
 	d := client.DetectProfile(context.Background(), langfuse.DefaultDetectionBudget)
 	if version, ok := d.Profile.KnownVersion(); ok && d.Unsupported {
 		log.Warn("unsupported Langfuse version", "version", version,
-			"reason", "below the supported floor 3.0.0: operations are filtered by version range alone; families are ignored")
+			"reason", "below the supported floor "+catalog.SupportedFloor+": operations are filtered by version range alone; families are ignored")
 	}
 	for _, w := range d.Warnings {
 		log.Warn("deployment profile probe undecided", "probe", w.Probe, "reason", w.Reason)

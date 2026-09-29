@@ -100,3 +100,18 @@ func TestResolvingAResolvedCatalogStartsFromTheUnion(t *testing.T) {
 		t.Fatalf("Resolve after Resolve = %v, want %v", opIDs(got), want)
 	}
 }
+
+// #94: the supported floor is defined once, in code; a union catalog built
+// from another oldest release fails to load instead of silently moving it.
+func TestAUnionCatalogWhoseOldestVersionIsNotTheSupportedFloorFailsToLoad(t *testing.T) {
+	t.Parallel()
+	for _, oldest := range []string{"2.0.0", "3.1.0", "3.0"} {
+		spec := []byte(`{"x-oldest-version":"` + oldest + `","x-newest-version":"4.10.0","paths":{}}`)
+		if _, err := load(spec); err == nil {
+			t.Errorf("load with x-oldest-version %q: no error, want one", oldest)
+		}
+	}
+	if _, err := load([]byte(`{"x-oldest-version":"3.0.0","paths":{}}`)); err != nil {
+		t.Errorf("load with x-oldest-version 3.0.0: %v", err)
+	}
+}

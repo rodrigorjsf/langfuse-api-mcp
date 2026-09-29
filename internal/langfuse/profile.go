@@ -7,10 +7,8 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
-	"regexp"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -37,15 +35,11 @@ func UnknownProfile() DeploymentProfile {
 	return DeploymentProfile{Families: catalog.AllFamilies()}
 }
 
-// versionPattern accepts a plain major.minor.patch version, such as "3.80.0".
-// It duplicates the catalog's version parser: see #94.
-var versionPattern = regexp.MustCompile(`^[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}$`)
-
 // KnownVersion returns the version and true when it is a plain
 // major.minor.patch version; anything else, including instruction-like text
 // or hidden characters, is reported as unknown and never returned.
 func (p DeploymentProfile) KnownVersion() (string, bool) {
-	if !versionPattern.MatchString(p.Version) {
+	if !catalog.IsPlainVersion(p.Version) {
 		return "", false
 	}
 	return p.Version, true
@@ -61,16 +55,14 @@ func (p DeploymentProfile) On(f catalog.Family) bool {
 // the MCP host's initialize for longer.
 const DefaultDetectionBudget = 5 * time.Second
 
-// supportedFloor is the oldest supported Langfuse version, v3.0.0 (ADR-0012 §4).
-const supportedFloor = 3
-
 // Detection is the outcome of DetectProfile: the deployment profile, whether
 // its version is below the supported floor, and one warning per probe that
 // could not decide.
 type Detection struct {
 	Profile DeploymentProfile
-	// Unsupported is set when the detected version is below v3.0.0, the
-	// supported floor (ADR-0012 §4): the catalog then ignores the families.
+	// Unsupported is set when the detected version is below
+	// catalog.SupportedFloor (ADR-0012 §4): the catalog then ignores the
+	// families.
 	Unsupported bool
 	// Undecided are the families kept on although their sentinel gave no
 	// deciding answer; each also has a warning.
@@ -164,12 +156,10 @@ func (c *Client) detectVersion(ctx context.Context) (version string, unsupported
 		Version string `json:"version"`
 	}
 	err = json.NewDecoder(bytes.NewReader(resp.Body)).Decode(&health)
-	if _, known := (DeploymentProfile{Version: health.Version}).KnownVersion(); err != nil || !known {
+	if err != nil || !catalog.IsPlainVersion(health.Version) {
 		return "", false, "version unknown: health reported no plain major.minor.patch version"
 	}
-	major, _, _ := strings.Cut(health.Version, ".")
-	n, _ := strconv.Atoi(major) // at most 5 digits: always parses
-	return health.Version, n < supportedFloor, ""
+	return health.Version, catalog.BelowSupportedFloor(health.Version), ""
 }
 
 // probe sends one family's sentinel and reports whether the family is on,

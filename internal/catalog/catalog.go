@@ -178,7 +178,9 @@ func load(spec []byte) (Catalog, error) {
 	}
 	var u union
 	var err error
-	if u.oldest, err = optionalVersion(doc.Oldest); err == nil {
+	if doc.Oldest != "" && doc.Oldest != SupportedFloor {
+		err = fmt.Errorf("oldest version %q is not the supported floor %s", doc.Oldest, SupportedFloor)
+	} else {
 		u.newest, err = optionalVersion(doc.Newest)
 	}
 	if err != nil {
