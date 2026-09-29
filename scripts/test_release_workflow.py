@@ -6,7 +6,8 @@
 #       `contents: read`, cannot fail the release run, and installs mcp-publisher checked against
 #       a pinned SHA-256. The pinned installs (#92, #124, #155): every workflow installs the MCPB
 #       CLI with `npm ci --ignore-scripts` from its integrity-hashed lockfile, and Python packages
-#       only with `pip install --require-hashes` from the hash-pinned scripts/requirements.txt.
+#       only with `pip install --require-hashes` from the hash-pinned scripts/requirements.txt,
+#       and every setup-node step takes the one exact NODE_VERSION.
 # WHY:  a publish job reachable from a pull request or a branch would publish from an unreviewed
 #       ref (security gate, dangerous parameters); a Registry failure (preview) must never fail a
 #       release; an unpinned mcp-publisher would be an unchecked supply-chain dependency.
@@ -111,6 +112,17 @@ class PinnedInstalls(unittest.TestCase):
         for path, meta in deps.items():
             with self.subTest(package=path):
                 self.assertRegex(meta.get("integrity", ""), r"^sha512-")
+
+    def test_node_is_pinned_to_an_exact_version_everywhere_it_is_set_up(self):
+        # The npx channel depends on Node (#123): every setup-node step takes the one pinned version.
+        self.assertRegex(load()["env"]["NODE_VERSION"], r"^\d+\.\d+\.\d+$")
+        seen = 0
+        for wf, job, step in workflow_steps():
+            if step.get("uses", "").startswith("actions/setup-node@"):
+                seen += 1
+                with self.subTest(workflow=wf, job=job):
+                    self.assertEqual(step["with"]["node-version"], "${{ env.NODE_VERSION }}")
+        self.assertGreater(seen, 0)
 
     def test_every_pip_install_requires_hashes_from_the_pinned_requirements(self):
         seen = 0

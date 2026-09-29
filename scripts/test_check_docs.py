@@ -51,6 +51,7 @@ PASSING_ROWS = [
     "| MCP07:2025 | HTTP | Loopback only. | spec | planned: [#160](https://github.com/o/r/issues/160) |",
     "| MCP09:2025 | Shadow servers | Signed releases. | README | planned: #150 |",
     "| ASI06:2026 | Memory | Stateless. | PDF | accepted-risk: the client owns agent memory |",
+    "| ASI07:2026 | A \\| pipe | Escaped pipe in a cell. | PDF | `accepted-risk`: the status may sit in backticks |",
 ]
 
 TRAILER = """
@@ -150,6 +151,12 @@ class FailureRuleTest(unittest.TestCase):
         problems = checkmod.check_mapping(mapping("| X10 | Risk | Control. | Source |", header=header), known())
         self.assertEqual(1, len(problems), problems)
         self.assertIn("no Status column", problems[0])
+
+    def test_a_mapping_without_its_separator_row_fails(self):
+        header = HEADER.replace("|---|---|---|---|---|\n", "")
+        problems = checkmod.check_mapping(mapping(*PASSING_ROWS, header=header), known())
+        self.assertEqual(1, len(problems), problems)
+        self.assertIn("separator", problems[0])
 
     def test_a_document_without_the_mapping_fails(self):
         problems = checkmod.check_mapping("# Security research\n\nNo table here.\n", known())

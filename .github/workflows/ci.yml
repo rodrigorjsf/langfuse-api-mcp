@@ -10,8 +10,8 @@
 # nothing in those paths is compiled or embedded (the only go:embed is internal/catalog/spec/*.json).
 # The user skill's Markdown under skills/ is the exception: the skill check guards it, so an edit
 # there starts a run. So is the security mapping, docs/research/security.md: the docs check
-# (scripts/check-docs.py, #155) guards its Status column. `paths` is used instead of `paths-ignore` because only `paths` can re-include
-# a path (the last matching pattern wins).
+# (scripts/check-docs.py, #155) guards its Status column. `paths` is used instead of
+# `paths-ignore` because only `paths` can re-include a path (the last matching pattern wins).
 name: CI
 
 on:

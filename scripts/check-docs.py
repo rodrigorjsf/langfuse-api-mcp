@@ -3,7 +3,7 @@
 # WHAT: the offline docs check (spec #150, ticket #155). It reads the risk-to-control mapping
 #       table of docs/research/security.md (the first table under "## Risk-to-control mapping")
 #       and fails when:
-#       - the table or its Status column is missing;
+#       - the table, its |---| separator row or its Status column is missing;
 #       - a row has no status, or a status other than `tested`, `planned` or `accepted-risk`
 #         (the cell reads `<status>: <detail>`);
 #       - a `tested` row names no test, or names one (in backticks) that is not a
@@ -66,8 +66,8 @@ def split_row(line):
 
 
 def mapping_rows(text):
-    """Return (header cells, [(line number, cells)]) of the first table under the mapping
-    heading, or None when there is no such table."""
+    """Return (header cells, separator cells, [(line number, cells)]) of the first table under
+    the mapping heading, or None when there is no such table."""
     lines = text.splitlines()
     try:
         start = next(i for i, line in enumerate(lines) if line.strip() == MAPPING_HEADING)
@@ -84,9 +84,9 @@ def mapping_rows(text):
             break
     if len(table) < 2:
         return None
-    header = split_row(table[0][1])
-    rows = [(n, split_row(line)) for n, line in table[2:]]  # table[1] is the |---| separator
-    return header, rows
+    header, separator = split_row(table[0][1]), split_row(table[1][1])
+    rows = [(n, split_row(line)) for n, line in table[2:]]
+    return header, separator, rows
 
 
 def status_problem(cell, known):
@@ -119,7 +119,9 @@ def check_mapping(text, known):
     table = mapping_rows(text)
     if table is None:
         return [f"no risk-to-control mapping table under '{MAPPING_HEADING}'"]
-    header, rows = table
+    header, separator, rows = table
+    if not all(re.fullmatch(r":?-{3,}:?", cell) for cell in separator):
+        return ["the risk-to-control mapping has no |---| separator row under its header"]
     if "Status" not in header:
         return ["the risk-to-control mapping has no Status column"]
     col = header.index("Status")
