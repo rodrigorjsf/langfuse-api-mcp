@@ -49,6 +49,22 @@ var (
 	noProxyPair    = [2]string{EnvNoProxy, EnvNoProxyLower}
 )
 
+// WindowsEnvName is the name a Windows environment variable is looked up
+// under (#62): Windows names are case-insensitive, so every name is
+// upper-cased, except the lower-case proxy spellings, kept so the startup log
+// names the variable as stored. Windows holds one variable per name whatever
+// its case, so a lower-case proxy spelling never meets its upper-case one.
+// Never apply it on Linux or macOS, where HTTPS_PROXY and https_proxy are two
+// variables with Go's upper-over-lower order.
+func WindowsEnvName(name string) string {
+	for _, pair := range [...][2]string{httpsProxyPair, httpProxyPair, noProxyPair} {
+		if name == pair[1] {
+			return name
+		}
+	}
+	return strings.ToUpper(name)
+}
+
 // ProxySettings are the proxy variables in effect, one value per variable,
 // resolved as Go's http.ProxyFromEnvironment resolves them (upper case over
 // lower case) over the environment and the config file together: the
