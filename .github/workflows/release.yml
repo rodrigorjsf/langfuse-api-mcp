@@ -537,12 +537,14 @@ jobs:
           [ -f "$command" ] || { echo "::error::the manifest's command for $PLATFORM is not in the bundle"; exit 1; }
           echo "SMOKE_BINARY=$command" >> "$GITHUB_ENV"
       # One bundle serves both Mac architectures (spec #119): the binary must be universal.
+      # lipo lists the slices in build order, which GoReleaser does not fix (run 36505490934 got
+      # "arm64 x86_64"), so the check asks lipo for each architecture instead of comparing a string.
       - name: Check the universal macOS binary
         if: matrix.platform == 'darwin'
         run: |
           set -euo pipefail
-          archs=$(lipo -archs "$SMOKE_BINARY")
-          [ "$archs" = "x86_64 arm64" ] || { echo "::error::want a universal x86_64 arm64 binary, got '$archs'"; exit 1; }
+          lipo "$SMOKE_BINARY" -verify_arch x86_64 arm64 ||
+            { echo "::error::want a universal x86_64 arm64 binary, got '$(lipo -archs "$SMOKE_BINARY")'"; exit 1; }
       # Windows only: the same narrow retry as ci.yml's test step (#102, golang/go#81238), in
       # scripts/go-test-windows-retry.sh. Remove with #102.
       - name: Smoke (seam S2) against the bundle's binary
