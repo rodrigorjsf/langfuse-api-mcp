@@ -5,12 +5,13 @@
 # Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current.
 # The generator job also runs the user skill check (#134, spec #132 S3), the skill ZIP pack
 # script's tests (#139, S4), the release workflow's tag-only job tests (#154) and the offline docs
-# check of the security mapping's Status column (#155).
+# check of the security mapping's Status column (#155) and of the README's Planned marks (#157).
 # A push or pull request that only changes docs (Markdown, docs/, .claude/, LICENSE) starts no run:
 # nothing in those paths is compiled or embedded (the only go:embed is internal/catalog/spec/*.json).
 # The user skill's Markdown under skills/ is the exception: the skill check guards it, so an edit
 # there starts a run. So is the security mapping, docs/research/security.md: the docs check
-# (scripts/check-docs.py, #155) guards its Status column. `paths` is used instead of
+# (scripts/check-docs.py, #155) guards its Status column, and so is README.md, whose Planned marks
+# the same check guards (#157). `paths` is used instead of
 # `paths-ignore` because only `paths` can re-include a path (the last matching pattern wins).
 name: CI
 
@@ -24,6 +25,7 @@ on:
       - "!LICENSE"
       - "skills/**"
       - "docs/research/security.md"
+      - "README.md"
   pull_request:
     paths:
       - "**"
@@ -33,6 +35,7 @@ on:
       - "!LICENSE"
       - "skills/**"
       - "docs/research/security.md"
+      - "README.md"
 
 permissions:
   contents: read
@@ -162,12 +165,13 @@ jobs:
           python3 scripts/check-skill.py
       # The offline docs check (spec #150, #155): every row of the risk-to-control mapping in
       # docs/research/security.md carries one status; a `tested` row names Go or Python tests that
-      # exist, a `planned` row links an issue. Standard library only; no network.
+      # exist, a `planned` row links an issue; every README.md line holding `Planned` links an issue
+      # (#157). Standard library only; no network.
       - name: Test the docs check
         run: |
           set -euo pipefail
           python3 scripts/test_check_docs.py
-      - name: Check the security mapping
+      - name: Check the security mapping and the README's Planned marks
         run: |
           set -euo pipefail
           python3 scripts/check-docs.py

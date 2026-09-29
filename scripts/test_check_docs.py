@@ -5,6 +5,8 @@
 #       fixture, and fails on one fixture per rule: a row with no status, an unknown status, a
 #       `tested` row naming a test that does not exist or naming none, a `planned` row linking no
 #       issue, an `accepted-risk` row giving no reason, and a mapping without its Status column.
+#       The README rule (#157): the real README.md passes, and a line holding `Planned` without a
+#       GitHub /issues/N link fails.
 #       The known test names come from the repository's Go and Python tests.
 # WHY:  "security mapping all green" (M7 exit criterion) is measurable only while every row's
 #       status is checked: a `tested` row must name a test that exists, a `planned` row must link
@@ -27,6 +29,7 @@ sys.dont_write_bytecode = True  # no scripts/__pycache__ left behind
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 REAL_MAPPING = os.path.join(ROOT, "docs", "research", "security.md")
+REAL_README = os.path.join(ROOT, "README.md")
 
 _spec = importlib.util.spec_from_file_location("check_docs", os.path.join(HERE, "check-docs.py"))
 checkmod = importlib.util.module_from_spec(_spec)
@@ -169,6 +172,39 @@ class FailureRuleTest(unittest.TestCase):
         self.assertTrue(problems[0].startswith(f"line {line}:"), problems)
 
 
+ISSUE_URL = "https://github.com/rodrigorjsf/langfuse-api-mcp/issues/160"
+
+
+class ReadmeRuleTest(unittest.TestCase):
+    """The README rule: a line holding the word `Planned` links an issue by its GitHub URL."""
+
+    def test_the_real_readme_passes(self):
+        with open(REAL_README, encoding="utf-8") as f:
+            self.assertEqual([], checkmod.check_readme(f.read()))
+
+    def test_a_planned_line_linking_an_issue_passes(self):
+        text = f"# T\n\n| HTTP | **Planned**, [#160]({ISSUE_URL}) |\nA line without the mark.\n"
+        self.assertEqual([], checkmod.check_readme(text))
+
+    def test_a_planned_line_linking_no_issue_fails_and_names_its_line(self):
+        problems = checkmod.check_readme("# T\n\nShipped.\n\n## Troubleshooting **(Planned)**\n")
+        self.assertEqual(1, len(problems), problems)
+        self.assertTrue(problems[0].startswith("line 5:"), problems)
+        self.assertIn("links no issue", problems[0])
+
+    def test_a_bare_issue_number_is_not_a_link_in_the_readme(self):
+        # GitHub renders a repository file without turning #N into a link.
+        problems = checkmod.check_readme("Publishing **Planned** (#150).\n")
+        self.assertEqual(1, len(problems), problems)
+
+    def test_a_lower_case_anchor_is_not_a_mark(self):
+        self.assertEqual([], checkmod.check_readme("See [Verify](#verify-what-you-run-planned).\n"))
+
+    def test_every_unlinked_planned_line_is_reported(self):
+        problems = checkmod.check_readme("A **Planned** one.\nFine.\nPlanned until M7.\n")
+        self.assertEqual(["line 1", "line 3"], [p.split(":")[0] for p in problems])
+
+
 class CommandTest(unittest.TestCase):
     def run_main(self, argv):
         out = io.StringIO()
@@ -184,10 +220,21 @@ class CommandTest(unittest.TestCase):
             f.write(text)
         return path
 
-    def test_without_arguments_it_checks_the_real_mapping_and_exits_zero(self):
+    def test_without_arguments_it_checks_the_real_mapping_and_readme_and_exits_zero(self):
         status, out = self.run_main([])
         self.assertEqual(0, status, out)
         self.assertIn("OK docs/research/security.md", out)
+        self.assertIn("OK README.md", out)
+
+    def test_a_readme_with_an_unlinked_planned_line_exits_one_and_prints_it(self):
+        mapping_path = self.fixture(mapping(*PASSING_ROWS))
+        readme = os.path.join(os.path.dirname(mapping_path), "README.md")
+        with open(readme, "w", encoding="utf-8") as f:
+            f.write("# T\n\nPublishing **Planned**.\n")
+        status, out = self.run_main([mapping_path, readme])
+        self.assertEqual(1, status, out)
+        self.assertIn(f"{readme}: line 3:", out)
+        self.assertIn("links no issue", out)
 
     def test_a_mapping_with_a_problem_exits_one_and_prints_it(self):
         path = self.fixture(mapping(*PASSING_ROWS, "| X12 | Risk | Control. | Source | planned: later |"))
