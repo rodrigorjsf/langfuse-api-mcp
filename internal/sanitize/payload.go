@@ -104,8 +104,12 @@ func Text(s string) string {
 
 // hidden reports whether r is an invisible or bidirectional formatting
 // character: the Unicode format category Cf (zero-width characters, bidi
-// overrides and isolates, the byte order mark) and the whole tag block
-// U+E0000–E007F.
+// overrides and isolates, the byte order mark), the whole tag block
+// U+E0000–E007F, the variation selectors (U+FE00–FE0F, U+E0100–E01EF), which
+// can encode any byte invisibly, and the other default-ignorable code points
+// (Hangul fillers, the combining grapheme joiner), which render as nothing
+// (#156).
 func hidden(r rune) bool {
-	return unicode.Is(unicode.Cf, r) || (r >= 0xE0000 && r <= 0xE007F)
+	return unicode.Is(unicode.Cf, r) || (r >= 0xE0000 && r <= 0xE007F) ||
+		unicode.In(r, unicode.Variation_Selector, unicode.Other_Default_Ignorable_Code_Point)
 }

@@ -171,7 +171,10 @@ func TestLoadRefusesLangfuseKeysInTheConfigFile(t *testing.T) {
 		"public key":           {"LANGFUSE_PUBLIC_KEY=pk-lf-1234", "LANGFUSE_PUBLIC_KEY", "pk-lf-1234"},
 		"secret key":           {"LANGFUSE_SECRET_KEY=sk-lf-5678", "LANGFUSE_SECRET_KEY", "sk-lf-5678"},
 		"dotenv export prefix": {"export LANGFUSE_SECRET_KEY=sk-lf-5678", "LANGFUSE_SECRET_KEY", "sk-lf-5678"},
-		"lower case":           {"langfuse_secret_key=sk-lf-5678", "LANGFUSE_SECRET_KEY", "sk-lf-5678"},
+		// A shell takes any blank after export (#156).
+		"export and a tab":       {"export\tLANGFUSE_SECRET_KEY=sk-lf-5678", "LANGFUSE_SECRET_KEY", "sk-lf-5678"},
+		"export and a blank run": {"export \t LANGFUSE_PUBLIC_KEY=pk-lf-1234", "LANGFUSE_PUBLIC_KEY", "pk-lf-1234"},
+		"lower case":             {"langfuse_secret_key=sk-lf-5678", "LANGFUSE_SECRET_KEY", "sk-lf-5678"},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -214,6 +217,7 @@ func FuzzLoadConfigFile(f *testing.F) {
 	f.Add("LANGFUSE_CA_CERT=/etc/corp/root.pem\n# comment\n\n")
 	f.Add("\uFEFFLANGFUSE_CA_CERTS_PATH=C:\\corp\\certs\r\n")
 	f.Add("export LANGFUSE_SECRET_KEY=sk-lf-secret\n")
+	f.Add("export\tLANGFUSE_SECRET_KEY=sk-lf-secret\n")
 	f.Add("=value\nno equals sign")
 	path := regexp.QuoteMeta(configFile("").Path)
 	shape := regexp.MustCompile(`^config file ` + path + ` line [0-9]+: (expected KEY=VALUE|` +

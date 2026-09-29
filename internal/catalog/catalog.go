@@ -396,8 +396,11 @@ func visibleText(s string) string {
 }
 
 // hidden reports whether r hides or reorders text (see visible).
+// Like sanitize's, it covers the variation selectors and the other
+// default-ignorable code points (#156).
 func hidden(r rune) bool {
-	return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || (r >= 0xE0000 && r <= 0xE007F)
+	return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || (r >= 0xE0000 && r <= 0xE007F) ||
+		unicode.In(r, unicode.Variation_Selector, unicode.Other_Default_Ignorable_Code_Point)
 }
 
 // Lookup returns the in-scope operation with the given ID.

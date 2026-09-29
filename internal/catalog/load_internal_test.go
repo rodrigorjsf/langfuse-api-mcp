@@ -47,7 +47,7 @@ func TestAnIndexLineIsTheSummaryCleanedOfHiddenCharactersLinksBoldAndExcess(t *t
 			want:        "Get list of traces (legacy: prefer observations_getMany when it is available)",
 		},
 		"hidden characters are removed from the summary": {
-			summary: "Get\u200b an x\u0007 (legacy: prefer\u202e y_get when it is available)\U000E0041",
+			summary: "Get\u200b an x\u0007 (legacy: prefer\u202e y_get\uFE0F\U000E0100 when it is available)\U000E0041\u3164",
 			want:    "Get an x (legacy: prefer y_get when it is available)",
 		},
 		"a Markdown link keeps only its text": {

@@ -45,6 +45,7 @@ func assertNoHiddenCharacter(t *testing.T, v any) {
 	check := func(s string) {
 		for _, r := range s {
 			if unicode.Is(unicode.Cf, r) || (r >= 0xE0000 && r <= 0xE007F) ||
+				unicode.In(r, unicode.Variation_Selector, unicode.Other_Default_Ignorable_Code_Point) ||
 				(unicode.IsControl(r) && !strings.ContainsRune("\t\n\r", r)) {
 				t.Fatalf("payload string %q keeps the hidden character %U", s, r)
 			}
@@ -88,6 +89,24 @@ func FuzzWrap(f *testing.F) {
 			t.Fatalf("a truncated page lost its meta: %.200s", env.Data)
 		}
 	})
+}
+
+// #156: variation selectors (U+FE00–FE0F, U+E0100–E01EF) encode any byte
+// invisibly after a visible character ("variation-selector smuggling"), and
+// the Hangul fillers and the combining grapheme joiner render as nothing:
+// all are dropped like the zero-width and tag characters.
+func TestPayloadDropsVariationSelectorsAndInvisibleFillers(t *testing.T) {
+	t.Parallel()
+	in := `{"name":"ok\uFE00\uFE0F\uDB40\uDD00\uDB40\uDDEFay\u3164\u115F\uFFA0\u034F"}`
+
+	got, err := sanitize.Payload(json.RawMessage(in), sanitize.Redactor{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(got) != `{"name":"okay"}` {
+		t.Fatalf("Payload = %s, want {\"name\":\"okay\"}", got)
+	}
 }
 
 func TestAKeyThatCollidesAfterCleaningNeverShadowsTheCleanKey(t *testing.T) {
