@@ -277,7 +277,7 @@ Get your company's root CA in PEM format:
 
 ## Install and run
 
-Every build reports the version it was built with: `initialize` returns it as the server version, and the startup log line `server started` names it. A build without an injected version (`go build`, `go install`) reports `0.0.0-dev`.
+Every build reports the version it was built with: `initialize` returns it as the server version, and the startup log line `server started` names it. A build without an injected version reports the module version Go recorded, without the leading `v`, only when it is a release tag (a `go install …@v0.1.0` build reports `0.1.0`); anything else, such as a `go build` in a checkout (a pseudo-version, `(devel)` or a `+dirty` version), reports `0.0.0-dev`.
 
 | Channel | Status |
 |---|---|
@@ -325,7 +325,7 @@ Then point your MCP client at the extracted binary (see [Client configuration](#
 go install github.com/rodrigorjsf/langfuse-api-mcp/cmd/langfuse-mcp@<version>
 ```
 
-The binary lands in `$(go env GOPATH)/bin`. A `go install` build carries no injected version, so it reports `0.0.0-dev`; use a release archive when you need the version in bug reports (see [#127](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/127)).
+The binary lands in `$(go env GOPATH)/bin`. A `go install …@<version>` build of a release tag reports that version without the leading `v` (`@v0.1.0` reports `0.1.0`), taken from the module version Go records in the binary (#127). `@latest` resolves to the latest release tag and reports it the same way; a build at a commit that is no release tag (`@main`, a commit hash) reports `0.0.0-dev`. The live proof of `go install …@v0.1.0` is recorded with the first release ([#158](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/158)).
 
 ### Docker
 

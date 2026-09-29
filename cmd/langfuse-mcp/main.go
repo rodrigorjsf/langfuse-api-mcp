@@ -10,7 +10,9 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"regexp"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"strings"
 
@@ -22,11 +24,46 @@ import (
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/trust"
 )
 
-// version is the version this executable was built with, reported in
-// initialize and in the startup log. Release builds set it through the linker
-// (-X main.version=…, packaging/.goreleaser.yaml); it is never changed at run
-// time. A go install build therefore reports DevVersion (see #127).
-var version = server.DevVersion
+// version is the version release builds inject through the linker
+// (-X main.version=…, packaging/.goreleaser.yaml); empty when none was
+// injected. It is never changed at run time. What the executable reports is
+// reportedVersion's answer (#127).
+var version string
+
+// releaseTag is a SemVer release or pre-release tag as Go records a module
+// version: a leading v, no build metadata (a "+dirty" local build is not a
+// release). pseudoVersion is Go's pseudo-version, which also matches
+// releaseTag when it follows a pre-release tag (golang.org/x/mod's pattern,
+// without build metadata).
+var (
+	releaseTag    = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$`)
+	pseudoVersion = regexp.MustCompile(`^v[0-9]+\.(0\.0-|[0-9]+\.[0-9]+-([^+]*\.)?0\.)[0-9]{14}-[A-Za-z0-9]+$`)
+)
+
+// reportedVersion is the version reported in initialize and in the startup
+// log: the linker-injected version when there is one; else the build info's
+// module version without its leading v, when it is a release tag (a go
+// install …@vX.Y.Z build); else server.DevVersion. A pseudo-version, (devel),
+// an empty version or any other build-metadata string is never reported.
+func reportedVersion(injected, module string) string {
+	if injected != "" {
+		return injected
+	}
+	if releaseTag.MatchString(module) && !pseudoVersion.MatchString(module) {
+		return module[1:]
+	}
+	return server.DevVersion
+}
+
+// moduleVersion is the main module's version recorded in the build info, or
+// empty when the executable carries none.
+func moduleVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return ""
+	}
+	return info.Main.Version
+}
 
 func main() {
 	// Nothing may run here before start: see start.
@@ -124,7 +161,8 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 	profile := detection.Profile
 	resolved := cat.Resolve(catalogProfile(profile))
 	logProfile(log, detection, len(resolved.Operations()))
-	opts := []server.Option{server.WithVersion(version)}
+	buildVersion := reportedVersion(version, moduleVersion())
+	opts := []server.Option{server.WithVersion(buildVersion)}
 	if cfg.AllowWrites.On {
 		opts = append(opts, server.WithWriteMode())
 	}
@@ -135,7 +173,7 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 		defer client.CloseIdleConnections()
 		return transport.Stdio(ctx, srv)
 	}
-	log.Info("server started", "version", version, "transport", "stdio")
+	log.Info("server started", "version", buildVersion, "transport", "stdio")
 	return app{log: log, pool: pool, serve: serve}, nil
 }
 
