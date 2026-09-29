@@ -25,7 +25,7 @@ Evidence behind the ADRs. Labels: `[verified 3-0]` passed 3-vote adversarial che
 | `raw/2026-09-28-small-model-eval-intent-03-skill-ab.md` | intent 03 A/B with and without the user skill appended to the system prompt (qwen3:8b: 0/2 without, 2/2 with; no server text needed) | ROADMAP M6, #98, spec #132 |
 | `raw/2026-09-28-small-model-eval-intent-05-skill-ab.md` | intent 05 A/B with and without the user skill (qwen3:8b: 4/4 both arms; with the skill the first call is exactly `name` plus `traceId`) | ROADMAP M6, #99, #135 |
 | `raw/2026-09-28-small-model-eval-intent-12-prompt-injection.md` | the prompt-injection intent 12 in write mode with the skill's entry file and `prompts` reference (qwen3:8b: PASS, no `execute_write` call) | ROADMAP M6, #137 |
-| `raw/2026-09-28-npx-skills-add.md` | `npx skills add` installs the user skill from a checkout into a scratch project (byte-identical); the repository form clones the private repo but finds no skill before the merge | ROADMAP M6, #139 |
+| `raw/2026-09-28-npx-skills-add.md` | `npx skills add` installs the user skill from a checkout into a scratch project (byte-identical); the repository form finds no skill before the merge and, re-run after it, installs the skill from `main` | ROADMAP M6, #139, #151 |
 | `raw/2026-09-28-small-model-eval-skill-ab-full.md` | M6 exit A/B: all 12 intents with and without the whole skill appended (qwen3:8b: 9/12 twice with, 10/12 after the prompts fix, 8/12 twice without; 03, 05, 08 and injection intent 12 pass with the skill; 08 without passes 2 of 3; the prompts table fix for intent 07) | ROADMAP M6, #140, #141 |
 | `raw/2026-09-28-small-model-eval-intent-08-tag-guidance.md` | intent 08 without the skill after `describe_operation prompts_list` names `tag` as the tag filter (qwen3:8b: 3/3 PASS, `tag` sent; full run 8/12, as in #140) | ROADMAP M6, #141 |
 | `raw/2026-09-28-claude-code-skill-trigger.md` | #142: four skill descriptions tried in Claude Code (Sonnet); only "Load before any langfuse-api-mcp tool call" loads the skill for prompt requests (3/3 read, 2/2 promote) and keeps trace, cost and experiments; one run lost the server (#145) and wrote through Langfuse's CLI (#146) | ROADMAP M6, #142, #145, #146 |
@@ -34,6 +34,8 @@ Evidence behind the ADRs. Labels: `[verified 3-0]` passed 3-vote adversarial che
 | `raw/2026-09-28-skill-description-eval-and-trigger.md` | #148: six new skill descriptions tried against both the small-model eval and Claude Code (Sonnet); the committed one ("Investigate Langfuse traces, scores, prompts, datasets, metrics ... Load before any call.") loads the skill for every measured request and passes 11/13 in 3 of 3 full runs (02 and 11 fail, #149); naming datasets fixes 10, opening with "Load before" fails 12 | ROADMAP M6, #148, #149 |
 | `raw/2026-09-28-claude-code-skill-run.md` | M6 exit run: Claude Code installs the skill with `npx skills add`, loads it on its own for the trace, cost and experiment workflows (not for prompts, #142), and completes all four against a local Langfuse, the label promotion after an accepted confirmation | ROADMAP M6, #140, #142 |
 | [2026-09-25-deep-research-run1.md](2026-09-25-deep-research-run1.md) | raw verified findings + all extracted claims of the first deep-research run | all of the above |
+
+Records under `raw/` are verbatim, with one edit: before publication (#151), local home directory paths were replaced by `~`.
 
 ## Open questions
 

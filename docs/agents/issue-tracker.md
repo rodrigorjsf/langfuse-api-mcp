@@ -15,7 +15,7 @@ Infer the repo from `git remote -v` — `gh` does this automatically when run in
 
 ## Milestones
 
-Every open issue carries exactly one GitHub milestone matching a `ROADMAP.md` row (`M2 TLS & config`, `M3 Full read surface`, `M4 Gated writes`, `M5 Distribution & supply chain`, `M6 User skills`, `M7 1.0`).
+Every open issue carries exactly one GitHub milestone matching a `ROADMAP.md` milestone row or its "Later" section. Open milestones: `M7 First public release` and `Later` (deferred past the first public release). Closed milestones, done in `ROADMAP.md`: `M2 TLS & config`, `M3 Full read surface`, `M4 Gated writes`, `M5 Distribution & supply chain`, `M6 User skills`.
 
 - **Creating an issue** (follow-up, bug, triage intake): set the milestone whose work closes it, `gh issue create --milestone "<title>"` or `gh issue edit <n> --milestone "<title>"`. Pick the milestone that builds the prerequisite, not the one where the gap was found. If none fits, ask the maintainer.
 - **Writing a spec for a milestone** (`/to-spec`, `/to-tickets`): first list `gh issue list --state open --milestone "<title>" --json number,title,body,comments`. Every issue there enters the spec: as its own ticket, or folded into a ticket's acceptance criteria with a link back (`Closes #n` in the PR that implements it). The spec lists which issues it absorbs.

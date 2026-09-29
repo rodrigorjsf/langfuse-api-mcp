@@ -1594,7 +1594,7 @@
       "tokens": 50974,
       "toolCalls": 3,
       "durationMs": 20387,
-      "resultPreview": "{\"refuted\":true,\"evidence\":\"The quote does not match the Go source, and the claim gets the platform behavior wrong. I checked the Go 1.26.0 stdlib installed locally. The SystemCertPool doc comment in /home/rodrigo/.local/share/mise/installs/go/1.26.0/src/crypto/x509/cert_pool.go:108-111 reads: \\\"On Unix systems other than macOS the environment variables SSL_CERT_FILE and SSL_CERT_DIR can be used t…"
+      "resultPreview": "{\"refuted\":true,\"evidence\":\"The quote does not match the Go source, and the claim gets the platform behavior wrong. I checked the Go 1.26.0 stdlib installed locally. The SystemCertPool doc comment in ~/.local/share/mise/installs/go/1.26.0/src/crypto/x509/cert_pool.go:108-111 reads: \\\"On Unix systems other than macOS the environment variables SSL_CERT_FILE and SSL_CERT_DIR can be used t…"
     },
     {
       "type": "workflow_agent",
@@ -2122,7 +2122,7 @@
       "tokens": 49029,
       "toolCalls": 3,
       "durationMs": 15371,
-      "resultPreview": "{\"refuted\":false,\"evidence\":\"I checked this against the local primary source, /home/rodrigo/Workspace/langfuse-api-mcp/docs/langfuse-openapi.json. Its components.securitySchemes declares only {\\\"BasicAuth\\\": {\\\"type\\\": \\\"http\\\", \\\"scheme\\\": \\\"basic\\\"}}. Its info.description says, verbatim: \\\"Authenticate with the API using Basic Auth, get API keys in the project settings: - username: Langfuse Publ…"
+      "resultPreview": "{\"refuted\":false,\"evidence\":\"I checked this against the local primary source, ~/Workspace/langfuse-api-mcp/docs/langfuse-openapi.json. Its components.securitySchemes declares only {\\\"BasicAuth\\\": {\\\"type\\\": \\\"http\\\", \\\"scheme\\\": \\\"basic\\\"}}. Its info.description says, verbatim: \\\"Authenticate with the API using Basic Auth, get API keys in the project settings: - username: Langfuse Publ…"
     },
     {
       "type": "workflow_agent",
@@ -2166,7 +2166,7 @@
       "tokens": 48789,
       "toolCalls": 2,
       "durationMs": 8877,
-      "resultPreview": "{\"refuted\":false,\"evidence\":\"The claim holds up, and the local OpenAPI spec confirms it independently. /home/rodrigo/Workspace/langfuse-api-mcp/docs/langfuse-openapi.json defines components.securitySchemes.BasicAuth = {type: http, scheme: basic}. Its info.description says: \\\"Authenticate with the API using Basic Auth, get API keys in the project settings: - username: Langfuse Public Key - password…"
+      "resultPreview": "{\"refuted\":false,\"evidence\":\"The claim holds up, and the local OpenAPI spec confirms it independently. ~/Workspace/langfuse-api-mcp/docs/langfuse-openapi.json defines components.securitySchemes.BasicAuth = {type: http, scheme: basic}. Its info.description says: \\\"Authenticate with the API using Basic Auth, get API keys in the project settings: - username: Langfuse Public Key - password…"
     },
     {
       "type": "workflow_agent",
