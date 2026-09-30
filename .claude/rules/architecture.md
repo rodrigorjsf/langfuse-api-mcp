@@ -13,3 +13,8 @@ Binding tree, placement table and dependency direction: `project-structure.md` (
 ## Executor
 
 Catalog operations run through one generic executor; typed functions exist only for workflow tools (ADR-0010).
+
+## archify gotchas
+
+- archify showcase: landscape viewBox ~1100x530; wider fails readability, taller overflows viewport.
+- Vertical archify edge labels overlap nodes by default; set `labelAt` at segment midpoint.

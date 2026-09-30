@@ -9,7 +9,7 @@ A change is **not done** until every doc it affects matches the code in the same
 | a domain term or its meaning | `CONTEXT.md` (via `/domain-modeling`) |
 | a hard-to-reverse, surprising, trade-off decision | new/superseding ADR in `docs/adr/` (format: `/domain-modeling`) |
 | scope, milestones, or a finished slice | `ROADMAP.md` |
-| a security control | `docs/reference/security-model.md` + `.claude/rules/security.md`; `README.md` "Security model" when a user-facing essential changes |
+| a security control | `docs/reference/security-model.md` + the matching `.claude/rules/security*.md`; `README.md` "Security model" when a user-facing essential changes |
 | a new package or top-level directory | ADR + `project-structure.md` + `archify` diagram |
 | build, CI, release or test procedure | `CONTRIBUTING.md` / the matching `docs/development/*.md` |
 | a new doc | a row in `docs/INDEX.md` |
@@ -17,6 +17,6 @@ A change is **not done** until every doc it affects matches the code in the same
 
 A Stop hook (`.claude/hooks/docs-sync-check.sh`) blocks ending a turn when code files changed and no doc did; satisfy it by updating docs, or state explicitly why no doc is affected.
 
-Before claiming done, run and show fresh output of: `go build ./...`, `go test -race ./...`, `golangci-lint run` (first confirm `golangci-lint version` says built with go1.27+; a silent exit is not a pass — `CONTRIBUTING.md` install note), and a stale-docs check (`git diff --stat` and confirm each affected row above was edited). If a doc gap cannot be closed now, file an issue (`/follow-up-issue`) and link it — do not leave it in a chat summary.
+Before claiming done, run and show fresh output of: `go build ./...`, `go test -race ./...`, `golangci-lint run`, plus `python3 scripts/check-skill.py` / `python3 scripts/check-docs.py` when `skills/**` or the security mapping changed (first confirm `golangci-lint version` says built with go1.27+; a silent exit is not a pass — `CONTRIBUTING.md` install note), and a stale-docs check (`git diff --stat` and confirm each affected row above was edited). If a doc gap cannot be closed now, file an issue (`/follow-up-issue`) and link it — do not leave it in a chat summary.
 
 A doc that describes something not yet implemented must say so (`Planned`), never present it as shipped. `README.md` is user-facing only (what the server does, install, configure, security essentials); deeper material goes to `docs/` through `docs/INDEX.md`. It links no GitHub issue, no ADR and no `docs/research/raw` record: the word `Planned` alone marks unshipped behaviour there, and its tracking lives in the issue tracker and `ROADMAP.md`.

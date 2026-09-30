@@ -32,7 +32,7 @@ Never report work as done without the fresh-output checklist in `.claude/rules/d
 
 ### Issue tracker
 
-Issues and specs live as GitHub issues in `rodrigorjsf/langfuse-api-mcp` (use the `gh` CLI). Every issue carries a GitHub milestone (M2–M7); a milestone's spec absorbs its open issues. See `docs/agents/issue-tracker.md`.
+Issues and specs live as GitHub issues in `rodrigorjsf/langfuse-api-mcp` (use the `gh` CLI). Every issue carries a GitHub milestone (open today: `Later`); a milestone's spec absorbs its open issues. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
@@ -46,12 +46,7 @@ Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agent
 
 When something fails repeatedly, when User has to re-explain, or when a workaround is found for a platform/tool limitation, add a one-line bullet here. Keep each bullet under 15 words. No explanations. Only add things that will save time in future sessions.
 
-- archify showcase: landscape viewBox ~1100x530; wider fails readability, taller overflows viewport.
 - Wizard `template.sh` ships CRLF; `sed -i 's/\r$//'` before `bash -n`.
-- Vertical archify edge labels overlap nodes by default; set `labelAt` at segment midpoint.
-- Langfuse compose: `docker compose pull` first; cached `:4` image silently stale.
-- Windows Go test from WSL: `GOOS=windows` build, run `.exe` directly; WSL env not inherited.
-- Old Langfuse compose: pin postgres 17 and clickhouse 24.3; `latest` breaks.
 - `gh issue view --comments`, `gh pr edit` fail (Projects-classic GraphQL); use `--json`, `gh api -X PATCH`.
 - `golangci-lint` not on bash PATH; run `~/go/bin/golangci-lint`.
 - System `gh` 2.45 lacks `gh attestation`; `go install github.com/cli/cli/v2/cmd/gh@latest` to scratch.
