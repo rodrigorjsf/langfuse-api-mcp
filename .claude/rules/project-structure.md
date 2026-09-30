@@ -24,11 +24,12 @@ Packages are organized **by domain concept** (terms from `CONTEXT.md`), never by
 ├── skills/<skill-name>/     M6 user-facing skills (SKILL.md + references), authored with /writing-great-skills
 ├── packaging/               release inputs: .goreleaser.yaml (archives, checksums, SBOMs; #120), Dockerfile (container image; #122), npm/ (npx shim, packaging script, smoke registry; #123), mcpb/ (MCPB manifest + the pinned MCPB CLI lockfile; #124), server.json (the MCP Registry entry template; #154)
 ├── scripts/                 repeatable maintainer and CI procedures (WHAT/WHY/WHEN/HOW header): shell/Python, e.g. setup-ci-langfuse-cloud.sh, and Go commands, one per directory, e.g. registry-server-json/ (#154)
-├── docs/                    adr/, architecture/, research/, agents/ — no code
+├── docs/                    INDEX.md (progressive-disclosure entry), reference/ (user reference), development/ (contributor
+│                            process), adr/, architecture/, research/, agents/ — no code
 └── .claude/                 rules/, hooks/, settings.json; handoffs/ (session handoff notes) is local, gitignored
 ```
 
-Go tooling files that must sit at the root stay there: `go.mod`, `go.sum`, `.golangci.yml`, `.gitattributes`, `.gitignore`, `LICENSE`, `README.md`, `CONTEXT.md`, `ROADMAP.md`, `CLAUDE.md`. `SECURITY.md` (the vulnerability reporting policy) sits at the root because GitHub reads it there.
+Go tooling files that must sit at the root stay there: `go.mod`, `go.sum`, `.golangci.yml`, `.gitattributes`, `.gitignore`, `LICENSE`, `README.md`, `CONTEXT.md`, `ROADMAP.md`, `CLAUDE.md`. `SECURITY.md` (the vulnerability reporting policy) and `CONTRIBUTING.md` (the contributor entry point) sit at the root because GitHub reads them there.
 Platform-mandated locations are not design choices and need no ADR: `.github/` holds `workflows/` (CI, toolchain bump) and `dependabot.yml`.
 
 ## Placement table — "the logic is about…"

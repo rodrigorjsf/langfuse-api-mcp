@@ -137,7 +137,7 @@ func TestLoadRefusesAnInvalidProxyValueWithoutEchoingIt(t *testing.T) {
 		"a port but no host":                      "http://" + credential + ":" + credential + "@:8080",
 		"scheme javascript, opaque":               "javascript:alert('" + credential + "')",
 	}
-	// The config file trims a value (Unicode white space, as README states)
+	// The config file trims a value (Unicode white space, as docs/reference/configuration.md states)
 	// and ends it at a newline, so these cannot reach Load from the file as
 	// the invalid value they are.
 	notInAFileLine := map[string]bool{"a newline": true, "a tab": true, "leading whitespace": true, "a non-breaking space": true}

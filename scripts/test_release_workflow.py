@@ -92,7 +92,7 @@ def step_using(job, action):
 
 
 class Signing(unittest.TestCase):
-    """What a user verifies (README "Verify what you run"): cosign keyless signatures and build
+    """What a user verifies (docs/reference/security-model.md "Verify what you run"): cosign keyless signatures and build
     provenance for every archive, checksums.txt, the .mcpb and the skill ZIP, and for the image by
     digest. The live proof against v0.1.0 is docs/research/raw/2026-09-30-v0.1.0-release-proofs.md."""
 

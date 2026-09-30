@@ -22,7 +22,7 @@
 # by digest), publish-npm (`npm publish` of the platform packages, then the main one) and
 # github-release (the GitHub release holding the archives, SBOMs, checksums, bundle, skill ZIP and
 # signatures), then publish-registry (the MCP Registry entry, #154; allowed to fail). Each is gated by a job `if` on the tag, so a snapshot run shows it skipped, and holds only the permissions it needs; the
-# publish jobs run in the `release` environment, restricted to `v*` tags (README "Cutting a
+# publish jobs run in the `release` environment, restricted to `v*` tags (docs/development/release-pipeline.md "Cutting a
 # release"), which alone holds the npm token until npm trusted publishing replaces it.
 # Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current. Tool
 # versions (GoReleaser, syft) are pinned below and in packaging/.goreleaser.yaml's header; Node and
@@ -702,7 +702,7 @@ jobs:
   # `npm publish` of the six platform packages, then the main package that depends on them, from the
   # tarballs the npx smoke installed. Authentication: npm trusted publishing (OIDC, id-token),
   # configured on npmjs.com after v0.1.0, which used a short-lived NPM_TOKEN; that secret is deleted,
-  # so NODE_AUTH_TOKEN is empty and npm uses OIDC (README "Cutting a release"). npm
+  # so NODE_AUTH_TOKEN is empty and npm uses OIDC (docs/development/release-pipeline.md "Cutting a release"). npm
   # adds provenance either way. A package version already on the registry is
   # skipped, so a re-run after a partial failure finishes the set instead of failing on it.
   publish-npm:

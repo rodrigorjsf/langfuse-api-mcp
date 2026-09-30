@@ -10,7 +10,7 @@
 #       (.wslconfig). On 2026-09-27 WSL froze when three full Langfuse stacks
 #       (one of them this repository's integration stack, left running) and
 #       Ollama loading qwen3:8b ran at once. One stack at a time, and only with
-#       room to spare (README "Container stacks").
+#       room to spare (docs/development/integration-tests.md "Container stacks").
 # WHEN: sourced by scripts/langfuse-selfhosted.sh (`up`) and
 #       scripts/small-model-eval-local.sh, before anything is started.
 # HOW:  . "$ROOT/scripts/container-preflight.sh"

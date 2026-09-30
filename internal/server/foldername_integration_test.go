@@ -13,7 +13,7 @@ import (
 // one %2F-encoded path segment and names the object created under it. The
 // prompt and the dataset are created straight through Langfuse (writes are
 // test setup); the dataset runs routes are not asserted: they fail upstream
-// for Folder names (langfuse/langfuse#13933; see README).
+// for Folder names (langfuse/langfuse#13933; see docs/reference/tools.md).
 
 func TestLiveLangfuseServesAPromptReadByItsFolderName(t *testing.T) {
 	t.Parallel()

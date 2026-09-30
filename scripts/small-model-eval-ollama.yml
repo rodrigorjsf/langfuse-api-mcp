@@ -8,7 +8,7 @@
 # one intent's conversation (tool schemas plus echoed thinking), and Ollama
 # drops the start of an over-long prompt without an error.
 # Resource caps, so a heavy run fails instead of freezing a small host (WSL
-# with 10 GB of RAM; README "Container stacks"): mem_limit with an equal
+# with 10 GB of RAM; docs/development/integration-tests.md "Container stacks"): mem_limit with an equal
 # memswap_limit (no swap; the container is OOM-killed at the cap), 2 CPUs, one
 # request and one loaded model at a time. The model weights live in VRAM;
 # host memory holds the runner and the page cache of the model file.
