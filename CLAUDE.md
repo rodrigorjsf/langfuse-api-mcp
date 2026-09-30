@@ -6,6 +6,7 @@ Stateless Go MCP server exposing the Langfuse public API (Cloud + self-hosted) w
 
 | Need | Go to |
 |---|---|
+| every doc, user reference to dev process | `docs/INDEX.md` |
 | domain terms (use them verbatim) | `CONTEXT.md` |
 | why things are the way they are | `docs/adr/` |
 | architecture diagram (archify) | `docs/architecture/target-architecture.html` |

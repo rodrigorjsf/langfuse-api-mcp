@@ -24,7 +24,7 @@
 # 16384; measured 7.5 GB, 100% on the GPU of an RTX 3060 12 GB), python3 and
 # the Go toolchain. Port 127.0.0.1:11434 must be free.
 #
-# Safe on a small box (README "Container stacks"): the preflight guard of
+# Safe on a small box (docs/development/integration-tests.md "Container stacks"): the preflight guard of
 # scripts/container-preflight.sh refuses to start while any other container is
 # running (ALLOW_OTHER_CONTAINERS=1 overrides) or with less than
 # MIN_MEM_MIB MemAvailable (MIN_MEM_AVAILABLE_MIB overrides); the server is

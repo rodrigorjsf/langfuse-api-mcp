@@ -54,7 +54,7 @@ func liveClient(t *testing.T, opts langfuse.Options) (*langfuse.Client, server.S
 	}
 	if len(missing) > 0 {
 		t.Skipf("no live Langfuse: %s not set; start one with scripts/langfuse-selfhosted.sh up, "+
-			"or load the Cloud test project's .env.integration (README, For contributors)", strings.Join(missing, ", "))
+			"or load the Cloud test project's .env.integration (docs/development/integration-tests.md)", strings.Join(missing, ", "))
 	}
 	host, err := url.Parse(os.Getenv(envTestBaseURL))
 	if err != nil {

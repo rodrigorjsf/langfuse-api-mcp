@@ -27,7 +27,7 @@ Measure before optimizing; never trade a security control for speed. Error handl
 - Every response body: read through `io.LimitReader(body, maxBytes+1)` (detect overflow), decode by streaming with `json.NewDecoder`, then drain and `Close()` in a `defer`. No unbounded `io.ReadAll`.
 - Keep upstream JSON as `json.RawMessage` when the server only forwards it; unmarshal into typed structs only for fields it acts on.
 - Preallocate slices/maps when size is known; `strings.Builder`/`bytes.Buffer` for assembly; `sync.Pool` only with a benchmark proving it helps.
-- Builds: `-trimpath -ldflags="-s -w"`, static binary. Respect `GOMEMLIMIT` in containers (document it in README).
+- Builds: `-trimpath -ldflags="-s -w"`, static binary. Respect `GOMEMLIMIT` in containers (document it in `docs/reference/installation.md`).
 - Performance claims need `go test -bench . -benchmem` numbers or a `pprof` profile in the PR.
 
 ## Concurrency

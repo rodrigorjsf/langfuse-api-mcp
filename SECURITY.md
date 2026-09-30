@@ -35,5 +35,5 @@ patched.
 ## Scope
 
 The server's security model (credentials, the write gate, request and result hardening, transport)
-is described in the README "Security model" section. A way around any control listed there is in
+is described in [docs/reference/security-model.md](docs/reference/security-model.md). A way around any control listed there is in
 scope. A problem in Langfuse itself goes to [Langfuse](https://github.com/langfuse/langfuse/security).
