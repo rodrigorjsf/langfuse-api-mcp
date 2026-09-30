@@ -3,7 +3,7 @@
 An MCP server that gives AI agents access to the full [Langfuse](https://langfuse.com) public API. It works with **Langfuse Cloud** in any region and with **self-hosted** instances. It is built to run on corporate networks that re-sign TLS traffic with their own certificate authority (CA).
 
 > [!IMPORTANT]
-> **Status: pre-alpha, first release `v0.1.0`** (semver `0.x`: no stability promise yet). Install it from a [release archive](#release-archive), `go install`, [Docker](#docker), [npx](#npx) or the [Claude Desktop bundle](#claude-desktop-mcpb), each [signed and verifiable](#verify-what-you-run), or build it from source (see [Quick start](#quick-start)). Everything below works today unless it is marked **Planned**, like the loopback HTTP transport. Milestones: [ROADMAP.md](ROADMAP.md).
+> **Status: pre-alpha, first release `v0.1.0`** (semver `0.x`: no stability promise yet). Install it from a [release archive](#release-archive), [Docker](#docker) or the [Claude Desktop bundle](#claude-desktop-mcpb), each [signed and verifiable](#verify-what-you-run), from [npx](#npx) (npm provenance) or `go install` (checked by the Go checksum database), or build it from source (see [Quick start](#quick-start)). Everything below works today unless it is marked **Planned**, like the loopback HTTP transport. Milestones: [ROADMAP.md](ROADMAP.md).
 
 ---
 
