@@ -3,7 +3,7 @@
 An MCP server that gives AI agents access to the full [Langfuse](https://langfuse.com) public API. It works with **Langfuse Cloud** in any region and with **self-hosted** instances. It is built to run on corporate networks that re-sign TLS traffic with their own certificate authority (CA).
 
 > [!IMPORTANT]
-> **Status: pre-alpha. No release is published yet**; build the server from source (see [Quick start](#quick-start)). Everything below works today unless it is marked **Planned**: the release channels (archives, the container image, npm, the Claude Desktop bundle, the MCP Registry entry, and the signatures that let you verify them) arrive with the first release, `v0.1.0`, and the loopback HTTP transport comes later. Milestones: [ROADMAP.md](ROADMAP.md).
+> **Status: pre-alpha, first release `v0.1.0`** (semver `0.x`: no stability promise yet). Install it from a [release archive](#release-archive), `go install`, [Docker](#docker), [npx](#npx) or the [Claude Desktop bundle](#claude-desktop-mcpb), each [signed and verifiable](#verify-what-you-run), or build it from source (see [Quick start](#quick-start)). Everything below works today unless it is marked **Planned**, like the loopback HTTP transport. Milestones: [ROADMAP.md](ROADMAP.md).
 
 ---
 
@@ -281,19 +281,21 @@ Every build reports the version it was built with: `initialize` returns it as th
 
 | Channel | Status |
 |---|---|
-| [Release archive](#release-archive) (Linux, macOS, Windows × amd64, arm64) | built and smoke-tested on every change to packaging or the executable; **publishing Planned**: the archives are published with the first release, `v0.1.0` |
-| [`go install`](#go-install) | works now at a commit (`@main`, reporting `0.0.0-dev`); `@<version>` is **Planned** until the first release tag |
-| [Docker](#docker) (linux/amd64, linux/arm64; stdio only) | built and smoke-tested on every change to packaging or the executable; **publishing Planned**: the image is pushed to GHCR with the first release |
-| [Claude Desktop (MCPB)](#claude-desktop-mcpb) (macOS, Windows) | built and smoke-tested on every change to packaging or the executable; **publishing Planned**: the bundle is attached to the first release |
-| [npx](#npx) (Linux, macOS, Windows × x64, arm64) | built on every change to packaging or the executable, and smoke-tested on Linux x64, macOS arm64 and Windows x64 (the other three platform packages are built, not CI-tested); **publishing Planned**: `npm publish` runs with the first release |
+| [Release archive](#release-archive) (Linux, macOS, Windows × amd64, arm64) | published with every release, signed; built and smoke-tested on every change to packaging or the executable |
+| [`go install`](#go-install) | `@v0.1.0` (or `@latest`) reports its release version; a commit (`@main`) reports `0.0.0-dev` |
+| [Docker](#docker) (linux/amd64, linux/arm64; stdio only) | `ghcr.io/rodrigorjsf/langfuse-api-mcp:<version>`, public, signed by digest; built and smoke-tested on every change to packaging or the executable |
+| [Claude Desktop (MCPB)](#claude-desktop-mcpb) (macOS, Windows) | attached to every release, signed; built and smoke-tested on every change to packaging or the executable; its install in Claude Desktop itself is not recorded yet |
+| [npx](#npx) (Linux, macOS, Windows × x64, arm64) | built on every change to packaging or the executable, and smoke-tested on Linux x64, macOS arm64 and Windows x64 (the other three platform packages are built, not CI-tested); published to npmjs.org with npm provenance at every release |
+
+The server is listed in the [MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.rodrigorjsf/langfuse-api-mcp`, pointing at the npm package, the image and the `.mcpb`.
 
 ### Release archive
 
-**Planned until the first release**: the release pipeline already builds these archives for every change to packaging or the executable and proves each one on a clean runner, but nothing is published yet.
+Every [GitHub release](https://github.com/rodrigorjsf/langfuse-api-mcp/releases) carries these archives; the release pipeline also builds them for every change to packaging or the executable and proves each one on a clean runner.
 
-One archive per target: `langfuse-mcp_<version>_<os>_<arch>.tar.gz` (`.zip` on Windows), with `os` one of `linux`, `darwin`, `windows` and `arch` one of `amd64`, `arm64`. Each holds the `langfuse-mcp` binary (`langfuse-mcp.exe` on Windows), `LICENSE` and this README. Next to them: `checksums.txt` (SHA-256 of every file) and one SPDX JSON SBOM per archive (`<archive>.sbom.json`). `windows/arm64` is **built, not CI-tested**: no runner proves it; on Windows on Arm you can also run the `windows/amd64` build under emulation.
+One archive per target: `langfuse-mcp_<version>_<os>_<arch>.tar.gz` (`.zip` on Windows), with `os` one of `linux`, `darwin`, `windows` and `arch` one of `amd64`, `arm64`. Each holds the `langfuse-mcp` binary (`langfuse-mcp.exe` on Windows), `LICENSE` and this README. Next to them: `checksums.txt` (SHA-256 of every archive and of its SBOM) and one SPDX JSON SBOM per archive (`<archive>.sbom.json`). `windows/arm64` is **built, not CI-tested**: no runner proves it; on Windows on Arm you can also run the `windows/amd64` build under emulation.
 
-Download with `gh` or `curl`, check the archive against `checksums.txt`, then extract it (Linux on amd64 shown; `<version>` is the release without the leading `v`):
+Download with `gh` or `curl`, check the archive against `checksums.txt`, then extract it (Linux on amd64 shown; `<version>` is the release without the leading `v`, for example `0.1.0`):
 
 ```bash
 version=<version>
@@ -319,19 +321,19 @@ Then point your MCP client at the extracted binary (see [Client configuration](#
 
 ### go install
 
-Works now at a commit (`@main` or a commit hash); `@<version>` is **Planned** until the first release tag. With Go 1.21 or later (the module's `toolchain` directive fetches the Go 1.27 toolchain it needs):
+Install a release (`@v0.1.0`, or `@latest`) or a commit (`@main` or a commit hash). With Go 1.21 or later (the module's `toolchain` directive fetches the Go 1.27 toolchain it needs):
 
 ```bash
 go install github.com/rodrigorjsf/langfuse-api-mcp/cmd/langfuse-mcp@<version>
 ```
 
-The binary lands in `$(go env GOPATH)/bin`. A `go install …@<version>` build of a release tag reports that version without the leading `v` (`@v0.1.0` reports `0.1.0`), taken from the module version Go records in the binary. `@latest` resolves to the latest release tag and reports it the same way; a build at a commit that is no release tag (`@main`, a commit hash) reports `0.0.0-dev`. The live proof of `go install …@v0.1.0` is recorded with the first release.
+The binary lands in `$(go env GOPATH)/bin`. A `go install …@<version>` build of a release tag reports that version without the leading `v` (`@v0.1.0` reports `0.1.0`), taken from the module version Go records in the binary. `@latest` resolves to the latest release tag and reports it the same way; a build at a commit that is no release tag (`@main`, a commit hash) reports `0.0.0-dev`. `go install …@v0.1.0` reporting `0.1.0` in `initialize` is recorded ([record](docs/research/raw/2026-09-30-v0.1.0-release-proofs.md)).
 
 ### Docker
 
-**Planned until the first release**: the release pipeline already builds the image for every change to packaging or the executable and proves the amd64 image with `docker run -i` on a clean Linux runner, but nothing is pushed yet.
+Every release pushes the image to GHCR, public, signed and attested by digest; the release pipeline also builds it for every change to packaging or the executable and proves the amd64 image with `docker run -i` on a clean Linux runner.
 
-The image `ghcr.io/rodrigorjsf/langfuse-api-mcp:<version>` is minimal: based on `gcr.io/distroless/static-debian13:nonroot` pinned by digest, the binary is the entrypoint, it runs as the non-root user `nonroot`, and it holds no shell. It is built for `linux/amd64` and `linux/arm64` and will be published as one multi-arch image, so an arm64 machine runs it natively (a snapshot build tags one local image per architecture, `<version>-amd64` and `<version>-arm64`, since a multi-arch image exists only once pushed). One SPDX JSON SBOM describes it (`langfuse-mcp_<version>_image.sbom.json`, scanned from the amd64 image; the arm64 image holds the same base and the same binary built for arm64).
+The image `ghcr.io/rodrigorjsf/langfuse-api-mcp:<version>` is minimal: based on `gcr.io/distroless/static-debian13:nonroot` pinned by digest, the binary is the entrypoint, it runs as the non-root user `nonroot`, and it holds no shell. It is built for `linux/amd64` and `linux/arm64` and published as one multi-arch image, so an arm64 machine runs it natively (a snapshot build tags one local image per architecture, `<version>-amd64` and `<version>-arm64`, since a multi-arch image exists only once pushed). One SPDX JSON SBOM describes it (`langfuse-mcp_<version>_image.sbom.json`, scanned from the amd64 image; the arm64 image holds the same base and the same binary built for arm64).
 
 Pass the keys and the base URL with `-e`, and keep `-i` (the server speaks MCP over stdin and stdout):
 
@@ -356,7 +358,7 @@ The image trusts its base image's CA bundle plus the file you mount, nothing els
 
 ### npx
 
-**Planned until the first release**: the release pipeline already packs the npm packages for every change to packaging or the executable and proves them with `npx` on clean Linux, macOS and Windows runners, but nothing is published yet.
+Every release publishes the npm packages to npmjs.org with npm provenance; the release pipeline also packs them for every change to packaging or the executable and proves them with `npx` on clean Linux, macOS and Windows runners.
 
 Configure the server in your MCP client as `npx -y langfuse-api-mcp` (pin a version with `langfuse-api-mcp@<version>`); it needs Node.js with npm, nothing else:
 
@@ -382,7 +384,7 @@ The npm registry and Node.js are dependencies of this channel only: the other ch
 
 ### Claude Desktop (MCPB)
 
-**Planned until the first release**: the release pipeline already packs the bundle for every change to packaging or the executable and proves the binary inside it on clean macOS and Windows runners, but nothing is published yet.
+Every GitHub release carries the bundle, signed; the release pipeline also packs it for every change to packaging or the executable and proves the binary inside it on clean macOS and Windows runners. Its install in Claude Desktop itself is not recorded yet.
 
 One file, `langfuse-mcp_<version>.mcpb`, for Claude Desktop on macOS (Apple silicon and Intel: it holds one universal binary) and Windows (amd64 only; Windows on Arm is not tested). There is no Linux bundle: no Linux host installs `.mcpb` files. Double-click it (or drag it onto Claude Desktop); the install dialog asks for:
 
@@ -397,7 +399,7 @@ Those four variables are all the bundle sets; the server validates them at start
 
 ### Client configuration
 
-One snippet per MCP client. Every snippet uses the [npx](#npx) channel (**Planned** until `npm publish` with the first release); to use a [release archive](#release-archive) instead, replace `"command": "npx", "args": ["-y", "langfuse-api-mcp"]` with `"command": "/absolute/path/to/langfuse-mcp"` and no `args` (`langfuse-mcp.exe` on Windows).
+One snippet per MCP client. Every snippet uses the [npx](#npx) channel; to use a [release archive](#release-archive) instead, replace `"command": "npx", "args": ["-y", "langfuse-api-mcp"]` with `"command": "/absolute/path/to/langfuse-mcp"` and no `args` (`langfuse-mcp.exe` on Windows).
 
 Each client starts the server with its own view of your environment, and several do not pass your shell's variables on (details and sources: [docs/research/mcp-hosts-env.md](docs/research/mcp-hosts-env.md)). So every snippet names the three variables the server needs in the client's own `env` mechanism, the one place a key may go. Settings that are not secret (`LANGFUSE_CA_CERT`, the proxy, the request limits) can go in the client's `env` as well, or once for every client in the [config file](#config-file-non-secret-settings). **Never put `LANGFUSE_PUBLIC_KEY` or `LANGFUSE_SECRET_KEY` in the config file**: the server refuses to start if it finds them there.
 
@@ -647,7 +649,7 @@ npx skills add rodrigorjsf/langfuse-api-mcp
 
 The CLI clones the repository (with the git credentials already on your machine, if it needs any) and installs from `main`, while your server may be an older build; the skill therefore names tool names, error codes and v4 operation IDs, plus only the v4 parameter names and filter rules its workflows turn on (such as `sessionId`, `fromStartTime` or the field groups of experiment items, which `describe_operation` does not list), and tells the agent to call `describe_operation` for every other parameter, bound and format. The install from a checkout, and from `main` after the skill was merged, is recorded in [docs/research/raw/2026-09-28-npx-skills-add.md](docs/research/raw/2026-09-28-npx-skills-add.md). In a recorded Claude Code run against a local Langfuse, the skill loads on its own for trace, cost and experiment requests, and the workflows complete, including the label promotion after the server's confirmation was accepted ([record](docs/research/raw/2026-09-28-claude-code-skill-run.md)). Its description says to load it before any call to this server's tools; with that wording it also loads for prompt requests ([record](docs/research/raw/2026-09-28-claude-code-skill-trigger.md)).
 
-**Claude Desktop** installs skills only by upload. **Planned until the first release**: each GitHub release will carry `langfuse-api-mcp-skill_<version>.zip`, whose root is the `langfuse-api-mcp/` folder; upload it in Claude Desktop under Customize > Skills. The release pipeline already builds and checks it on every snapshot run (see [For contributors](#for-contributors)). Until then, build it from a checkout with `python3 scripts/pack-skill.py <version> dist/skill`.
+**Claude Desktop** installs skills only by upload. Each [GitHub release](https://github.com/rodrigorjsf/langfuse-api-mcp/releases) carries `langfuse-api-mcp-skill_<version>.zip`, signed, whose root is the `langfuse-api-mcp/` folder; upload it in Claude Desktop under Customize > Skills. The release pipeline also builds and checks it on every snapshot run (see [For contributors](#for-contributors)); from a checkout, build it with `python3 scripts/pack-skill.py <version> dist/skill`.
 
 ## Security model
 
@@ -675,17 +677,20 @@ Found a vulnerability? Report it privately, never in a public issue: see [SECURI
 
 The write gate (write mode off, and the confirmation of every destructive call in write mode) covers only the calls made through this server. It cannot see or stop another process holding the same keys. When the keys sit in the environment the MCP client starts with, every shell command and tool the agent runs inherits them: an agent with a shell can call Langfuse's own CLI or `curl` with them and change your data without any confirmation, for example when this server fails to start and the agent looks for another way. Denying the shell tool alone is not enough: any tool that starts a process inheriting that environment (a script runner, a code interpreter, a plugin) does the same.
 
-- Store the keys in the client's own per-server settings, not in your shell: `claude mcp add --env` for Claude Code (kept in `~/.claude.json`), the [MCPB bundle](#claude-desktop-mcpb) for Claude Desktop (OS keychain; **Planned** until the first release), VS Code `inputs` with `"password": true`, or a literal value in the client's `env` block kept out of the repository.
+- Store the keys in the client's own per-server settings, not in your shell: `claude mcp add --env` for Claude Code (kept in `~/.claude.json`), the [MCPB bundle](#claude-desktop-mcpb) for Claude Desktop (OS keychain), VS Code `inputs` with `"password": true`, or a literal value in the client's `env` block kept out of the repository.
 - Never export `LANGFUSE_PUBLIC_KEY` or `LANGFUSE_SECRET_KEY` in the shell that starts the MCP client. The `${VAR}`-style snippets under [Client configuration](#client-configuration) need exactly that, so use them only when the agent cannot run commands.
 - The agent still runs as your user, so it could read a file that holds the keys. Where your client has permission rules, deny the agent reading that file; for a hard limit, give the agent no way to run commands at all.
 
 ### Verify what you run
 
-**Planned until the first release**: the release workflow is wired, but its signing, provenance and publishing jobs run **only on a `v*` release tag**, never on a pull request, a push to `main` or the weekly run, and no release tag exists yet, so none of the commands below has anything to verify. A cosign keyless signature writes a permanent public entry (the Rekor transparency log) naming this repository and its workflow.
+The release workflow signs and publishes **only on a `v*` release tag**, never on a pull request, a push to `main` or the weekly run. A cosign keyless signature writes a permanent public entry (the Rekor transparency log) naming this repository and its workflow. Every command below passed against `v0.1.0` ([record](docs/research/raw/2026-09-30-v0.1.0-release-proofs.md)).
 
-Every release will carry: `checksums.txt` (SHA-256 of every archive and SBOM); one SPDX JSON SBOM per archive and one for the image; a cosign keyless signature, as a Sigstore bundle `<file>.sigstore.json`, and GitHub build provenance for every archive, `checksums.txt`, the `.mcpb` and the skill ZIP; the multi-arch image signed and attested by digest. The SBOMs are covered through `checksums.txt`, which lists them and is itself signed. The skill ZIP is not in `checksums.txt` (GoReleaser writes that file before the ZIP is packed): check it by its signature (step 2). A signature is valid only when its certificate names this repository's release workflow at the release tag, issued to GitHub Actions. With `version=<version>` (without the leading `v`):
+Every release carries: `checksums.txt` (SHA-256 of every archive and of its SBOM); one SPDX JSON SBOM per archive and one for the image; a cosign keyless signature, as a Sigstore bundle `<file>.sigstore.json`, and GitHub build provenance for every archive, `checksums.txt`, the `.mcpb` and the skill ZIP; the multi-arch image signed by digest (each platform image too) and attested by digest. The archive SBOMs are covered through `checksums.txt`, which lists them and is itself signed. The `.mcpb` and the skill ZIP are not in `checksums.txt` (GoReleaser writes that file before they are packed): check them by their signatures (step 2). The image SBOM (`langfuse-mcp_<version>_image.sbom.json`) is covered by no signature yet: neither `checksums.txt` nor a bundle or attestation lists it. A signature is valid only when its certificate names this repository's release workflow at the release tag, issued to GitHub Actions. Step 4 needs a GitHub CLI with the `gh attestation` command (the Ubuntu package's 2.45.0 lacks it; 2.101.0 has it). With the release files downloaded into the current directory (see [Release archive](#release-archive)):
 
 ```bash
+version=<version>   # without the leading v, for example 0.1.0
+archive="langfuse-mcp_${version}_linux_amd64.tar.gz"   # the archive you downloaded
+
 # 1. The archive is the one in checksums.txt (Windows: compare Get-FileHash, see Release archive).
 awk -v f="$archive" '$2 == f' checksums.txt | sha256sum -c -   # macOS: … | shasum -a 256 -c -
 
@@ -707,7 +712,7 @@ gh attestation verify "$archive" -R rodrigorjsf/langfuse-api-mcp
 gh attestation verify oci://ghcr.io/rodrigorjsf/langfuse-api-mcp:$version -R rodrigorjsf/langfuse-api-mcp
 ```
 
-The npm packages are published with npm provenance: `npm audit signatures` in a project that installed `langfuse-api-mcp` checks them.
+The npm packages are published with npm provenance: `npm audit signatures` in a project that installed `langfuse-api-mcp` checks them (for `v0.1.0` it reports verified registry signatures and attestations for both installed packages).
 
 The [npx](#npx) channel adds the npm registry and Node.js as dependencies of that channel only; its packages depend on nothing but their own platform packages and run no install script. The one Python dependency of the maintainer tooling (PyYAML, used by the union catalog generator in CI only) is pinned with hashes in [`scripts/requirements.txt`](scripts/requirements.txt), installed with `--require-hashes` and kept current by Dependabot. The MCPB CLI that validates and packs the Claude Desktop bundle is pinned with its whole dependency tree and integrity hashes in [`packaging/mcpb/package-lock.json`](packaging/mcpb/package-lock.json), installed with `npm ci --ignore-scripts` and kept current by Dependabot. `mcp-publisher`, which publishes the [MCP Registry](https://registry.modelcontextprotocol.io) entry on a release tag only (`publish-registry`), is pinned to one version and its archive checked against a pinned SHA-256 before it runs; the entry it publishes is [`packaging/server.json`](packaging/server.json), whose texts are written in this repository and never built from Langfuse data.
 
@@ -804,19 +809,22 @@ scripts/pack-mcpb.sh   # prints dist/langfuse-mcp_<version>.mcpb
 
 The same run packs the [user skill](#user-skill) ZIP for Claude Desktop with [`scripts/pack-skill.py`](scripts/pack-skill.py) (standard library only; its offline tests, `python3 scripts/test_pack_skill.py`, run in CI): `dist/skill/langfuse-api-mcp-skill_<version>.zip`, whose root is the `langfuse-api-mcp/` folder, holding every file of `skills/langfuse-api-mcp/`, entries sorted and dated 1980-01-01 so the same skill gives the same bytes. A workflow step checks that the ZIP lists exactly the files git tracks under `skills/langfuse-api-mcp/`, `langfuse-api-mcp/SKILL.md` among them. The snapshot run keeps it as a workflow artifact only; nothing attaches it anywhere. The release workflow does not run on a change to the skill's Markdown alone (CI checks that change with `check-skill.py`); a push to `main` rebuilds the ZIP. Locally: `python3 scripts/pack-skill.py <version> dist/skill`.
 
-**On a release tag the same pipeline publishes (Planned until the first release tag).** A `v*` tag push runs the same build with the tag's version (`vX.Y.Z` only; any other `v*` tag fails the build before anything is signed) and the same smoke against those artifacts; only when every smoke passes do the tag-only jobs run, each with only the permissions it needs, signing first so nothing is public before its signatures exist: `sign-blobs` (cosign keyless signatures and `actions/attest` build provenance for the archives, `checksums.txt`, the `.mcpb` and the skill ZIP; `id-token`, `attestations`), `publish-image` (pushes the two images the smoke built and joins them into the multi-arch `ghcr.io/rodrigorjsf/langfuse-api-mcp:<version>`, signs and attests it by digest; `packages`, `id-token`, `attestations`), `publish-npm` (the six platform packages, then the main one; `id-token`) and `github-release` (the GitHub release with every archive, SBOM, signature, the bundle and the skill ZIP; `contents: write`). After it, `publish-registry` publishes the MCP Registry entry `io.github.rodrigorjsf/langfuse-api-mcp` (the npm package, the image and, only when the GitHub release holds one, the `.mcpb` with its `fileSha256`) with `mcp-publisher login github-oidc` and `mcp-publisher publish` (`id-token`, `contents: read`); the Registry is in preview, so this job may fail without failing the release run. On a pull request, `main` or the weekly run they show as skipped. See [Verify what you run](#verify-what-you-run) for what a user checks.
+**On a release tag the same pipeline publishes.** A `v*` tag push runs the same build with the tag's version (`vX.Y.Z` only; any other `v*` tag fails the build before anything is signed) and the same smoke against those artifacts; only when every smoke passes do the tag-only jobs run, each with only the permissions it needs, signing first so nothing is public before its signatures exist: `sign-blobs` (cosign keyless signatures and `actions/attest` build provenance for the archives, `checksums.txt`, the `.mcpb` and the skill ZIP; `id-token`, `attestations`), `publish-image` (pushes the two images the smoke built and joins them into the multi-arch `ghcr.io/rodrigorjsf/langfuse-api-mcp:<version>`, signs and attests it by digest; `packages`, `id-token`, `attestations`), `publish-npm` (the six platform packages, then the main one; `id-token`) and `github-release` (the GitHub release with every archive, SBOM, signature, the bundle and the skill ZIP; `contents: write`). After it, `publish-registry` publishes the MCP Registry entry `io.github.rodrigorjsf/langfuse-api-mcp` (the npm package, the image and, only when the GitHub release holds one, the `.mcpb` with its `fileSha256`) with `mcp-publisher login github-oidc` and `mcp-publisher publish` (`id-token`, `contents: read`); the Registry is in preview, so this job may fail without failing the release run. On a pull request, `main` or the weekly run they show as skipped. See [Verify what you run](#verify-what-you-run) for what a user checks.
 
 #### Cutting a release (maintainer)
 
-The repository is public (GitHub artifact attestations need a public repository, or GitHub Enterprise Cloud, and npm provenance needs a public source repository), with secret scanning, push protection and private vulnerability reporting on. The tag ruleset, the `release` environment and its secret below do not exist yet. Before the first tag:
+The repository is public (GitHub artifact attestations need a public repository, or GitHub Enterprise Cloud, and npm provenance needs a public source repository), with secret scanning, push protection and private vulnerability reporting on. The first release, `v0.1.0`, was cut on 2026-09-30 with this process; its settings stay in place for every later release:
 
-1. **Protect `v*` tags** with a tag ruleset (Settings → Rules → Rulesets, target tags `v*`: restrict creation, update and deletion to administrators), so only the maintainer can start a release; `sign-blobs` and `github-release` do not run in the environment below.
-2. **Create the `release` environment** (Settings → Environments) with the deployment rule "Selected branches and tags" allowing only tags matching `v*`. `publish-image`, `publish-npm` and `publish-registry` run in it, so a workflow on any other ref, a pull request that edits the workflow included, cannot reach its secrets.
-3. **Check the npm names** `langfuse-api-mcp` and `langfuse-api-mcp-{linux,darwin,win32}-{x64,arm64}` are still free (the spec checked `langfuse-api-mcp` on 2026-09-27); if one is taken, the package name is reopened.
-4. **npm authentication, first release.** npm trusted publishing (OIDC from this workflow, no long-lived token) is configured per package on npmjs.com, and the npm documentation describes it only for packages that already exist. So publish the first release with a granular access token: create one on npmjs.com with read and write access to packages and a short expiry, and store it as the secret `NPM_TOKEN` of the `release` environment only (never a repository secret).
-5. **Tag and push** `vX.Y.Z` from `main`, then watch the Release run. Its last job, `publish-registry`, publishes the MCP Registry entry and is allowed to fail (the Registry is in preview): if it failed, the release is still complete. The Registry proves the image is ours by reading its label, which it cannot do while the GHCR package is private, so on the first release expect it to fail until step 6 makes the package public; re-run that job then (or once the Registry answers again), and confirm the entry at `https://registry.modelcontextprotocol.io/v0/servers?search=io.github.rodrigorjsf/langfuse-api-mcp`.
-6. **After the first release:** make the GHCR package public (Packages → `langfuse-api-mcp` → Package settings → Change visibility; a newly pushed package is private) and link it to the repository if it is not already. On npmjs.com, add a trusted publisher to each of the seven packages (repository `rodrigorjsf/langfuse-api-mcp`, workflow `release.yml`, environment `release`), then delete the `NPM_TOKEN` secret and revoke the token: `publish-npm` authenticates through OIDC from then on (its `NODE_AUTH_TOKEN` is then empty; if the second release's `npm publish` still asks for a token, remove that line from the job).
-7. **Check the release** with the commands in [Verify what you run](#verify-what-you-run) and remove from the README the Planned marks of the release channels and of release verification.
+- **`v*` tags are protected** by the tag ruleset `release tags` (Settings → Rules → Rulesets: creation, update and deletion of `v*` tags restricted to administrators), so only the maintainer can start a release; `sign-blobs` and `github-release` do not run in the environment below.
+- **The `release` environment** (Settings → Environments) allows deployments from tags matching `v*` only. `publish-image`, `publish-npm` and `publish-registry` run in it, so a workflow on any other ref, a pull request that edits the workflow included, cannot reach its secrets.
+- **The GHCR package `langfuse-api-mcp` is public**, so anyone pulls the image without logging in, and the MCP Registry can read the image label that proves the image is ours.
+- **npm authentication.** npm trusted publishing (OIDC from this workflow, no long-lived token) is configured per package on npmjs.com, and only for packages that already exist, so `v0.1.0` was published with a short-lived granular access token stored as the secret `NPM_TOKEN` of the `release` environment only (never a repository secret). Still to do before the next release: on npmjs.com, add a trusted publisher to each of the seven packages (`langfuse-api-mcp` and `langfuse-api-mcp-{linux,darwin,win32}-{x64,arm64}`; repository `rodrigorjsf/langfuse-api-mcp`, workflow `release.yml`, environment `release`), then delete the `NPM_TOKEN` secret and revoke the token. From then on `publish-npm` authenticates through OIDC (its `NODE_AUTH_TOKEN` is then empty; if `npm publish` still asks for a token, remove that line from the job).
+
+To cut a release:
+
+1. **Tag and push** `vX.Y.Z` from `main`, then watch the Release run.
+2. Its last job, `publish-registry`, publishes the MCP Registry entry and is allowed to fail (the Registry is in preview): if it failed, the release is still complete. Re-run that job once the Registry answers again, and confirm the entry at `https://registry.modelcontextprotocol.io/v0/servers?search=io.github.rodrigorjsf/langfuse-api-mcp`.
+3. **Check the release** with the commands in [Verify what you run](#verify-what-you-run), as was done for `v0.1.0` ([record](docs/research/raw/2026-09-30-v0.1.0-release-proofs.md)).
 
 **A toolchain bump PR shows no CI until you re-trigger it.** The workflow opens its pull request with the repository's `GITHUB_TOKEN`, and GitHub does not start workflows for events that token creates, so `CI` does not run on the PR by itself. The same holds for the union catalog PR (`deps/union-catalog-*`). Close and reopen the PR (or push a commit to its `deps/toolchain-*` or `deps/union-catalog-*` branch) to run CI, and merge only once it is green. The workflow also relies on the repository setting "Allow GitHub Actions to create and approve pull requests" (Settings → Actions → General); without it the PR is not created.
 
