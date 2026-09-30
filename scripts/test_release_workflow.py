@@ -7,7 +7,10 @@
 #       a pinned SHA-256. The pinned installs (#92, #124, #155): every workflow installs the MCPB
 #       CLI with `npm ci --ignore-scripts` from its integrity-hashed lockfile, and Python packages
 #       only with `pip install --require-hashes` from the hash-pinned scripts/requirements.txt,
-#       and every setup-node step takes the one exact NODE_VERSION.
+#       and every setup-node step takes the one exact NODE_VERSION. Signing (#158): sign-blobs signs
+#       every archive, checksums.txt, the .mcpb and the skill ZIP with a pinned cosign and attests
+#       the same files; publish-image signs the image and its platform manifests by digest and
+#       attests it by digest.
 # WHY:  a publish job reachable from a pull request or a branch would publish from an unreviewed
 #       ref (security gate, dangerous parameters); a Registry failure (preview) must never fail a
 #       release; an unpinned mcp-publisher would be an unchecked supply-chain dependency.
@@ -78,6 +81,57 @@ class TagOnlyJobs(unittest.TestCase):
         self.assertLess(run.index("sha256sum -c"), run.index("tar -xzf"))
         self.assertLess(run.index("tar -xzf"), run.index("login github-oidc"))
         self.assertIsNone(re.search(r"releases/latest", run))
+
+
+def step_using(job, action):
+    """Return the one step of job that uses action (`owner/name`, pinned by commit)."""
+    steps = [s for s in job["steps"] if s.get("uses", "").startswith(action + "@")]
+    if len(steps) != 1:
+        raise AssertionError(f"want one {action} step, got {len(steps)}")
+    return steps[0]
+
+
+class Signing(unittest.TestCase):
+    """What a user verifies (README "Verify what you run"): cosign keyless signatures and build
+    provenance for every archive, checksums.txt, the .mcpb and the skill ZIP, and for the image by
+    digest. The live proof against v0.1.0 is docs/research/raw/2026-09-30-v0.1.0-release-proofs.md."""
+
+    SIGNED_BLOBS = ["*.tar.gz", "*.zip", "checksums.txt", "*.mcpb"]
+
+    def setUp(self):
+        self.wf = load()
+        self.jobs = self.wf["jobs"]
+
+    def test_cosign_is_pinned_and_installed_by_sigstores_installer_in_every_signing_job(self):
+        self.assertRegex(self.wf["env"]["COSIGN_VERSION"], r"^v\d+\.\d+\.\d+$")
+        for name in ["sign-blobs", "publish-image"]:
+            with self.subTest(job=name):
+                step = step_using(self.jobs[name], "sigstore/cosign-installer")
+                self.assertEqual(step["with"]["cosign-release"], "${{ env.COSIGN_VERSION }}")
+
+    def test_sign_blobs_signs_every_archive_the_checksums_the_bundle_and_the_skill_zip(self):
+        run = "\n".join(s.get("run", "") for s in self.jobs["sign-blobs"]["steps"])
+        loop = re.search(r"^\s*for f in (.+); do$", run, re.M)
+        self.assertIsNotNone(loop)
+        self.assertEqual(loop.group(1).split(), self.SIGNED_BLOBS)
+        self.assertIn('cosign sign-blob --yes --bundle "$f.sigstore.json" "$f"', run)
+
+    def test_sign_blobs_attests_build_provenance_for_the_same_files(self):
+        attest = step_using(self.jobs["sign-blobs"], "actions/attest")
+        paths = attest["with"]["subject-path"].split()
+        self.assertEqual(paths, ["release/" + g for g in self.SIGNED_BLOBS])
+
+    def test_publish_image_signs_the_image_and_every_platform_manifest_by_digest(self):
+        runs = [s.get("run", "") for s in self.jobs["publish-image"]["steps"]]
+        self.assertIn('cosign sign --yes --recursive "$IMAGE@$DIGEST"', runs)
+        sign = next(s for s in self.jobs["publish-image"]["steps"] if "cosign sign" in s.get("run", ""))
+        self.assertEqual(sign["env"]["DIGEST"], "${{ steps.push.outputs.digest }}")
+
+    def test_publish_image_attests_build_provenance_for_the_image_by_digest(self):
+        attest = step_using(self.jobs["publish-image"], "actions/attest")
+        self.assertEqual(attest["with"]["subject-name"], "${{ env.IMAGE }}")
+        self.assertEqual(attest["with"]["subject-digest"], "${{ steps.push.outputs.digest }}")
+        self.assertIs(attest["with"]["push-to-registry"], True)
 
 
 def workflow_steps():

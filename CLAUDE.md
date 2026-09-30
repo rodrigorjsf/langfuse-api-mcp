@@ -53,3 +53,4 @@ When something fails repeatedly, when User has to re-explain, or when a workarou
 - Old Langfuse compose: pin postgres 17 and clickhouse 24.3; `latest` breaks.
 - `gh issue view --comments`, `gh pr edit` fail (Projects-classic GraphQL); use `--json`, `gh api -X PATCH`.
 - `golangci-lint` not on bash PATH; run `~/go/bin/golangci-lint`.
+- System `gh` 2.45 lacks `gh attestation`; `go install github.com/cli/cli/v2/cmd/gh@latest` to scratch.

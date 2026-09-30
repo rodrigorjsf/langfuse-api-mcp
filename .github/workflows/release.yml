@@ -22,8 +22,8 @@
 # by digest), publish-npm (`npm publish` of the platform packages, then the main one) and
 # github-release (the GitHub release holding the archives, SBOMs, checksums, bundle, skill ZIP and
 # signatures), then publish-registry (the MCP Registry entry, #154; allowed to fail). Each is gated by a job `if` on the tag, so a snapshot run shows it skipped, and holds only the permissions it needs; the
-# publish jobs run in the `release` environment, which alone will hold the npm token (Planned, M7:
-# the maintainer creates it restricted to `v*` tags, README "Cutting a release").
+# publish jobs run in the `release` environment, restricted to `v*` tags (README "Cutting a
+# release"), which alone holds the npm token until npm trusted publishing replaces it.
 # Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current. Tool
 # versions (GoReleaser, syft) are pinned below and in packaging/.goreleaser.yaml's header; Node and
 # cosign in `env` below,
@@ -657,7 +657,7 @@ jobs:
     needs: [snapshot, sign-blobs]
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: release # to be restricted by the maintainer to `v*` tags (M7)
+    environment: release # restricted to `v*` tags
     permissions:
       packages: write # push to ghcr.io with this run's GITHUB_TOKEN
       id-token: write # the OIDC token for the cosign signature and the attestation
@@ -700,9 +700,9 @@ jobs:
           create-storage-record: false # would need artifact-metadata: write; not needed to verify
 
   # `npm publish` of the six platform packages, then the main package that depends on them, from the
-  # tarballs the npx smoke installed. Authentication: npm trusted publishing (OIDC, id-token) once it
-  # is configured on npmjs.com; until then the `release` environment's NPM_TOKEN secret (README
-  # "Cutting a release"; once the secret is deleted NODE_AUTH_TOKEN is empty and npm uses OIDC). npm
+  # tarballs the npx smoke installed. Authentication: npm trusted publishing (OIDC, id-token),
+  # configured on npmjs.com after v0.1.0, which used a short-lived NPM_TOKEN; that secret is deleted,
+  # so NODE_AUTH_TOKEN is empty and npm uses OIDC (README "Cutting a release"). npm
   # adds provenance either way. A package version already on the registry is
   # skipped, so a re-run after a partial failure finishes the set instead of failing on it.
   publish-npm:
@@ -710,7 +710,7 @@ jobs:
     needs: [snapshot, sign-blobs]
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment: release # to be restricted to `v*` tags and to hold NPM_TOKEN (M7)
+    environment: release # restricted to `v*` tags; no npm token, trusted publishing (OIDC)
     permissions:
       id-token: write # npm trusted publishing and npm provenance
     env:
@@ -791,7 +791,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     continue-on-error: true # the Registry (preview) never fails a release
-    environment: release # restricted by the maintainer to `v*` tags (M7), like the other publish jobs
+    environment: release # restricted to `v*` tags, like the other publish jobs
     permissions:
       id-token: write # the OIDC token mcp-publisher exchanges for a Registry token
       contents: read # the checkout and the GitHub release's asset list
