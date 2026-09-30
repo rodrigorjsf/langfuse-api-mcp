@@ -16,3 +16,9 @@ paths:
 - Installed-artifact smoke (seam S2, spec #119; build tag `smoke`, `cmd/langfuse-mcp/installed_test.go`): `TestInstalledArtifact` runs `checkInstalledArtifact` (initialize version, read tool set, one `execute_read` through a private CA with a hostile payload and the CA file logged as an explicit source, the same read refused as `tls_untrusted_certificate` without the CA file, invalid base URL refusal with exit code 1 and one log line, keys full of shell metacharacters reaching Langfuse byte-for-byte) against the launch command in `LANGFUSE_MCP_SMOKE_COMMAND` (a JSON argv, never a shell string) expecting `LANGFUSE_MCP_SMOKE_VERSION`; a missing variable fails, never skips. Optional `LANGFUSE_MCP_SMOKE_CA_DIR`: the directory the private CA file is written to (world-readable), mounted read-only at the same path by the container adapter. `.github/workflows/release.yml` runs it on each runner against the extracted snapshot archive, on Linux against the snapshot image (`docker run -i --network host`), and on each runner against `npx -y langfuse-api-mcp@<version>` served by a local registry of the packed tarballs (`packaging/npm/smoke-registry.mjs`), after the npm shim tests (`node --test packaging/npm/shim.test.mjs`, #123); `go test ./...` runs the same checks against a binary built with an injected version.
 - Golden files live in `testdata/`; update with an explicit `-update` flag, never silently.
 - `go test -race ./...` must pass on linux, macOS and windows.
+
+## Gotchas
+
+- Langfuse compose: `docker compose pull` first; cached `:4` image silently stale.
+- Windows Go test from WSL: `GOOS=windows` build, run `.exe` directly; WSL env not inherited.
+- Old Langfuse compose: pin postgres 17 and clickhouse 24.3; `latest` breaks.
