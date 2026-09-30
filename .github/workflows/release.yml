@@ -700,9 +700,9 @@ jobs:
           create-storage-record: false # would need artifact-metadata: write; not needed to verify
 
   # `npm publish` of the six platform packages, then the main package that depends on them, from the
-  # tarballs the npx smoke installed. Authentication: npm trusted publishing (OIDC, id-token) once it
-  # is configured on npmjs.com; until then the `release` environment's NPM_TOKEN secret (README
-  # "Cutting a release"; once the secret is deleted NODE_AUTH_TOKEN is empty and npm uses OIDC). npm
+  # tarballs the npx smoke installed. Authentication: npm trusted publishing (OIDC, id-token),
+  # configured on npmjs.com after v0.1.0, which used a short-lived NPM_TOKEN; that secret is deleted,
+  # so NODE_AUTH_TOKEN is empty and npm uses OIDC (README "Cutting a release"). npm
   # adds provenance either way. A package version already on the registry is
   # skipped, so a re-run after a partial failure finishes the set instead of failing on it.
   publish-npm:
@@ -710,7 +710,7 @@ jobs:
     needs: [snapshot, sign-blobs]
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment: release # restricted to `v*` tags; holds NPM_TOKEN until trusted publishing
+    environment: release # restricted to `v*` tags; no npm token, trusted publishing (OIDC)
     permissions:
       id-token: write # npm trusted publishing and npm provenance
     env:
