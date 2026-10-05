@@ -11150,6 +11150,26 @@
     "x-introduced": "4.46.0"
    }
   },
+  "/api/public/unstable/skills/files/content": {
+   "get": {
+    "description": "Read a batch of text contents by canonical base64-encoded SHA-256 hashes.",
+    "operationId": "unstable_skills_getFileContents",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "sha256Hashes",
+      "required": true,
+      "schema": {
+       "type": "string"
+      }
+     }
+    ],
+    "tags": [
+     "UnstableSkills"
+    ],
+    "x-introduced": "4.48.0"
+   }
+  },
   "/api/public/unstable/skills/files/{fileId}/content": {
    "get": {
     "description": "Read one text file from a persisted skill version using its file id, not its blob id. Returns JSON containing the text content with Cache-Control no-store.",
@@ -11167,12 +11187,13 @@
     "tags": [
      "UnstableSkills"
     ],
-    "x-introduced": "4.46.0"
+    "x-introduced": "4.46.0",
+    "x-removed": "4.48.0"
    }
   },
   "/api/public/unstable/skills/{skillName}": {
    "get": {
-    "description": "Resolve a skill's metadata and file manifest by version or label. Defaults to the production label. Use each file's id with getFileContent to read its text content.",
+    "description": "Resolve a skill's metadata and file manifest by version or label. Defaults to the production label. Use each file's sha256Hash with getFileContents, individually or in batches across manifests.",
     "operationId": "unstable_skills_get",
     "parameters": [
      {
@@ -14838,9 +14859,9 @@
    }
   }
  },
- "x-distinct-specs": 116,
+ "x-distinct-specs": 118,
  "x-generated-by": "scripts/gen-union-catalog.py",
- "x-newest-version": "4.46.0",
+ "x-newest-version": "4.50.0",
  "x-oldest-version": "3.0.0",
- "x-releases": 399
+ "x-releases": 403
 }
