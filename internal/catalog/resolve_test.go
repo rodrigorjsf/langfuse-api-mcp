@@ -137,7 +137,10 @@ func TestEachDeploymentProfileResolvesToExactlyItsOperations(t *testing.T) {
 			"unstable_skills_update",
 		}},
 		{"4.x dual", catalog.Profile{Version: "4.46.0", Families: []catalog.Family{legacy, v4, experiments}}, dual4460},
-		{"newer than any known version: the newest known one", catalog.Profile{Version: "5.0.0", Families: []catalog.Family{legacy, v4, experiments}}, dual4460},
+		{"newer than any known version: the newest known one", catalog.Profile{Version: "5.0.0", Families: []catalog.Family{legacy, v4, experiments}},
+			// 4.48.0 replaced unstable_skills_getFileContent with unstable_skills_getFileContents.
+			append(slices.DeleteFunc(slices.Clone(dual4460), func(id string) bool { return id == "unstable_skills_getFileContent" }),
+				"unstable_skills_getFileContents")},
 		// Families are ignored: none is on, yet the legacy reads stay.
 		{"below v3.0.0: ranges alone", catalog.Profile{Version: "2.95.0"}, []string{
 			"datasetRunItems_create", "datasets_getRun", "datasets_getRuns", "legacy_observationsV1_get",
