@@ -109,7 +109,7 @@ Consequences:
 | `GET /v3/scores` | core (always), `details`, `subject`, `annotation` | core | An unknown group returns 400. `subject` = `{kind: trace\|observation\|session\|experiment, id, traceId?}`. |
 | `GET /experiments` | `core`, `metadata`, `scores` | `core` | spec |
 | `GET /experiment-items` | `core`, `dataset`, `io`, `metadata`, `itemMetadata`, `experimentMetadata`, `scores` | `core,dataset` | spec |
-| `GET /traces` (deprecated) | has `fields` | — | spec |
+| `GET /traces` (deprecated) | `core` (always), `io` (input, output, metadata), `scores`, `observations`, `metrics` | all groups | A group left out comes back empty: `scores` and `observations` as empty lists, `metrics` as `-1` for `totalCost` and `latency`. Served from 3.73.0 (`x-introduced`); `fields=core` returned 537 bytes against 144,257 for the same `trace_list` page on 3.80.0 (campaign 2026-10-10). The server's static guidance on `describe_operation trace_list` (#178) names these values. `[sourced]` API reference `GET /api/public/traces` (`langfuse-docs` MCP, 2026-10-10) |
 
 Sources: `[sourced]` `/docs/api-and-data-platform/features/public-api#field-groups`, `#scores-field-groups`; the local spec's parameter descriptions.
 
@@ -463,6 +463,13 @@ mistakes them for "the last 7 days" of a run, #105):
   takes `=`, `contains`, `does not contain`, `starts with`, `ends with`.
 - `traceName` stays a backwards-compatible column of the `observations` view in v2, usable in `filters` and
   `dimensions`.
+
+The legacy v1 query (`GET /api/public/metrics`, `legacy_metricsV1_metrics`) has the same top-level keys as v2 and the
+`traces` view besides `observations` and the three `scores-*` views; its documented example, the number of traces per
+name (`{"view":"traces","metrics":[{"measure":"count","aggregation":"count"}],"dimensions":[{"field":"name"}],…}`),
+is the server's static guidance on `describe_operation legacy_metricsV1_metrics` (#178), with fixed January 2025 dates.
+Its documented `orderBy` sample is `{"field":"name","direction":"asc"}`. `[sourced]` API reference
+`GET /api/public/metrics` and `/docs/metrics/features/metrics-api` (`langfuse-docs` MCP, 2026-10-10).
 
 `[sourced]` checked on 2026-09-27 with the `langfuse-docs` MCP: API reference `GET /api/public/v2/metrics` (`query`
 parameter structure); `/docs/metrics/features/metrics-api#v2`; `/guides/cookbook/example_metrics_api_v2` (daily

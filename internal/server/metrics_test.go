@@ -241,11 +241,13 @@ func TestTheMetricsQueryExampleOfTheGuidancePassesTheServersValidator(t *testing
 	}
 }
 
-func TestOnlyMetricsMetricsCarriesTheQueryGuidance(t *testing.T) {
+func TestOperationsOutsideTheGuidedOnesCarryNoGuidance(t *testing.T) {
 	t.Parallel()
 	cs := connectOffline(t)
 
-	for _, operationID := range []string{"legacy_metricsV1_metrics", "trace_list"} {
+	for _, operationID := range []string{
+		"trace_get", "observations_getMany", "legacy_observationsV1_getMany", "scores_get-many", "datasets_get", "metrics_daily",
+	} {
 		res := callTool(t, cs, "describe_operation", map[string]any{"operationId": operationID})
 		if res.IsError {
 			t.Fatalf("describe_operation %s returned a tool error: %s", operationID, resultText(t, res))
@@ -313,20 +315,22 @@ func TestTheRefusalHintAndTheGuidanceNameTheKeysTheValidatorAccepts(t *testing.T
 	if len(keys) != len(values) {
 		t.Fatalf("the key list names %d keys, this test gives values for %d", len(keys), len(values))
 	}
-	for _, key := range keys {
-		value, ok := values[key]
-		if !ok {
-			t.Fatalf("the key list names %q, which this test has no value for", key)
-		}
-		t.Run(key, func(t *testing.T) {
-			t.Parallel()
-
-			sent := sentQuery(t, "metrics_metrics", `{"`+key+`":`+value+`}`)
-
-			if _, ok := sent[key]; !ok {
-				t.Fatalf("Langfuse received %v, want key %s", sent, key)
+	for _, operationID := range []string{"metrics_metrics", "legacy_metricsV1_metrics"} {
+		for _, key := range keys {
+			value, ok := values[key]
+			if !ok {
+				t.Fatalf("the key list names %q, which this test has no value for", key)
 			}
-		})
+			t.Run(operationID+" "+key, func(t *testing.T) {
+				t.Parallel()
+
+				sent := sentQuery(t, operationID, `{"`+key+`":`+value+`}`)
+
+				if _, ok := sent[key]; !ok {
+					t.Fatalf("Langfuse received %v, want key %s", sent, key)
+				}
+			})
+		}
 	}
 }
 

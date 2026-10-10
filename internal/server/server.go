@@ -299,6 +299,13 @@ const (
 		"may decode %2F before Langfuse sees it (langfuse/langfuse#12720), and then for a prompt, prompts_list " +
 		"with the full name in its name query parameter still finds it; the dataset runs routes " +
 		"(datasets_getRuns, datasets_getRun, datasets_deleteRun) currently fail upstream for Folder names (langfuse/langfuse#13933)"
+	// productionLabelHint closes the not-found hint of prompts_get called with
+	// no label and no version (#178): Langfuse then asks for the version
+	// labelled production, so a prompt that lacks that label is not found.
+	// Static text: it holds no prompt name.
+	productionLabelHint = "a call with no label and no version asks for the version labelled production, so a " +
+		"prompt without that label is not found: send label latest for the newest version, or label or version " +
+		"to name another"
 	// notFoundHint answers an unknown operation ID (#36).
 	notFoundHint = "call search_operations to find the operation ID: without arguments it lists every " +
 		"operation, with query it keeps those matching keywords such as \"prompt get\""
@@ -360,6 +367,9 @@ func (ex executor) run(ctx context.Context, op catalog.Operation, request catalo
 			a.status = f.HTTPStatus
 			if request.FolderName && (f.HTTPStatus == http.StatusNotFound || f.HTTPStatus == http.StatusBadRequest) {
 				f.Hint = folderNameHintFor(f)
+			}
+			if f.Code == errorNotFound && op.ImpliesProductionLabel(request) {
+				f.Hint += "; " + productionLabelHint
 			}
 		} else {
 			a.cause = err.Error()

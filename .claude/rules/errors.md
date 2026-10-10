@@ -34,7 +34,7 @@ Protocol-level JSON-RPC errors are reserved for malformed requests and unknown t
 | 400 | `langfuse_bad_request` | include Langfuse's validation message (truncated, sanitized) | no |
 | 401 | `langfuse_unauthorized` | check key pair and that `LANGFUSE_BASE_URL` is the key's region | no |
 | 403 | `langfuse_forbidden` | key lacks access (org key required? Enterprise feature?) | no |
-| 404 | `langfuse_not_found` | verify the id/name; use search/list operations | no |
+| 404 | `langfuse_not_found` | verify the id/name; use search/list operations; `prompts_get` with no `label` and no `version` adds the implicit `production` label and `latest` (static text, never the prompt name, #178) | no |
 | 404 meaning unavailable: HTML body, or a JSON `message`/`error` saying "Langfuse v4 events_only mode" / "Langfuse v4 write mode" | `operation_unavailable` | name the detected version and family; never echo the body (ADR-0012) | no |
 | 404/400 on a call with a Folder name (`/` in a folder-capable name, #33) | same code as its row | static hint: verify the name; a proxy may decode `%2F` (langfuse/langfuse#12720), `prompts_list` `name` workaround; dataset runs routes fail upstream (langfuse/langfuse#13933). Replaces the not-found/bad-request hint; follows an `operation_unavailable` hint | no |
 | 409/422 | `langfuse_conflict` / `langfuse_unprocessable` | state conflict; re-read before changing | no |
