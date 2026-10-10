@@ -115,7 +115,7 @@ func (ex executor) executeWrite(ctx context.Context, req *mcp.CallToolRequest, a
 	}
 	op, ok := ex.catalog.Lookup(in.OperationID)
 	if !ok {
-		if f, method, unavailable := notOffered(ex.catalog, in.OperationID, ex.writeMode, ex.profile); unavailable {
+		if f, method, unavailable := notOffered(ex.catalog, in.OperationID, toolExecuteWrite, ex.writeMode, ex.profile); unavailable {
 			a.method = method
 			return errorResult(f)
 		}

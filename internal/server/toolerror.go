@@ -179,10 +179,10 @@ func routeMissingFlavour(family catalog.Family, profile langfuse.DeploymentProfi
 // off: that stays operation_not_found, so the write surface is not revealed.
 // The message and the hint hold the operation ID and the replacements from the
 // catalog, and the deployment profile; never the caller's text.
-func notOffered(cat catalog.Catalog, id string, writeMode bool, profile langfuse.DeploymentProfile,
+func notOffered(cat catalog.Catalog, id, tool string, writeMode bool, profile langfuse.DeploymentProfile,
 ) (f toolErrorFields, method string, ok bool) {
 	u, found := cat.Unavailable(id)
-	if !found || (u.Method != http.MethodGet && !writeMode) {
+	if !found || !toolRuns(tool, u.Method, writeMode) {
 		return toolErrorFields{}, "", false
 	}
 	return toolErrorFields{
@@ -193,12 +193,28 @@ func notOffered(cat catalog.Catalog, id string, writeMode bool, profile langfuse
 	}, u.Method, true
 }
 
+// toolRuns reports whether tool answers about an operation of the given HTTP
+// method: execute_read about reads, execute_write about writes, and
+// describe_operation about both, but a write only in write mode (a write
+// operation ID while write mode is off is operation_not_found everywhere).
+func toolRuns(tool, method string, writeMode bool) bool {
+	isRead := method == http.MethodGet
+	switch tool {
+	case toolExecuteRead:
+		return isRead
+	case toolExecuteWrite:
+		return !isRead
+	default:
+		return isRead || writeMode
+	}
+}
+
 // notOfferedHint is the hint of an operation the deployment's catalog does not
 // offer: where the replacements are, then the deployment profile.
 func notOfferedHint(u catalog.Unavailable, profile langfuse.DeploymentProfile) string {
-	use := "no other operation does the same job on this deployment"
+	use := "this deployment offers no operation to use instead"
 	if len(u.Replacements) > 0 {
-		use = "operations that do the same job on this deployment: " + strings.Join(u.Replacements, ", ")
+		use = "operations to use on this deployment instead: " + strings.Join(u.Replacements, ", ")
 	}
 	return use + "; " + searchServedOperations + "; " + profileSummary(profile)
 }
