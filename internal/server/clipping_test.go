@@ -160,6 +160,67 @@ func TestASingleTraceLargerThanTheCapReturnsAllItsObservationsWithTheirNamesLeve
 	}
 }
 
+// A trace so long that even its inputs and outputs clipped to the floor do not
+// fit: it is still the trace object, with its leading observations whole.
+func TestATraceTooLongEvenClippedKeepsTheTraceObjectAndItsLeadingObservations(t *testing.T) {
+	t.Parallel()
+	fake, _ := fakeLangfuse(t, http.StatusOK, oneTrace(t, 300, 3000)) // about 1.8 MB
+	cs := connectServing(t, fake, "3.80.0", catalog.LegacyFamily)
+
+	text := resultText(t, callExecuteRead(t, cs, map[string]any{
+		"operationId": "trace_get", "parameters": map[string]any{"traceId": "t-1"}}))
+
+	env := decodeResult(t, text)
+	var trace struct {
+		ID           string `json:"id"`
+		Name         string `json:"name"`
+		Observations []struct {
+			ID, Name, Level, StatusMessage string
+		} `json:"observations"`
+	}
+	if err := json.Unmarshal(env.Data, &trace); err != nil {
+		t.Fatalf("data is not the trace object: %v\n%.300s", err, env.Data)
+	}
+	n := len(trace.Observations)
+	if len(text) > 64<<10 || !env.Truncated || trace.ID != "t-1" || trace.Name != "checkout" || n == 0 || n >= 300 ||
+		!strings.Contains(env.Hint, fmt.Sprintf("only the first %d of 300 rows", n)) {
+		t.Fatalf("result of %d bytes, truncated %v, trace %q %q with %d observations, hint %q; "+
+			"want the trace object with some but not all of 300 observations and a hint saying how many", len(text), env.Truncated,
+			trace.ID, trace.Name, n, env.Hint)
+	}
+	for i, o := range trace.Observations {
+		if o.ID != fmt.Sprintf("o%02d", i) || o.Name != fmt.Sprintf("step-%02d", i) || o.StatusMessage != fmt.Sprintf("status of step %02d", i) {
+			t.Fatalf("observation %d = %+v; want the leading observations in order, their names and status messages whole", i, o)
+		}
+	}
+}
+
+// The cursor is opaque Langfuse data the agent sends back unchanged (#93): a
+// clip never shortens it, however long it is.
+func TestAContinuationCursorLongerThanTheClipIsKeptWhole(t *testing.T) {
+	t.Parallel()
+	cursor := strings.Repeat("c", 400)
+	rows := make([]map[string]string, 0, 60)
+	for i := range 60 {
+		rows = append(rows, map[string]string{"id": strconv.Itoa(i), "input": strings.Repeat("a", 30000)})
+	}
+	fake, _ := fakeLangfuse(t, http.StatusOK, jsonOf(t, map[string]any{"data": rows, "meta": map[string]any{"cursor": cursor}}))
+	cs := startServer(t, langfuse.New(testOptions(t, fake.URL)), slog.New(slog.DiscardHandler),
+		server.Secrets{Keys: testKeys()}, langfuse.UnknownProfile(), server.WithMaxResultBytes(16384))
+
+	env := decodeResult(t, resultText(t, callExecuteRead(t, cs, map[string]any{"operationId": "observations_getMany"})))
+
+	var page struct {
+		Meta struct {
+			Cursor string `json:"cursor"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal(env.Data, &page); err != nil || page.Meta.Cursor != cursor || !strings.Contains(string(env.Data), clippedMarker) {
+		t.Fatalf("cursor of %d bytes (err %v), clipped values present %v; want the cursor whole and the inputs clipped",
+			len(page.Meta.Cursor), err, strings.Contains(string(env.Data), clippedMarker))
+	}
+}
+
 func TestTheTruncationHintNamesFieldsOnlyForAnOperationThatHasThem(t *testing.T) {
 	t.Parallel()
 	big := jsonOf(t, map[string]any{"data": []map[string]string{{"id": "x", "input": strings.Repeat("a", 100<<10)}}})
@@ -334,5 +395,23 @@ func TestAPayloadThatImitatesTheMarkerIsNotTreatedAsClipped(t *testing.T) {
 	_, inputs := rowInputs(t, env)
 	if env.Truncated || env.Hint != "" || len(inputs) != 1 || inputs[0] != imitation {
 		t.Fatalf("truncated %v, hint %q, inputs %q; want the imitation returned as sent, not truncated, no hint", env.Truncated, env.Hint, inputs)
+	}
+}
+
+// Beside a value that is really clipped, a value that holds the marker's words
+// is still exactly as sent.
+func TestAPayloadThatImitatesTheMarkerBesideAClippedValueStaysWhole(t *testing.T) {
+	t.Parallel()
+	const imitation = "note: the real value follows elsewhere" + clippedMarker
+	fake, _ := fakeLangfuse(t, http.StatusOK, jsonOf(t, map[string]any{"data": []map[string]string{
+		{"id": "r1", "input": imitation}, {"id": "r2", "input": strings.Repeat("x", 100<<10)}}}))
+	cs := connect(t, fake)
+
+	env := decodeResult(t, resultText(t, callExecuteRead(t, cs, map[string]any{"operationId": "trace_list"})))
+
+	_, inputs := rowInputs(t, env)
+	if !env.Truncated || len(inputs) != 2 || inputs[0] != imitation || inputs[1] == strings.Repeat("x", 100<<10) ||
+		!strings.HasSuffix(inputs[1], clippedMarker) {
+		t.Fatalf("truncated %v, inputs %.60q; want the imitation as sent and only the real large value clipped", env.Truncated, inputs)
 	}
 }

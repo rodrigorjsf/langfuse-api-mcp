@@ -5,7 +5,6 @@ package sanitize
 import (
 	"encoding/json"
 	"sort"
-	"unicode/utf8"
 )
 
 // UntrustedLabel labels every Langfuse payload returned to the agent.
@@ -25,7 +24,7 @@ type Envelope struct {
 	OperationID string `json:"operationId"`
 	// Truncated is set when the payload did not fit the result size cap and
 	// Data is less than the whole payload: some string values were clipped,
-	// leading rows were left out, or Data is the payload's start as text.
+	// trailing rows were left out, or Data is the payload's start as text.
 	Truncated bool   `json:"truncated,omitempty"`
 	Hint      string `json:"hint,omitempty"`
 	// Data is the payload JSON, with the structure it had when only values
@@ -39,17 +38,18 @@ type Envelope struct {
 // Hint are set and Data is cut to fit, by the least that does it:
 //   - the largest string values are clipped first: each keeps its start and
 //     ends in a marker, and every row and every other value stays whole;
-//   - only when clipping every value to the floor is not enough, a page, an
-//     object whose "data" is a list, keeps its other fields (meta, with the
-//     cursor or page) and as many leading rows as fit;
-//   - any other payload becomes a string holding as much of its start as fits,
-//     followed by the truncation marker.
+//   - only when clipping every value to the floor is not enough, the payload
+//     keeps all but its list of rows (a page's "data", or the largest list of
+//     an object, such as the observations of a trace: meta with the cursor
+//     stays) and as many leading rows as fit;
+//   - a payload with no list of rows becomes a string holding as much of its
+//     start as fits, followed by the truncation marker.
 //
 // payload is already sanitized and redacted: clipping only removes text, so
 // it cannot bring back anything those removed. remedies names what the
 // operation allows to ask for less, for the hint.
 func Wrap(operationID string, payload json.RawMessage, limit int, remedies Remedies) Envelope {
-	return wrap(operationID, payload, limit, "", notesFor(remedies, ""))
+	return wrap(operationID, payload, limit, hintsFor(remedies))
 }
 
 // WrapWith is Wrap for a payload whose hints are fixed text, such as a
@@ -57,53 +57,52 @@ func Wrap(operationID string, payload json.RawMessage, limit int, remedies Remed
 // remedy, a sentence part saying how to ask for less, comes before it. The
 // envelope, hints included, fits limit bytes.
 func WrapWith(operationID string, payload json.RawMessage, limit int, hint, remedy string) Envelope {
-	return wrap(operationID, payload, limit, hint, notes{remedy: remedy, standing: hint})
+	return wrap(operationID, payload, limit, hints{remedy: remedy, resultHint: hint})
 }
 
-// wrap builds the envelope with hint, cutting the payload when it does not
-// fit: clipping its values, then leaving out rows, then cutting it to text.
-func wrap(operationID string, payload json.RawMessage, limit int, hint string, n notes) Envelope {
-	env := Envelope{Label: UntrustedLabel, OperationID: operationID, Hint: hint, Data: payload}
+// wrap builds the envelope, cutting the payload when it does not fit:
+// clipping its values, then leaving out rows, then cutting it to text.
+func wrap(operationID string, payload json.RawMessage, limit int, h hints) Envelope {
+	env := Envelope{Label: UntrustedLabel, OperationID: operationID, Hint: h.resultHint, Data: payload}
 	if size(env) <= limit {
 		return env
 	}
 	env.Truncated = true
 	c := newClipper(payload)
-	tooBig := c.tooBig(operationID, limit)
-	if clipped, ok := c.fit(env, limit, n.clipped(tooBig)); ok {
+	tooBig := c.tooBig(operationID, limit, h.clipped(true))
+	if clipped, ok := c.fit(env, limit, h.clipped(tooBig)); ok {
 		return clipped
 	}
-	// Clipping as little as it takes did not fit: clip to the floor, then
-	// leave rows out.
-	wasClipped := c.apply(clipFloor) > 0
-	floored := c.marshal()
-	rowHint := func(kept, total int) string { return n.rows(kept, total, wasClipped, tooBig) }
-	if page, ok := firstRows(env, floored, limit, rowHint); ok {
-		return page
+	if rows, ok := leaveRowsOut(env, payload, limit, h, tooBig); ok {
+		return rows
 	}
-	env.Hint = n.text(tooBig)
-	return cutText(env, string(floored), limit)
+	floored := newClipper(payload)
+	floored.apply(clipFloor)
+	env.Hint = h.text(tooBig)
+	return cutText(env, string(floored.marshal()), limit)
 }
 
-// firstRows returns env holding the page payload with as many leading rows of
-// its "data" list as fit limit bytes, hinted by rowHint, or false when payload is not a page
-// or not even its other fields fit.
-func firstRows(env Envelope, payload json.RawMessage, limit int, rowHint func(kept, total int) string) (Envelope, bool) {
-	var page map[string]json.RawMessage
-	var rows []json.RawMessage
-	if json.Unmarshal(payload, &page) != nil || json.Unmarshal(page["data"], &rows) != nil || rows == nil {
+// leaveRowsOut returns env holding the payload with every large value clipped
+// to the floor and as many leading rows of its list of rows as fit limit
+// bytes, or false when the payload has no list of rows or not even the rest
+// of it fits.
+func leaveRowsOut(env Envelope, payload json.RawMessage, limit int, h hints, tooBig bool) (Envelope, bool) {
+	c := newClipper(payload)
+	list, ok := c.rowList()
+	if !ok {
 		return env, false
 	}
+	clipped := c.apply(clipFloor) > 0
 	with := func(k int) Envelope {
-		page["data"] = marshal(rows[:k])
+		list.set(list.rows[:k])
 		e := env
-		e.Data, e.Hint = marshal(page), rowHint(k, len(rows))
+		e.Data, e.Hint = c.marshal(), h.rows(k, len(list.rows), clipped, tooBig)
 		return e
 	}
 	// Rows past the cap even on their own never fit: search only below them.
 	candidates, total := 0, 0
-	for candidates < len(rows) && total <= limit {
-		total += len(rows[candidates])
+	for candidates < len(list.rows) && total <= limit {
+		total += len(marshal(list.rows[candidates]))
 		candidates++
 	}
 	// The largest k whose envelope fits: size grows with k.
@@ -111,18 +110,21 @@ func firstRows(env Envelope, payload json.RawMessage, limit int, rowHint func(ke
 	if k < 0 {
 		return env, false
 	}
-	return with(k), true
+	// The hint claims clipped values only if one is still among the rows that
+	// stay; it is no longer than the one the search measured.
+	kept := newClipper(payload)
+	kept.keepRows(k)
+	e := with(k)
+	e.Hint = h.rows(k, len(list.rows), len(kept.slots) > 0, tooBig)
+	return e, true
 }
 
 // cutText returns env holding, as a JSON string, the longest start of text
 // that fits limit bytes with the truncation marker.
 func cutText(env Envelope, text string, limit int) Envelope {
 	with := func(n int) Envelope {
-		for n > 0 && n < len(text) && !utf8.RuneStart(text[n]) {
-			n-- // never cut a character in half
-		}
 		e := env
-		e.Data = marshal(text[:n] + truncatedMarker)
+		e.Data = marshal(text[:runeBoundary(text, n)] + truncatedMarker)
 		return e
 	}
 	// The largest n whose envelope fits: escapes make the size grow faster

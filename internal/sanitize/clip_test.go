@@ -232,15 +232,91 @@ func TestRowsAreLeftOutOnlyWhenClippingToTheFloorIsNotEnough(t *testing.T) {
 	})
 }
 
-func TestAnObjectThatClippingCannotFitBecomesTextAsBefore(t *testing.T) {
+func TestAnObjectThatHoldsAListOfRowsKeepsItsStructureAndItsLeadingRows(t *testing.T) {
 	t.Parallel()
-	env := sanitize.Wrap("trace_get", payloadOf(t, map[string]any{"observationIds": manyIDs()}), 16384, sanitize.Remedies{})
+	// A trace as v3 trace_get returns it: the observations are a list inside an object.
+	obs := pageOf(300, 5000)["data"]
+	payload := payloadOf(t, map[string]any{"id": "t-1", "name": "checkout", "observations": obs, "scores": []any{}})
+
+	env := sanitize.Wrap("trace_get", payload, 16384, sanitize.Remedies{})
+
+	var trace struct {
+		ID           string           `json:"id"`
+		Name         string           `json:"name"`
+		Observations []map[string]any `json:"observations"`
+	}
+	if err := json.Unmarshal(env.Data, &trace); err != nil {
+		t.Fatalf("data is not the trace object: %v\n%.200s", err, env.Data)
+	}
+	if !env.Truncated || jsonSize(t, env) > 16384 || trace.ID != "t-1" || trace.Name != "checkout" ||
+		len(trace.Observations) == 0 || len(trace.Observations) >= 300 {
+		t.Fatalf("truncated %v, %d bytes, trace %q %q with %d observations; want the object kept with some but not all of 300 observations",
+			env.Truncated, jsonSize(t, env), trace.ID, trace.Name, len(trace.Observations))
+	}
+	for i, o := range trace.Observations {
+		if o["id"] != fmt.Sprintf("r%03d", i) || o["input"] != strings.Repeat("x", floor)+clipped {
+			t.Fatalf("observation %d = %v; want the leading observations in order, each input cut to the floor", i, o)
+		}
+	}
+	if !strings.Contains(env.Hint, fmt.Sprintf("only the first %d of 300 rows", len(trace.Observations))) {
+		t.Fatalf("hint = %q, want it to say how many of the 300 rows are shown", env.Hint)
+	}
+}
+
+func TestARowHintNeverSuggestsALimitAboveWhatTheOperationAccepts(t *testing.T) {
+	t.Parallel()
+	env := sanitize.Wrap("trace_list", payloadOf(t, pageOf(1000, 20)), 16384, sanitize.Remedies{Limit: 100})
+
+	rows := rowsOf(t, env)
+	if len(rows) <= 100 || !strings.Contains(env.Hint, "call again with limit 100;") {
+		t.Fatalf("%d rows kept, hint %q; want more than 100 rows kept and the hint to suggest limit 100, the most accepted", len(rows), env.Hint)
+	}
+}
+
+func TestAHintOnlyClaimsClippedValuesWhereOneRemainsAmongTheRowsThatStay(t *testing.T) {
+	t.Parallel()
+	// Only the last row holds a large value, and rows past the first few are left out.
+	page := pageOf(1000, 20)
+	rows := page["data"].([]map[string]any)
+	rows[999]["input"] = strings.Repeat("y", 5000)
+
+	env := sanitize.Wrap("trace_list", payloadOf(t, page), 16384, sanitize.Remedies{})
+
+	if kept := rowsOf(t, env); len(kept) >= 1000 || strings.Contains(env.Hint, "were shortened") {
+		t.Fatalf("%d rows kept, hint %q; want rows left out and no claim of a clipped value, none stays", len(kept), env.Hint)
+	}
+}
+
+func TestAContinuationCursorIsNeverClipped(t *testing.T) {
+	t.Parallel()
+	cursor := strings.Repeat("c", 400) // a base64 keyset cursor is this long
+	page := pageOf(60, 30000)          // the clip ceiling falls below 400 bytes
+	page["meta"] = map[string]any{"cursor": cursor}
+
+	env := sanitize.Wrap("observations_getMany", payloadOf(t, page), 16384, sanitize.Remedies{})
+
+	var got struct {
+		Meta struct {
+			Cursor string `json:"cursor"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal(env.Data, &got); err != nil || got.Meta.Cursor != cursor {
+		t.Fatalf("cursor = %.30q… (%d bytes, err %v), want the 400-byte cursor whole", got.Meta.Cursor, len(got.Meta.Cursor), err)
+	}
+	if !strings.Contains(string(env.Data), clipped) {
+		t.Fatalf("the large inputs were not clipped: %.200s", env.Data)
+	}
+}
+
+func TestAnObjectWithNoListOfRowsThatClippingCannotFitBecomesText(t *testing.T) {
+	t.Parallel()
+	env := sanitize.Wrap("trace_get", payloadOf(t, manyKeys()), 16384, sanitize.Remedies{})
 
 	var text string
 	if err := json.Unmarshal(env.Data, &text); err != nil {
 		t.Fatalf("data is not text: %v", err)
 	}
-	if !env.Truncated || !strings.HasPrefix(text, `{"observationIds":["observation-00000"`) ||
+	if !env.Truncated || !strings.HasPrefix(text, `{"key-00000":"value"`) ||
 		!strings.HasSuffix(text, "… [truncated]") || jsonSize(t, env) > 16384 {
 		t.Fatalf("data = %.60q… of %d bytes, truncated %v; want the start of the object as text ending with the truncation marker within the cap",
 			text, jsonSize(t, env), env.Truncated)
@@ -258,7 +334,7 @@ func TestHintsNameOnlyTheRemediesTheOperationHas(t *testing.T) {
 		"none": {not: []string{"fields", "limit", "time window", "page"}},
 		"fields": {remedies: sanitize.Remedies{Fields: true}, want: []string{"fields"},
 			not: []string{"limit", "time window", "page"}},
-		"limit and paging": {remedies: sanitize.Remedies{Limit: true, Paging: true}, want: []string{"limit"},
+		"limit and paging": {remedies: sanitize.Remedies{Limit: 100, Paging: true}, want: []string{"limit"},
 			wantRows: []string{"page through the rest"}, not: []string{"fields", "time window"}},
 		"time window": {remedies: sanitize.Remedies{TimeWindow: true}, want: []string{"time window"},
 			not: []string{"fields", "limit", "page"}},
@@ -267,7 +343,7 @@ func TestHintsNameOnlyTheRemediesTheOperationHas(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			for what, payload := range map[string]any{
-				"clipped values": pageOf(10, 30000), "rows left out": pageOf(400, 5000), "text": map[string]any{"ids": manyIDs()},
+				"clipped values": pageOf(10, 30000), "rows left out": pageOf(400, 5000), "text": manyKeys(),
 			} {
 				env := sanitize.Wrap("op", payloadOf(t, payload), 16384, tc.remedies)
 
@@ -290,13 +366,14 @@ func TestHintsNameOnlyTheRemediesTheOperationHas(t *testing.T) {
 	}
 }
 
-// manyIDs returns 6000 short strings, which clipping cannot shorten.
-func manyIDs() []string {
-	ids := make([]string, 0, 6000)
+// manyKeys returns an object of 6000 short values and no list, which clipping
+// cannot shorten and no row can be left out of.
+func manyKeys() map[string]string {
+	obj := make(map[string]string, 6000)
 	for i := range 6000 {
-		ids = append(ids, fmt.Sprintf("observation-%05d", i))
+		obj[fmt.Sprintf("key-%05d", i)] = "value"
 	}
-	return ids
+	return obj
 }
 
 func TestTheHintSaysWhenASingleValueIsLargerThanTheCapAndOnlyThen(t *testing.T) {
@@ -306,14 +383,15 @@ func TestTheHintSaysWhenASingleValueIsLargerThanTheCapAndOnlyThen(t *testing.T) 
 		payload any
 		want    bool
 	}{
-		"a value above the cap":          {payload: pageOf(3, 40000), want: true},
-		"values below the cap, together": {payload: pageOf(10, 6000), want: false},
-		"a value just under the cap":     {payload: pageOf(2, 15000), want: false},
+		"a value above the cap":                                  {payload: pageOf(3, 40000), want: true},
+		"values below the cap, together":                         {payload: pageOf(10, 6000), want: false},
+		"a value just under the cap":                             {payload: pageOf(2, 15000), want: false},
+		"a value that leaves no room for the envelope around it": {payload: pageOf(2, 16300), want: true},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			env := sanitize.Wrap("trace_list", payloadOf(t, tc.payload), 16384, sanitize.Remedies{Limit: true})
+			env := sanitize.Wrap("trace_list", payloadOf(t, tc.payload), 16384, sanitize.Remedies{Limit: 100})
 
 			if !env.Truncated || strings.Contains(env.Hint, whole) != tc.want {
 				t.Fatalf("truncated %v, hint %q; want truncated, and the sentence %q present: %v", env.Truncated, env.Hint, whole, tc.want)

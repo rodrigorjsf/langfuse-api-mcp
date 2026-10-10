@@ -9,7 +9,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -388,17 +387,15 @@ func (ex executor) run(ctx context.Context, op catalog.Operation, request catalo
 // parameters the deployment serves: the truncation hint names only these (a
 // deployment that does not serve fields is never told to use it).
 func remediesOf(op catalog.Operation) sanitize.Remedies {
-	takes := func(name string) bool {
-		return slices.ContainsFunc(op.Params, func(p catalog.Param) bool { return p.In == "query" && p.Name == name })
+	r := sanitize.Remedies{
+		Fields:     op.HasQueryParam("fields"),
+		TimeWindow: op.HasTimeFilter(),
+		Paging:     op.HasQueryParam("page") || op.HasQueryParam("cursor"),
 	}
-	return sanitize.Remedies{
-		Fields: takes("fields"),
-		Limit:  takes("limit"),
-		TimeWindow: slices.ContainsFunc(op.Params, func(p catalog.Param) bool {
-			return p.In == "query" && p.Schema.Format == "date-time"
-		}),
-		Paging: takes("page") || takes("cursor"),
+	if op.IsRead() && op.HasQueryParam("limit") {
+		r.Limit = catalog.MaxLimit
 	}
+	return r
 }
 
 // metricsQueryHint is the hint for a malformed metrics query (#104): how the

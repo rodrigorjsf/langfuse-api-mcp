@@ -2,6 +2,8 @@ package sanitize
 
 import (
 	"encoding/json"
+	"maps"
+	"slices"
 	"sort"
 	"unicode/utf8"
 )
@@ -16,6 +18,11 @@ const clippedMarker = "… [clipped]"
 // rows instead.
 const clipFloor = 128
 
+// cursorKey is the key of a continuation cursor. Its value is opaque Langfuse
+// data that the agent sends back unchanged (#93): shortened, it would break
+// paging, so clipping never touches it.
+const cursorKey = "cursor"
+
 // clipper shortens the string values of one decoded payload. It owns the
 // decoded value: apply rewrites its strings in place.
 type clipper struct {
@@ -24,8 +31,8 @@ type clipper struct {
 	// root holds the decoded payload as its only element, so that a payload
 	// that is itself a string can be clipped like any other value.
 	root []any
-	// slots are the string values clipping may shorten, in document order:
-	// those that clipping to the floor makes shorter. Keys are never clipped.
+	// slots are the string values clipping may shorten: those that clipping to
+	// the floor makes shorter. Keys and cursors are never clipped.
 	slots []slot
 	// longest is the length in bytes of the longest slot.
 	longest int
@@ -69,7 +76,9 @@ func (c *clipper) collect(v any) {
 		}
 	case map[string]any:
 		for k, item := range v {
-			add(item, func(s string) { v[k] = s })
+			if k != cursorKey {
+				add(item, func(s string) { v[k] = s })
+			}
 		}
 	}
 }
@@ -104,11 +113,16 @@ func clip(s string, ceil int) string {
 	if len(s) <= ceil+len(clippedMarker) {
 		return s
 	}
-	n := ceil
-	for n > 0 && !utf8.RuneStart(s[n]) {
-		n-- // never cut a character in half
+	return s[:runeBoundary(s, ceil)] + clippedMarker
+}
+
+// runeBoundary returns the largest n' <= n at which s can be cut without
+// splitting a character.
+func runeBoundary(s string, n int) int {
+	for n > 0 && n < len(s) && !utf8.RuneStart(s[n]) {
+		n--
 	}
-	return s[:n] + clippedMarker
+	return n
 }
 
 // fit clips the payload as little as it takes for env, holding hint, to fit
@@ -147,14 +161,66 @@ func (c *clipper) fit(env Envelope, limit int, hint string) (Envelope, bool) {
 }
 
 // tooBig reports whether some value is larger than any result can hold: an
-// envelope with that value alone would exceed limit bytes. Such a value
-// cannot be read whole through this server, whatever the query.
-func (c *clipper) tooBig(operationID string, limit int) bool {
-	room := limit - (size(Envelope{Label: UntrustedLabel, OperationID: operationID, Data: json.RawMessage(`""`)}) - 2)
+// envelope holding that value alone, with hint, would exceed limit bytes.
+// Such a value cannot be read whole through this server, whatever the query.
+func (c *clipper) tooBig(operationID string, limit int, hint string) bool {
+	room := limit - (size(Envelope{Label: UntrustedLabel, OperationID: operationID, Hint: hint, Data: json.RawMessage(`[""]`)}) - 2)
 	for _, s := range c.slots {
 		if len(s.text)*6+2 > room && len(marshal(s.text)) > room { // an encoded character takes at most 6 bytes
 			return true
 		}
 	}
 	return false
+}
+
+// rowList is the list of rows of a payload, and how to replace it.
+type rowList struct {
+	rows []any
+	set  func([]any)
+}
+
+// rowList finds the rows of the payload: the "data" list of a page; else the
+// payload itself when it is a list; else the largest list reachable through
+// objects, such as the observations of a trace. It returns false when there
+// is none.
+func (c *clipper) rowList() (rowList, bool) {
+	if c.root == nil {
+		return rowList{}, false
+	}
+	return findRows(c.root[0], func(rows []any) { c.root[0] = rows })
+}
+
+// findRows is rowList below v, which set replaces.
+func findRows(v any, set func([]any)) (rowList, bool) {
+	switch v := v.(type) {
+	case []any:
+		return rowList{rows: v, set: set}, true
+	case map[string]any:
+		if rows, ok := v["data"].([]any); ok {
+			return rowList{rows: rows, set: func(r []any) { v["data"] = r }}, true
+		}
+		var best rowList
+		found, bestSize := false, -1
+		for _, k := range slices.Sorted(maps.Keys(v)) {
+			if list, ok := findRows(v[k], func(r []any) { v[k] = r }); ok {
+				if n := len(marshal(list.rows)); n > bestSize {
+					best, found, bestSize = list, true, n
+				}
+			}
+		}
+		return best, found
+	}
+	return rowList{}, false
+}
+
+// keepRows leaves the first k rows of the payload and finds the clippable
+// strings of what stays.
+func (c *clipper) keepRows(k int) {
+	list, ok := c.rowList()
+	if !ok {
+		return
+	}
+	list.set(list.rows[:k])
+	c.slots, c.longest = nil, 0
+	c.collect(c.root)
 }

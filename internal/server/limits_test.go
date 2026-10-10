@@ -130,9 +130,9 @@ func TestAListResultAboveTheMaximumReturnedBytesKeepsTheFirstRowsAndThePaginatio
 		t.Fatalf("truncated list is not the Langfuse page shape: %v", err)
 	}
 	if len(page.Data) == 0 || len(page.Data) >= 5001 || page.Data[0].ID != "obs-1" || page.Meta.Cursor != "next" ||
-		!strings.Contains(env.Hint, strconv.Itoa(len(page.Data))+" of 5001") {
+		!strings.Contains(env.Hint, strconv.Itoa(len(page.Data))+" of 5001") || !strings.Contains(env.Hint, "call again with limit 100;") {
 		t.Fatalf("kept %d rows (first %+v), cursor %q, hint %q; want the first rows, fewer than 5001, "+
-			"meta.cursor next and a hint naming how many of 5001 rows are shown",
+			"meta.cursor next and a hint naming how many of 5001 rows are shown and the largest limit, 100",
 			len(page.Data), page.Data[:min(1, len(page.Data))], page.Meta.Cursor, env.Hint)
 	}
 }
@@ -157,20 +157,20 @@ func TestAResultAboveTheMaximumReturnedBytesThatIsNotAListHasItsLargeValueClippe
 	}
 }
 
-func TestAnObjectOfManyShortValuesAboveTheMaximumReturnedBytesIsCutToTextWithAMarker(t *testing.T) {
+func TestAnObjectWithNoListOfManyShortValuesAboveTheMaximumReturnedBytesIsCutToTextWithAMarker(t *testing.T) {
 	t.Parallel()
-	ids := make([]string, 0, 6000)
+	pairs := make([]string, 0, 6000)
 	for i := range 6000 {
-		ids = append(ids, fmt.Sprintf("observation-%05d", i))
+		pairs = append(pairs, fmt.Sprintf(`"key-%05d":"value"`, i))
 	}
 
-	env := readTruncated(t, "trace_get", `{"id":"t-1","observationIds":["`+strings.Join(ids, `","`)+`"]}`)
+	env := readTruncated(t, "trace_get", `{`+strings.Join(pairs, ",")+`}`)
 
 	var data string
 	if err := json.Unmarshal(env.Data, &data); err != nil {
 		t.Fatalf("truncated data is not the payload as text: %v", err)
 	}
-	if !strings.HasPrefix(data, `{"id":"t-1","observationIds":["observation-00000"`) || !strings.HasSuffix(data, "… [truncated]") {
+	if !strings.HasPrefix(data, `{"key-00000":"value"`) || !strings.HasSuffix(data, "… [truncated]") {
 		t.Fatalf("data = %q…%q, want the payload's start ending with the truncation marker",
 			data[:min(40, len(data))], data[max(0, len(data)-20):])
 	}

@@ -206,6 +206,19 @@ func invalidf(format string, args ...any) error {
 	return fmt.Errorf("%w: "+format, append([]any{ErrInvalidParameter}, args...)...)
 }
 
+// HasQueryParam reports whether the operation takes the query parameter called
+// name on this deployment (a served parameter, #173).
+func (o Operation) HasQueryParam(name string) bool {
+	return slices.ContainsFunc(o.Params, func(p Param) bool { return p.In == "query" && p.Name == name })
+}
+
+// HasTimeFilter reports whether the operation takes a query parameter that
+// bounds time (the spec gives it the format date-time), which narrows what a
+// list returns.
+func (o Operation) HasTimeFilter() bool {
+	return slices.ContainsFunc(o.Params, func(p Param) bool { return p.In == "query" && p.Schema.Format == "date-time" })
+}
+
 func (o Operation) hasParam(name string) bool {
 	return slices.ContainsFunc(o.Params, func(p Param) bool { return p.Name == name })
 }
