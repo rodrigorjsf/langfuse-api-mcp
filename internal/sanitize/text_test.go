@@ -41,3 +41,12 @@ func TestMessageDropsVariationSelectorsAndInvisibleFillers(t *testing.T) {
 		t.Fatalf("Message = %q, want %q", got, "okay")
 	}
 }
+
+// Text leaves plain ASCII alone and still drops what hides or reorders text,
+// the delete character among it (#180: the plain-text fast path stops at it).
+func TestTextKeepsTabsAndLineBreaksAndDropsTheDeleteCharacter(t *testing.T) {
+	t.Parallel()
+	if got := sanitize.Text("a\tb\nc\rd\x7fe\x00f\x1bg"); got != "a\tb\nc\rdefg" {
+		t.Fatalf("Text = %q, want %q", got, "a\tb\nc\rdefg")
+	}
+}

@@ -169,6 +169,8 @@ func (ex executor) confirm(req *mcp.CallToolRequest, op catalog.Operation, param
 		a.confirmation = confirmationRequested
 		return &mcp.CallToolResult{
 			InputRequests: mcp.InputRequestMap{confirmInputID: &mcp.ElicitParams{
+				// Redacted after bodySummary cut the body: the start of a token it
+				// cut can show (#197).
 				Message: ex.redact.Redact(confirmationText(op, params, request, body)),
 				// An accept-only form: the answer is the action, no field.
 				RequestedSchema: map[string]any{"type": "object", "properties": map[string]any{}},

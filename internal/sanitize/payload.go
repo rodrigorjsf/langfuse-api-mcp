@@ -40,9 +40,10 @@ func Decode(raw json.RawMessage) (any, error) {
 	return v, err
 }
 
-// clean returns v with every string cleaned by Text and redacted by r.
+// clean returns v with every string cleaned by Text and redacted by r. The
+// text r gets is already clean, so it skips the cleaning Redact does.
 func clean(v any, r Redactor) any {
-	return walk(v, func(s string) string { return r.Redact(Text(s)) })
+	return walk(v, func(s string) string { return r.redact(Text(s)) })
 }
 
 // Line drops every control, invisible and bidirectional formatting character
@@ -94,12 +95,28 @@ func walk(v any, f func(string) string) any {
 // bidirectional formatting characters (hidden) and control characters other
 // than tab, line feed and carriage return.
 func Text(s string) string {
+	if plain(s) {
+		return s
+	}
 	return strings.Map(func(r rune) rune {
 		if hidden(r) || (unicode.IsControl(r) && r != '\t' && r != '\n' && r != '\r') {
 			return -1
 		}
 		return r
 	}, strings.ToValidUTF8(s, "�"))
+}
+
+// plain reports whether s is ASCII with no control character other than tab,
+// line feed and carriage return: text that Text leaves as it is, found by a
+// byte scan that costs a fraction of Text's scan by rune (#180: Redact cleans
+// every text it is given).
+func plain(s string) bool {
+	for i := range len(s) {
+		if c := s[i]; c >= 0x7f || (c < ' ' && c != '\t' && c != '\n' && c != '\r') {
+			return false
+		}
+	}
+	return true
 }
 
 // hidden reports whether r is an invisible or bidirectional formatting
