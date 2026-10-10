@@ -74,6 +74,8 @@ Deferred past the first public release; every open issue here carries the GitHub
 - #90: `execute_read`'s spec-given bound refusal is unproven at the server seam until the union catalog carries a bound.
 - #56: OS proxy settings and PAC files.
 - #42: triage workflow tools (errors, latency, cost) with the payload-query guard, only if the M3 small-model eval shows agents need them.
+- #187: the trace tree is not built on a v3 deployment; `get_trace_tree` answers `operation_unavailable` there (M8, ADR-0002 amendment).
+- #188: the low-severity findings of the 3.80.0 end-to-end campaign, each to be fixed, documented or closed.
 - The HTTP transport (`LANGFUSE_MCP_TRANSPORT=http`, marked **Planned** in the README): tracked by [#160](https://github.com/rodrigorjsf/langfuse-api-mcp/issues/160), filed by the security mapping slice of M7 (#155).
 - More install channels (Homebrew, Scoop, winget), only if users ask; Apple notarization and Authenticode signing if browser-download friction proves real (M5 grilling).
 - Legacy-family adapters for the workflow tools, so self-hosted v3 (patched until January 2027) gets guided flows too (ADR-0012 §6).
