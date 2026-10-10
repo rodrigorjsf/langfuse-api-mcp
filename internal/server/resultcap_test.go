@@ -84,15 +84,10 @@ func TestAConfiguredCapAboveTheDefaultLetsALargerResultThrough(t *testing.T) {
 	}
 }
 
-// The workflow tool honours the configured cap too.
-func TestGetTraceTreeIsCutAtTheConfiguredCap(t *testing.T) {
+// The workflow tool honours the configured cap too: its rows are clipped to it.
+func TestGetTraceTreeIsClippedToTheConfiguredCap(t *testing.T) {
 	t.Parallel()
-	rows := make([]string, 0, 60)
-	for n := 59; n >= 0; n-- { // newest first, as Langfuse sends them
-		rows = append(rows, fmt.Sprintf(`{"id":"o%03d","startTime":"2026-09-25T10:00:%02d.000Z","input":"%s"}`,
-			n, n, strings.Repeat("x", 1000)))
-	}
-	fake, _ := observationsLangfuse(t, map[string]string{"": `{"data":[` + strings.Join(rows, ",") + `],"meta":{}}`})
+	fake, _ := observationsLangfuse(t, map[string]string{"": treeRows(60)})
 	cs := startServer(t, langfuse.New(testOptions(t, fake.URL)), slog.New(slog.DiscardHandler),
 		server.Secrets{Keys: testKeys()}, v4Profile, server.WithMaxResultBytes(20000))
 
@@ -103,8 +98,8 @@ func TestGetTraceTreeIsCutAtTheConfiguredCap(t *testing.T) {
 	if err := json.Unmarshal([]byte(text), &env); err != nil {
 		t.Fatalf("result is not the enveloped trace tree: %v", err)
 	}
-	if kept := preOrder(env); len(text) > 20000 || !env.Truncated || len(kept) == 0 || len(kept) >= 60 {
-		t.Fatalf("result of %d bytes: truncated %v, %d rows kept; want at most 20000 bytes, truncated, some but not all of 60 rows",
+	if kept := preOrder(env); len(text) > 20000 || !env.Truncated || len(kept) != 60 {
+		t.Fatalf("result of %d bytes: truncated %v, %d rows kept; want at most 20000 bytes, truncated, all 60 rows",
 			len(text), env.Truncated, len(kept))
 	}
 }

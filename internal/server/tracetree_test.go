@@ -310,15 +310,19 @@ func TestGetTraceTreeAsksForInputOutputAndMetadataOnlyWhenIncluded(t *testing.T)
 	}
 }
 
-func TestGetTraceTreeBiggerThanTheResultCapIsCutAtARowBoundaryWithTheMarker(t *testing.T) {
-	t.Parallel()
-	// 200 roots of about 1 KiB each, newest first: o199 … o000.
-	rows := make([]string, 0, 200)
-	for n := 199; n >= 0; n-- {
-		rows = append(rows, `{"id":"o`+fmt.Sprintf("%03d", n)+`","startTime":"2026-09-25T10:`+
-			fmt.Sprintf("%02d:%02d", n/60, n%60)+`.000Z","input":"`+strings.Repeat("x", 1000)+`"}`)
+// treeRows returns n roots of about 1 KiB each, newest first: o(n-1) … o000.
+func treeRows(n int) string {
+	rows := make([]string, 0, n)
+	for i := n - 1; i >= 0; i-- {
+		rows = append(rows, `{"id":"o`+fmt.Sprintf("%03d", i)+`","startTime":"2026-09-25T10:`+
+			fmt.Sprintf("%02d:%02d", i/60, i%60)+`.000Z","input":"`+strings.Repeat("x", 1000)+`"}`)
 	}
-	fake, _ := observationsLangfuse(t, map[string]string{"": `{"data":[` + strings.Join(rows, ",") + `],"meta":{}}`})
+	return `{"data":[` + strings.Join(rows, ",") + `],"meta":{}}`
+}
+
+func TestGetTraceTreeBiggerThanTheResultCapKeepsEveryObservationWithItsLargeValuesClipped(t *testing.T) {
+	t.Parallel()
+	fake, _ := observationsLangfuse(t, map[string]string{"": treeRows(200)})
 	cs := connectProfile(t, fake, v4Profile)
 
 	res := callTool(t, cs, "get_trace_tree", map[string]any{"traceId": "t-1", "include": []string{"io"}})
@@ -329,8 +333,30 @@ func TestGetTraceTreeBiggerThanTheResultCapIsCutAtARowBoundaryWithTheMarker(t *t
 		t.Fatalf("result is not the enveloped trace tree: %v", err)
 	}
 	kept := preOrder(env)
-	if len(text) > 64<<10 || !env.Truncated || len(kept) == 0 || len(kept) >= 200 || kept[0] != "o000@0" ||
-		env.Data.Meta.Observations != 200 || !strings.Contains(env.Hint, "result size cap") {
+	input, _ := env.Data.Data[0]["input"].(string)
+	if len(text) > 64<<10 || !env.Truncated || len(kept) != 200 || kept[0] != "o000@0" || env.Data.Meta.Observations != 200 ||
+		!strings.HasSuffix(input, "… [clipped]") || !strings.Contains(env.Hint, "result size cap") {
+		t.Fatalf("result of %d bytes: truncated %v, %d rows from %v, first input ends %q, hint %q; "+
+			"want at most 64 KiB, truncated, all 200 rows with clipped inputs and the cut hint",
+			len(text), env.Truncated, len(kept), kept[:min(1, len(kept))], input[max(0, len(input)-20):], env.Hint)
+	}
+}
+
+func TestGetTraceTreeBiggerThanTheResultCapEvenClippedIsCutAtARowBoundary(t *testing.T) {
+	t.Parallel()
+	fake, _ := observationsLangfuse(t, map[string]string{"": treeRows(600)}) // 600 rows of about 220 bytes at the floor
+	cs := connectProfile(t, fake, v4Profile)
+
+	res := callTool(t, cs, "get_trace_tree", map[string]any{"traceId": "t-1", "include": []string{"io"}})
+
+	text := resultText(t, res)
+	var env traceTreeEnvelope
+	if err := json.Unmarshal([]byte(text), &env); err != nil {
+		t.Fatalf("result is not the enveloped trace tree: %v", err)
+	}
+	kept := preOrder(env)
+	if len(text) > 64<<10 || !env.Truncated || len(kept) == 0 || len(kept) >= 600 || kept[0] != "o000@0" ||
+		env.Data.Meta.Observations != 600 || !strings.Contains(env.Hint, fmt.Sprintf("only the first %d of 600 rows", len(kept))) {
 		t.Fatalf("result of %d bytes: truncated %v, %d rows from %v, meta %+v, hint %q; "+
 			"want at most 64 KiB, truncated, the first rows of the tree and the cut hint",
 			len(text), env.Truncated, len(kept), kept[:min(1, len(kept))], env.Data.Meta, env.Hint)

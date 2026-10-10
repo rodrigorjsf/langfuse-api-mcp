@@ -41,6 +41,8 @@ M3 ships a single workflow tool, the trace tree. Error, latency and cost triage 
 
 `get_trace_tree` on every deployment shipped in M8 (#175), and so did `operation_unavailable` for a filtered operation (#174). The user skill and the tool reference name `get_trace_tree`; on a deployment without the v4 read family the tool was not registered, so an agent that called it was refused by its host before the server could say anything (campaign finding M2). The tool is now registered on every deployment. Where the v4 read family is off it answers the tool error `operation_unavailable`, with a hint naming the deployment's version and the operation that reads one trace there. The tool set is the same on every deployment and still fixed at startup.
 
+A trace tree over the result size cap keeps every observation: its largest string values (the inputs and outputs) are clipped first, and rows are left out at a row boundary only when clipping every value to the floor is not enough (#177; this refines the row truncation described above).
+
 Building the trace tree from the legacy observations list was considered and deferred: that list has no field selection and always carries input and output.
 
 In the same milestone, an operation ID that is in the union catalog but filtered out by the deployment profile is answered `operation_unavailable` by `describe_operation`, `execute_read` and `execute_write`, with the operation that replaces it on this deployment, instead of `operation_not_found`; a legacy line of the operation index names a preferred operation only when the deployment offers it; and the trace reads hint of `search_operations` also exists on a legacy deployment. A write operation ID while write mode is off stays `operation_not_found`.

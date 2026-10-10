@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -103,8 +104,8 @@ func readTruncated(t *testing.T, operationID, body string) truncatedEnvelope {
 	if err := json.Unmarshal([]byte(text), &env); err != nil {
 		t.Fatalf("truncated result is not the envelope: %v", err)
 	}
-	if !env.Truncated || !strings.Contains(env.Hint, "limit") || env.Label == "" {
-		t.Fatalf("envelope = {truncated: %v, hint: %q, label: %q}, want truncated with a hint to narrow the query",
+	if !env.Truncated || env.Hint == "" || env.Label == "" {
+		t.Fatalf("envelope = {truncated: %v, hint: %q, label: %q}, want truncated with a hint",
 			env.Truncated, env.Hint, env.Label)
 	}
 	return env
@@ -136,17 +137,40 @@ func TestAListResultAboveTheMaximumReturnedBytesKeepsTheFirstRowsAndThePaginatio
 	}
 }
 
-func TestAResultAboveTheMaximumReturnedBytesThatIsNotAListIsCutWithAMarker(t *testing.T) {
+func TestAResultAboveTheMaximumReturnedBytesThatIsNotAListHasItsLargeValueClippedAndStaysAnObject(t *testing.T) {
 	t.Parallel()
 	body := `{"id":"t-1","input":"` + strings.Repeat(`<p>\"long\" & é</p>`, 20000) + `"}`
 
 	env := readTruncated(t, "trace_get", body)
 
+	var data struct {
+		ID    string `json:"id"`
+		Input string `json:"input"`
+	}
+	if err := json.Unmarshal(env.Data, &data); err != nil {
+		t.Fatalf("clipped data is not the payload's object: %v", err)
+	}
+	if data.ID != "t-1" || !strings.HasPrefix(data.Input, `<p>"long" & é</p><p>"long"`) || !strings.HasSuffix(data.Input, "… [clipped]") ||
+		!strings.Contains(env.Hint, "cannot be read whole through this server") {
+		t.Fatalf("data = {id: %q, input: %.40q…%q}, hint %q; want the object kept, the input clipped with its start and the marker, "+
+			"and a hint that the value is larger than the cap", data.ID, data.Input, data.Input[max(0, len(data.Input)-20):], env.Hint)
+	}
+}
+
+func TestAnObjectOfManyShortValuesAboveTheMaximumReturnedBytesIsCutToTextWithAMarker(t *testing.T) {
+	t.Parallel()
+	ids := make([]string, 0, 6000)
+	for i := range 6000 {
+		ids = append(ids, fmt.Sprintf("observation-%05d", i))
+	}
+
+	env := readTruncated(t, "trace_get", `{"id":"t-1","observationIds":["`+strings.Join(ids, `","`)+`"]}`)
+
 	var data string
 	if err := json.Unmarshal(env.Data, &data); err != nil {
 		t.Fatalf("truncated data is not the payload as text: %v", err)
 	}
-	if !strings.HasPrefix(data, `{"id":"t-1","input":"<p>`) || !strings.HasSuffix(data, "… [truncated]") {
+	if !strings.HasPrefix(data, `{"id":"t-1","observationIds":["observation-00000"`) || !strings.HasSuffix(data, "… [truncated]") {
 		t.Fatalf("data = %q…%q, want the payload's start ending with the truncation marker",
 			data[:min(40, len(data))], data[max(0, len(data)-20):])
 	}

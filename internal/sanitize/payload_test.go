@@ -66,11 +66,13 @@ func assertNoHiddenCharacter(t *testing.T, v any) {
 	}
 }
 
-// FuzzWrap checks that an envelope never exceeds its limit and that a
-// truncated one still holds the payload's start, whatever the payload.
+// FuzzWrap checks that an envelope never exceeds its limit, that its data is
+// valid JSON, and that a truncated page still holds the payload's start,
+// whatever the payload.
 func FuzzWrap(f *testing.F) {
 	f.Add(`"<p>\"quoted\" & é</p>"`, 30000, 65536)
 	f.Add(`{"a":"`+strings.Repeat("\\u0001", 10)+`"}`, 20000, 16384)
+	f.Add(`"é€😀 <&>"`, 5000, 16384)
 	f.Fuzz(func(t *testing.T, item string, repeat, limit int) {
 		repeat = min(max(repeat, 1), 40000)
 		limit = min(max(limit, 16384), 1<<20) // the range config accepts
@@ -80,13 +82,19 @@ func FuzzWrap(f *testing.F) {
 			return // strconv.Quote is not always JSON
 		}
 		page := json.RawMessage(`{"data":` + string(clean) + `,"meta":{"cursor":"c"}}`)
-		for _, p := range []json.RawMessage{clean, page} {
-			got, err := json.Marshal(sanitize.Wrap("trace_list", p, limit))
-			if err != nil || len(got) > limit {
-				t.Fatalf("envelope is %d bytes (err %v), want at most %d", len(got), err, limit)
+		oneValue := json.RawMessage(`{"data":[{"id":"r1","input":` + strconv.Quote(strings.Repeat(item, repeat)) +
+			`},{"id":"r2"}],"meta":{"cursor":"c"}}`)
+		for _, p := range []json.RawMessage{clean, page, oneValue} {
+			if !json.Valid(p) {
+				continue // strconv.Quote is not always JSON
+			}
+			env := sanitize.Wrap("trace_list", p, limit, sanitize.Remedies{})
+			got, err := json.Marshal(env)
+			if err != nil || len(got) > limit || !json.Valid(env.Data) {
+				t.Fatalf("envelope is %d bytes (err %v, valid data %v), want valid and at most %d", len(got), err, json.Valid(env.Data), limit)
 			}
 		}
-		if env := sanitize.Wrap("trace_list", page, limit); env.Truncated && !strings.Contains(string(env.Data), `"cursor":"c"`) {
+		if env := sanitize.Wrap("trace_list", page, limit, sanitize.Remedies{}); env.Truncated && !strings.Contains(string(env.Data), `"cursor":"c"`) {
 			t.Fatalf("a truncated page lost its meta: %.200s", env.Data)
 		}
 	})

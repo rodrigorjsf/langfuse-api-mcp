@@ -104,11 +104,10 @@ const (
 		"the newest first, so the oldest are missing and some rows may be orphans; execute_read with operationId " +
 		"observations_getMany and parameters traceId, fields, cursor (from data.meta.cursor) and a limit of at most " +
 		"100 reads the rest, page by page"
-	// traceTreeCutHint replaces the row hint of a trace tree cut to the
-	// result size cap: the tool takes no limit.
-	traceTreeCutHint = "only the first rows of the trace tree fit the result size cap; data.meta.observations is the " +
-		"number of rows read; the tree without include has smaller rows, and execute_read with observations_getMany " +
-		"(traceId, fields, limit, cursor) pages through every observation"
+	// traceTreeCutHint says how to ask for less when the trace tree was cut
+	// to the result size cap: the tool takes no limit.
+	traceTreeCutHint = "data.meta.observations is the number of rows read; the tree without include has smaller " +
+		"rows, and execute_read with observations_getMany (traceId, fields, limit, cursor) pages through every observation"
 )
 
 func (ex executor) getTraceTree(ctx context.Context, req *mcp.CallToolRequest, a *audit) (*mcp.CallToolResult, error) {
