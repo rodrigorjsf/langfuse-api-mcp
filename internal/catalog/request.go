@@ -29,6 +29,13 @@ type Request struct {
 // the reason.
 var ErrInvalidParameter = errors.New("invalid parameter")
 
+// ErrParameterNotServed marks a parameter that is one of the operation's but
+// that the deployment's Langfuse version does not declare (#173); it also
+// matches ErrInvalidParameter. The message names the parameter, the operation,
+// the deployment's version and the release that serves the parameter, taken
+// from the catalog, never from the caller.
+var ErrParameterNotServed = errors.New("parameter not served by the deployment's version")
+
 // ErrLimitOutOfRange marks a limit outside 1..MaxLimit on a list operation;
 // it also matches ErrInvalidParameter.
 var ErrLimitOutOfRange = errors.New("limit out of range")
@@ -63,10 +70,16 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 	}
 	slices.Sort(names)
 	for _, name := range names {
-		if !o.hasParam(name) {
-			return Request{}, invalidf("parameter %s: unknown parameter for operation %s; its parameters are: %s",
-				strconv.Quote(truncate(name)), o.ID, o.paramNames())
+		if o.hasParam(name) {
+			continue
 		}
+		if p, ok := o.unservedParam(name); ok {
+			return Request{}, sentinelError{ErrParameterNotServed, invalidf(
+				"parameter %s: operation %s does not serve it on this deployment (%s); Langfuse serves it %s",
+				strconv.Quote(p.Name), o.ID, o.deploymentText(), servedRange(p))}
+		}
+		return Request{}, invalidf("parameter %s: unknown parameter for operation %s; its parameters are: %s",
+			strconv.Quote(truncate(name)), o.ID, o.paramNames())
 	}
 
 	req := Request{Method: o.Method, Path: o.Path, Query: url.Values{}}
@@ -195,6 +208,36 @@ func invalidf(format string, args ...any) error {
 
 func (o Operation) hasParam(name string) bool {
 	return slices.ContainsFunc(o.Params, func(p Param) bool { return p.Name == name })
+}
+
+// unservedParam returns the operation's parameter called name that the
+// deployment's version does not declare.
+func (o Operation) unservedParam(name string) (Param, bool) {
+	i := slices.IndexFunc(o.unserved, func(p Param) bool { return p.Name == name })
+	if i < 0 {
+		return Param{}, false
+	}
+	return o.unserved[i], true
+}
+
+// deploymentText names the deployment's Langfuse version for a refusal.
+func (o Operation) deploymentText() string {
+	if o.deployment == "" {
+		return "Langfuse version not detected, so the newest release's parameters are served"
+	}
+	return "Langfuse " + o.deployment
+}
+
+// servedRange says in which releases Langfuse serves p: "from 3.133.0",
+// "up to before 3.100.0" or both.
+func servedRange(p Param) string {
+	switch {
+	case p.Removed == "":
+		return "from " + p.Introduced
+	case p.Introduced == "" || p.Introduced == SupportedFloor:
+		return "up to before " + p.Removed
+	}
+	return "from " + p.Introduced + " up to before " + p.Removed
 }
 
 // paramNames lists the operation's parameter names, or "none".

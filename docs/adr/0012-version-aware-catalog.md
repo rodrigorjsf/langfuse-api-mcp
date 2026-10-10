@@ -82,7 +82,7 @@ Users on old and on new deployments must both get every operation their deployme
 
 ## Amendment: a version range per parameter, and a filter scan for two of them (2026-10-10, M8 grilling)
 
-Planned for M8; nothing below is shipped yet.
+Served parameters shipped in M8 (#173); the filter scan is still Planned.
 
 The end-to-end campaign on Langfuse 3.80.0 ([record](../research/raw/2026-10-10-e2e-langfuse-3.80.0.md), finding H1) showed that the union catalog offers a parameter on a deployment whose version does not declare it: `traceId` on `scores_get-many`, `level` on `legacy_observationsV1_getMany` and `fields` on `trace_get`. Langfuse 3.80.0 ignores each of them and answers the unfiltered list with no error, so the agent gets a plausible, wrong result. The cause is the generator: for each operation it keeps the parameters of the last release spec that contains the operation.
 

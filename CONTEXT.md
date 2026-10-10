@@ -59,7 +59,7 @@ _Avoid_: v1 API, old API
 **Unavailable operation**: an operation of the catalog that the connected deployment does not serve (its version lacks the route, or its write mode turns the operation's family off); a call to it returns the tool error `operation_unavailable`, never Langfuse's body.
 _Avoid_: missing endpoint, not found (that is a missing resource)
 
-**Served parameter**: a parameter of an operation that the connected deployment's Langfuse version declares; an operation description lists only its served parameters, and a call carrying any other parameter of that operation is refused before any request, naming the version that serves it. (Planned.)
+**Served parameter**: a parameter of an operation that the connected deployment's Langfuse version declares; an operation description lists only its served parameters, and a call carrying any other parameter of that operation is refused before any request, naming the version that serves it.
 _Avoid_: supported parameter, valid parameter
 
 **Filter scan**: the server's answer to a list call whose filter the connected deployment does not serve, for the few filters it is defined for: the server reads the list without the filter, keeps the rows that match, and says whether it read every row or stopped at its page limit. (Planned.)

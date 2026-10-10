@@ -203,6 +203,9 @@ func deploymentHandler(healthBody string, unavailable []string, next http.Handle
 	}
 }
 
+// servedParametersMessage is the startup log line of an undetected version (#173).
+const servedParametersMessage = "Langfuse version not detected: serving the newest release's parameters"
+
 // profileLogLine returns the startup log line naming the deployment profile.
 func profileLogLine(t *testing.T, stderr []byte) map[string]any {
 	t.Helper()
@@ -267,6 +270,9 @@ func TestExecutableServesTheDiscoveryToolsExecuteReadAndGetTraceTreeOverStdio(t 
 	// 107: the 4.x dual fixture of the catalog's deployment-profile test.
 	if got["version"] != "4.46.0" || string(families) != `["legacy","v4 read","experiments"]` || got["operations"] != float64(107) {
 		t.Errorf("deployment profile log line = %v, want version 4.46.0, every family, 107 operations", got)
+	}
+	if slices.ContainsFunc(logLines(t, s.stderr.Bytes()), func(line map[string]any) bool { return line["msg"] == servedParametersMessage }) {
+		t.Errorf("startup logs %q although the version was detected:\n%s", servedParametersMessage, s.stderr)
 	}
 }
 
@@ -336,6 +342,12 @@ func TestExecutableReachesAnOperationOnlyAnOlderReleaseSpecListsWhenTheVersionIs
 	s.stop()
 	if got := profileLogLine(t, s.stderr.Bytes()); got["version"] != "unknown" {
 		t.Errorf("deployment profile log line = %v, want version unknown", got)
+	}
+	// #173: with no detected version the newest release's parameters are served, and the log says so.
+	if !slices.ContainsFunc(logLines(t, s.stderr.Bytes()), func(line map[string]any) bool {
+		return line["msg"] == servedParametersMessage
+	}) {
+		t.Errorf("no startup log line %q:\n%s", servedParametersMessage, s.stderr)
 	}
 	if strings.Contains(s.stderr.String(), "ignore previous") {
 		t.Errorf("stderr echoes the version health reported:\n%s", s.stderr)

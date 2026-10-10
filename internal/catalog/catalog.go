@@ -82,8 +82,17 @@ type Operation struct {
 	// the operation to prefer), else the first line of its OpenAPI
 	// description. The spec is third-party text, so indexLine cleans it.
 	DescriptionLine string
-	// Params are the operation's path and query parameters.
+	// Params are the operation's served parameters: the path and query
+	// parameters the deployment's version declares (Resolve, #173). Before
+	// the catalog is resolved for a deployment it is those of the newest known
+	// release.
 	Params []Param
+	// unserved are the operation's parameters the deployment's version does not
+	// declare, with their ranges: Request refuses them naming the release that
+	// serves them. Empty until Resolve.
+	unserved []Param
+	// deployment is the deployment's plain version, "" when not detected.
+	deployment string
 	// Introduced is the first Langfuse version whose spec lists the operation
 	// (SupportedFloor when it predates the union catalog), or the earlier floor the
 	// docs state; empty when unknown.
@@ -121,6 +130,14 @@ type Param struct {
 	Required bool
 	// Schema is the type the parameter's value must have.
 	Schema Schema
+	// Introduced is the first Langfuse version whose spec lists the parameter
+	// (the operation's own when it was there from the start); empty when the
+	// catalog gives no range.
+	Introduced string `json:"x-introduced"`
+	// Removed is the first Langfuse version whose spec no longer lists the
+	// parameter while it lists the operation; empty while the newest known
+	// spec lists it.
+	Removed string `json:"x-removed"`
 }
 
 // Schema is the part of a parameter's OpenAPI schema the catalog validates
@@ -241,6 +258,12 @@ func load(spec []byte) (Catalog, error) {
 			if err != nil {
 				return Catalog{}, fmt.Errorf("embedded union catalog: %s: %w", o.ID, err)
 			}
+			paramSpans := make([]span, len(o.Params))
+			for i, p := range o.Params {
+				if paramSpans[i], err = parameterRange(p); err != nil {
+					return Catalog{}, fmt.Errorf("embedded union catalog: %s parameter %s: %w", o.ID, p.Name, err)
+				}
+			}
 			if len(op.Tags) > 0 {
 				o.Tag = visible(op.Tags[0])
 			}
@@ -252,7 +275,7 @@ func load(spec []byte) (Catalog, error) {
 					o.Params[i].Schema.Default = DefaultLimit
 				}
 			}
-			u.ops = append(u.ops, rangedOperation{Operation: o, span: r})
+			u.ops = append(u.ops, rangedOperation{Operation: o, span: r, paramSpans: paramSpans})
 		}
 	}
 	return Catalog{union: u}.Resolve(Profile{Families: AllFamilies()}), nil

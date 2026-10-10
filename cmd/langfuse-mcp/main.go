@@ -196,7 +196,8 @@ func detectProfile(log *slog.Logger, client *langfuse.Client) langfuse.Detection
 // without a deciding answer, whether the version is unsupported, and the number
 // of operations the resolved catalog offers. An unsupported version lists no
 // family: the catalog ignores them. The version is untrusted Langfuse text:
-// only a plain version is logged.
+// only a plain version is logged. A version that was not detected is logged
+// as such, with the parameters then served.
 func logProfile(log *slog.Logger, d langfuse.Detection, operations int) {
 	p := d.Profile
 	version, ok := p.KnownVersion()
@@ -215,6 +216,10 @@ func logProfile(log *slog.Logger, d langfuse.Detection, operations int) {
 	families, undecided := familyNames(on), familyNames(kept)
 	log.Info("deployment profile", "version", version, "families", families, "undecided", undecided,
 		"unsupported", d.Unsupported, "operations", operations)
+	if !ok {
+		// Fixed text: an operation offers the parameters of the newest known release (#173).
+		log.Info("Langfuse version not detected: serving the newest release's parameters")
+	}
 }
 
 // familyNames returns the families' names in order, never nil, so an empty

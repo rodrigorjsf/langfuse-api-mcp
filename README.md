@@ -56,7 +56,7 @@ The Langfuse API has about 100 in-scope operations. One tool per operation would
 | Tool | What it does | Available |
 |---|---|---|
 | `search_operations` | Lists the Langfuse operations your deployment serves, optionally filtered by keywords | always |
-| `describe_operation` | Returns one operation's parameters (and, in write mode, its body schema and whether it is destructive) | always |
+| `describe_operation` | Returns the parameters of one operation that your deployment's Langfuse version serves (and, in write mode, its body schema and whether it is destructive) | always |
 | `execute_read` | Runs a **read** operation (HTTP GET) by its ID and returns the Langfuse JSON inside an untrusted-data envelope | always |
 | `execute_write` | Runs a **write** operation by its ID; a destructive one (DELETE, PUT, PATCH) only after you confirm that exact call | only in [write mode](#security-model) |
 | `get_trace_tree` | Returns every observation of one trace as a tree in one call | when the deployment answers the v4 read APIs (Cloud, self-hosted v4) |
