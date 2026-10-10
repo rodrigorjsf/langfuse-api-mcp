@@ -388,7 +388,9 @@ func (p Param) checkText(values []string) error {
 
 // holdsJSONText reports whether the parameter is a JSON text that Langfuse
 // parses and the server passes on: a filter. Pretty-printed, it holds tab, line
-// feed and carriage return, which a parameter of any other kind refuses.
+// feed and carriage return, which a parameter of any other kind refuses. The
+// server does not decode it, so a JSON escape inside it is Langfuse's to decode
+// (#195).
 func (p Param) holdsJSONText() bool { return p.Name == "filter" }
 
 // hiddenTextRule is the refusal of a value that holds a control or invisible
