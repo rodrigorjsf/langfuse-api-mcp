@@ -169,9 +169,7 @@ func (ex executor) confirm(req *mcp.CallToolRequest, op catalog.Operation, param
 		a.confirmation = confirmationRequested
 		return &mcp.CallToolResult{
 			InputRequests: mcp.InputRequestMap{confirmInputID: &mcp.ElicitParams{
-				// Redacted after bodySummary cut the body: the start of a token it
-				// cut can show (#197).
-				Message: ex.redact.Redact(confirmationText(op, params, request, body)),
+				Message: ex.redact.Redact(confirmationText(op, params, request, body, ex.redact)),
 				// An accept-only form: the answer is the action, no field.
 				RequestedSchema: map[string]any{"type": "object", "properties": map[string]any{}},
 			}},
@@ -211,9 +209,11 @@ const maxSummaryRunes = 300
 // method, the path and query parameters, and a summary of the body cut at
 // maxSummaryRunes, saying so and giving the body size when cut. Every
 // argument-derived string is stripped of control, invisible and bidi
-// characters and shown quoted, as text: markup is never rendered.
+// characters and shown quoted, as text: markup is never rendered. The body is
+// redacted by r before the cut, so a secret the cut would leave short cannot
+// show.
 func confirmationText(op catalog.Operation, params map[string]any, request catalog.Request,
-	body json.RawMessage,
+	body json.RawMessage, r sanitize.Redactor,
 ) string {
 	var b strings.Builder
 	b.WriteString("Confirm this destructive change to Langfuse. The values below come from the call's " +
@@ -243,7 +243,7 @@ func confirmationText(op catalog.Operation, params map[string]any, request catal
 	if n, ok := op.DeletedTraceCount(body); ok {
 		b.WriteString("Trace IDs to delete: " + strconv.Itoa(n) + "\n")
 	}
-	summary, cut := bodySummary(body)
+	summary, cut := bodySummary(body, r)
 	if cut {
 		b.WriteString("Body (" + strconv.Itoa(len(body)) + " bytes; summary cut after " +
 			strconv.Itoa(maxSummaryRunes) + " characters): " + summary + " [cut]\n")
@@ -276,10 +276,11 @@ func jsonText(v any) string {
 }
 
 // bodySummary returns the body as compact JSON with every string (keys
-// included) stripped, cut at maxSummaryRunes; cut reports whether it was.
-func bodySummary(body json.RawMessage) (summary string, cut bool) {
+// included) stripped and redacted by r, cut at maxSummaryRunes; cut reports
+// whether it was.
+func bodySummary(body json.RawMessage, r sanitize.Redactor) (summary string, cut bool) {
 	v, _ := sanitize.Decode(body) // body passed CheckBody: it is valid JSON
-	s := jsonText(sanitize.LineValue(v))
+	s := r.Redact(jsonText(sanitize.LineValue(v)))
 	if utf8.RuneCountInString(s) <= maxSummaryRunes {
 		return s, false
 	}

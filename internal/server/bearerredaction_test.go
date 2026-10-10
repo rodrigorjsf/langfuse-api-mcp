@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"cmp"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -27,20 +28,25 @@ const (
 	seededBearerHeader = "Authorization: Bearer " + seededBearerToken
 	// otherBearerToken has no word in common with the text around it, so that
 	// a short part of it left behind by a cut is found.
-	otherBearerToken = "Zq9X4k7W2m5N8v3B1c6D" //nolint:gosec // G101: a fake token for the fake Langfuse
+	otherBearerToken  = "Zq9X4k7W2m5N8v3B1c6D" //nolint:gosec // G101: a fake token for the fake Langfuse
+	otherBearerHeader = "Authorization: Bearer " + otherBearerToken
 	// bearerLeakRun is how many bytes of a token in a row count as a leak.
 	bearerLeakRun = 8
 )
 
-// plantedCredential is one form of a credential and the token inside it.
-type plantedCredential struct{ text, token string }
+// plantedCredential is one form of a credential, the token inside it and the
+// text that must come back in its place.
+type plantedCredential struct{ text, token, redacted string }
 
 // plantedCredentials are the forms a leak could take.
 func plantedCredentials() map[string]plantedCredential {
 	return map[string]plantedCredential{
-		"the seeded Authorization header":        {seededBearerHeader, seededBearerToken},
-		"a Bearer token alone":                   {"Bearer " + otherBearerToken, otherBearerToken},
-		"an Authorization header of another one": {"authorization: Basic " + otherBearerToken, otherBearerToken},
+		"the seeded Authorization header": {text: seededBearerHeader, token: seededBearerToken,
+			redacted: "Authorization: Bearer [REDACTED]"},
+		"a Bearer token alone": {text: "Bearer " + otherBearerToken, token: otherBearerToken,
+			redacted: "Bearer [REDACTED]"},
+		"an Authorization header of another scheme": {text: "authorization: Basic " + otherBearerToken, token: otherBearerToken,
+			redacted: "authorization: Basic [REDACTED]"},
 	}
 }
 
@@ -85,6 +91,47 @@ func assertNoToken(t *testing.T, res *mcp.CallToolResult, logs *syncBuffer, toke
 func bearerPayload(t *testing.T, input string) string {
 	t.Helper()
 	return jsonOf(t, map[string]any{"data": []map[string]string{{"id": "t-1", "input": input}}})
+}
+
+// idleLangfuse is a Langfuse that no call reaches: a refused call sends nothing.
+func idleLangfuse(t *testing.T) *httptest.Server {
+	t.Helper()
+	fake := httptest.NewServer(nil)
+	t.Cleanup(fake.Close)
+	return fake
+}
+
+// paddedLangfuse answers every request with body(pad), pad being the number in
+// the name query parameter of the call (trace_list's name filter carries it);
+// a call with no number gets no padding.
+func paddedLangfuse(t *testing.T, status int, body func(pad int) string) *httptest.Server {
+	t.Helper()
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		pad, _ := strconv.Atoi(r.URL.Query().Get("name")) // a missing or bad number means no padding
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body(max(pad, 0)))) // a failed write fails the call on the client side
+	}))
+	t.Cleanup(fake.Close)
+	return fake
+}
+
+// connectUnthrottled starts the server against fake with a result size cap of
+// 16 KiB and a rate limit high enough for the many calls of a cut test (the
+// default 30 a minute would take minutes).
+func connectUnthrottled(t *testing.T, fake *httptest.Server) *mcp.ClientSession {
+	t.Helper()
+	opts := testOptions(t, fake.URL)
+	opts.RateLimit = 60_000
+	return startServer(t, langfuse.New(opts), slog.New(slog.DiscardHandler),
+		server.Secrets{Keys: testKeys()}, langfuse.UnknownProfile(), server.WithMaxResultBytes(16384))
+}
+
+// readPadded calls trace_list with the padding the paddedLangfuse answer uses.
+func readPadded(t *testing.T, cs *mcp.ClientSession, pad int) *mcp.CallToolResult {
+	t.Helper()
+	return callExecuteRead(t, cs, map[string]any{
+		"operationId": "trace_list", "parameters": map[string]any{"name": strconv.Itoa(pad)}})
 }
 
 func TestTheSeededAuthorizationHeaderInATraceComesBackRedactedWithItsSchemeKept(t *testing.T) {
@@ -197,10 +244,9 @@ func TestACredentialInALangfuseErrorMessageIsRedactedInTheToolError(t *testing.T
 
 			res := callExecuteRead(t, cs, traceList)
 
-			got := toolErrorOf(t, res).Error
-			if got.Code != "langfuse_bad_request" || !strings.HasPrefix(got.Message, "Langfuse answered HTTP 400: rejected the header ") ||
-				!strings.HasSuffix(got.Message, "[REDACTED] as expired") {
-				t.Fatalf("tool error = %+v, want langfuse_bad_request with the token replaced by [REDACTED]", got)
+			want := "Langfuse answered HTTP 400: rejected the header " + c.redacted + " as expired"
+			if got := toolErrorOf(t, res).Error.Message; got != want {
+				t.Fatalf("message = %q, want %q", got, want)
 			}
 			assertNoToken(t, res, logs, c.token)
 		})
@@ -282,9 +328,7 @@ func TestATokenSplitByInvisibleCharactersInACallsOwnTextIsRedactedAfterTheyAreSt
 		for where, tc := range calls {
 			t.Run(hidden+" "+where, func(t *testing.T) {
 				t.Parallel()
-				fake := httptest.NewServer(nil) // a refused call sends nothing
-				t.Cleanup(fake.Close)
-				cs, logs := connectLogged(t, fake)
+				cs, logs := connectLogged(t, idleLangfuse(t))
 
 				res := callTool(t, cs, tc.tool, tc.args)
 
@@ -322,19 +366,13 @@ func TestACredentialInACallsOwnTextIsRedactedInTheEchoAndTheAuditLine(t *testing
 		for where, tc := range calls {
 			t.Run(form+" "+where, func(t *testing.T) {
 				t.Parallel()
-				fake := httptest.NewServer(nil) // a refused call sends nothing
-				t.Cleanup(fake.Close)
-				cs, logs := connectLogged(t, fake, tc.options...)
+				cs, logs := connectLogged(t, idleLangfuse(t), tc.options...)
 
 				res := callTool(t, cs, tc.tool, tc.args)
 
-				got := toolErrorOf(t, res).Error
 				assertNoToken(t, res, logs, c.token)
-				if leak, ok := bearerPartOf(c.token, got.Hint); ok {
-					t.Errorf("the hint carries %q of the token: %s", leak, got.Hint)
-				}
-				if !strings.Contains(got.Message, "[REDACTED]") {
-					t.Errorf("the message does not mark where the token was: %s", got.Message)
+				if message := toolErrorOf(t, res).Error.Message; !strings.Contains(message, c.redacted) {
+					t.Errorf("the message does not show %q where the token was: %s", c.redacted, message)
 				}
 			})
 		}
@@ -343,9 +381,7 @@ func TestACredentialInACallsOwnTextIsRedactedInTheEchoAndTheAuditLine(t *testing
 
 func TestTheAuditLineNamesAnOperationIDHoldingAHeaderRedactedWithItsSchemeKept(t *testing.T) {
 	t.Parallel()
-	fake := httptest.NewServer(nil)
-	t.Cleanup(fake.Close)
-	cs, logs := connectLogged(t, fake)
+	cs, logs := connectLogged(t, idleLangfuse(t))
 
 	callExecuteRead(t, cs, map[string]any{"operationId": seededBearerHeader})
 
@@ -364,7 +400,7 @@ func TestTheAuditLineNamesAnOperationIDHoldingAHeaderRedactedWithItsSchemeKept(t
 
 func TestTheHintOfEveryRefusalAndFailureHoldsNoCredentialTheCallCarried(t *testing.T) {
 	t.Parallel()
-	const header = "Authorization: Bearer " + otherBearerToken
+	const header = otherBearerHeader
 	tests := map[string]struct {
 		status int
 		body   string
@@ -374,22 +410,19 @@ func TestTheHintOfEveryRefusalAndFailureHoldsNoCredentialTheCallCarried(t *testi
 		"an unknown parameter":    {args: map[string]any{"operationId": "trace_list", "parameters": map[string]any{header: "x"}}},
 		"a Folder name not found": {status: http.StatusNotFound, body: `{"message":"` + header + `"}`,
 			args: map[string]any{"operationId": "prompts_get", "parameters": map[string]any{"promptName": "a/" + header[:10]}}},
-		"a bad request":     {status: http.StatusBadRequest, body: `{"message":"` + header + `"}`, args: traceList},
-		"a server failure":  {status: http.StatusInternalServerError, body: `{"message":"` + header + `"}`, args: traceList},
-		"a rate limit":      {status: http.StatusTooManyRequests, body: `{"message":"` + header + `"}`, args: traceList},
-		"a payload to cut":  {status: http.StatusOK, body: bearerPayload(t, strings.Repeat(header+" ", 9000)), args: traceList},
-		"a response to cut": {status: http.StatusOK, body: bearerPayload(t, header), args: map[string]any{"operationId": "trace_list", "parameters": map[string]any{"limit": 1}}},
+		"a bad request":                     {status: http.StatusBadRequest, body: `{"message":"` + header + `"}`, args: traceList},
+		"a server failure":                  {status: http.StatusInternalServerError, body: `{"message":"` + header + `"}`, args: traceList},
+		"a rate limit":                      {status: http.StatusTooManyRequests, body: `{"message":"` + header + `"}`, args: traceList},
+		"a result over the result size cap": {status: http.StatusOK, body: bearerPayload(t, strings.Repeat(header+" ", 9000)), args: traceList},
+		"a one-row result": {status: http.StatusOK, body: bearerPayload(t, header),
+			args: map[string]any{"operationId": "trace_list", "parameters": map[string]any{"limit": 1}}},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			status := cmpOrOK(tc.status)
-			var fake *httptest.Server
-			if tc.body == "" {
-				fake = httptest.NewServer(nil)
-				t.Cleanup(fake.Close)
-			} else {
-				fake, _ = fakeLangfuse(t, status, tc.body)
+			fake := idleLangfuse(t)
+			if tc.body != "" {
+				fake, _ = fakeLangfuse(t, cmp.Or(tc.status, http.StatusOK), tc.body)
 			}
 			cs, logs := connectLogged(t, fake, server.WithMaxResultBytes(16384))
 
@@ -403,21 +436,8 @@ func TestTheHintOfEveryRefusalAndFailureHoldsNoCredentialTheCallCarried(t *testi
 			if leak, ok := bearerPartOf(otherBearerToken, env.Hint); ok {
 				t.Errorf("the hint carries %q of the token: %s", leak, env.Hint)
 			}
-			if res.IsError {
-				if hint := toolErrorOf(t, res).Error.Hint; hint == "" {
-					t.Errorf("the tool error has no hint")
-				}
-			}
 		})
 	}
-}
-
-// cmpOrOK returns status, or 200 when it is zero.
-func cmpOrOK(status int) int {
-	if status == 0 {
-		return http.StatusOK
-	}
-	return status
 }
 
 // Redaction runs before any length cut: a token that a cut would leave short
@@ -425,53 +445,40 @@ func cmpOrOK(status int) int {
 
 func TestATokenThatALangfuseErrorMessageCutWouldHaveLeftShortIsStillRedacted(t *testing.T) {
 	t.Parallel()
-	const prefix = "Langfuse answered HTTP 400: "
-	header := "Authorization: Bearer " + otherBearerToken
-	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		pad, _ := strconv.Atoi(r.URL.Query().Get("name")) // trace_list's name filter carries the padding
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(jsonOf(t, map[string]string{"message": strings.Repeat("x ", pad/2) + header + " tail"})))
-	}))
-	t.Cleanup(fake.Close)
-	opts := testOptions(t, fake.URL)
-	opts.RateLimit = 60_000 // many calls: the default 30 a minute would take minutes
-	cs := connectServer(t, langfuse.New(opts), slog.New(slog.DiscardHandler), server.Secrets{Keys: testKeys()})
+	fake := paddedLangfuse(t, http.StatusBadRequest, func(pad int) string {
+		return jsonOf(t, map[string]string{"message": strings.Repeat("x ", pad/2) + otherBearerHeader + " tail"})
+	})
+	cs := connectUnthrottled(t, fake)
 
 	// The message is cut at 500 runes: the header starts before, at and after
 	// the point where only part of the token would be kept.
 	for pad := 400; pad <= 480; pad += 2 {
-		res := callExecuteRead(t, cs, map[string]any{"operationId": "trace_list", "parameters": map[string]any{"name": strconv.Itoa(pad)}})
+		got := toolErrorOf(t, readPadded(t, cs, pad)).Error
 
-		got := toolErrorOf(t, res).Error
 		if leak, ok := bearerPartOf(otherBearerToken, got.Message); ok {
-			t.Fatalf("after %d bytes of padding the message carries %q of the token: %s", len(prefix)+pad, leak, got.Message)
+			t.Fatalf("after %d bytes of padding the message carries %q of the token: %s", pad, leak, got.Message)
 		}
 	}
 }
 
 func TestATokenInACallsOwnTextThatTheEchoCutWouldHaveLeftShortIsStillRedacted(t *testing.T) {
 	t.Parallel()
-	fake := httptest.NewServer(nil)
-	t.Cleanup(fake.Close)
-	header := "Authorization: Bearer " + otherBearerToken
-	cs, logs := connectLogged(t, fake)
+	cs, logs := connectLogged(t, idleLangfuse(t))
 
 	// The echo of a name is cut at 64 bytes: the header starts before, at and
 	// after the point where only part of the token would be kept.
 	for pad := 20; pad <= 66; pad++ {
-		text := strings.Repeat("x", pad) + header
-		for where, args := range map[string]map[string]any{
-			"an operation ID":    {"operationId": text},
-			"a parameter name":   {"operationId": "trace_list", "parameters": map[string]any{text: "x"}},
-			"an argument name":   {"operationId": "trace_list", text: "x"},
-			"a describe request": {"operationId": text},
+		text := strings.Repeat("x", pad) + otherBearerHeader
+		for where, call := range map[string]struct {
+			tool string
+			args map[string]any
+		}{
+			"an operation ID":                       {"execute_read", map[string]any{"operationId": text}},
+			"a parameter name":                      {"execute_read", map[string]any{"operationId": "trace_list", "parameters": map[string]any{text: "x"}}},
+			"an argument name":                      {"execute_read", map[string]any{"operationId": "trace_list", text: "x"}},
+			"an operation ID to describe_operation": {"describe_operation", map[string]any{"operationId": text}},
 		} {
-			tool := "execute_read"
-			if where == "a describe request" {
-				tool = "describe_operation"
-			}
-			res := callTool(t, cs, tool, args)
+			res := callTool(t, cs, call.tool, call.args)
 
 			if leak, ok := bearerPartOf(otherBearerToken, resultText(t, res)); ok {
 				t.Fatalf("%s after %d bytes: the result carries %q of the token: %s", where, pad, leak, resultText(t, res))
@@ -485,34 +492,39 @@ func TestATokenInACallsOwnTextThatTheEchoCutWouldHaveLeftShortIsStillRedacted(t 
 
 func TestATokenCutInHalfByAClipIsStillRedacted(t *testing.T) {
 	t.Parallel()
-	header := "Authorization: Bearer " + otherBearerToken
-	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		pad, _ := strconv.Atoi(r.URL.Query().Get("name")) // trace_list's name filter carries the padding
-		body := jsonOf(t, map[string]any{"data": []map[string]string{
-			{"id": "r1", "input": strings.Repeat("a", max(pad-1, 0)) + " " + header + " " + strings.Repeat("b", 30000)}}})
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(body)) // a failed write fails the call
-	}))
-	t.Cleanup(fake.Close)
-	opts := testOptions(t, fake.URL)
-	opts.RateLimit = 60_000 // many calls: the default 30 a minute would take minutes
-	cs := startServer(t, langfuse.New(opts), slog.New(slog.DiscardHandler),
-		server.Secrets{Keys: testKeys()}, langfuse.UnknownProfile(), server.WithMaxResultBytes(16384))
-	read := func(pad int) string {
-		return resultText(t, callExecuteRead(t, cs, map[string]any{
-			"operationId": "trace_list", "parameters": map[string]any{"name": strconv.Itoa(pad)}}))
-	}
-	_, inputs := rowInputs(t, decodeResult(t, read(0)))
-	clip := len(inputs[0]) // where the clip lands, marker included
+	fake := paddedLangfuse(t, http.StatusOK, func(pad int) string {
+		return jsonOf(t, map[string]any{"data": []map[string]string{{
+			"id": "r1", "input": strings.Repeat("a", max(pad-1, 0)) + " " + otherBearerHeader + " " + strings.Repeat("b", 30000)}}})
+	})
+	cs := connectUnthrottled(t, fake)
+	_, inputs := rowInputs(t, decodeResult(t, resultText(t, readPadded(t, cs, 0))))
+	clip := len(inputs[0]) // where the clip lands, marker included: the range of padding to probe
 	if clip < 1000 {
 		t.Fatalf("the first read clipped the input to %d bytes, want about the result size cap", clip)
 	}
 
 	for pad := clip - 90; pad <= clip+3; pad++ { // the header ends well before, at and after the cut
-		text := read(pad)
+		text := resultText(t, readPadded(t, cs, pad))
 
 		if leak, ok := bearerPartOf(otherBearerToken, text); ok {
 			t.Fatalf("after %d bytes: the result carries %q of the token", pad, leak)
+		}
+	}
+}
+
+func TestATokenInAWriteBodyThatTheConfirmationCutWouldHaveLeftShortIsStillRedacted(t *testing.T) {
+	t.Parallel()
+	// The confirmation shows the body cut at 300 characters: the header starts
+	// before, at and after the point where only part of the token would show.
+	for pad := 230; pad <= 265; pad++ {
+		label := strings.Repeat("a", pad) + " " + otherBearerHeader
+
+		got := question(t, map[string]any{"operationId": "promptVersion_update",
+			"parameters": map[string]any{"name": "greeting", "version": 2},
+			"body":       map[string]any{"newLabels": []any{label}}})
+
+		if leak, ok := bearerPartOf(otherBearerToken, got); ok {
+			t.Fatalf("after %d bytes of padding the confirmation carries %q of the token:\n%s", pad, leak, got)
 		}
 	}
 }

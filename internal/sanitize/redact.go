@@ -84,7 +84,7 @@ func (r Redactor) redact(s string) string {
 
 // mentionsHeader reports whether s holds "bearer" or "authorization" in any
 // case: the cheap test that lets the common text skip headerPattern, which
-// costs about a hundred times more per byte than this scan (#180).
+// costs far more per byte than this scan (BenchmarkRedact).
 func mentionsHeader(s string) bool {
 	for i := 0; i+1 < len(s); i++ {
 		// An ASCII letter in lower case, and the second letter of the word,

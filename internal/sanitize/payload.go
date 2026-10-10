@@ -108,8 +108,8 @@ func Text(s string) string {
 
 // plain reports whether s is ASCII with no control character other than tab,
 // line feed and carriage return: text that Text leaves as it is, found by a
-// byte scan that costs a fraction of Text's scan by rune (#180: Redact cleans
-// every text it is given).
+// byte scan that costs far less than Text's scan by rune on ASCII text
+// (BenchmarkRedact; Redact cleans every text it is given).
 func plain(s string) bool {
 	for i := range len(s) {
 		if c := s[i]; c >= 0x7f || (c < ' ' && c != '\t' && c != '\n' && c != '\r') {
