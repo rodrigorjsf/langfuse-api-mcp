@@ -292,13 +292,13 @@ const (
 		"filter the rows yourself over every page (page, or cursor from meta.cursor)"
 	// folderNameHint replaces the hint of a 404 or 400 answering a call with
 	// a Folder name: the name may be wrong, or the %2F may not have reached
-	// Langfuse intact. The runs-route claim is lifted once langfuse/langfuse#13933
-	// is fixed (#49).
+	// Langfuse intact. It says nothing of the dataset runs routes: a live
+	// test on every pinned deployment found them serving a Folder name where
+	// they are served at all (#181, #49).
 	folderNameHint = "the name has folders, sent with each \"/\" encoded as %2F as Langfuse asks: verify the name " +
 		"(prompts_list and datasets_list list existing ones); a reverse proxy in front of a self-hosted Langfuse " +
 		"may decode %2F before Langfuse sees it (langfuse/langfuse#12720), and then for a prompt, prompts_list " +
-		"with the full name in its name query parameter still finds it; the dataset runs routes " +
-		"(datasets_getRuns, datasets_getRun, datasets_deleteRun) currently fail upstream for Folder names (langfuse/langfuse#13933)"
+		"with the full name in its name query parameter still finds it"
 	// productionLabelHint closes the not-found hint of prompts_get called with
 	// no label and no version (#178): Langfuse then asks for the version
 	// labelled production, so a prompt that lacks that label is not found.

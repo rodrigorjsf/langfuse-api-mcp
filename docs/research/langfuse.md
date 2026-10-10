@@ -295,6 +295,39 @@ finding H1, `raw/2026-10-10-e2e-langfuse-3.80.0.md`).
   carries none; kept, it would be a required parameter of the operation on those deployments.
 - **A change of a parameter's type or enum between releases is not tracked**: the definition of the newest release that
   lists the parameter applies.
+
+### 1.11 Dataset runs routes with a Folder name (live test, 2026-10-10) `[verified]`
+
+Source: `TestLiveLangfuseServesTheRunsOfADatasetReadByItsFolderName` and
+`TestLiveLangfuseAnswersOperationUnavailableOnTheDatasetRunsRoutesWhereTheLegacyFamilyIsOff`
+(`internal/server/foldername_integration_test.go`, #181), run on each pinned deployment. The test creates a dataset
+named `it-folder-<id>/runs-dataset`, one item and one run item of the run `it-run-<id>` straight through Langfuse, then
+reads the runs through `execute_read` (`datasets_getRuns`, `datasets_getRun`, the Folder name sent as `%2F`) and
+sends `DELETE` to the route `datasets_deleteRun` and `datasets_getRun` share. It replaces the statement, kept in the
+Folder-name hint and two docs since #33, that these routes fail for Folder names in Langfuse itself
+(langfuse/langfuse#13933; a Langfuse maintainer answered there on 2026-07-15 that the OSS route supports the encoded
+name, and the issue was still open on 2026-10-10). The report rested on one reporter, not on a deployment.
+
+| Deployment | `datasets_getRuns` | `datasets_getRun` | `DELETE` of the run |
+|---|---|---|---|
+| 3.80.0 | 200, the one run of that dataset | 200, run and its run item | 200 |
+| 3.225.11 | 200, the one run of that dataset | 200, run; its run item after about 6 s | 200 |
+| 4.46.0 `events_only` | 404, the legacy family is off | 404 | 404 |
+| 4.46.0 `dual` | 200, the one run of that dataset | 200, run; its run item after about 8 s | 200 |
+
+- **"Belongs to that dataset"** means the run's `datasetId` is the ID Langfuse returned when it created the dataset and
+  its `datasetName` is the Folder name; `datasets_getRun` also lists the run item of the item created.
+- **4.46.0 `events_only` is no Folder-name failure.** The three routes are legacy-family routes. Langfuse answers 404
+  to all three for a dataset that exists, and the executor reports `operation_unavailable` (the test asserts the code
+  and the HTTP status 404); the resolved catalog of that profile offers neither read operation (ADR-0012).
+- **Run items are listed late on 3.225.11 and 4.46.0 `dual`.** A run item created with `POST /dataset-run-items` is
+  listed by `GET /datasets/{name}/runs/{run}` only after a delay: the `datasets_getRun` subtest took 6.1 s on 3.225.11
+  and 8.1 s on `dual`, 0.01 s on 3.80.0. The run itself is listed at once (`datasets_getRuns` took 0.02 s or less on
+  every deployment that serves it). The test polls for the run item for up to 90 s. The delay was not compared with a
+  dataset without folders, so it is not claimed to be Folder-name related.
+- **A run item needs no trace.** `POST /dataset-run-items` accepted a `traceId` that no trace carries, on every
+  deployment, so the test seeds none.
+
 ---
 
 ## 2. Deprecations
