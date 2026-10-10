@@ -50,6 +50,7 @@ const traceListOperationID = "trace_list"
 // and the campaign saw the parameter work on 3.80.0 (144,257 bytes of
 // trace_list rows against 537 with fields=core). Only a deployment whose
 // version serves fields lists the parameter, so only there does it carry this.
+// The fields of the other six operations that take it have no guidance yet: see #194.
 const traceListFieldsGuidance = "Comma-separated field groups to return: core (always included), io (input, output, " +
 	"metadata), scores, observations and metrics; for example core,scores. Without fields every group is returned, " +
 	"which makes rows large; core alone is the smallest row. A group left out comes back empty: scores and " +
