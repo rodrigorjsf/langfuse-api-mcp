@@ -140,3 +140,31 @@ func TestNoToolArgumentChangesTheResultSizeCap(t *testing.T) {
 		})
 	}
 }
+
+// No other tool takes a cap argument either: each refuses one as an unknown
+// argument, naming it redacted and cut, before any Langfuse request.
+func TestNoOtherToolTakesAResultSizeCapArgument(t *testing.T) {
+	t.Parallel()
+	calls := map[string]map[string]any{
+		"get_trace_tree":     {"traceId": "t-1", "maxResultBytes": 1048576},
+		"describe_operation": {"operationId": "trace_list", "maxResultBytes": 1048576},
+		"search_operations":  {"query": "trace", "maxResultBytes": 1048576},
+	}
+	for tool, args := range calls {
+		t.Run(tool, func(t *testing.T) {
+			t.Parallel()
+			fake, calls := scriptedLangfuse(t, answer{status: http.StatusOK, body: `{"data":[],"meta":{}}`})
+			cs := startServer(t, langfuse.New(testOptions(t, fake.URL)), slog.New(slog.DiscardHandler),
+				server.Secrets{Keys: testKeys()}, v4Profile, server.WithMaxResultBytes(16384))
+
+			res := callTool(t, cs, tool, args)
+
+			if got := toolErrorOf(t, res).Error.Code; got != "invalid_argument" {
+				t.Fatalf("%s: tool error code = %q, want invalid_argument", tool, got)
+			}
+			if n := calls.Load(); n != 0 {
+				t.Fatalf("%s: Langfuse received %d requests for a cap argument", tool, n)
+			}
+		})
+	}
+}

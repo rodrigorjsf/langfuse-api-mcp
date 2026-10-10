@@ -107,11 +107,12 @@ func TestExecutableCutsAToolResultAtTheConfiguredResultSizeCap(t *testing.T) {
 	page := `{"data":[` + strings.Join(rows, ",") + `],"meta":{"cursor":"next"}}`
 	for name, tc := range map[string]struct {
 		env           []string
+		wantLimit     int
 		wantTruncated bool
 	}{
-		"default cap":   {nil, false},
-		"cap of 16384":  {[]string{"LANGFUSE_MCP_MAX_RESULT_BYTES=16384"}, true},
-		"cap of 100000": {[]string{"LANGFUSE_MCP_MAX_RESULT_BYTES=100000"}, false},
+		"default cap":   {nil, 65536, false},
+		"cap of 16384":  {[]string{"LANGFUSE_MCP_MAX_RESULT_BYTES=16384"}, 16384, true},
+		"cap of 100000": {[]string{"LANGFUSE_MCP_MAX_RESULT_BYTES=100000"}, 100000, false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -133,10 +134,9 @@ func TestExecutableCutsAToolResultAtTheConfiguredResultSizeCap(t *testing.T) {
 				t.Fatalf("tools/call result = %+v, want one enveloped result", call)
 			}
 			truncated, _ := call.StructuredContent["truncated"].(bool)
-			limit := map[string]int{"default cap": 65536, "cap of 16384": 16384, "cap of 100000": 100000}[name]
-			if truncated != tc.wantTruncated || len(call.Content[0].Text) > limit {
+			if truncated != tc.wantTruncated || len(call.Content[0].Text) > tc.wantLimit {
 				t.Fatalf("result of %d bytes, truncated %v; want truncated %v within %d bytes",
-					len(call.Content[0].Text), truncated, tc.wantTruncated, limit)
+					len(call.Content[0].Text), truncated, tc.wantTruncated, tc.wantLimit)
 			}
 		})
 	}
