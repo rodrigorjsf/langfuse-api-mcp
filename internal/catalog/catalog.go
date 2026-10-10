@@ -105,6 +105,12 @@ type Operation struct {
 	Family Family
 	// Body is the operation's JSON request body; nil when it takes none.
 	Body *RequestBody
+	// prefers is the ID of the operation the union catalog's summary names as
+	// the one to prefer over this one ("legacy: prefer X when it is
+	// available"); "" when it names none. plainLine is the operation's line
+	// without that mention, which Resolve uses where the catalog does not
+	// offer prefers.
+	prefers, plainLine string
 }
 
 // RequestBody is the JSON request body of a write operation, from the release
@@ -268,6 +274,7 @@ func load(spec []byte) (Catalog, error) {
 				o.Tag = visible(op.Tags[0])
 			}
 			o.DescriptionLine = indexLine(op.Summary, op.Description)
+			o.prefers, o.plainLine = splitPreferred(op.Summary, op.Description, o.DescriptionLine)
 			for i, p := range o.Params {
 				if o.isListLimit(p) {
 					// The catalog bounds the page size itself (Request).
@@ -307,6 +314,23 @@ func indexLine(summary, description string) string {
 		line = string(r[:maxIndexLineRunes-1]) + "…"
 	}
 	return line
+}
+
+// preferredSuffix matches the mention a deprecated operation's summary ends
+// with: the operation to prefer (scripts/gen-union-catalog.py, summarize). Only
+// an operation ID matches; a path the notice wrote is not one.
+var preferredSuffix = regexp.MustCompile(` \(legacy: prefer ([A-Za-z0-9_-]+) when it is available\)$`)
+
+// splitPreferred returns the operation a summary names as the one to prefer
+// and the operation's index line without that mention (" (legacy)" instead);
+// both are "" and line when the summary names none.
+func splitPreferred(summary, description, line string) (prefers, plainLine string) {
+	clean := visible(summary)
+	m := preferredSuffix.FindStringSubmatchIndex(clean)
+	if m == nil {
+		return "", line
+	}
+	return clean[m[2]:m[3]], indexLine(clean[:m[0]]+" (legacy)", description)
 }
 
 // cleanSchema returns the JSON schema raw with every string in it cleaned of

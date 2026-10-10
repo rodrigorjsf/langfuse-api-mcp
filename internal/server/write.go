@@ -114,6 +114,12 @@ func (ex executor) executeWrite(ctx context.Context, req *mcp.CallToolRequest, a
 		return toolError(errorInvalidArgument, err.Error(), writeArgumentsHint, in.OperationID)
 	}
 	op, ok := ex.catalog.Lookup(in.OperationID)
+	if !ok {
+		if f, method, unavailable := notOffered(ex.catalog, in.OperationID, toolExecuteWrite, ex.writeMode, ex.profile); unavailable {
+			a.method = method
+			return errorResult(f)
+		}
+	}
 	if !ok || op.IsRead() {
 		// Excluded, unknown and read operations look the same: none of them
 		// can be run by execute_write.

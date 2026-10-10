@@ -14,6 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/sanitize"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/workflows"
 )
@@ -149,6 +150,9 @@ type discovery struct {
 	// offersTraceTree reports whether get_trace_tree is registered.
 	offersTraceTree bool
 	redact          sanitize.Redactor
+	// profile is the deployment profile detected at startup; the unavailable
+	// operation errors name it.
+	profile langfuse.DeploymentProfile
 }
 
 // listed reports whether op is in the operation index: a read operation, or
@@ -204,16 +208,39 @@ func asksAboutTraces(query string) bool {
 	})
 }
 
+// The legacy operations that read traces on a deployment without the v4 read
+// family (3.x, or v4 in legacy mode).
+const (
+	legacyTraceGet     = "trace_get"
+	legacyTraceList    = "trace_list"
+	legacyObservations = "legacy_observationsV1_getMany"
+	legacyMetrics      = "legacy_metricsV1_metrics"
+)
+
 // traceReadsHint returns the hint of a search that asks about traces (#100,
 // #114): a v4 deployment has no Trace tag, so it names how trace
-// data is read instead. It is static text naming only the tools and
+// data is read instead; a deployment without the v4 read family names its
+// legacy trace reads. It is static text naming only the tools and
 // operations this deployment offers, never the query, and "" when it offers
 // none of them.
 func (d discovery) traceReadsHint() string {
 	var reads []string
 	if d.offersTraceTree {
-		reads = append(reads, "one trace by its ID: "+toolGetTraceTree)
+		reads = d.v4TraceReads()
+	} else {
+		reads = d.legacyTraceReads()
 	}
+	if len(reads) == 0 {
+		return ""
+	}
+	return "Trace data is read with: " + strings.Join(reads, "; ") +
+		". " + toolDescribeOperation + " returns an operation's parameters."
+}
+
+// v4TraceReads lists the trace reads of a deployment with the v4 read family
+// that it offers, each with what it reads.
+func (d discovery) v4TraceReads() []string {
+	reads := []string{"one trace by its ID: " + toolGetTraceTree}
 	if d.offers(workflows.ObservationsOperationID) {
 		reads = append(reads, "a filtered list of observations: "+toolExecuteRead+" with "+workflows.ObservationsOperationID)
 	}
@@ -221,11 +248,24 @@ func (d discovery) traceReadsHint() string {
 		reads = append(reads, "aggregates such as cost or latency per day, e.g. for a trace name: "+
 			toolExecuteRead+" with "+catalog.MetricsOperationID)
 	}
-	if len(reads) == 0 {
-		return ""
+	return reads
+}
+
+// legacyTraceReads lists the legacy operations that read traces and that this
+// deployment offers, each with what it reads.
+func (d discovery) legacyTraceReads() []string {
+	var reads []string
+	for _, r := range []struct{ id, what string }{
+		{legacyTraceGet, "one trace by its ID"},
+		{legacyTraceList, "a filtered list of traces"},
+		{legacyObservations, "a filtered list of observations"},
+		{legacyMetrics, "aggregates such as cost or latency per day, e.g. for a trace name"},
+	} {
+		if d.offers(r.id) {
+			reads = append(reads, r.what+": "+toolExecuteRead+" with "+r.id)
+		}
 	}
-	return "Trace data is read with: " + strings.Join(reads, "; ") +
-		". " + toolDescribeOperation + " returns an operation's parameters."
+	return reads
 }
 
 // offers reports whether the operation index lists the operation id.
@@ -468,6 +508,12 @@ func (d discovery) describeOperation(_ context.Context, req *mcp.CallToolRequest
 		return toolError(errorInvalidArgument, err.Error(), describeArgumentsHint, "")
 	}
 	op, ok := d.catalog.Lookup(id)
+	if !ok {
+		if f, method, unavailable := notOffered(d.catalog, id, toolDescribeOperation, d.writeMode, d.profile); unavailable {
+			a.method = method
+			return errorResult(f)
+		}
+	}
 	if !ok || !d.listed(op) {
 		// Excluded, unknown and (write mode off) write operations look the
 		// same: none of them can be run here.
