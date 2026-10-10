@@ -147,11 +147,10 @@ func searchArgumentsHint() string {
 type discovery struct {
 	catalog   catalog.Catalog
 	writeMode bool
-	// offersTraceTree reports whether get_trace_tree is registered.
-	offersTraceTree bool
-	redact          sanitize.Redactor
+	redact    sanitize.Redactor
 	// profile is the deployment profile detected at startup; the unavailable
-	// operation errors name it.
+	// operation errors name it, and its v4 read family decides whether
+	// get_trace_tree can run.
 	profile langfuse.DeploymentProfile
 }
 
@@ -225,7 +224,7 @@ const (
 // none of them.
 func (d discovery) traceReadsHint() string {
 	var reads []string
-	if d.offersTraceTree {
+	if d.profile.On(catalog.V4ReadFamily) {
 		reads = d.v4TraceReads()
 	} else {
 		reads = d.legacyTraceReads()

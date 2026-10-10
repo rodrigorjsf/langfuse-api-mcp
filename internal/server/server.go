@@ -129,8 +129,7 @@ func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets
 	redact := secrets.redactor()
 	ex := executor{catalog: cat, client: client, redact: redact, profile: profile, writeMode: o.writeMode,
 		confirmer: newConfirmer(o.now), maxResultBytes: o.maxResultBytes}
-	traceTree := profile.On(catalog.V4ReadFamily)
-	d := discovery{catalog: cat, writeMode: o.writeMode, offersTraceTree: traceTree, redact: redact, profile: profile}
+	d := discovery{catalog: cat, writeMode: o.writeMode, redact: redact, profile: profile}
 	s.AddTool(&mcp.Tool{
 		Name:         "search_operations",
 		Title:        searchOperationsTitle,
@@ -160,9 +159,7 @@ func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets
 			OpenWorldHint:   new(true),
 		},
 	}, audited(log, redact, ex.executeRead))
-	if traceTree {
-		s.AddTool(traceTreeTool(), audited(log, redact, ex.getTraceTree))
-	}
+	s.AddTool(traceTreeTool(), audited(log, redact, ex.getTraceTree))
 	if o.writeMode {
 		s.AddTool(executeWriteTool(), audited(log, redact, ex.executeWrite))
 	}

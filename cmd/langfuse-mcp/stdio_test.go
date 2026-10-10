@@ -397,6 +397,57 @@ func TestExecutableOffersOnlyTheOperationsOfTheDetectedDeploymentProfile(t *test
 	}
 }
 
+// ADR-0002 amendment of 2026-10-10, spec #172 stories 26 and 27: on a Langfuse
+// 3.80.0, whose v4 read sentinel answers 404, the wired server still lists
+// get_trace_tree, and a call answers operation_unavailable without a request.
+func TestExecutableOnADeploymentWithoutTheV4ReadFamilyListsGetTraceTreeAndAnswersOperationUnavailable(t *testing.T) {
+	t.Parallel()
+	gotRequest := make(chan string, 1)
+	fake := deploymentLangfuse(t, `{"status":"OK","version":"3.80.0"}`,
+		[]string{"/api/public/v2/observations", "/api/public/experiments"}, func(w http.ResponseWriter, r *http.Request) {
+			gotRequest <- r.Method + " " + r.URL.RequestURI()
+			_, _ = io.WriteString(w, `{}`) // a failed write fails the call below
+		})
+	s := startStdio(t, "LANGFUSE_BASE_URL="+fake.URL)
+	s.initialize()
+
+	var list struct {
+		Tools []struct {
+			Name string `json:"name"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(s.send("tools/list", map[string]any{}, true), &list); err != nil {
+		t.Fatalf("decode tools/list: %v", err)
+	}
+	var call toolCall
+	if err := json.Unmarshal(s.send("tools/call", map[string]any{
+		"name": "get_trace_tree", "arguments": map[string]any{"traceId": "trace-1"},
+	}, true), &call); err != nil {
+		t.Fatalf("decode tools/call: %v", err)
+	}
+	s.stop()
+
+	names := make([]string, 0, len(list.Tools))
+	for _, tool := range list.Tools {
+		names = append(names, tool.Name)
+	}
+	if !slices.Contains(names, "get_trace_tree") {
+		t.Errorf("tools = %v, want get_trace_tree listed on a deployment without the v4 read family", names)
+	}
+	toolErr, _ := call.StructuredContent["error"].(map[string]any)
+	if code, _ := toolErr["code"].(string); !call.IsError || code != "operation_unavailable" {
+		t.Errorf("get_trace_tree = %+v, want operation_unavailable", call)
+	}
+	if hint, _ := toolErr["hint"].(string); !strings.Contains(hint, "trace_get") || !strings.Contains(hint, "Langfuse 3.80.0") {
+		t.Errorf("hint = %q, want it to name trace_get and Langfuse 3.80.0", hint)
+	}
+	select {
+	case got := <-gotRequest:
+		t.Errorf("Langfuse received %q, want no request beyond the detection", got)
+	default:
+	}
+}
+
 // ADR-0012 amendment, spec #68 stories 24 and 25: a Langfuse that never
 // answers holds startup only for the detection budget (about 5 s); the server
 // then starts with the version unknown and every family on.

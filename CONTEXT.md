@@ -56,7 +56,7 @@ _Avoid_: region preset
 **Legacy operation**: a deprecated operation, part of the legacy family; exposed only when the connected deployment still answers it.
 _Avoid_: v1 API, old API
 
-**Unavailable operation**: an operation of the catalog that the connected deployment does not serve (its version lacks the route, or its write mode turns the operation's family off); a call to it returns the tool error `operation_unavailable`, never Langfuse's body.
+**Unavailable operation**: an operation of the catalog that the connected deployment does not serve (its version lacks the route, or its write mode turns the operation's family off); a call to it returns the tool error `operation_unavailable`, never Langfuse's body. `get_trace_tree` answers the same way on a deployment without the v4 read family.
 _Avoid_: missing endpoint, not found (that is a missing resource)
 
 **Served parameter**: a parameter of an operation that the connected deployment's Langfuse version declares; an operation description lists only its served parameters, and a call carrying any other parameter of that operation is refused before any request, naming the version that serves it.

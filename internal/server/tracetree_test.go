@@ -1,7 +1,6 @@
 package server_test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,34 +30,6 @@ var v4Profile = langfuse.DeploymentProfile{Version: "4.46.0", Families: []catalo
 
 // legacyProfile is a deployment without the v4 read family (Langfuse v3).
 var legacyProfile = langfuse.DeploymentProfile{Version: "3.80.0", Families: []catalog.Family{catalog.LegacyFamily}}
-
-func TestGetTraceTreeIsRegisteredOnlyWhenTheV4ReadFamilyIsOn(t *testing.T) {
-	t.Parallel()
-	tests := map[string]struct {
-		profile langfuse.DeploymentProfile
-		want    bool
-	}{
-		"v4 read family on":  {profile: v4Profile, want: true},
-		"v4 read family off": {profile: legacyProfile, want: false},
-	}
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			fake := httptest.NewServer(nil)
-			t.Cleanup(fake.Close)
-			cs := connectProfile(t, fake, tc.profile)
-
-			res, err := cs.ListTools(context.Background(), nil)
-			if err != nil {
-				t.Fatalf("list tools: %v", err)
-			}
-			got := slices.ContainsFunc(res.Tools, func(tool *mcp.Tool) bool { return tool.Name == "get_trace_tree" })
-			if got != tc.want {
-				t.Fatalf("get_trace_tree listed = %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
 
 func TestGetTraceTreeIsAnnotatedReadOnlyIdempotentAndOpenWorld(t *testing.T) {
 	t.Parallel()
