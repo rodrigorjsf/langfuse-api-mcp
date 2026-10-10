@@ -21,7 +21,7 @@ import (
 // Langfuse release specs show: scores_get-many traceId from 3.133.0,
 // legacy_observationsV1_getMany level from 3.82.0, trace_get fields from 3.166.0.
 
-// connectResolved starts the server over the catalog resolved for a deployment
+// connectServing starts the server over the catalog resolved for a deployment
 // of the given version, as cmd/langfuse-mcp does at startup.
 func connectServing(t *testing.T, fake *httptest.Server, version string, families ...catalog.Family) *mcp.ClientSession {
 	t.Helper()

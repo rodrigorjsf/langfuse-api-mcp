@@ -11,7 +11,7 @@ Contract: ADR-0008. The agent must always receive a structured tool error it can
 | Where it fails | Behavior |
 |---|---|
 | Startup (config, CA explicit sources, invalid host) | exit non-zero with one clear stderr message naming the variable; never start half-configured |
-| Tool input invalid | tool result `isError: true`, code `invalid_argument`, which field and why |
+| Tool input invalid | tool result `isError: true`, code `invalid_argument`, which field and why; a parameter of the operation that the deployment's version does not serve (#173) names the parameter, operation, deployment version and the serving release (from the catalog) with a static hint: call without it and filter over every page |
 | Unknown / excluded operation | `operation_not_found` + hint to call `search_operations` |
 | Write requested with writes off | cannot happen via tools: `execute_write` is not registered, so the client gets the SDK's unknown-tool error (no `writes_disabled` code exists) |
 | Destructive write (DELETE, PUT, PATCH), client offers no form elicitation (none, or URL mode only; read per request) | `confirmation_unavailable`, static hint (use a client with form elicitation, or the Langfuse UI), not retryable; nothing is sent (#113) |

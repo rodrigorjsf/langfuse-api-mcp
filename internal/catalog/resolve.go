@@ -60,11 +60,11 @@ func (c Catalog) Resolve(p Profile) Catalog {
 	if known && at.less(floor) {
 		at, byFamily = floor, false
 	}
-	servedAt, deployment := at, ""
+	paramVersion, deployment := at, ""
 	if known {
 		deployment = p.Version
 	} else {
-		servedAt = u.newest
+		paramVersion = u.newest
 	}
 	byID := map[string]rangedOperation{}
 	for _, op := range u.ops {
@@ -81,7 +81,7 @@ func (c Catalog) Resolve(p Profile) Catalog {
 	}
 	out := Catalog{union: u, byID: make(map[string]Operation, len(byID))}
 	for id, op := range byID {
-		out.byID[id] = op.servedAt(servedAt, deployment)
+		out.byID[id] = op.withServedParams(paramVersion, deployment)
 	}
 	return out
 }
@@ -102,15 +102,15 @@ type rangedOperation struct {
 	paramSpans []span
 }
 
-// servedAt returns the operation with the parameters version v serves in
+// withServedParams returns the operation with the parameters version v serves in
 // Params and the others in unserved; deployment is the deployment's plain
 // version, "" when it was not detected.
-func (o rangedOperation) servedAt(v version, deployment string) Operation {
+func (o rangedOperation) withServedParams(v version, deployment string) Operation {
 	out := o.Operation
 	out.deployment = deployment
 	out.Params, out.unserved = nil, nil
 	for i, p := range o.Params {
-		if o.paramSpans[i].servedAt(v) {
+		if o.paramSpans[i].serves(v) {
 			out.Params = append(out.Params, p)
 		} else {
 			out.unserved = append(out.unserved, p)
@@ -127,34 +127,31 @@ func (s span) contains(v version) bool {
 	return !v.less(s.introduced) && (s.removed.isZero() || v.less(s.removed))
 }
 
-// servedAt reports whether a parameter with range s is served at version v.
+// serves reports whether a parameter with range s is served at version v.
 // The zero version, which no release has, is the newest known one that is
 // unknown: it serves the parameters no release removed.
-func (s span) servedAt(v version) bool {
+func (s span) serves(v version) bool {
 	if v.isZero() {
 		return s.removed.isZero()
 	}
 	return s.contains(v)
 }
 
-// parameterRange parses a parameter's version range.
-func parameterRange(p Param) (span, error) {
-	introduced, err := optionalVersion(p.Introduced)
-	if err != nil {
-		return span{}, err
-	}
-	removed, err := optionalVersion(p.Removed)
-	return span{introduced: introduced, removed: removed}, err
-}
-
 // rangeOf parses an operation's version range.
-func rangeOf(o Operation) (span, error) {
-	introduced, err := optionalVersion(o.Introduced)
+func rangeOf(o Operation) (span, error) { return parseSpan(o.Introduced, o.Removed) }
+
+// parameterRange parses a parameter's version range.
+func parameterRange(p Param) (span, error) { return parseSpan(p.Introduced, p.Removed) }
+
+// parseSpan parses the introduced and removed versions of a union catalog
+// entry; "" is no bound.
+func parseSpan(introduced, removed string) (span, error) {
+	from, err := optionalVersion(introduced)
 	if err != nil {
 		return span{}, err
 	}
-	removed, err := optionalVersion(o.Removed)
-	return span{introduced: introduced, removed: removed}, err
+	to, err := optionalVersion(removed)
+	return span{introduced: from, removed: to}, err
 }
 
 // optionalVersion parses a version of the union catalog; "" is the zero

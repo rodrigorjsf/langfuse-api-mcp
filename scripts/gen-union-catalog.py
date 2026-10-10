@@ -323,14 +323,15 @@ def note_parameters(history, tag, ops):
             h["param"] = p  # the last spec that lists it wins
 
 
-def parameters(h, order, introduced):
+def parameters(h, order, introduced, notes):
     """The operation's parameters across every release (#173): those of the
     newest spec that lists the operation first, in its order, then the ones
     only older releases had, by first appearance. Each carries x-introduced,
     the release that introduced it, and x-removed, the release that removed it
     while the operation stayed; a parameter that lived as long as the
     operation takes the operation's range, so the documented floors of an
-    operation also reach its parameters."""
+    operation also reach its parameters. A release in between that lacks a
+    parameter is ignored, as for operations; it is added to notes."""
     first, last = h["present"][0], h["present"][-1]
     listed = [param_key(p) for p in h["op"]["parameters"]]
     rest = sorted((k for k in h["params"] if k not in listed), key=lambda k: h["params"][k]["order"])
@@ -338,6 +339,9 @@ def parameters(h, order, introduced):
     for k in listed + rest:
         ph = h["params"][k]
         pfirst, plast = ph["present"][0], ph["present"][-1]
+        lacking = order.index(plast) - order.index(pfirst) + 1 - len(ph["present"])
+        if lacking:
+            notes.append(f"parameter {k[0]} ({k[1]}) of {h['key']} absent from {lacking} tags between {pfirst} and {plast}")
         p = dict(ph["param"])
         p["x-introduced"] = introduced if pfirst == first else text(version(pfirst))
         if plast != last:
@@ -351,7 +355,7 @@ def merge(releases):
     history = {}
     for tag, ops in releases:
         for key, op in ops.items():
-            h = history.setdefault(key, {"present": []})
+            h = history.setdefault(key, {"present": [], "key": key})
             h["present"].append(tag)
             h["op"] = op  # the last spec that contains it wins
         note_parameters(history, tag, ops)
@@ -373,7 +377,7 @@ def merge(releases):
         if floor and floor < introduced:
             introduced = floor
         op["x-introduced"] = text(introduced)
-        op["parameters"] = parameters(h, order, op["x-introduced"])
+        op["parameters"] = parameters(h, order, op["x-introduced"], gaps)
         if last != newest:
             op["x-removed"] = text(version(order[order.index(last) + 1]))
         fam = family(key, op, "x-removed" in op)

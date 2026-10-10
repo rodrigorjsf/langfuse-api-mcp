@@ -256,6 +256,20 @@ class ParameterRangeTest(unittest.TestCase):
         catalog = union_of([("v3.0.0", release_spec(("/api/public/x", "x_list", [query("page"), response])))])
         self.assertEqual(list(parameters_of(catalog, "/api/public/x")), ["page"])
 
+    def test_a_release_lacking_a_parameter_between_two_that_list_it_is_noted_and_ignored(self):
+        import contextlib
+        import io
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            catalog = union_of([
+                ("v3.0.0", release_spec(("/api/public/x", "x_list", [query("page")]))),
+                ("v3.1.0", release_spec(("/api/public/x", "x_list", []))),
+                ("v3.2.0", release_spec(("/api/public/x", "x_list", [query("page")]))),
+            ])
+        page = parameters_of(catalog, "/api/public/x")["page"]
+        self.assertEqual((page["x-introduced"], "x-removed" in page), ("3.0.0", False))
+        self.assertIn("parameter page (query) of GET /api/public/x absent from 1 tags between v3.0.0 and v3.2.0", err.getvalue())
+
     def test_a_path_parameter_gets_a_range_like_a_query_one(self):
         path_param = {"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}
         catalog = union_of([("v3.0.0", release_spec(("/api/public/x/{id}", "x_get", [path_param])))])
