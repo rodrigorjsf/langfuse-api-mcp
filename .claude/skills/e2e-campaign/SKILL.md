@@ -1,7 +1,6 @@
 ---
 name: e2e-campaign
 description: Run the end-to-end campaign of this MCP server against one pinned Langfuse version and write its report. Usage: /e2e-campaign <version>
-disable-model-invocation: true
 argument-hint: <langfuse version, e.g. 3.80.0>
 ---
 
@@ -30,3 +29,5 @@ The campaign has two phases because an agent host loads MCP servers and agent de
 - The tools `mcp__langfuse-ro__search_operations` and `mcp__langfuse-rw__execute_write` are **absent** from this session: follow [`prepare.md`](prepare.md). It ends by asking the user to restart the host and invoke this skill again.
 - They are **present**, and `python3 scripts/e2e-audit.py call ro execute_read '{"operationId":"health_health"}'` answers the version asked for: follow [`run.md`](run.md).
 - They are present but the health call fails or answers another version: the stack is down or stale. Follow `prepare.md` from its first step.
+
+
