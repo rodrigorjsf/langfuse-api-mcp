@@ -358,10 +358,10 @@ func TestGetTraceTreeBiggerThanTheResultCapIsCutAtARowBoundaryWithTheMarker(t *t
 		t.Fatalf("result is not the enveloped trace tree: %v", err)
 	}
 	kept := preOrder(env)
-	if len(text) > 100<<10 || !env.Truncated || len(kept) == 0 || len(kept) >= 200 || kept[0] != "o000@0" ||
+	if len(text) > 64<<10 || !env.Truncated || len(kept) == 0 || len(kept) >= 200 || kept[0] != "o000@0" ||
 		env.Data.Meta.Observations != 200 || !strings.Contains(env.Hint, "result size cap") {
 		t.Fatalf("result of %d bytes: truncated %v, %d rows from %v, meta %+v, hint %q; "+
-			"want at most 100 KiB, truncated, the first rows of the tree and the cut hint",
+			"want at most 64 KiB, truncated, the first rows of the tree and the cut hint",
 			len(text), env.Truncated, len(kept), kept[:min(1, len(kept))], env.Data.Meta, env.Hint)
 	}
 }
@@ -581,8 +581,8 @@ func FuzzGetTraceTreeLangfuseAnswer(f *testing.F) {
 		fake, _ := scriptedLangfuse(t, answer{status: 200, body: body})
 		cs := connectProfile(t, fake, v4Profile)
 		res := callTool(t, cs, "get_trace_tree", map[string]any{"traceId": "t-1"})
-		if !res.IsError && len(resultText(t, res)) > 100<<10 {
-			t.Fatalf("result of %d bytes exceeds the 100 KiB cap", len(resultText(t, res)))
+		if !res.IsError && len(resultText(t, res)) > 64<<10 {
+			t.Fatalf("result of %d bytes exceeds the 64 KiB cap", len(resultText(t, res)))
 		}
 	})
 }

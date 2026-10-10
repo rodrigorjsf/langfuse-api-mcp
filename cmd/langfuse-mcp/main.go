@@ -142,6 +142,7 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 	log.Info("rate limit", "perMinute", cfg.RateLimit, "source", cfg.RateLimitSource)
 	logProxy(log, cfg.Proxy)
 	logWriteMode(log, cfg.AllowWrites)
+	logResultCap(log, cfg.ResultCap)
 	// The key pair leaves config.Secret straight into a langfuse.KeyPair,
 	// which redacts itself as config.Secret does.
 	keys := langfuse.NewKeyPair(cfg.Connection.PublicKey.Reveal(), cfg.Connection.SecretKey.Reveal())
@@ -161,7 +162,8 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 	resolved := cat.Resolve(catalogProfile(profile))
 	logProfile(log, detection, len(resolved.Operations()))
 	reported := reportedVersion(version, moduleVersion())
-	opts := []server.Option{server.WithVersion(reported)}
+	// The cap is the operator's: config validated its range; no tool argument reaches it.
+	opts := []server.Option{server.WithVersion(reported), server.WithMaxResultBytes(cfg.ResultCap.Bytes)}
 	if cfg.AllowWrites.On {
 		opts = append(opts, server.WithWriteMode())
 	}
@@ -245,6 +247,16 @@ func logWriteMode(log *slog.Logger, w config.WriteMode) {
 		source = "default"
 	}
 	log.Info("write mode", "on", w.On, "source", source)
+}
+
+// logResultCap logs the effective result size cap and where it was set; an
+// unset LANGFUSE_MCP_MAX_RESULT_BYTES is the default.
+func logResultCap(log *slog.Logger, c config.ResultCap) {
+	source := string(c.Origin)
+	if source == "" {
+		source = "default"
+	}
+	log.Info("result size cap", "bytes", c.Bytes, "source", source)
 }
 
 // envMap turns "KEY=value" entries into a map; the last entry for a key wins.
