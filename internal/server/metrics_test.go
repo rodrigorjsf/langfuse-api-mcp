@@ -241,23 +241,6 @@ func TestTheMetricsQueryExampleOfTheGuidancePassesTheServersValidator(t *testing
 	}
 }
 
-func TestOperationsOutsideTheGuidedOnesCarryNoGuidance(t *testing.T) {
-	t.Parallel()
-	cs := connectOffline(t)
-
-	for _, operationID := range []string{
-		"trace_get", "observations_getMany", "legacy_observationsV1_getMany", "scores_get-many", "datasets_get", "metrics_daily",
-	} {
-		res := callTool(t, cs, "describe_operation", map[string]any{"operationId": operationID})
-		if res.IsError {
-			t.Fatalf("describe_operation %s returned a tool error: %s", operationID, resultText(t, res))
-		}
-		if s := mustJSON(t, res.StructuredContent); strings.Contains(s, `"guidance"`) {
-			t.Errorf("describe_operation %s carries guidance: %s", operationID, s)
-		}
-	}
-}
-
 func TestAMalformedMetricsQueryIsRefusedWithAHintNamingTheKeysAndDescribeOperation(t *testing.T) {
 	t.Parallel()
 	// injected plus a zero-width space and a control character.

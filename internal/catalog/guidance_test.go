@@ -19,31 +19,30 @@ func TestOnlyTheGuidedParametersCarryGuidance(t *testing.T) {
 
 	got := guidedParameters(cat)
 
-	want := []string{
-		"legacy_metricsV1_metrics/query", "metrics_metrics/query", "prompts_get/label", "prompts_get/version",
-		"prompts_list/filter", "prompts_list/tag", "trace_list/fields",
-	}
-	if !slices.Equal(got, want) {
-		t.Fatalf("parameters with guidance = %v, want %v", got, want)
+	if !slices.Equal(got, guidedParams) {
+		t.Fatalf("parameters with guidance = %v, want %v", got, guidedParams)
 	}
 }
 
-// Whatever the deployment, no parameter outside the guided ones gains
-// guidance, and an operation carries guidance only on a parameter it serves.
+// guidedParams are the parameters that carry guidance, as "operation/parameter",
+// sorted.
+var guidedParams = []string{
+	"legacy_metricsV1_metrics/query", "metrics_metrics/query", "prompts_get/label", "prompts_get/version",
+	"prompts_list/filter", "prompts_list/tag", "trace_list/fields",
+}
+
+// Whatever the deployment's version, no parameter outside the guided ones
+// gains guidance.
 func TestNoDeploymentGivesGuidanceToAParameterOutsideTheGuidedOnes(t *testing.T) {
 	t.Parallel()
 	cat := mustLoad(t)
-	guided := []string{
-		"legacy_metricsV1_metrics/query", "metrics_metrics/query", "prompts_get/label", "prompts_get/version",
-		"prompts_list/filter", "prompts_list/tag", "trace_list/fields",
-	}
 
 	for _, version := range []string{"3.0.0", "3.57.0", "3.72.0", "3.80.0", "3.225.11", "4.46.0", ""} {
 		got := guidedParameters(cat.Resolve(catalog.Profile{Version: version, Families: catalog.AllFamilies()}))
 
 		for _, g := range got {
-			if !slices.Contains(guided, g) {
-				t.Errorf("on %q %s carries guidance, want only %v", version, g, guided)
+			if !slices.Contains(guidedParams, g) {
+				t.Errorf("on %q %s carries guidance, want only %v", version, g, guidedParams)
 			}
 		}
 	}

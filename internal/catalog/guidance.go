@@ -1,7 +1,5 @@
 package catalog
 
-import "slices"
-
 // guidedParam names one query parameter of one operation that has static
 // guidance.
 type guidedParam struct{ operationID, param string }
@@ -30,14 +28,14 @@ const (
 // (#178, campaign finding M4). The Langfuse spec describes neither; with no
 // label and no version Langfuse serves the version labelled production, and
 // the label latest, which Langfuse keeps on the newest version, is how to ask
-// for that one (docs/research/langfuse.md, section on prompts). Both labels
-// and version cannot be sent together: Langfuse answers 400.
+// for that one (docs/research/langfuse.md, section on prompts). Label and
+// version cannot be sent together: Langfuse answers 400.
 const (
 	promptsGetLabelGuidance = "Selects the version that carries this label. With no label and no version, Langfuse " +
-		"returns the version labelled production, not the newest one; send label latest to get the newest " +
+		"returns the version labelled production, which may not be the newest one; send label latest to get the newest " +
 		"version. Send label or version, not both."
 	promptsGetVersionGuidance = "Selects one version by its number. With no version and no label, Langfuse " +
-		"returns the version labelled production, not the newest one; send label latest to get the newest " +
+		"returns the version labelled production, which may not be the newest one; send label latest to get the newest " +
 		"version. Send version or label, not both."
 )
 
@@ -74,18 +72,14 @@ var staticGuidance = map[guidedParam]string{
 }
 
 // ParamGuidance returns static guidance on how to fill parameter p of the
-// operation, or "" when there is none. Only a served parameter reaches it, so
-// an operation never carries guidance on a parameter its deployment lacks.
+// operation, or "" when there is none. Callers pass the operation's own
+// parameters (Params, the served ones), so an operation carries guidance only
+// on a parameter its deployment serves.
 func (o Operation) ParamGuidance(p Param) string {
 	if p.In != "query" {
 		return ""
 	}
 	return staticGuidance[guidedParam{o.ID, p.Name}]
-}
-
-// HasGuidance reports whether any parameter of the operation has guidance.
-func (o Operation) HasGuidance() bool {
-	return slices.ContainsFunc(o.Params, func(p Param) bool { return o.ParamGuidance(p) != "" })
 }
 
 // ImpliesProductionLabel reports whether r, a request of this operation,

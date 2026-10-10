@@ -410,15 +410,12 @@ func remediesOf(op catalog.Operation) sanitize.Remedies {
 
 // metricsQueryHint is the hint for a malformed metrics query (#104): how the
 // query is sent as a string (#106), its top-level keys, from the validator's
-// own list, and where the rest of its shape is described. Static text: it
-// never holds the caller's query.
+// own list, and where the rest of its shape is described: the guidance of
+// describe_operation, which both metrics operations carry (#104, #178). Static
+// text: it never holds the caller's query.
 func metricsQueryHint(op catalog.Operation) string {
-	describes := "its parameters"
-	if op.HasGuidance() {
-		describes = "the query's shape and a worked example"
-	}
 	return "send query as " + catalog.MetricsQueryEncoding + "; its top-level keys are only " + catalog.MetricsQueryKeys() +
-		"; " + toolDescribeOperation + " with operationId " + op.ID + " returns " + describes
+		"; " + toolDescribeOperation + " with operationId " + op.ID + " returns the query's shape and a worked example"
 }
 
 // parametersHintFor is the hint for a parameter the catalog refused: a

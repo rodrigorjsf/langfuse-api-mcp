@@ -214,8 +214,8 @@ func MetricsQueryKeys() string {
 
 // A metrics guide is what differs between the guidance on the query of the two
 // metrics operations: the views, one sample of each object a query holds and
-// the worked example. The rest of the text, above all the key list, is shared
-// and comes from the validator (metricsQueryKeys), so the two cannot drift.
+// the worked example. The rest of the text is shared, and its key list is the
+// validator's own (metricsQueryKeys), so the two cannot drift.
 type metricsGuide struct {
 	// views is the list of views the operation takes.
 	views string
