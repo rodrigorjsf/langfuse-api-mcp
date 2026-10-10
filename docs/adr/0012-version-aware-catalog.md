@@ -79,3 +79,22 @@ Users on old and on new deployments must both get every operation their deployme
 
 - **Corrects the startup budget amendment.** "A slow or down Langfuse never holds up the host's `initialize`" overstated it. The server reads stdin only after detection, so the host's first message waits for up to the 5 s budget; the budget bounds the wait, it does not remove it.
 - **Consequence found in #145.** Claude Code probes `server/discover` first and, after 3 s without an answer, falls back to a legacy `initialize`. With both queued, go-sdk v1.8.0 refused the `initialize` as a duplicate. The stdio transport therefore offers no protocol from 2026-07-28, so the probe negotiates nothing and the `initialize` succeeds ([record](../research/raw/2026-09-28-claude-code-slow-startup-handshake.md)). The startup order and the fixed tool set are unchanged.
+
+## Amendment: a version range per parameter, and a filter scan for two of them (2026-10-10, M8 grilling)
+
+Planned for M8; nothing below is shipped yet.
+
+The end-to-end campaign on Langfuse 3.80.0 ([record](../research/raw/2026-10-10-e2e-langfuse-3.80.0.md), finding H1) showed that the union catalog offers a parameter on a deployment whose version does not declare it: `traceId` on `scores_get-many`, `level` on `legacy_observationsV1_getMany` and `fields` on `trace_get`. Langfuse 3.80.0 ignores each of them and answers the unfiltered list with no error, so the agent gets a plausible, wrong result. The cause is the generator: for each operation it keeps the parameters of the last release spec that contains the operation.
+
+Decision:
+
+- The generator records, for every path and query parameter, the release that introduced it and, when it left the spec, the release that removed it, the same way it already does per operation.
+- At startup the catalog resolves each operation's **served parameters** for the detected version. `describe_operation` lists only those. A call that carries a parameter the version does not serve is refused with `invalid_argument` before any request; the message names the parameter, the release that serves it and the deployment's version, so that it cannot be mistaken for a misspelled name, and the hint says to call without it and filter the rows over every page.
+- When the version could not be detected, the newest release's parameters are served, as today, and the startup log says so.
+- A change of a parameter's type or enum between releases is not tracked.
+
+Refusing alone turns the most common investigation ("which traces had errors") into dozens of paged calls, so for a closed, static list of `(operation, parameter, row field)` the server answers the call with a **filter scan** instead of refusing: it reads the list without the parameter, keeps the rows whose field equals the value, and stops after 10 pages. A scan that reached the end returns a complete answer; one that hit the page limit is marked incomplete and says how many rows it read of how many exist. The list starts with the two pairs proven on 3.80.0 (`scores_get-many`/`traceId`, `legacy_observationsV1_getMany`/`level`). Whether a pair qualifies is never decided from a payload: an empty page shows no field. This part is the last slice of M8 and may ship after the rest.
+
+Considered and rejected: documenting the gap only (the agent keeps getting wrong data); filtering the one page Langfuse returned (a short, clean and incomplete answer is worse than the long, visibly unfiltered one); tracking the introduction only (a parameter a later release removed would stay unavailable on the deployments that have it).
+
+Consequences: the catalog grows by two fields per parameter; the OpenAPI spec of a release becomes the authority for what that release filters by, and where a spec is wrong the server will be wrong the same way; the filter scan is a second way to run an operation (ADR-0010 amendment) and multiplies the requests of one call by up to 10, inside the existing rate limit and counted in the audit line.

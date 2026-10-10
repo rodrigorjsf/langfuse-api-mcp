@@ -36,3 +36,11 @@ M3 ships a single workflow tool, the trace tree. Error, latency and cost triage 
 - Output: a flat list in depth-first pre-order with `depth` and `parentObservationId`, siblings by `startTime` ascending, so the existing row truncation of the untrusted-data envelope applies unchanged at the 100 KiB cap. An observation whose parent is absent becomes an extra root with `orphan: true`; several roots are ordered by `startTime`. A trace with no observations is an empty result with a hint, not `langfuse_not_found`, because Observations v2 cannot tell "missing" from "not yet ingested".
 - No scores: the agent reads them with `execute_read` `scoresV3_getManyV3`.
 - The payload is wrapped and sanitized like any `execute_read` result; the audit line names `get_trace_tree` and counts the Langfuse requests it made.
+
+## Amendment: `get_trace_tree` is registered on every deployment (2026-10-10, M8 grilling)
+
+Planned for M8. The user skill and the tool reference name `get_trace_tree`; on a deployment without the v4 read family the tool was not registered, so an agent that called it was refused by its host before the server could say anything (campaign finding M2). The tool is now registered on every deployment. Where the v4 read family is off it answers the tool error `operation_unavailable`, with a hint naming the deployment's version and the operation that reads one trace there. The tool set is the same on every deployment and still fixed at startup.
+
+Building the trace tree from the legacy observations list was considered and deferred: that list has no field selection and always carries input and output.
+
+In the same milestone, an operation ID that is in the union catalog but filtered out by the deployment profile is answered `operation_unavailable` by `describe_operation`, `execute_read` and `execute_write`, with the operation that replaces it on this deployment, instead of `operation_not_found`; a legacy line of the operation index names a preferred operation only when the deployment offers it; and the trace reads hint of `search_operations` also exists on a legacy deployment. A write operation ID while write mode is off stays `operation_not_found`.
