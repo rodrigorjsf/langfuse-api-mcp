@@ -19,6 +19,29 @@ scripts/langfuse-selfhosted.sh down        # removes the containers and their vo
 
 Or against the Cloud test project: run [`scripts/setup-ci-langfuse-cloud.sh`](../../scripts/setup-ci-langfuse-cloud.sh) once (it creates the project's keys, writes `.env.integration` and sets the CI secrets), then `set -a; . ./.env.integration; set +a` and the same `go test` line. Never point the suite at a project with real data. Both env files are gitignored.
 
+## End-to-end campaign
+
+The end-to-end campaign checks the server the way an agent uses it: subagents of an agent host answer tasks and probe the server through its MCP tools only, against a seeded self-hosted Langfuse. It costs model usage and a person at the confirmation dialog, so it is run by hand, not in CI. The first run and its findings: [docs/research/raw/2026-10-10-e2e-langfuse-3.80.0.md](../research/raw/2026-10-10-e2e-langfuse-3.80.0.md).
+
+```bash
+LANGFUSE_DEPLOYMENT=3.80.0 scripts/langfuse-selfhosted.sh up
+set -a; . ./.env.integration.selfhosted; set +a
+python3 scripts/seed-langfuse.py                       # writes the answer key .seed-expected.json (gitignored)
+go build -o dist/e2e/langfuse-mcp ./cmd/langfuse-mcp
+claude mcp add --scope local langfuse-ro -- "$PWD/scripts/e2e-mcp-server.sh" ro
+claude mcp add --scope local langfuse-rw -- "$PWD/scripts/e2e-mcp-server.sh" rw
+# restart Claude Code, run the workers, then:
+scripts/langfuse-selfhosted.sh down
+claude mcp remove --scope local langfuse-ro; claude mcp remove --scope local langfuse-rw
+```
+
+- **The servers.** [`scripts/e2e-mcp-server.sh`](../../scripts/e2e-mcp-server.sh) starts the built server in read-only (`ro`) or write (`rw`) mode with the keys of `.env.integration.selfhosted`, so the keys never enter the host's MCP registration, and appends the server's stderr to `dist/e2e/audit-<mode>.log`. Every `up` creates new keys: restart the host after it, since the script reads them when the server starts.
+- **The workers.** [`.claude/agents/`](../../.claude/agents/) holds four agent definitions (Haiku and Sonnet, one per server), each limited to `Read` and that server's tools. A worker has no shell, so it cannot reach Langfuse except through the server. The host loads them at start.
+- **The evidence.** Judge a worker by the audit file, not by its report: one JSON line per tool call (tool, operation ID, status, error code, confirmation). Run one worker at a time per server so the lines can be attributed, and note the line count before and after each one.
+- **The answer key.** Give a worker the user's question only, never an operation ID, a parameter name or the path of the key. Compare its answer with `.seed-expected.json`.
+- **Destructive calls.** The server asks the person at the host to confirm each one, also when a subagent makes the call. Let workers change only records they created (prefix `e2e-`), never a `seed-` record.
+- **Limits.** A worker in this repository sees `CLAUDE.md` and the rules, which name some operation IDs, so a "no skill" run is not a clean baseline. One run per task is an indication, not a measurement.
+
 ## Container stacks
 
 Every container this repository uses runs only while a task needs it: the script that starts a stack also stops it, and nothing is left running in the background. Every stack is a committed compose file with its images pinned by digest, started through one script. Run one stack at a time.
