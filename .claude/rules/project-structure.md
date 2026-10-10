@@ -26,7 +26,7 @@ Packages are organized **by domain concept** (terms from `CONTEXT.md`), never by
 ├── scripts/                 repeatable maintainer and CI procedures (WHAT/WHY/WHEN/HOW header): shell/Python, e.g. setup-ci-langfuse-cloud.sh, and Go commands, one per directory, e.g. registry-server-json/ (#154)
 ├── docs/                    INDEX.md (progressive-disclosure entry), reference/ (user reference), development/ (contributor
 │                            process), adr/, architecture/, research/, agents/ — no code
-└── .claude/                 rules/, hooks/, settings.json; agents/ (the end-to-end campaign's workers, restricted to the MCP tools);
+└── .claude/                 rules/, hooks/, settings.json; agents/ (the end-to-end campaign's workers, restricted to the MCP tools), skills/ (contributor skills, e.g. e2e-campaign; user skills go to the top-level skills/);
                              handoffs/ (session handoff notes) is local, gitignored
 ```
 

@@ -23,6 +23,15 @@ Or against the Cloud test project: run [`scripts/setup-ci-langfuse-cloud.sh`](..
 
 The end-to-end campaign checks the server the way an agent uses it: subagents of an agent host answer tasks and probe the server through its MCP tools only, against a seeded self-hosted Langfuse. It costs model usage and a person at the confirmation dialog, so it is run by hand, not in CI. The first run and its findings: [docs/research/raw/2026-10-10-e2e-langfuse-3.80.0.md](../research/raw/2026-10-10-e2e-langfuse-3.80.0.md).
 
+**Run it with the skill.** In Claude Code, in this repository, type `/e2e-campaign <version>`, for example `/e2e-campaign 3.80.0`. The version must be one of the pinned deployments (`3.80.0`, `3.225.11`, `4.46.0-events_only`, `4.46.0-dual`); the seed is proven on 3.80.0 only. The skill ([`.claude/skills/e2e-campaign/`](../../.claude/skills/e2e-campaign/)) runs in two phases, because an agent host loads MCP servers and agent definitions only when it starts:
+
+1. The first invocation prepares: branch `test/e2e-langfuse-<version>`, the stack, the seed, the server build and the two registrations. It ends by asking you to restart Claude Code and invoke it again.
+2. The second invocation runs the campaign: a pilot, the functional sweep of every read operation, the security probe, the write path, the confirmations (you accept and decline at the dialog), the skill A/B with Haiku and Sonnet, the open issues, the published package, then it stops the stack and runs the small-model eval.
+
+**Where the report goes.** `docs/research/raw/<date>-e2e-langfuse-<version>.md`, with a row in [`docs/research/INDEX.md`](../research/INDEX.md), committed on the campaign branch and offered as a pull request. The campaign changes no production code and touches no GitHub issue: findings go to the report. Working files (audit files, the ledger, running notes, the answer key) stay under the gitignored `dist/e2e/`.
+
+The steps the skill runs, for doing it by hand:
+
 ```bash
 LANGFUSE_DEPLOYMENT=3.80.0 scripts/langfuse-selfhosted.sh up
 set -a; . ./.env.integration.selfhosted; set +a
@@ -37,7 +46,7 @@ claude mcp remove --scope local langfuse-ro; claude mcp remove --scope local lan
 
 - **The servers.** [`scripts/e2e-mcp-server.sh`](../../scripts/e2e-mcp-server.sh) starts the built server in read-only (`ro`) or write (`rw`) mode with the keys of `.env.integration.selfhosted`, so the keys never enter the host's MCP registration, and appends the server's stderr to `dist/e2e/audit-<mode>.log`. Every `up` creates new keys: restart the host after it, since the script reads them when the server starts.
 - **The workers.** [`.claude/agents/`](../../.claude/agents/) holds four agent definitions (Haiku and Sonnet, one per server), each limited to `Read` and that server's tools. A worker has no shell, so it cannot reach Langfuse except through the server. The host loads them at start.
-- **The evidence.** Judge a worker by the audit file, not by its report: one JSON line per tool call (tool, operation ID, status, error code, confirmation). Run one worker at a time per server so the lines can be attributed, and note the line count before and after each one.
+- **The evidence.** Judge a worker by the audit file, not by its report: one JSON line per tool call (tool, operation ID, status, error code, confirmation). Run one worker at a time per server so the lines can be attributed; [`scripts/e2e-audit.py`](../../scripts/e2e-audit.py) `mark <label>` notes the line counts before and after each one, `count` summarises a window (calls, error codes, `execute_write` calls, confirmations), and `call` makes one tool call through the wrapper for a check no agent should improvise.
 - **The answer key.** Give a worker the user's question only, never an operation ID, a parameter name or the path of the key. Compare its answer with `.seed-expected.json`.
 - **Destructive calls.** The server asks the person at the host to confirm each one, also when a subagent makes the call. Let workers change only records they created (prefix `e2e-`), never a `seed-` record.
 - **Limits.** A worker in this repository sees `CLAUDE.md` and the rules, which name some operation IDs, so a "no skill" run is not a clean baseline. One run per task is an indication, not a measurement.

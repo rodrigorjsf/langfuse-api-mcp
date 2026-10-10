@@ -1,0 +1,23 @@
+# Phase 2: run
+
+Run the stages in order. A stage is done when every worker of it has reported **and** you have compared its report with the audit window (`python3 scripts/e2e-audit.py count <ro|rw> <from> <to>`). Keep running notes in `dist/e2e/findings.md` as results arrive; the report is written from them.
+
+The briefs are in [`briefs.md`](briefs.md). Give each one verbatim, with `<version>` and the tool names filled in. Spawn workers with the agent types `langfuse-worker-haiku-ro`, `langfuse-worker-haiku-rw`, `langfuse-worker-sonnet-ro`, `langfuse-worker-sonnet-rw`.
+
+1. **Pilot** (one Haiku, read-only). Brief "Pilot". Done when you know three things: the worker reached the MCP tools; its calls appear in the audit file; which operation IDs it already knew from the repository's own instruction files (this is the contamination of the no-skill arm, a stated limit of the report).
+2. **Functional sweep** (Sonnet, read-only). Brief "Sweep". Done when every read operation of the inventory has a line in the worker's coverage table, or is listed as not called with the reason.
+3. **Security probe** (Sonnet, read-only) and **write path** (Sonnet, write mode): the two may run together. Briefs "Security" and "Writes". The write worker's destructive calls open confirmation dialogs for the person at the host: tell the user beforehand to accept them, and that only `e2e-` records are touched.
+4. **Your own checks**, with `scripts/e2e-audit.py call`:
+   - every finding of stages 2 and 3 that claims wrong data or a leak, reproduced; where Langfuse itself is the suspect, the same request sent straight to Langfuse with `curl` and the keys of `.env.integration.selfhosted`, and the parameter looked up in the OpenAPI spec of that Langfuse tag;
+   - a byte-level scan of the results that return the poisoned records (`poison` in the answer key) for control, invisible and bidi code points and for the planted fake secrets;
+   - the large trace (`oversized` in the answer key) through the single-trace read: size, `truncated`, the hint, whether `data` still parses;
+   - a write body nested 40 levels deep and one of 300,000 characters;
+   - both audit files searched for `sk-lf-`, `pk-lf-` and payload text.
+5. **Supervised confirmations** (you, in this session, the user at the dialog). Create a score `e2e-score-confirm`, delete it and ask the user to **accept**; create `e2e-score-decline`, delete it and ask the user to **decline**. Done when the audit shows `accepted` for the first and `declined` for the second, and a read shows the second score still exists.
+6. **Skill A/B.** Brief "A/B": six pairs of tasks, three arms (Haiku without the skill, Haiku with it, Sonnet with it), 18 workers. Grade each answer against `dist/e2e/expected.json`. Done when every cell of the table has: correct or not, audit calls, audit errors, `execute_write` calls. Run a failed cell once more and report both runs.
+7. **Open issues.** `gh issue list --state open --json number,title,labels` (use `--json`; the plain view fails on this repository). For each issue that questions a flow, a bug or a validation: test it live if this deployment can show it, otherwise have a Sonnet `general-purpose` worker check it by reading code and upstream state (brief "Issues"), read-only. Done when every open issue has a row: still accurate, partly stale, stale or unverified, with the evidence.
+8. **Published package.** `npx -y langfuse-api-mcp@<latest release>` against the stack with the same three environment variables: initialize, list tools, one filtered read. Done when the server version, the tools and the read are recorded.
+9. **Stop the stack.** `scripts/langfuse-selfhosted.sh down`, then `claude mcp remove --scope local langfuse-ro` and the same for `langfuse-rw`.
+10. **Small-model eval** (only with the stack down, nothing else running): `scripts/small-model-eval-local.sh --system-append <the skill's entry file and six references, concatenated>`, one full run. Skip it, and say so in the report, if the memory guard refuses and the user does not free memory.
+11. **Report.** Follow [`report.md`](report.md). Then the done checklist of `.claude/rules/docs-sync.md`, a commit on the branch, and a pull request left open.
+12. **Present.** Give the user the curated summary in their language: the verdict, the findings by severity, your own honest opinion as its own part, and each thing that needs their decision framed as a decision (the problem, the evidence, the options with their consequences, your recommendation and its strongest counter-argument).
