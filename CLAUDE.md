@@ -42,6 +42,10 @@ The five canonical triage roles use their default label strings (`needs-triage`,
 
 Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+### End-to-end campaign
+
+`/e2e-campaign <langfuse version>` tests the server against a seeded self-hosted Langfuse through subagents and writes the report to `docs/research/raw/`. See `docs/development/integration-tests.md` "End-to-end campaign".
+
 ## Applied Learning
 
 When something fails repeatedly, when User has to re-explain, or when a workaround is found for a platform/tool limitation, add a one-line bullet here. Keep each bullet under 15 words. No explanations. Only add things that will save time in future sessions.
@@ -50,3 +54,5 @@ When something fails repeatedly, when User has to re-explain, or when a workarou
 - `gh issue view --comments`, `gh pr edit` fail (Projects-classic GraphQL); use `--json`, `gh api -X PATCH`.
 - `golangci-lint` not on bash PATH; run `~/go/bin/golangci-lint`.
 - System `gh` 2.45 lacks `gh attestation`; `go install github.com/cli/cli/v2/cmd/gh@latest` to scratch.
+- New `.claude/agents` and MCP registrations load only at Claude Code start; restart first.
+- Every `langfuse-selfhosted.sh up` makes new keys; restart MCP servers reading `.env.integration.selfhosted`.

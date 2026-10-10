@@ -1,0 +1,11 @@
+# Phase 1: prepare
+
+Each step ends on the check named in it; go to the next step only when the check holds.
+
+1. **Branch.** Work on a branch named `test/e2e-langfuse-<version>`, created from `main` if it does not exist. Check: `git branch --show-current` prints it.
+2. **Stack.** `LANGFUSE_DEPLOYMENT=<deployment> scripts/langfuse-selfhosted.sh up`. Check: its last line says the `LANGFUSE_TEST_*` variables were written, and `curl -s localhost:3000/api/public/health` names the version.
+3. **Seed.** `set -a; . ./.env.integration.selfhosted; set +a; python3 scripts/seed-langfuse.py`, then `cp .seed-expected.json dist/e2e/expected.json`. Check: exit 0 and the `readback ok` block. The seed is proven on 3.80.0 only. On another version a failed load is the first finding of the campaign: record the loader's last lines, fix nothing, and ask the user whether to go on with what loaded.
+4. **Server.** `go build -o dist/e2e/langfuse-mcp ./cmd/langfuse-mcp`. Then `python3 scripts/e2e-audit.py call ro tools/list` and the same with `rw`. Check: both list the tools, and `rw` adds `execute_write`. Write down the tool names: a v4 deployment adds `get_trace_tree`.
+5. **Registration.** `claude mcp add --scope local langfuse-ro -- "$PWD/scripts/e2e-mcp-server.sh" ro` and the same for `langfuse-rw` with `rw`. Check: `claude mcp list` shows both connected.
+6. **Clean audit.** Move any earlier `dist/e2e/audit-*.log` and `dist/e2e/ledger.tsv` aside (`dist/e2e/previous-<date>/`), so this campaign's line counts start at the servers' start.
+7. **Hand over.** Tell the user, in their language: the stack is up and seeded, the two servers are registered, and they must restart the agent host in this directory and run `/e2e-campaign <version>` again. State the memory available now and ask them to keep heavy programs closed while the stack runs.
