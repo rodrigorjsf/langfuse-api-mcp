@@ -299,6 +299,13 @@ const (
 		"may decode %2F before Langfuse sees it (langfuse/langfuse#12720), and then for a prompt, prompts_list " +
 		"with the full name in its name query parameter still finds it; the dataset runs routes " +
 		"(datasets_getRuns, datasets_getRun, datasets_deleteRun) currently fail upstream for Folder names (langfuse/langfuse#13933)"
+	// productionLabelHint closes the not-found hint of prompts_get called with
+	// no label and no version (#178): Langfuse then asks for the version
+	// labelled production, so a prompt that lacks that label is not found.
+	// Static text: it holds no prompt name.
+	productionLabelHint = "a call with no label and no version asks for the version labelled production, so a " +
+		"prompt without that label is not found: send label latest for the newest version, or label or version " +
+		"to name another"
 	// notFoundHint answers an unknown operation ID (#36).
 	notFoundHint = "call search_operations to find the operation ID: without arguments it lists every " +
 		"operation, with query it keeps those matching keywords such as \"prompt get\""
@@ -361,6 +368,9 @@ func (ex executor) run(ctx context.Context, op catalog.Operation, request catalo
 			if request.FolderName && (f.HTTPStatus == http.StatusNotFound || f.HTTPStatus == http.StatusBadRequest) {
 				f.Hint = folderNameHintFor(f)
 			}
+			if f.Code == errorNotFound && op.ImpliesProductionLabel(request) {
+				f.Hint += "; " + productionLabelHint
+			}
 		} else {
 			a.cause = err.Error()
 			f = failureFields(err)
@@ -400,15 +410,12 @@ func remediesOf(op catalog.Operation) sanitize.Remedies {
 
 // metricsQueryHint is the hint for a malformed metrics query (#104): how the
 // query is sent as a string (#106), its top-level keys, from the validator's
-// own list, and where the rest of its shape is described. Static text: it
-// never holds the caller's query.
+// own list, and where the rest of its shape is described: the guidance of
+// describe_operation, which both metrics operations carry (#104, #178). Static
+// text: it never holds the caller's query.
 func metricsQueryHint(op catalog.Operation) string {
-	describes := "its parameters"
-	if op.HasGuidance() {
-		describes = "the query's shape and a worked example"
-	}
 	return "send query as " + catalog.MetricsQueryEncoding + "; its top-level keys are only " + catalog.MetricsQueryKeys() +
-		"; " + toolDescribeOperation + " with operationId " + op.ID + " returns " + describes
+		"; " + toolDescribeOperation + " with operationId " + op.ID + " returns the query's shape and a worked example"
 }
 
 // parametersHintFor is the hint for a parameter the catalog refused: a

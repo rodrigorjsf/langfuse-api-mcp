@@ -29,27 +29,23 @@ var ErrRowLimitOutOfRange = errors.New("row_limit out of range")
 // key or a key of the wrong type. It also matches ErrInvalidParameter.
 var ErrMetricsQuery = errors.New("malformed metrics query")
 
-// MetricsOperationID is the Metrics v2 operation: the one whose query has
-// static guidance (ParamGuidance).
-const MetricsOperationID = "metrics_metrics"
+// MetricsOperationID is the Metrics v2 operation and legacyMetricsOperationID
+// the legacy v1 one: the two whose query has static guidance (staticGuidance).
+const (
+	MetricsOperationID       = "metrics_metrics"
+	legacyMetricsOperationID = "legacy_metricsV1_metrics"
+)
 
 // metricsOperations are the operations whose "query" parameter is a metrics
 // query JSON.
 var metricsOperations = map[string]bool{
-	MetricsOperationID:         true,
-	"legacy_metricsV1_metrics": true,
+	MetricsOperationID:       true,
+	legacyMetricsOperationID: true,
 }
 
 // isMetricsQuery reports whether p is the JSON query of a metrics operation.
 func (o Operation) isMetricsQuery(p Param) bool {
 	return metricsOperations[o.ID] && p.In == "query" && p.Name == "query"
-}
-
-// isMetricsV2Query reports whether p is the JSON query of MetricsOperationID;
-// the legacy v1 metrics operation is left out on purpose, as it has no
-// guidance.
-func (o Operation) isMetricsV2Query(p Param) bool {
-	return o.ID == MetricsOperationID && o.isMetricsQuery(p)
 }
 
 // A metrics query JSON is bounded before it is decoded: at most
@@ -216,22 +212,72 @@ func MetricsQueryKeys() string {
 	return strings.Join(metricsQueryKeyNames, ", ")
 }
 
-// metricsQueryExample is the worked example of the metrics query guidance:
-// the total cost per day of the observations of traces named checkout. It is
+// A metrics guide is what differs between the guidance on the query of the two
+// metrics operations: the views, one sample of each object a query holds and
+// the worked example. The rest of the text is shared, and its key list is the
+// validator's own (metricsQueryKeys), so the two cannot drift.
+type metricsGuide struct {
+	// views is the list of views the operation takes.
+	views string
+	// metric, dimension, filter and orderBy are samples of the objects of the
+	// lists of the same names.
+	metric, dimension, filter, orderBy string
+	// exampleFor says what the worked example computes; example is that query.
+	exampleFor, example string
+}
+
+// metricsV2Example is the worked example of the metrics_metrics guidance: the
+// total cost per day of the observations of traces named checkout. It is
 // checked against the Langfuse Metrics v2 docs (docs/research/langfuse.md,
 // section 4.5), and a test proves the validator accepts it. Its dates are
 // fixed, as static text must be, and lie in January 2025 so that they read
 // as an example and never coincide with "the last 7 days" of a run: a model
 // without a clock copied the earlier window of the eval's run week (#105).
-const metricsQueryExample = `{"view":"observations","metrics":[{"measure":"totalCost","aggregation":"sum"}],` +
+const metricsV2Example = `{"view":"observations","metrics":[{"measure":"totalCost","aggregation":"sum"}],` +
 	`"filters":[{"column":"traceName","operator":"=","value":"checkout","type":"string"}],` +
 	`"timeDimension":{"granularity":"day"},"fromTimestamp":"2025-01-01T00:00:00Z","toTimestamp":"2025-01-08T00:00:00Z"}`
 
+// metricsV1Example is the worked example of the legacy_metricsV1_metrics
+// guidance (#178): the number of traces per name, the example of the Langfuse
+// metrics API documentation (https://langfuse.com/docs/metrics/features/metrics-api)
+// with fixed dates, as above; a test proves the validator accepts it.
+const metricsV1Example = `{"view":"traces","metrics":[{"measure":"count","aggregation":"count"}],` +
+	`"dimensions":[{"field":"name"}],"fromTimestamp":"2025-01-01T00:00:00Z","toTimestamp":"2025-01-08T00:00:00Z"}`
+
 // metricsQueryGuidance is the guidance on the query of metrics_metrics
 // (#104): the Langfuse spec types it as a plain string, so nothing else tells
-// an agent its shape. Its key list is the validator's own
-// (metricsQueryKeys), so the two cannot drift.
+// an agent its shape.
 func metricsQueryGuidance() string {
+	return metricsGuide{
+		views:      "observations, scores-numeric, scores-boolean or scores-categorical",
+		metric:     `{"measure": "totalCost", "aggregation": "sum"}`,
+		dimension:  `{"field": "providedModelName"}`,
+		filter:     `{"column": "traceName", "operator": "=", "value": "checkout", "type": "string"}`,
+		orderBy:    `{"field": "sum_totalCost", "direction": "desc"}`,
+		exampleFor: "the total cost per day of the observations of traces named checkout",
+		example:    metricsV2Example,
+	}.text()
+}
+
+// legacyMetricsQueryGuidance is the guidance on the query of
+// legacy_metricsV1_metrics (#178, campaign finding M5): the same keys, and
+// the shapes of the v1 API, which has the traces view and, in its
+// documentation, orderBy on a dimension.
+func legacyMetricsQueryGuidance() string {
+	return metricsGuide{
+		views:      "traces, observations, scores-numeric, scores-boolean or scores-categorical",
+		metric:     `{"measure": "count", "aggregation": "count"}`,
+		dimension:  `{"field": "name"}`,
+		filter:     `{"column": "name", "operator": "=", "value": "checkout", "type": "string"}`,
+		orderBy:    `{"field": "name", "direction": "asc"}`,
+		exampleFor: "the number of traces per name",
+		example:    metricsV1Example,
+	}.text()
+}
+
+// text is the guidance of a metrics query. Its key list is the validator's
+// own (metricsQueryKeys).
+func (g metricsGuide) text() string {
 	typed := make([]string, len(metricsQueryKeyNames))
 	for i, k := range metricsQueryKeyNames {
 		typed[i] = k + " (" + metricsQueryKeys[k].String() + ")"
@@ -239,15 +285,15 @@ func metricsQueryGuidance() string {
 	return "Send query as " + MetricsQueryEncoding + ". Its top-level keys: " + strings.Join(typed, ", ") +
 		"; any other key is refused. " +
 		"Langfuse requires view, metrics, fromTimestamp and toTimestamp (ISO 8601 date-times). " +
-		"view: observations, scores-numeric, scores-boolean or scores-categorical. " +
-		`metrics: a list of {"measure": "totalCost", "aggregation": "sum"}; aggregation is sum, avg, count, max, min, ` +
+		"view: " + g.views + ". " +
+		"metrics: a list of " + g.metric + "; aggregation is sum, avg, count, max, min, " +
 		"p50, p75, p90, p95, p99 or histogram. " +
-		`dimensions: a list of {"field": "providedModelName"}. ` +
-		`filters: a list of {"column": "traceName", "operator": "=", "value": "checkout", "type": "string"}. ` +
+		"dimensions: a list of " + g.dimension + ". " +
+		"filters: a list of " + g.filter + ". " +
 		`timeDimension: {"granularity": "day"}; granularity is auto, minute, hour, day, week or month. ` +
-		`orderBy: a list of {"field": "sum_totalCost", "direction": "desc"}. ` +
+		"orderBy: a list of " + g.orderBy + ". " +
 		`config: {"row_limit": ` + strconv.Itoa(DefaultRowLimit) + `}; row_limit is from 1 to ` +
 		strconv.Itoa(MaxRowLimit) + ", default " + strconv.Itoa(DefaultRowLimit) + ". " +
-		"Example, the total cost per day of the observations of traces named checkout, " +
-		"for the week to 2025-01-08 (set fromTimestamp and toTimestamp to the window you need): " + metricsQueryExample
+		"Example, " + g.exampleFor + ", for the week to 2025-01-08 " +
+		"(set fromTimestamp and toTimestamp to the window you need): " + g.example
 }
