@@ -221,29 +221,12 @@ func TestARefusedPathValueNeverComesBackInTheToolError(t *testing.T) {
 // query parameter is the workaround for prompts.
 var folderNameHintMarkers = []string{"%2F", "proxy", "langfuse/langfuse#12720", "prompts_list", "name"}
 
-// The dataset runs routes take a Folder name wherever a pinned deployment
+// datasetRunsClaims are the statements the Folder-name hint once made about the
+// dataset runs routes. They serve a Folder name wherever a pinned deployment
 // serves them (live test, #181, #49): on 3.80.0, 3.225.11 and 4.46.0 dual they
 // answer with the runs of that dataset, and on 4.46.0 events_only they are off
-// for every name. The hint of a failed call with a Folder name claims nothing
-// else about them.
-func TestTheFolderNameHintDoesNotSayTheDatasetRunsRoutesFail(t *testing.T) {
-	t.Parallel()
-	for name, fc := range folderCapableCalls {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			fake, _ := scriptedLangfuse(t, answer{status: http.StatusNotFound, body: `{"message":"Dataset not found"}`})
-			cs := connect(t, fake)
-
-			got := toolErrorOf(t, callExecuteRead(t, cs, folderCall(fc.operationID, fc.param, "support/triage/system"))).Error
-
-			for _, claim := range []string{"fail upstream", "currently fail", "datasets_getRun", "datasets_deleteRun", "13933"} {
-				if strings.Contains(got.Hint, claim) {
-					t.Errorf("hint %q says %q: the dataset runs routes serve a Folder name", got.Hint, claim)
-				}
-			}
-		})
-	}
-}
+// for every name. The hint claims nothing about them.
+var datasetRunsClaims = []string{"fail upstream", "currently fail", "datasets_getRun", "datasets_deleteRun", "13933"}
 
 func TestALangfuse404Or400OnAFolderNameCallCarriesTheFolderNameHint(t *testing.T) {
 	t.Parallel()
@@ -279,6 +262,11 @@ func TestALangfuse404Or400OnAFolderNameCallCarriesTheFolderNameHint(t *testing.T
 				for _, m := range folderNameHintMarkers {
 					if !strings.Contains(got.Hint, m) {
 						t.Errorf("hint %q does not mention %q", got.Hint, m)
+					}
+				}
+				for _, claim := range datasetRunsClaims {
+					if strings.Contains(got.Hint, claim) {
+						t.Errorf("hint %q says %q: the dataset runs routes serve a Folder name", got.Hint, claim)
 					}
 				}
 			})

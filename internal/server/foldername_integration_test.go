@@ -100,17 +100,17 @@ func createLive(t *testing.T, path string, body map[string]any) string {
 // datasetRun is the part of a dataset run, as getRuns lists it and getRun
 // returns it, that says which dataset it belongs to.
 type datasetRun struct {
-	Name           string `json:"name"`
-	DatasetID      string `json:"datasetId"`
-	DatasetName    string `json:"datasetName"`
-	DatasetRunItem []struct {
+	Name            string `json:"name"`
+	DatasetID       string `json:"datasetId"`
+	DatasetName     string `json:"datasetName"`
+	DatasetRunItems []struct {
 		DatasetItemID string `json:"datasetItemId"`
 	} `json:"datasetRunItems"`
 }
 
 // runItemReadBackTimeout bounds how long the test waits for Langfuse to list
 // a run item it accepted: later 3.x and 4.x releases ingest run items
-// asynchronously (about 6 s on 3.225.11, for a plain dataset name too).
+// asynchronously (6 s on 3.225.11, 8 s on 4.46.0 dual; docs/research/langfuse.md 1.11).
 const runItemReadBackTimeout = 90 * time.Second
 
 // datasetRunsServed reports whether the pinned deployment the live Langfuse is
@@ -148,10 +148,21 @@ func seedRunOnAFolderDataset(t *testing.T) seededRun {
 	return s
 }
 
-// deleteRunRoute is the path of the route datasets_getRun and
-// datasets_deleteRun share, with the Folder name encoded as the server sends it.
-func (s seededRun) deleteRunRoute() string {
+// runRoute is the path of the route datasets_getRun and datasets_deleteRun
+// share, with the Folder name encoded as the server sends it.
+func (s seededRun) runRoute() string {
 	return "/api/public/datasets/" + url.PathEscape(s.datasetName) + "/runs/" + url.PathEscape(s.runName)
+}
+
+// assertDeleteOfTheRunAnswers sends DELETE straight to the route of the seeded
+// run, as the server would for datasets_deleteRun, and fails unless Langfuse
+// answers want. Writes through execute_write are live-tested on 4.46.0 only
+// (write_integration_test.go), so this checks the route, not the operation.
+func assertDeleteOfTheRunAnswers(t *testing.T, s seededRun, want int) {
+	t.Helper()
+	if status, body := langfuseDirect(t.Context(), t, http.MethodDelete, s.runRoute(), nil); status != want {
+		t.Fatalf("DELETE the run %q of dataset %q: HTTP %d %s, want %d", s.runName, s.datasetName, status, body, want)
+	}
 }
 
 // The dataset runs routes with a Folder name (spec #172, ticket #181, #49):
@@ -190,7 +201,7 @@ func TestLiveLangfuseServesTheRunsOfADatasetReadByItsFolderName(t *testing.T) {
 			liveData(t, readLive(t, cs, map[string]any{
 				"operationId": "datasets_getRun", "parameters": map[string]any{"datasetName": seed.datasetName, "runName": seed.runName},
 			}, sleepCtx), &run)
-			if len(run.DatasetRunItem) > 0 || time.Now().After(deadline) {
+			if len(run.DatasetRunItems) > 0 || time.Now().After(deadline) {
 				break
 			}
 			if err := sleepCtx(t.Context(), 2*time.Second); err != nil {
@@ -199,28 +210,26 @@ func TestLiveLangfuseServesTheRunsOfADatasetReadByItsFolderName(t *testing.T) {
 		}
 
 		if run.Name != seed.runName || run.DatasetID != seed.datasetID || run.DatasetName != seed.datasetName ||
-			len(run.DatasetRunItem) != 1 || run.DatasetRunItem[0].DatasetItemID != seed.itemID {
+			len(run.DatasetRunItems) != 1 || run.DatasetRunItems[0].DatasetItemID != seed.itemID {
 			t.Fatalf("datasets_getRun %q %q = %+v, want run %q of dataset %q (%s) holding item %s",
 				seed.datasetName, seed.runName, run, seed.runName, seed.datasetName, seed.datasetID, seed.itemID)
 		}
 	})
 
-	// datasets_deleteRun shares the route of datasets_getRun. Writes through
-	// execute_write run on 4.46.0 only (write_integration_test.go), so this
-	// sends the DELETE straight, as the server would, to learn whether the
-	// route takes a Folder name; it also removes the run. It runs last.
+	// datasets_deleteRun shares the route of datasets_getRun; it also removes
+	// the run, so it runs last.
 	t.Run("datasets_deleteRun route", func(t *testing.T) {
-		status, body := langfuseDirect(t.Context(), t, http.MethodDelete, seed.deleteRunRoute(), nil)
-		if status != http.StatusOK {
-			t.Fatalf("DELETE the run %q of dataset %q: HTTP %d %s, want 200", seed.runName, seed.datasetName, status, body)
-		}
+		assertDeleteOfTheRunAnswers(t, seed, http.StatusOK)
 	})
 }
 
 // Where Langfuse turns the legacy family off (v4 events_only), the dataset runs
 // routes answer 404 "not available in events_only mode" whatever the dataset
 // is called: the executor says operation_unavailable, which is no Folder-name
-// failure. The server offers neither operation on such a deployment (#174).
+// failure. The live session runs under an unknown profile (all families on),
+// so the request reaches Langfuse and the 404 is its own answer; the resolved
+// catalog of a deployment without the legacy family offers neither operation
+// (internal/catalog resolve_test.go, "4.x events_only"; #174).
 func TestLiveLangfuseAnswersOperationUnavailableOnTheDatasetRunsRoutesWhereTheLegacyFamilyIsOff(t *testing.T) {
 	t.Parallel()
 	if datasetRunsServed(t) {
@@ -244,9 +253,6 @@ func TestLiveLangfuseAnswersOperationUnavailableOnTheDatasetRunsRoutesWhereTheLe
 	}
 
 	t.Run("datasets_deleteRun route", func(t *testing.T) {
-		status, body := langfuseDirect(t.Context(), t, http.MethodDelete, seed.deleteRunRoute(), nil)
-		if status != http.StatusNotFound {
-			t.Fatalf("DELETE the run %q of dataset %q: HTTP %d %s, want 404", seed.runName, seed.datasetName, status, body)
-		}
+		assertDeleteOfTheRunAnswers(t, seed, http.StatusNotFound)
 	})
 }
