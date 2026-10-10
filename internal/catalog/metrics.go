@@ -178,12 +178,12 @@ func metricsQuery(raw string) (string, error) {
 func holdsHiddenJSONText(v any) bool {
 	switch v := v.(type) {
 	case string:
-		return holdsHiddenText(v)
+		return holdsHiddenText(v, false)
 	case []any:
 		return slices.ContainsFunc(v, holdsHiddenJSONText)
 	case map[string]any:
 		for key, x := range v {
-			if holdsHiddenText(key) || holdsHiddenJSONText(x) {
+			if holdsHiddenText(key, false) || holdsHiddenJSONText(x) {
 				return true
 			}
 		}

@@ -8,17 +8,24 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode"
+	"unicode/utf16"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse"
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/sanitize"
 )
 
 // Seam S1 (spec #172, ticket #179): the values execute_read forwards to
 // Langfuse are checked by the server before any request. Every refusal here is
 // an invalid_argument that names the parameter and the rule, never the value,
 // and the fake Langfuse receives nothing.
+
+// plantedText is a value that carries instructions: no refusal, hint or audit
+// line may repeat it.
+const plantedText = "PLANTED-IGNORE-PREVIOUS-INSTRUCTIONS"
 
 // readsTakingQuery returns the read operations of the embedded catalog that
 // take a query parameter called name, accepted by pick.
@@ -60,7 +67,7 @@ func TestExecuteReadRefusesAPageBelowOneWithoutCallingLangfuse(t *testing.T) {
 			t.Parallel()
 			fake, seen := fakeLangfuse(t, http.StatusOK, `{"data":[]}`)
 			cs := connect(t, fake)
-			for _, page := range []any{0, -1, -1000000, 0.0} {
+			for _, page := range []any{0, -1, -7654321} {
 				got := toolErrorOf(t, callExecuteRead(t, cs, withParameter(op, "page", page))).Error
 
 				if got.Code != "invalid_argument" || got.OperationID != op.ID ||
@@ -69,6 +76,9 @@ func TestExecuteReadRefusesAPageBelowOneWithoutCallingLangfuse(t *testing.T) {
 				}
 				if got.Hint == "" {
 					t.Errorf("page %v: error = %+v, want a hint", page, got)
+				}
+				if strings.Contains(got.Message+got.Hint, "7654321") {
+					t.Errorf("page %v: the refusal repeats the value: %+v", page, got)
 				}
 				assertNoRequest(t, seen)
 			}
@@ -136,6 +146,9 @@ func TestExecuteReadRefusesATimestampThatIsNotRFC3339WithoutCallingLangfuse(t *t
 		"2031-04-05T25:07:08Z",
 		"1760097600",
 		"2031-04-05T06:07:08Z; DROP",
+		"2031-04-05T06:07:08,123Z", // a comma before the fraction: time.Parse takes it, RFC 3339 does not
+		"2031-04-05T6:07:08Z",      // a one-digit hour
+		"2031-4-5T06:07:08Z",
 		" 2031-04-05T06:07:08Z",
 		"",
 	}
@@ -197,7 +210,7 @@ func TestExecuteReadSendsAnRFC3339TimestampUnchanged(t *testing.T) {
 // overrides and isolates, tag characters, variation selectors and the other
 // default-ignorable code points.
 var hiddenCharacters = map[string]rune{
-	"NUL": 0x00, "SOH": 0x01, "backspace": 0x08, "vertical tab": 0x0b, "form feed": 0x0c, "ESC": 0x1b, "DEL": 0x7f,
+	"NUL": 0x00, "SOH": 0x01, "backspace": 0x08, "tab": 0x09, "line feed": 0x0a, "carriage return": 0x0d, "vertical tab": 0x0b, "form feed": 0x0c, "ESC": 0x1b, "DEL": 0x7f,
 	"NEL, a C1 control": 0x85, "soft hyphen": 0xad, "combining grapheme joiner": 0x34f, "Hangul filler": 0x3164,
 	"zero width space": 0x200b, "zero width joiner": 0x200d, "left-to-right mark": 0x200e,
 	"right-to-left override": 0x202e, "word joiner": 0x2060, "left-to-right isolate": 0x2066,
@@ -217,15 +230,14 @@ func connectAudited(t *testing.T, fake *httptest.Server, logs *syncBuffer) *mcp.
 // request, and neither the refusal nor the audit line repeats the value.
 func TestExecuteReadRefusesAControlOrInvisibleCharacterInAQueryParameterValueWithoutCallingLangfuse(t *testing.T) {
 	t.Parallel()
-	const planted = "PLANTED-IGNORE-PREVIOUS-INSTRUCTIONS"
 	for name, r := range hiddenCharacters {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			value := "a" + string(r) + planted
+			value := "a" + string(r) + plantedText
 			fake, seen := fakeLangfuse(t, http.StatusOK, `{"data":[]}`)
 			var logs syncBuffer
 			cs := connectAudited(t, fake, &logs)
-			for _, tc := range []struct {
+			cases := []struct {
 				param string
 				value any
 				want  string
@@ -234,7 +246,15 @@ func TestExecuteReadRefusesAControlOrInvisibleCharacterInAQueryParameterValueWit
 				{"name", value, "parameter name: must not contain control or invisible characters"},
 				{"tags", []any{"ok", value}, "parameter tags: item 1: must not contain control or invisible characters"},
 				{"tags", value, "parameter tags: item 0: must not contain control or invisible characters"},
-			} {
+			}
+			if r != '\t' && r != '\n' && r != '\r' { // a filter is JSON text, which may span lines
+				cases = append(cases, struct {
+					param string
+					value any
+					want  string
+				}{"filter", value, "parameter filter: must not contain control or invisible characters"})
+			}
+			for _, tc := range cases {
 				got := toolErrorOf(t, callExecuteRead(t, cs, map[string]any{
 					"operationId": "trace_list", "parameters": map[string]any{tc.param: tc.value},
 				})).Error
@@ -242,24 +262,23 @@ func TestExecuteReadRefusesAControlOrInvisibleCharacterInAQueryParameterValueWit
 				if got.Code != "invalid_argument" || !strings.Contains(got.Message, tc.want) {
 					t.Errorf("%s: error = %+v, want invalid_argument with %q", tc.param, got, tc.want)
 				}
-				if all := got.Message + got.Hint; strings.Contains(all, planted) || strings.ContainsRune(all, r) {
+				if all := got.Message + got.Hint; strings.Contains(all, plantedText) || strings.ContainsRune(all, r) {
 					t.Errorf("%s: the refusal repeats the value or its hidden character: %+v", tc.param, got)
 				}
 				assertNoRequest(t, seen)
 			}
-			if text := logs.String(); strings.Contains(text, planted) || strings.ContainsRune(text, r) {
+			if text := logs.String(); strings.Contains(text, plantedText) || r != '\n' && strings.ContainsRune(text, r) { // the log has line breaks of its own
 				t.Errorf("the audit log repeats the value or its hidden character:\n%s", text)
 			}
 		})
 	}
 }
 
-// Tab, line feed and carriage return are visible whitespace: a JSON-valued
-// query parameter such as a metrics query or a filter may hold them, so a
-// pretty-printed query is not refused.
-func TestExecuteReadSendsAQueryParameterValueHoldingTabLineFeedAndCarriageReturn(t *testing.T) {
+// A filter is a JSON text that Langfuse parses, so a pretty-printed one holds
+// tab, line feed and carriage return: it is sent as it is.
+func TestExecuteReadSendsAPrettyPrintedFilter(t *testing.T) {
 	t.Parallel()
-	const filter = "{\r\n\t\"a\": 1,\n\t\"b\": [2]\r\n}"
+	const filter = "[\r\n\t{\"column\": \"name\",\n\t \"value\": \"x\"}\r\n]"
 	fake, seen := fakeLangfuse(t, http.StatusOK, `{"data":[]}`)
 	cs := connect(t, fake)
 
@@ -273,17 +292,41 @@ func TestExecuteReadSendsAQueryParameterValueHoldingTabLineFeedAndCarriageReturn
 	if got := receivedOne(t, seen).query.Get("filter"); got != filter {
 		t.Errorf("Langfuse received filter %q, want %q unchanged", got, filter)
 	}
+}
 
-	const query = "{\n  \"view\": \"observations\",\n  \"metrics\": [{\"measure\": \"count\", \"aggregation\": \"count\"}],\n" +
+// The line breaks and tabs between the tokens of a metrics query are not
+// strings the query holds: a pretty-printed query is not refused.
+func TestExecuteReadSendsAPrettyPrintedMetricsQuery(t *testing.T) {
+	t.Parallel()
+	const query = "{\n  \"view\": \"observations\",\n\t\"metrics\": [{\"measure\": \"count\", \"aggregation\": \"count\"}],\r\n" +
 		"  \"fromTimestamp\": \"2026-10-09T00:00:00Z\",\n  \"toTimestamp\": \"2026-10-10T00:00:00Z\"\n}"
-	res = callExecuteRead(t, cs, map[string]any{
-		"operationId": "metrics_metrics", "parameters": map[string]any{"query": query},
+
+	sent := sentQuery(t, "metrics_metrics", query)
+
+	if sent["view"] != "observations" {
+		t.Errorf("Langfuse received %v, want the pretty-printed query's view observations", sent)
+	}
+}
+
+// What the server does not decode, it does not read: an escape inside a filter
+// is Langfuse's to decode, so a filter holding one is sent as it is (the
+// documented limit of the text checks).
+func TestExecuteReadSendsAJSONEscapeInsideAFilterUnread(t *testing.T) {
+	t.Parallel()
+	const filter = `[{"column":"name","value":"a` + `\` + `u200bb"}]`
+	fake, seen := fakeLangfuse(t, http.StatusOK, `{"data":[]}`)
+	cs := connect(t, fake)
+
+	res := callExecuteRead(t, cs, map[string]any{
+		"operationId": "trace_list", "parameters": map[string]any{"filter": filter},
 	})
 
 	if res.IsError {
-		t.Fatalf("a pretty-printed metrics query: execute_read returned a tool error: %s", resultText(t, res))
+		t.Fatalf("execute_read returned a tool error: %s", resultText(t, res))
 	}
-	receivedOne(t, seen)
+	if got := receivedOne(t, seen).query.Get("filter"); got != filter {
+		t.Errorf("Langfuse received filter %q, want %q unchanged", got, filter)
+	}
 }
 
 // A hidden character in a path parameter is refused, never removed: removing it
@@ -292,7 +335,6 @@ func TestExecuteReadSendsAQueryParameterValueHoldingTabLineFeedAndCarriageReturn
 // is looked up.
 func TestExecuteReadRefusesAControlOrInvisibleCharacterInAPathParameterInsteadOfRemovingIt(t *testing.T) {
 	t.Parallel()
-	const planted = "PLANTED-IGNORE-PREVIOUS-INSTRUCTIONS"
 	for name, r := range hiddenCharacters {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -302,7 +344,7 @@ func TestExecuteReadRefusesAControlOrInvisibleCharacterInAPathParameterInsteadOf
 			for _, tc := range []struct{ operationID, param string }{
 				{"trace_get", "traceId"}, {"sessions_get", "sessionId"}, {"datasets_get", "datasetName"},
 			} {
-				for _, value := range []string{"a" + string(r) + "b" + planted, string(r) + planted, planted + string(r)} {
+				for _, value := range []string{"a" + string(r) + "b" + plantedText, string(r) + plantedText, plantedText + string(r)} {
 					got := toolErrorOf(t, callExecuteRead(t, cs, map[string]any{
 						"operationId": tc.operationID, "parameters": map[string]any{tc.param: value},
 					})).Error
@@ -311,29 +353,32 @@ func TestExecuteReadRefusesAControlOrInvisibleCharacterInAPathParameterInsteadOf
 						!strings.Contains(got.Message, want) {
 						t.Errorf("%s: error = %+v, want invalid_argument with %q", tc.operationID, got, want)
 					}
-					if all := got.Message + got.Hint; strings.Contains(all, planted) || strings.ContainsRune(all, r) {
+					if all := got.Message + got.Hint; strings.Contains(all, plantedText) || strings.ContainsRune(all, r) {
 						t.Errorf("%s: the refusal repeats the value or its hidden character: %+v", tc.operationID, got)
 					}
 					assertNoRequest(t, seen)
 				}
 			}
-			if text := logs.String(); strings.Contains(text, planted) || strings.ContainsRune(text, r) {
+			if text := logs.String(); strings.Contains(text, plantedText) || r != '\n' && strings.ContainsRune(text, r) { // the log has line breaks of its own
 				t.Errorf("the audit log repeats the value or its hidden character:\n%s", text)
 			}
 		})
 	}
 }
 
-// A Folder name on the allow-list still takes "/" and still refuses a hidden
-// character.
-func TestAFolderNameStillTakesASlashAndRefusesAHiddenCharacter(t *testing.T) {
+// folderNameParameters are Folder-name parameters of the allow-list, with the
+// path a Folder name reaches Langfuse at.
+var folderNameParameters = []struct{ operationID, param, wantPath string }{
+	{"prompts_get", "promptName", "/api/public/v2/prompts/support%2Fbilling"},
+	{"datasets_get", "datasetName", "/api/public/v2/datasets/support%2Fbilling"},
+}
+
+// A Folder name on the allow-list still takes "/".
+func TestAFolderNameStillTakesASlash(t *testing.T) {
 	t.Parallel()
 	fake, seen := fakeLangfuse(t, http.StatusOK, `{}`)
 	cs := connect(t, fake)
-	for _, tc := range []struct{ operationID, param, wantPath string }{
-		{"prompts_get", "promptName", "/api/public/v2/prompts/support%2Fbilling"},
-		{"datasets_get", "datasetName", "/api/public/v2/datasets/support%2Fbilling"},
-	} {
+	for _, tc := range folderNameParameters {
 		res := callExecuteRead(t, cs, map[string]any{
 			"operationId": tc.operationID, "parameters": map[string]any{tc.param: "support/billing"},
 		})
@@ -344,6 +389,15 @@ func TestAFolderNameStillTakesASlashAndRefusesAHiddenCharacter(t *testing.T) {
 		if got := receivedOne(t, seen).path; got != tc.wantPath {
 			t.Errorf("%s: path = %s, want %s", tc.operationID, got, tc.wantPath)
 		}
+	}
+}
+
+// A Folder name on the allow-list still refuses a hidden character.
+func TestAFolderNameStillRefusesAHiddenCharacter(t *testing.T) {
+	t.Parallel()
+	fake, seen := fakeLangfuse(t, http.StatusOK, `{}`)
+	cs := connect(t, fake)
+	for _, tc := range folderNameParameters {
 		for name, r := range hiddenCharacters {
 			got := toolErrorOf(t, callExecuteRead(t, cs, map[string]any{
 				"operationId": tc.operationID, "parameters": map[string]any{tc.param: "support/" + string(r) + "billing"},
@@ -364,7 +418,6 @@ func TestAFolderNameStillTakesASlashAndRefusesAHiddenCharacter(t *testing.T) {
 // never the query.
 func TestAMetricsQueryHoldingAControlOrInvisibleCharacterIsRefusedWithoutCallingLangfuse(t *testing.T) {
 	t.Parallel()
-	const planted = "PLANTED-IGNORE-PREVIOUS-INSTRUCTIONS"
 	base := strings.TrimSuffix(metricsQuery, "}")
 	places := map[string]func(text string) string{
 		"in a filter value": func(text string) string {
@@ -381,11 +434,9 @@ func TestAMetricsQueryHoldingAControlOrInvisibleCharacterIsRefusedWithoutCalling
 			queries := map[string]string{}
 			for where, build := range places {
 				if r >= 0x20 { // a raw control character is not valid JSON: the query is refused as malformed
-					queries[where+", written as itself"] = build(planted + string(r))
+					queries[where+", written as itself"] = build(plantedText + string(r))
 				}
-				if r <= 0xffff {
-					queries[where+", written as a JSON escape"] = build(planted + fmt.Sprintf(`\u%04x`, r))
-				}
+				queries[where+", written as a JSON escape"] = build(plantedText + jsonEscape(r))
 			}
 			for where, query := range queries {
 				got := refusedMetricsQuery(t, query)
@@ -393,10 +444,51 @@ func TestAMetricsQueryHoldingAControlOrInvisibleCharacterIsRefusedWithoutCalling
 				if want := "parameter query: must not contain control or invisible characters"; !strings.Contains(got.Message, want) {
 					t.Errorf("%s: message = %q, want it to contain %q", where, got.Message, want)
 				}
-				if all := got.Message + got.Hint; strings.Contains(all, planted) || strings.ContainsRune(all, r) {
+				if all := got.Message + got.Hint; strings.Contains(all, plantedText) || strings.ContainsRune(all, r) {
 					t.Errorf("%s: the refusal repeats the query or its hidden character: %+v", where, got)
 				}
 			}
 		})
+	}
+}
+
+// jsonEscape writes r as the JSON escape Langfuse would decode: \u and four
+// hexadecimal digits, a surrogate pair for a character above U+FFFF.
+func jsonEscape(r rune) string {
+	if r > 0xffff {
+		high, low := utf16.EncodeRune(r)
+		return fmt.Sprintf(`\u%04x\u%04x`, high, low)
+	}
+	return fmt.Sprintf(`\u%04x`, r)
+}
+
+// The catalog, which may not import sanitize (ADR-0009), keeps its own copy of
+// the predicate for a character that hides or reorders text. This pins the
+// copy to the sanitizer's over every code point, so the rule "the set
+// sanitize.Text strips" cannot drift: a path parameter refuses exactly the
+// characters the sanitizer removes from a payload, and tab, line feed and
+// carriage return too, which the sanitizer keeps as visible text.
+func TestAPathParameterRefusesExactlyTheCharactersTheSanitizerStrips(t *testing.T) {
+	t.Parallel()
+	cat, err := catalog.Load()
+	if err != nil {
+		t.Fatalf("load catalog: %v", err)
+	}
+	op, ok := cat.Lookup("sessions_get")
+	if !ok {
+		t.Fatal("sessions_get missing from the catalog")
+	}
+	for r := rune(0); r <= unicode.MaxRune; r++ {
+		if r >= 0xd800 && r <= 0xdfff || r == '/' || r == '\\' {
+			continue // a surrogate is no character; "/" and "\" are refused by their own rules
+		}
+		value := "a" + string(r) + "b"
+
+		_, err := op.Request(map[string]any{"sessionId": value})
+
+		stripped := sanitize.Text(value) != value || r == '\t' || r == '\n' || r == '\r'
+		if refused := err != nil; refused != stripped {
+			t.Fatalf("U+%04X: path parameter refused = %v, sanitizer strips it = %v: the two predicates drifted", r, refused, stripped)
+		}
 	}
 }

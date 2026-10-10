@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -118,17 +119,18 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 		if err := p.inBounds(v, values); err != nil {
 			return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
 		}
-		if p.In == "query" && !o.isMetricsQuery(p) { // metricsQuery checks the text it decodes
-			if err := p.wellFormed(values); err != nil {
-				return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
-			}
-		}
-		if o.isMetricsQuery(p) {
+		switch {
+		case o.isMetricsQuery(p):
+			// metricsQuery checks the text of the strings it decodes.
 			q, err := metricsQuery(values[0])
 			if err != nil {
 				return Request{}, err
 			}
 			values = []string{q}
+		case p.In == "query":
+			if err := p.checkText(values); err != nil {
+				return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
+			}
 		}
 		if p.In == "path" {
 			if err := safePathValue(values[0], o.takesFolderName(p)); err != nil {
@@ -358,12 +360,12 @@ func (s Schema) scalar(v any) (string, error) {
 	return out, nil
 }
 
-// wellFormed checks the text of the rendered values of a query parameter
+// checkText checks the text of the rendered values of a query parameter
 // (#179): none may hold a control or invisible character, and where the schema
 // says date-time each must be an RFC 3339 timestamp. The message names the
 // rule or the format, never the value; a repeated parameter's message names
 // the item.
-func (p Param) wellFormed(values []string) error {
+func (p Param) checkText(values []string) error {
 	s := p.Schema
 	if s.Type == "array" {
 		s = Schema{}
@@ -372,7 +374,7 @@ func (p Param) wellFormed(values []string) error {
 		}
 	}
 	for i, value := range values {
-		err := s.wellFormedValue(value)
+		err := s.checkText(value, p.holdsJSONText())
 		if err == nil {
 			continue
 		}
@@ -384,25 +386,38 @@ func (p Param) wellFormed(values []string) error {
 	return nil
 }
 
+// holdsJSONText reports whether the parameter is a JSON text that Langfuse
+// parses and the server passes on: a filter. Pretty-printed, it holds tab, line
+// feed and carriage return, which a parameter of any other kind refuses.
+func (p Param) holdsJSONText() bool { return p.Name == "filter" }
+
 // hiddenTextRule is the refusal of a value that holds a control or invisible
 // character (see holdsHiddenText). It names the rule, never the value.
 const hiddenTextRule = "must not contain control or invisible characters"
 
 // holdsHiddenText reports whether s holds a control character or a character
-// that hides or reorders text (see hidden). Tab, line feed and carriage return
-// are visible whitespace, which the JSON-valued parameters (a metrics query, a
-// filter) legitimately hold.
-func holdsHiddenText(s string) bool {
-	return strings.ContainsFunc(s, func(r rune) bool { return hidden(r) && r != '\t' && r != '\n' && r != '\r' })
+// that hides or reorders text (see hidden). With keepWhitespace, tab, line feed
+// and carriage return are not counted.
+func holdsHiddenText(s string, keepWhitespace bool) bool {
+	if keepWhitespace {
+		return strings.ContainsFunc(s, hiddenOutsideWhitespace)
+	}
+	return strings.ContainsFunc(s, hidden)
 }
 
-// wellFormedValue is wellFormed for one rendered value.
-func (s Schema) wellFormedValue(v string) error {
-	if holdsHiddenText(v) {
+// rfc3339 is the shape of an RFC 3339 timestamp (section 5.6: date, "T", time
+// with seconds, an optional fraction and a "Z" or numeric offset). time.Parse
+// accepts looser forms (a one-digit hour, a comma before the fraction), so the
+// shape is checked first and time.Parse then checks the ranges.
+var rfc3339 = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$`)
+
+// checkText is Param.checkText for one rendered value.
+func (s Schema) checkText(v string, keepWhitespace bool) error {
+	if holdsHiddenText(v, keepWhitespace) {
 		return errors.New(hiddenTextRule)
 	}
 	if s.Format == "date-time" {
-		if _, err := time.Parse(time.RFC3339, v); err != nil {
+		if _, err := time.Parse(time.RFC3339, v); err != nil || !rfc3339.MatchString(v) {
 			return errors.New("want a date-time in RFC 3339 format, such as 2026-10-10T12:00:00Z")
 		}
 	}

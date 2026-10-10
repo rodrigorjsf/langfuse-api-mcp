@@ -90,6 +90,8 @@ Sources: `[sourced]` local spec (script over every GET: `cursor` vs `page` param
 `/faq/all/deprecated-api-migration#dataset-runs`; `/docs/metrics/features/metrics-api#v2`.
 Observations v2 is **always sorted by `startTime` descending**. It has no `orderBy`. `[sourced]` public-api page.
 
+**Page numbers start at 1.** `[verified]` the end-to-end campaign of 2026-10-10 against 3.80.0 ([finding M7](raw/2026-10-10-e2e-langfuse-3.80.0.md)): `page` 0 and -1 come back as a Langfuse 400, as does a `date-time` parameter that is not a timestamp. The server refuses both before any request (#179): the catalog gives every `page` the minimum 1, and a `date-time` parameter must be an RFC 3339 timestamp.
+
 **Observations v2 cursor format (#93).** `meta.cursor` is base64 of a JSON keyset position: the sort key of the last row served, never an offset and never the page size. Two forms are documented; the first was also observed live:
 
 - `{"lastStartTimeTo":"2026-09-24T01:53:32.683Z","lastTraceId":"a15f…1457","lastId":"dbd1a6c259d1b876"}`: decoded from a live cursor, self-hosted 4.46.0 `events_only`, `GET /v2/observations?limit=2&fields=core`, 2026-09-27. `[verified]` The cookbook `/guides/cookbook/example_data_migration` shows the same form. `[sourced]`

@@ -14,22 +14,36 @@ import (
 // (internal/server/valuechecks_test.go); these tests cover what the embedded
 // catalog cannot show: a repeated date-time, and every value a fuzzer finds.
 
-// A list of timestamps is checked item by item: the refusal names the item and
-// the format, never the value.
-func TestAListItemThatIsNotRFC3339IsRefusedNamingTheItemAndTheFormat(t *testing.T) {
-	t.Parallel()
-	op := catalog.Operation{
+// timestampList is an operation whose one parameter is a list of timestamps,
+// which the embedded catalog has none of.
+func timestampList() catalog.Operation {
+	return catalog.Operation{
 		ID: "x_list", Method: "GET", Path: "/api/public/x",
 		Params: []catalog.Param{{Name: "since", In: "query", Schema: catalog.Schema{
 			Type: "array", Items: &catalog.Schema{Type: "string", Format: "date-time"},
 		}}},
 	}
+}
 
-	if _, err := op.Request(map[string]any{"since": []any{"2026-10-10T12:00:00Z", "2031-04-05"}}); !errors.Is(err, catalog.ErrInvalidParameter) ||
+// A list of timestamps is checked item by item: the refusal names the item and
+// the format, never the value.
+func TestAListItemThatIsNotRFC3339IsRefusedNamingTheItemAndTheFormat(t *testing.T) {
+	t.Parallel()
+
+	_, err := timestampList().Request(map[string]any{"since": []any{"2026-10-10T12:00:00Z", "2031-04-05"}})
+
+	if !errors.Is(err, catalog.ErrInvalidParameter) ||
 		!strings.Contains(err.Error(), "parameter since: item 1: want a date-time in RFC 3339 format") || strings.Contains(err.Error(), "2031") {
 		t.Fatalf("Request error = %v, want ErrInvalidParameter naming item 1 of since and the format, without the value", err)
 	}
-	req, err := op.Request(map[string]any{"since": []any{"2026-10-10T12:00:00Z", "2026-10-11T12:00:00+02:00"}})
+}
+
+// A list of RFC 3339 timestamps is sent item by item, unchanged.
+func TestAListOfRFC3339TimestampsIsSentUnchanged(t *testing.T) {
+	t.Parallel()
+
+	req, err := timestampList().Request(map[string]any{"since": []any{"2026-10-10T12:00:00Z", "2026-10-11T12:00:00+02:00"}})
+
 	if err != nil {
 		t.Fatalf("Request = %v, want two RFC 3339 timestamps accepted", err)
 	}
@@ -53,6 +67,16 @@ func TestAPageBelowOneIsRefusedNamingItsMinimum(t *testing.T) {
 			t.Errorf("Request(page %v) error = %v, want ErrInvalidParameter naming the minimum 1", page, err)
 		}
 	}
+}
+
+// Page 1 and every later page are accepted.
+func TestPageOneAndLaterPagesAreAccepted(t *testing.T) {
+	t.Parallel()
+	op, ok := mustLoad(t).Lookup("trace_list")
+	if !ok {
+		t.Fatal("trace_list missing from the catalog")
+	}
+
 	for _, page := range []float64{1, 2, 1e6} {
 		if _, err := op.Request(map[string]any{"page": page}); err != nil {
 			t.Errorf("Request(page %v) = %v, want it accepted", page, err)
@@ -60,10 +84,18 @@ func TestAPageBelowOneIsRefusedNamingItsMinimum(t *testing.T) {
 	}
 }
 
-// Whatever a caller passes as a plain query value or as a path parameter,
-// Request accepts it only free of control and format characters (tab, line feed
-// and carriage return excepted in a query value, which JSON-valued parameters
-// may hold), and a refusal never repeats such a character.
+// hiddenOrFormat reports whether r is a control character, a format character
+// (Unicode category Cf), the tag block, a variation selector or another
+// default-ignorable code point.
+func hiddenOrFormat(r rune) bool {
+	return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || r >= 0xe0000 && r <= 0xe007f ||
+		unicode.In(r, unicode.Variation_Selector, unicode.Other_Default_Ignorable_Code_Point)
+}
+
+// Whatever a caller passes as a plain query value, a filter or a path
+// parameter, Request accepts it only free of control, format and other
+// invisible characters (tab, line feed and carriage return excepted in a
+// filter, a JSON text), and a refusal never repeats such a character.
 func FuzzRequestAcceptsNoControlOrFormatCharacter(f *testing.F) {
 	for _, seed := range []string{"", "a", "ab", "a\tb", "a\nb", "a\rb", "\xff\xfe"} {
 		f.Add(seed)
@@ -84,28 +116,28 @@ func FuzzRequestAcceptsNoControlOrFormatCharacter(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, value string) {
 		for _, tc := range []struct {
-			op       catalog.Operation
-			param    string
-			allowedW bool
-		}{{traceList, "userId", true}, {sessionGet, "sessionId", false}} {
+			op              catalog.Operation
+			param           string
+			keepsWhitespace bool
+		}{{traceList, "filter", true}, {traceList, "userId", false}, {sessionGet, "sessionId", false}} {
 			_, err := tc.op.Request(map[string]any{tc.param: value})
 			if err != nil {
 				if !errors.Is(err, catalog.ErrInvalidParameter) {
 					t.Fatalf("%s: Request(%q) error %v does not wrap ErrInvalidParameter", tc.op.ID, value, err)
 				}
 				for _, r := range value {
-					if (unicode.IsControl(r) || unicode.Is(unicode.Cf, r)) && strings.ContainsRune(err.Error(), r) {
+					if hiddenOrFormat(r) && strings.ContainsRune(err.Error(), r) {
 						t.Fatalf("%s: the refusal %q repeats %U of the value", tc.op.ID, err, r)
 					}
 				}
 				continue
 			}
 			for _, r := range value {
-				if tc.allowedW && (r == '\t' || r == '\n' || r == '\r') {
+				if tc.keepsWhitespace && (r == '\t' || r == '\n' || r == '\r') {
 					continue
 				}
-				if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
-					t.Fatalf("%s: Request(%q) accepted %U", tc.op.ID, value, r)
+				if hiddenOrFormat(r) {
+					t.Fatalf("%s %s: Request(%q) accepted %U", tc.op.ID, tc.param, value, r)
 				}
 			}
 		}

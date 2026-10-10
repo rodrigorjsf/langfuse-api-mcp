@@ -441,11 +441,17 @@ func visible(s string) string {
 // return are kept, as sanitize.Text keeps them in a payload.
 func visibleText(s string) string {
 	return strings.Map(func(r rune) rune {
-		if hidden(r) && r != '\t' && r != '\n' && r != '\r' {
+		if hiddenOutsideWhitespace(r) {
 			return -1
 		}
 		return r
 	}, strings.ToValidUTF8(s, ""))
+}
+
+// hiddenOutsideWhitespace is hidden without tab, line feed and carriage
+// return, which are visible text where a value may span lines.
+func hiddenOutsideWhitespace(r rune) bool {
+	return hidden(r) && r != '\t' && r != '\n' && r != '\r'
 }
 
 // hidden reports whether r hides or reorders text (see visible).
