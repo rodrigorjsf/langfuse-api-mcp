@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -402,14 +403,31 @@ func TestExecutableOffersOnlyTheOperationsOfTheDetectedDeploymentProfile(t *test
 // get_trace_tree, and a call answers operation_unavailable without a request.
 func TestExecutableOnADeploymentWithoutTheV4ReadFamilyListsGetTraceTreeAndAnswersOperationUnavailable(t *testing.T) {
 	t.Parallel()
-	gotRequest := make(chan string, 1)
-	fake := deploymentLangfuse(t, `{"status":"OK","version":"3.80.0"}`,
-		[]string{"/api/public/v2/observations", "/api/public/experiments"}, func(w http.ResponseWriter, r *http.Request) {
-			gotRequest <- r.Method + " " + r.URL.RequestURI()
+	// Every request after startup is recorded, whatever route it names, the
+	// route the trace tree reads included: detection ends before initialize.
+	var (
+		mu       sync.Mutex
+		started  bool
+		received []string
+	)
+	detection := deploymentHandler(`{"status":"OK","version":"3.80.0"}`,
+		[]string{"/api/public/v2/observations", "/api/public/experiments"}, func(w http.ResponseWriter, _ *http.Request) {
 			_, _ = io.WriteString(w, `{}`) // a failed write fails the call below
 		})
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		if started {
+			received = append(received, r.Method+" "+r.URL.RequestURI())
+		}
+		mu.Unlock()
+		detection(w, r)
+	}))
+	t.Cleanup(fake.Close)
 	s := startStdio(t, "LANGFUSE_BASE_URL="+fake.URL)
 	s.initialize()
+	mu.Lock()
+	started = true
+	mu.Unlock()
 
 	var list struct {
 		Tools []struct {
@@ -441,10 +459,10 @@ func TestExecutableOnADeploymentWithoutTheV4ReadFamilyListsGetTraceTreeAndAnswer
 	if hint, _ := toolErr["hint"].(string); !strings.Contains(hint, "trace_get") || !strings.Contains(hint, "Langfuse 3.80.0") {
 		t.Errorf("hint = %q, want it to name trace_get and Langfuse 3.80.0", hint)
 	}
-	select {
-	case got := <-gotRequest:
-		t.Errorf("Langfuse received %q, want no request beyond the detection", got)
-	default:
+	mu.Lock()
+	defer mu.Unlock()
+	if len(received) != 0 {
+		t.Errorf("Langfuse received %q after startup, want no request", received)
 	}
 }
 

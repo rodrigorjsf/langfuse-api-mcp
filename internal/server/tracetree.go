@@ -157,9 +157,9 @@ func (ex executor) traceTreeUnavailable() toolErrorFields {
 	}
 	return toolErrorFields{
 		Code: errorUnavailableOperation,
-		Message: toolGetTraceTree + " is not served by the connected Langfuse deployment (" + deploymentVersion(ex.profile) +
-			"): it reads the Langfuse v4 read APIs, which this deployment does not answer",
-		Hint:        use + "; " + searchServedOperations + "; " + profileSummary(ex.profile),
+		Message: notServedMessage(toolGetTraceTree, ex.profile) +
+			": it reads the Langfuse v4 read APIs, which this deployment does not answer",
+		Hint:        unavailableHintWith(use, ex.profile),
 		OperationID: workflows.ObservationsOperationID,
 	}
 }

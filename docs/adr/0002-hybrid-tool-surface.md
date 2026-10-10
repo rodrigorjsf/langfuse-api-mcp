@@ -29,7 +29,7 @@ Evidence that small models benefit comes from a scripted eval in `scripts/` (abo
 
 M3 ships a single workflow tool, the trace tree. Error, latency and cost triage are deferred: they are mostly a choice of filters and a reading of Metrics v2, which an M6 skill can teach over `execute_read`, and they come back only if the small-model eval shows agents fail at them. The payload-query guard (#42) moves with them.
 
-`get_trace_tree` is registered only when the v4 read family answers (ADR-0012 §6):
+`get_trace_tree` is registered only when the v4 read family answers (ADR-0012 §6; superseded by the amendment of 2026-10-10 below, which registers it on every deployment):
 
 - Input: `traceId` (1–128 runes; control or invisible characters refused with `invalid_argument`; sent as a query parameter, never echoed unbounded) and an optional `include`, a closed subset of `["io","metadata"]`. Unknown arguments are refused.
 - It calls `observations_getMany` with `traceId`, `limit=1000` and field groups `core,basic,time,usage,model,metrics`, plus `io`/`metadata` only when asked; it follows `meta.cursor` for at most 5 pages. Past that, the result is marked truncated and returns the cursor, with a hint to continue through `execute_read`.
@@ -39,7 +39,7 @@ M3 ships a single workflow tool, the trace tree. Error, latency and cost triage 
 
 ## Amendment: `get_trace_tree` is registered on every deployment (2026-10-10, M8 grilling)
 
-Planned for M8. The user skill and the tool reference name `get_trace_tree`; on a deployment without the v4 read family the tool was not registered, so an agent that called it was refused by its host before the server could say anything (campaign finding M2). The tool is now registered on every deployment. Where the v4 read family is off it answers the tool error `operation_unavailable`, with a hint naming the deployment's version and the operation that reads one trace there. The tool set is the same on every deployment and still fixed at startup.
+`get_trace_tree` on every deployment shipped in M8 (#175), and so did `operation_unavailable` for a filtered operation (#174). The user skill and the tool reference name `get_trace_tree`; on a deployment without the v4 read family the tool was not registered, so an agent that called it was refused by its host before the server could say anything (campaign finding M2). The tool is now registered on every deployment. Where the v4 read family is off it answers the tool error `operation_unavailable`, with a hint naming the deployment's version and the operation that reads one trace there. The tool set is the same on every deployment and still fixed at startup.
 
 Building the trace tree from the legacy observations list was considered and deferred: that list has no field selection and always carries input and output.
 

@@ -586,8 +586,8 @@ func TestSearchOperationsForAnOperationIDStartingWithTraceReturnsNoHint(t *testi
 }
 
 // #100: the hint names only trace reads the deployment offers. A 3.x deployment
-// serves the legacy family only: no get_trace_tree, observations_getMany or
-// metrics_metrics, so none is named.
+// serves the legacy family only: get_trace_tree is listed but cannot run there, and
+// observations_getMany and metrics_metrics are not offered, so none is named.
 func TestSearchOperationsNamesNoTraceReadTheDeploymentDoesNotOffer(t *testing.T) {
 	t.Parallel()
 	cs := connectResolved(t, "3.225.11")

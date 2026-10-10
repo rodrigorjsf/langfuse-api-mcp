@@ -187,7 +187,7 @@ func notOffered(cat catalog.Catalog, id, tool string, writeMode bool, profile la
 	}
 	return toolErrorFields{
 		Code:        errorUnavailableOperation,
-		Message:     "operation " + u.ID + " is not served by the connected Langfuse deployment (" + deploymentVersion(profile) + ")",
+		Message:     notServedMessage("operation "+u.ID, profile),
 		Hint:        notOfferedHint(u, profile),
 		OperationID: u.ID,
 	}, u.Method, true
@@ -216,6 +216,20 @@ func notOfferedHint(u catalog.Unavailable, profile langfuse.DeploymentProfile) s
 	if len(u.Replacements) > 0 {
 		use = "operations to use on this deployment instead: " + strings.Join(u.Replacements, ", ")
 	}
+	return unavailableHintWith(use, profile)
+}
+
+// notServedMessage is the message of an operation_unavailable answer about
+// subject, an operation or a tool of the server's own: it names the
+// deployment's version and nothing of the call.
+func notServedMessage(subject string, profile langfuse.DeploymentProfile) string {
+	return subject + " is not served by the connected Langfuse deployment (" + deploymentVersion(profile) + ")"
+}
+
+// unavailableHintWith is the hint of an operation_unavailable answer built
+// from the catalog: use says what to run instead, then where the served
+// operations are listed, then the deployment profile.
+func unavailableHintWith(use string, profile langfuse.DeploymentProfile) string {
 	return use + "; " + searchServedOperations + "; " + profileSummary(profile)
 }
 
