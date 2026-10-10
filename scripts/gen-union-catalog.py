@@ -4,11 +4,14 @@
 #       every Langfuse release tag from v3.0.0 onward, and writes it to
 #       internal/catalog/spec/langfuse-union-catalog.json, which the server embeds.
 #       Each operation (method + path) keeps its definition from the last spec
-#       that contained it: its path and query parameters and its JSON request
-#       body, with $refs inlined from that same spec (#81) and converted from
+#       that contained it: its JSON request body with $refs inlined from that same spec (#81) and converted from
 #       the OpenAPI 3.0 schema dialect to JSON Schema 2020-12 (#111:
 #       nullable, boolean exclusive bounds), so the server can compile it
-#       with jsonschema-go. It also carries
+#       with jsonschema-go. Its path and query parameters are the union over
+#       every release, each with the release that introduced it (x-introduced)
+#       and, when it left the spec while the operation stayed, the release that
+#       removed it (x-removed, #173), so that the server can offer the
+#       parameters a deployment's version serves. It also carries
 #       its version range (x-introduced, plus x-removed when it left the spec)
 #       and its operation family (x-family: legacy, v4 read or experiments)
 #       where a write mode gates it. An operation whose description opens
@@ -152,7 +155,8 @@ def operations(spec):
     request body of a write operation, which execute_write's body gate (M4)
     checks against (#81). Both are resolved against this spec's own components,
     so an operation keeps the schemas of the release it was taken from. Header
-    parameters and responses are dropped: nothing uses them.
+    parameters, responses and a parameter whose schema is an object (is_object)
+    are dropped: nothing uses them.
     """
     out = {}
     for path, item in (spec.get("paths") or {}).items():
@@ -164,7 +168,7 @@ def operations(spec):
             params = {}
             for p in deref(shared, spec) + deref(op.get("parameters") or [], spec):
                 params[(p.get("name"), p.get("in"))] = p  # operation-level wins
-            kept = [p for p in params.values() if p.get("in") in ("path", "query")]
+            kept = [p for p in params.values() if p.get("in") in ("path", "query") and not is_object(p)]
             for p in kept:
                 p.pop("description", None)
                 if isinstance(p.get("schema"), dict):
@@ -180,6 +184,17 @@ def operations(spec):
             if "requestBody" in op:
                 out[key]["requestBody"] = request_body(key, op["requestBody"], spec)
     return out
+
+
+def is_object(p):
+    """Whether parameter p is an object, which no URL parameter of the API is.
+
+    Releases 3.57.1 to 3.78.x list the response schema of datasetRunItems_list
+    as a required query parameter named "response": a spec error. Kept, it
+    would be a required parameter of the operation on those deployments (#173).
+    """
+    schema = p.get("schema")
+    return isinstance(schema, dict) and (schema.get("type") == "object" or "properties" in schema)
 
 
 def request_body(key, body, spec):
@@ -283,16 +298,64 @@ def documented_floor(key):
 
 
 def build(repo):
-    tags = release_tags(repo)
-    cache, history = {}, {}
-    for tag, blob in tags:
+    cache = {}
+    releases = []
+    for tag, blob in release_tags(repo):
         if blob not in cache:
             cache[blob] = operations(load_spec(repo, blob))
-        for key, op in cache[blob].items():
+        releases.append((tag, cache[blob]))
+    return merge(releases)
+
+
+def param_key(p):
+    return (p.get("name"), p.get("in"))
+
+
+def note_parameters(history, tag, ops):
+    """Add the parameters of release tag's operations to their histories: for
+    every path and query parameter, the releases that list it and its
+    definition from the last of them (#173)."""
+    for key, op in ops.items():
+        seen = history[key].setdefault("params", {})
+        for p in op["parameters"]:
+            h = seen.setdefault(param_key(p), {"present": [], "order": len(seen)})
+            h["present"].append(tag)
+            h["param"] = p  # the last spec that lists it wins
+
+
+def parameters(h, order, introduced):
+    """The operation's parameters across every release (#173): those of the
+    newest spec that lists the operation first, in its order, then the ones
+    only older releases had, by first appearance. Each carries x-introduced,
+    the release that introduced it, and x-removed, the release that removed it
+    while the operation stayed; a parameter that lived as long as the
+    operation takes the operation's range, so the documented floors of an
+    operation also reach its parameters."""
+    first, last = h["present"][0], h["present"][-1]
+    listed = [param_key(p) for p in h["op"]["parameters"]]
+    rest = sorted((k for k in h["params"] if k not in listed), key=lambda k: h["params"][k]["order"])
+    out = []
+    for k in listed + rest:
+        ph = h["params"][k]
+        pfirst, plast = ph["present"][0], ph["present"][-1]
+        p = dict(ph["param"])
+        p["x-introduced"] = introduced if pfirst == first else text(version(pfirst))
+        if plast != last:
+            p["x-removed"] = text(version(order[order.index(plast) + 1]))
+        out.append(p)
+    return out
+
+
+def merge(releases):
+    """The union catalog of releases, [(tag, operations(spec))] oldest first."""
+    history = {}
+    for tag, ops in releases:
+        for key, op in ops.items():
             h = history.setdefault(key, {"present": []})
             h["present"].append(tag)
             h["op"] = op  # the last spec that contains it wins
-    order = [t for t, _ in tags]
+        note_parameters(history, tag, ops)
+    order = [t for t, _ in releases]
     newest = order[-1]
     paths, gaps = {}, []
     for key, h in history.items():
@@ -310,6 +373,7 @@ def build(repo):
         if floor and floor < introduced:
             introduced = floor
         op["x-introduced"] = text(introduced)
+        op["parameters"] = parameters(h, order, op["x-introduced"])
         if last != newest:
             op["x-removed"] = text(version(order[order.index(last) + 1]))
         fam = family(key, op, "x-removed" in op)
@@ -327,7 +391,7 @@ def build(repo):
         "x-oldest-version": text(version(order[0])),
         "x-newest-version": text(version(newest)),
         "x-releases": len(order),
-        "x-distinct-specs": len(cache),
+        "x-distinct-specs": len({id(ops) for _, ops in releases}),
         "paths": paths,
     }
 

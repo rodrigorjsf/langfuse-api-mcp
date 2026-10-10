@@ -167,5 +167,100 @@ class Dialect202012Test(unittest.TestCase):
                                          {"type": "null"}]})
 
 
+def query(name, **schema):
+    return {"name": name, "in": "query", "required": False, "schema": {"type": "string", **schema}}
+
+
+def release_spec(*operations):
+    """A minimal release spec: operations is (path, operationId, [parameters])."""
+    return {"paths": {path: {"get": {"operationId": oid, "parameters": params}} for path, oid, params in operations}}
+
+
+def union_of(releases):
+    """The union catalog built from releases, [(tag, spec)] oldest first."""
+    return gen.merge([(tag, gen.operations(spec)) for tag, spec in releases])
+
+
+def parameters_of(catalog, path):
+    return {p["name"]: p for p in catalog["paths"][path]["get"]["parameters"]}
+
+
+class ParameterRangeTest(unittest.TestCase):
+    """#173: every path and query parameter carries the release that introduced
+    it and, when it left the spec, the release that removed it."""
+
+    def test_a_parameter_introduced_later_an_unchanged_one_and_one_removed_later(self):
+        catalog = union_of([
+            ("v3.0.0", release_spec(("/api/public/x", "x_list", [query("page"), query("legacy")]))),
+            ("v3.1.0", release_spec(("/api/public/x", "x_list", [query("page"), query("traceId")]))),
+            ("v3.2.0", release_spec(("/api/public/x", "x_list", [query("page"), query("traceId")]))),
+        ])
+        got = parameters_of(catalog, "/api/public/x")
+        self.assertEqual(got["page"]["x-introduced"], "3.0.0")
+        self.assertNotIn("x-removed", got["page"])
+        self.assertEqual(got["traceId"]["x-introduced"], "3.1.0")
+        self.assertNotIn("x-removed", got["traceId"])
+        self.assertEqual(got["legacy"]["x-introduced"], "3.0.0")
+        self.assertEqual(got["legacy"]["x-removed"], "3.1.0")
+
+    def test_a_removed_parameter_stays_in_the_catalog_with_its_definition_from_its_last_release(self):
+        catalog = union_of([
+            ("v3.0.0", release_spec(("/api/public/x", "x_list", [query("level", enum=["A"])]))),
+            ("v3.1.0", release_spec(("/api/public/x", "x_list", [query("level", enum=["A", "B"])]))),
+            ("v3.2.0", release_spec(("/api/public/x", "x_list", []))),
+        ])
+        level = parameters_of(catalog, "/api/public/x")["level"]
+        self.assertEqual(level["schema"], {"type": "string", "enum": ["A", "B"]})
+        self.assertEqual((level["x-introduced"], level["x-removed"]), ("3.0.0", "3.2.0"))
+
+    def test_the_parameters_of_the_newest_release_come_first_in_their_order(self):
+        catalog = union_of([
+            ("v3.0.0", release_spec(("/api/public/x", "x_list", [query("old"), query("b")]))),
+            ("v3.1.0", release_spec(("/api/public/x", "x_list", [query("b"), query("a")]))),
+        ])
+        names = [p["name"] for p in catalog["paths"]["/api/public/x"]["get"]["parameters"]]
+        self.assertEqual(names, ["b", "a", "old"])
+
+    def test_a_parameter_of_an_operation_introduced_later_starts_with_the_operation(self):
+        catalog = union_of([
+            ("v3.0.0", release_spec(("/api/public/y", "y_list", []))),
+            ("v3.1.0", release_spec(("/api/public/y", "y_list", []), ("/api/public/x", "x_list", [query("page")]))),
+        ])
+        op = catalog["paths"]["/api/public/x"]["get"]
+        self.assertEqual(op["x-introduced"], "3.1.0")
+        self.assertEqual(op["parameters"][0]["x-introduced"], "3.1.0")
+
+    def test_a_parameter_of_an_operation_with_a_documented_earlier_floor_starts_at_that_floor(self):
+        key = "POST /api/public/otel/v1/traces"
+        spec = {"paths": {"/api/public/otel/v1/traces": {"post": {"operationId": "otel_export", "parameters": [query("p")]}}}}
+        catalog = gen.merge([("v3.30.0", gen.operations(spec))])
+        op = catalog["paths"]["/api/public/otel/v1/traces"]["post"]
+        self.assertEqual(op["x-introduced"], "3.22.0", key)
+        self.assertEqual(op["parameters"][0]["x-introduced"], "3.22.0")
+
+    def test_a_parameter_of_a_removed_operation_is_bounded_by_the_operation_alone(self):
+        catalog = union_of([
+            ("v3.0.0", release_spec(("/api/public/x", "x_list", [query("page")]))),
+            ("v3.1.0", release_spec(("/api/public/y", "y_list", []))),
+        ])
+        op = catalog["paths"]["/api/public/x"]["get"]
+        self.assertEqual(op["x-removed"], "3.1.0")
+        self.assertNotIn("x-removed", op["parameters"][0])
+
+    def test_a_query_parameter_that_is_an_object_schema_is_not_a_parameter(self):
+        # Releases 3.57.1 to 3.78.x list the response schema of datasetRunItems_list as a
+        # required query parameter named "response": a spec error that would otherwise
+        # become a required parameter of the operation on those deployments.
+        response = {"name": "response", "in": "query", "required": True, "schema": {
+            "type": "object", "properties": {"data": {"type": "array"}}}}
+        catalog = union_of([("v3.0.0", release_spec(("/api/public/x", "x_list", [query("page"), response])))])
+        self.assertEqual(list(parameters_of(catalog, "/api/public/x")), ["page"])
+
+    def test_a_path_parameter_gets_a_range_like_a_query_one(self):
+        path_param = {"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}
+        catalog = union_of([("v3.0.0", release_spec(("/api/public/x/{id}", "x_get", [path_param])))])
+        self.assertEqual(parameters_of(catalog, "/api/public/x/{id}")["id"]["x-introduced"], "3.0.0")
+
+
 if __name__ == "__main__":
     unittest.main()

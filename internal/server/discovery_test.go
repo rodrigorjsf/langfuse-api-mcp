@@ -133,9 +133,9 @@ func TestSearchOperationsWithoutQueryListsEveryReadOperationGroupedByTag(t *test
 
 	assertMatchesOutputSchema(t, tool, res)
 	idx := operationIndexOf(t, res)
-	// The union catalog has 68 GET operations and no excluded one among them.
-	if idx.Count != 68 || len(idx.listed()) != 68 {
-		t.Fatalf("index lists %d operations (count %d), want the 68 read operations", len(idx.listed()), idx.Count)
+	// The union catalog has 69 GET operations and no excluded one among them.
+	if idx.Count != 69 || len(idx.listed()) != 69 {
+		t.Fatalf("index lists %d operations (count %d), want the 69 read operations", len(idx.listed()), idx.Count)
 	}
 	// The tags holding a v4-family operation come first (ADR-0012 §5).
 	if idx.Groups[0].Tag != "Metrics" || idx.Groups[0].Operations[0].OperationID != "metrics_metrics" ||

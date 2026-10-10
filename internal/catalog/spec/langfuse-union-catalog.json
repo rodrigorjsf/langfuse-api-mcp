@@ -12,7 +12,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.42.0"
      },
      {
       "in": "query",
@@ -21,7 +22,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.42.0"
      }
     ],
     "tags": [
@@ -82,7 +84,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.42.0"
      }
     ],
     "tags": [
@@ -102,7 +105,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.95.0"
      }
     ],
     "requestBody": {
@@ -139,7 +143,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.95.0"
      }
     ],
     "requestBody": {
@@ -178,7 +183,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.42.0"
      },
      {
       "in": "query",
@@ -192,7 +198,8 @@
        "nullable": true,
        "title": "AnnotationQueueStatus",
        "type": "string"
-      }
+      },
+      "x-introduced": "3.42.0"
      },
      {
       "in": "query",
@@ -201,7 +208,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.42.0"
      },
      {
       "in": "query",
@@ -210,7 +218,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.42.0"
      }
     ],
     "tags": [
@@ -228,7 +237,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.42.0"
      }
     ],
     "requestBody": {
@@ -290,7 +300,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.42.0"
      },
      {
       "in": "path",
@@ -298,7 +309,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.42.0"
      }
     ],
     "tags": [
@@ -316,7 +328,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.42.0"
      },
      {
       "in": "path",
@@ -324,7 +337,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.42.0"
      }
     ],
     "tags": [
@@ -342,7 +356,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.42.0"
      },
      {
       "in": "path",
@@ -350,7 +365,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.42.0"
      }
     ],
     "requestBody": {
@@ -396,7 +412,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -405,7 +422,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -414,7 +432,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -423,7 +442,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -432,7 +452,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "tags": [
@@ -511,7 +532,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "tags": [
@@ -532,7 +554,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -541,7 +564,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -550,7 +574,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -560,7 +585,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.153.0"
      },
      {
       "in": "query",
@@ -569,7 +595,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -578,7 +605,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "tags": [
@@ -661,7 +689,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.35.0"
      }
     ],
     "tags": [
@@ -679,7 +708,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "tags": [
@@ -699,7 +729,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.57.1"
      },
      {
       "in": "query",
@@ -707,7 +738,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.57.1"
      },
      {
       "in": "query",
@@ -716,7 +748,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.57.1"
      },
      {
       "in": "query",
@@ -725,7 +758,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.57.1"
      }
     ],
     "tags": [
@@ -820,7 +854,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -829,7 +864,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -838,7 +874,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "tags": [
@@ -860,7 +897,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.35.1"
      },
      {
       "in": "path",
@@ -868,7 +906,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.35.1"
      }
     ],
     "tags": [
@@ -888,7 +927,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "path",
@@ -896,7 +936,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "tags": [
@@ -919,7 +960,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.206.0"
      },
      {
       "in": "query",
@@ -928,7 +970,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.206.0"
      },
      {
       "in": "query",
@@ -937,7 +980,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.206.0"
      },
      {
       "in": "query",
@@ -946,7 +990,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.206.0"
      },
      {
       "in": "query",
@@ -955,7 +1000,8 @@
       "schema": {
        "format": "date-time",
        "type": "string"
-      }
+      },
+      "x-introduced": "3.206.0"
      },
      {
       "in": "query",
@@ -965,7 +1011,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.206.0"
      },
      {
       "in": "query",
@@ -974,7 +1021,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.206.0"
      },
      {
       "in": "query",
@@ -983,7 +1031,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.206.0"
      },
      {
       "in": "query",
@@ -992,7 +1041,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.206.0"
      },
      {
       "in": "query",
@@ -1001,7 +1051,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.206.0"
      },
      {
       "in": "query",
@@ -1010,7 +1061,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.206.0"
      }
     ],
     "tags": [
@@ -1032,7 +1084,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.206.0"
      },
      {
       "in": "query",
@@ -1041,7 +1094,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.206.0"
      },
      {
       "in": "query",
@@ -1050,7 +1104,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.206.0"
      },
      {
       "in": "query",
@@ -1059,7 +1114,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.206.0"
      },
      {
       "in": "query",
@@ -1068,7 +1124,8 @@
       "schema": {
        "format": "date-time",
        "type": "string"
-      }
+      },
+      "x-introduced": "3.206.0"
      },
      {
       "in": "query",
@@ -1078,7 +1135,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.206.0"
      },
      {
       "in": "query",
@@ -1087,7 +1145,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.206.0"
      },
      {
       "in": "query",
@@ -1096,7 +1155,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.206.0"
      },
      {
       "in": "query",
@@ -1105,7 +1165,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.206.0"
      },
      {
       "in": "query",
@@ -1114,7 +1175,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.206.0"
      }
     ],
     "tags": [
@@ -3577,7 +3639,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.110.0"
      }
     ],
     "tags": [
@@ -3595,7 +3658,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.158.0"
      }
     ],
     "tags": [
@@ -3616,7 +3680,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.92.0"
      },
      {
       "in": "query",
@@ -3625,7 +3690,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.92.0"
      }
     ],
     "tags": [
@@ -3736,7 +3802,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.170.0"
      }
     ],
     "tags": [
@@ -3886,7 +3953,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "tags": [
@@ -3904,7 +3972,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "requestBody": {
@@ -3964,7 +4033,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.57.0"
      }
     ],
     "tags": [
@@ -3987,7 +4057,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -3996,7 +4067,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -4005,7 +4077,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -4014,7 +4087,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -4026,7 +4100,8 @@
         "type": "string"
        },
        "type": "array"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -4038,7 +4113,8 @@
         "type": "string"
        },
        "type": "array"
-      }
+      },
+      "x-introduced": "3.35.0"
      },
      {
       "in": "query",
@@ -4048,7 +4124,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -4058,7 +4135,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "tags": [
@@ -4080,7 +4158,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -4089,7 +4168,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "tags": [
@@ -4337,7 +4417,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "tags": [
@@ -4355,7 +4436,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "tags": [
@@ -4373,7 +4455,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "4.19.0"
      }
     ],
     "requestBody": {
@@ -4613,7 +4696,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -4622,7 +4706,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -4631,7 +4716,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -4640,7 +4726,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -4649,7 +4736,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -4658,7 +4746,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -4674,7 +4763,8 @@
        "nullable": true,
        "title": "ObservationLevel",
        "type": "string"
-      }
+      },
+      "x-introduced": "3.82.0"
      },
      {
       "in": "query",
@@ -4683,7 +4773,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -4695,7 +4786,8 @@
         "type": "string"
        },
        "type": "array"
-      }
+      },
+      "x-introduced": "3.35.0"
      },
      {
       "in": "query",
@@ -4705,7 +4797,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -4715,7 +4808,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -4724,7 +4818,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -4733,7 +4828,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.120.0"
      }
     ],
     "tags": [
@@ -4755,7 +4851,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -4765,7 +4862,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "4.33.0"
      }
     ],
     "tags": [
@@ -5254,7 +5352,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.50.0"
      }
     ],
     "tags": [
@@ -5272,7 +5371,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.50.0"
      }
     ],
     "requestBody": {
@@ -5325,7 +5425,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.50.0"
      }
     ],
     "tags": [
@@ -5343,7 +5444,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.50.0"
      }
     ],
     "requestBody": {
@@ -5396,7 +5498,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.50.0"
      },
      {
       "in": "path",
@@ -5404,7 +5507,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.50.0"
      }
     ],
     "tags": [
@@ -5424,7 +5528,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.99.0"
      }
     ],
     "requestBody": {
@@ -5461,7 +5566,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.50.0"
      }
     ],
     "tags": [
@@ -5479,7 +5585,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.50.0"
      }
     ],
     "requestBody": {
@@ -5563,7 +5670,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.50.0"
      },
      {
       "in": "query",
@@ -5572,7 +5680,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.50.0"
      },
      {
       "in": "query",
@@ -5581,7 +5690,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.50.0"
      }
     ],
     "tags": [
@@ -5684,7 +5794,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.50.0"
      }
     ],
     "tags": [
@@ -5702,7 +5813,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.50.0"
      }
     ],
     "tags": [
@@ -5723,7 +5835,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -5732,7 +5845,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "tags": [
@@ -5839,7 +5953,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "tags": [
@@ -5857,7 +5972,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.113.0"
      }
     ],
     "requestBody": {
@@ -5952,7 +6068,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -5961,7 +6078,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -5970,7 +6088,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -5979,7 +6098,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -5989,7 +6109,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -5999,7 +6120,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6011,7 +6133,8 @@
         "type": "string"
        },
        "type": "array"
-      }
+      },
+      "x-introduced": "3.35.0"
      },
      {
       "in": "query",
@@ -6026,7 +6149,8 @@
        "nullable": true,
        "title": "ScoreSource",
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6035,7 +6159,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6045,7 +6170,8 @@
        "format": "double",
        "nullable": true,
        "type": "number"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6054,7 +6180,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6063,7 +6190,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6072,7 +6200,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6087,7 +6216,8 @@
        "nullable": true,
        "title": "ScoreDataType",
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6099,7 +6229,8 @@
         "type": "string"
        },
        "type": "array"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "tags": [
@@ -6257,7 +6388,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "tags": [
@@ -6275,7 +6407,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "tags": [
@@ -6297,7 +6430,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6306,7 +6440,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6316,7 +6451,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6326,7 +6462,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6338,7 +6475,8 @@
         "type": "string"
        },
        "type": "array"
-      }
+      },
+      "x-introduced": "3.35.0"
      }
     ],
     "tags": [
@@ -6360,7 +6498,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "tags": [
@@ -6414,7 +6553,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6423,7 +6563,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6432,7 +6573,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6441,7 +6583,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6450,7 +6593,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6460,7 +6604,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6470,7 +6615,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6479,7 +6625,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6491,7 +6638,8 @@
         "type": "string"
        },
        "type": "array"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6500,7 +6648,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6509,7 +6658,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6521,7 +6671,8 @@
         "type": "string"
        },
        "type": "array"
-      }
+      },
+      "x-introduced": "3.35.0"
      },
      {
       "in": "query",
@@ -6530,7 +6681,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.73.0"
      },
      {
       "in": "query",
@@ -6539,7 +6691,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.116.1"
      }
     ],
     "tags": [
@@ -6561,7 +6714,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.39.0"
      }
     ],
     "tags": [
@@ -6579,7 +6733,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -6588,7 +6743,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.166.0"
      }
     ],
     "tags": [
@@ -6611,7 +6767,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.216.0"
      },
      {
       "in": "query",
@@ -6620,7 +6777,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.216.0"
      }
     ],
     "tags": [
@@ -6856,7 +7014,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.216.0"
      }
     ],
     "tags": [
@@ -6874,7 +7033,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.216.0"
      }
     ],
     "tags": [
@@ -6892,7 +7052,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.216.0"
      }
     ],
     "requestBody": {
@@ -7131,7 +7292,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.216.0"
      },
      {
       "in": "query",
@@ -7140,7 +7302,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.216.0"
      }
     ],
     "tags": [
@@ -7353,7 +7516,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.216.0"
      }
     ],
     "tags": [
@@ -7371,7 +7535,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.216.0"
      }
     ],
     "tags": [
@@ -7389,7 +7554,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.216.0"
      }
     ],
     "requestBody": {
@@ -7593,7 +7759,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.216.0"
      }
     ],
     "requestBody": {
@@ -7759,7 +7926,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.216.0"
      },
      {
       "in": "path",
@@ -7767,7 +7935,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.216.0"
      }
     ],
     "tags": [
@@ -7785,7 +7954,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.216.0"
      },
      {
       "in": "path",
@@ -7793,7 +7963,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.216.0"
      }
     ],
     "requestBody": {
@@ -7855,7 +8026,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.170.0"
      },
      {
       "in": "query",
@@ -7864,7 +8036,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.170.0"
      }
     ],
     "tags": [
@@ -9753,7 +9926,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.170.0"
      }
     ],
     "tags": [
@@ -9773,7 +9947,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.170.0"
      }
     ],
     "tags": [
@@ -9793,7 +9968,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.170.0"
      }
     ],
     "requestBody": {
@@ -10530,7 +10706,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.170.0"
      },
      {
       "in": "query",
@@ -10539,7 +10716,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.170.0"
      }
     ],
     "tags": [
@@ -10968,7 +11146,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.187.0"
      }
     ],
     "tags": [
@@ -10988,7 +11167,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.170.0"
      }
     ],
     "tags": [
@@ -11011,7 +11191,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "4.46.0"
      },
      {
       "in": "query",
@@ -11020,7 +11201,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "4.46.0"
      },
      {
       "in": "query",
@@ -11029,7 +11211,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "4.46.0"
      },
      {
       "in": "query",
@@ -11038,7 +11221,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "4.46.0"
      },
      {
       "in": "query",
@@ -11047,7 +11231,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "4.46.0"
      },
      {
       "in": "query",
@@ -11057,7 +11242,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "4.46.0"
      },
      {
       "in": "query",
@@ -11067,7 +11253,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "4.46.0"
      }
     ],
     "tags": [
@@ -11161,7 +11348,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "4.48.0"
      }
     ],
     "tags": [
@@ -11181,7 +11369,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "4.46.0"
      }
     ],
     "tags": [
@@ -11202,7 +11391,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "4.46.0"
      },
      {
       "in": "query",
@@ -11211,7 +11401,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "4.46.0"
      },
      {
       "in": "query",
@@ -11220,7 +11411,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "4.46.0"
      }
     ],
     "tags": [
@@ -11238,7 +11430,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "4.46.0"
      }
     ],
     "requestBody": {
@@ -11281,7 +11474,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "4.46.0"
      },
      {
       "in": "path",
@@ -11289,7 +11483,8 @@
       "required": true,
       "schema": {
        "type": "integer"
-      }
+      },
+      "x-introduced": "4.46.0"
      }
     ],
     "tags": [
@@ -11307,7 +11502,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "4.46.0"
      },
      {
       "in": "path",
@@ -11315,7 +11511,8 @@
       "required": true,
       "schema": {
        "type": "integer"
-      }
+      },
+      "x-introduced": "4.46.0"
      }
     ],
     "requestBody": {
@@ -11358,7 +11555,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -11367,7 +11565,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "tags": [
@@ -11438,7 +11637,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      }
     ],
     "tags": [
@@ -11459,7 +11659,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "4.23.0"
      },
      {
       "in": "query",
@@ -11468,7 +11669,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "4.23.0"
      }
     ],
     "tags": [
@@ -12112,7 +12314,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "4.23.0"
      }
     ],
     "tags": [
@@ -12130,7 +12333,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "4.23.0"
      }
     ],
     "tags": [
@@ -12148,7 +12352,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "4.23.0"
      }
     ],
     "requestBody": {
@@ -12789,7 +12994,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "4.23.0"
      },
      {
       "in": "query",
@@ -12798,7 +13004,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "4.23.0"
      }
     ],
     "tags": [
@@ -13256,7 +13463,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "4.23.0"
      }
     ],
     "tags": [
@@ -13274,7 +13482,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "4.23.0"
      }
     ],
     "tags": [
@@ -13292,7 +13501,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "4.23.0"
      }
     ],
     "requestBody": {
@@ -13726,7 +13936,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "4.23.0"
      },
      {
       "in": "query",
@@ -13735,7 +13946,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "4.23.0"
      },
      {
       "in": "query",
@@ -13744,7 +13956,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "4.23.0"
      }
     ],
     "tags": [
@@ -13764,7 +13977,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.141.0"
      }
     ],
     "tags": [
@@ -13786,7 +14000,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.141.0"
      },
      {
       "in": "query",
@@ -13795,7 +14010,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.145.0"
      },
      {
       "in": "query",
@@ -13804,7 +14020,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.141.0"
      },
      {
       "in": "query",
@@ -13813,7 +14030,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.141.0"
      },
      {
       "in": "query",
@@ -13822,7 +14040,8 @@
       "schema": {
        "nullable": true,
        "type": "boolean"
-      }
+      },
+      "x-introduced": "3.141.0"
      },
      {
       "in": "query",
@@ -13831,7 +14050,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.141.0"
      },
      {
       "in": "query",
@@ -13840,7 +14060,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.141.0"
      },
      {
       "in": "query",
@@ -13849,7 +14070,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "4.2.0"
      },
      {
       "in": "query",
@@ -13858,7 +14080,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.141.0"
      },
      {
       "in": "query",
@@ -13867,7 +14090,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.141.0"
      },
      {
       "in": "query",
@@ -13883,7 +14107,8 @@
        "nullable": true,
        "title": "ObservationLevel",
        "type": "string"
-      }
+      },
+      "x-introduced": "3.141.0"
      },
      {
       "in": "query",
@@ -13892,7 +14117,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.141.0"
      },
      {
       "in": "query",
@@ -13901,7 +14127,8 @@
       "schema": {
        "nullable": true,
        "type": "boolean"
-      }
+      },
+      "x-introduced": "4.0.0"
      },
      {
       "in": "query",
@@ -13913,7 +14140,8 @@
         "type": "string"
        },
        "type": "array"
-      }
+      },
+      "x-introduced": "3.141.0"
      },
      {
       "in": "query",
@@ -13923,7 +14151,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.141.0"
      },
      {
       "in": "query",
@@ -13933,7 +14162,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.141.0"
      },
      {
       "in": "query",
@@ -13942,7 +14172,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.141.0"
      },
      {
       "in": "query",
@@ -13951,7 +14182,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.141.0"
      }
     ],
     "tags": [
@@ -13973,7 +14205,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -13982,7 +14215,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -13991,7 +14225,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -14000,7 +14235,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -14009,7 +14245,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -14019,7 +14256,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -14029,7 +14267,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -14038,7 +14277,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "4.42.0"
      }
     ],
     "tags": [
@@ -14241,7 +14481,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.18.0"
      },
      {
       "in": "path",
@@ -14249,7 +14490,8 @@
       "required": true,
       "schema": {
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.18.0"
      }
     ],
     "requestBody": {
@@ -14291,7 +14533,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.138.0"
      },
      {
       "in": "query",
@@ -14300,7 +14543,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.138.0"
      },
      {
       "in": "query",
@@ -14309,7 +14553,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.138.0"
      }
     ],
     "tags": [
@@ -14327,7 +14572,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -14336,7 +14582,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -14345,7 +14592,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.0.0"
      },
      {
       "in": "query",
@@ -14354,7 +14602,8 @@
       "schema": {
        "nullable": true,
        "type": "boolean"
-      }
+      },
+      "x-introduced": "3.158.0"
      }
     ],
     "tags": [
@@ -14374,7 +14623,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.15.0"
      },
      {
       "in": "path",
@@ -14382,7 +14632,8 @@
       "required": true,
       "schema": {
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.15.0"
      }
     ],
     "requestBody": {
@@ -14426,7 +14677,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.53.0"
      },
      {
       "in": "query",
@@ -14435,7 +14687,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.53.0"
      },
      {
       "in": "query",
@@ -14444,7 +14697,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.53.0"
      },
      {
       "in": "query",
@@ -14453,7 +14707,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.53.0"
      },
      {
       "in": "query",
@@ -14463,7 +14718,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.53.0"
      },
      {
       "in": "query",
@@ -14473,7 +14729,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.53.0"
      },
      {
       "in": "query",
@@ -14485,7 +14742,8 @@
         "type": "string"
        },
        "type": "array"
-      }
+      },
+      "x-introduced": "3.53.0"
      },
      {
       "in": "query",
@@ -14500,7 +14758,8 @@
        "nullable": true,
        "title": "ScoreSource",
        "type": "string"
-      }
+      },
+      "x-introduced": "3.53.0"
      },
      {
       "in": "query",
@@ -14509,7 +14768,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.53.0"
      },
      {
       "in": "query",
@@ -14519,7 +14779,8 @@
        "format": "double",
        "nullable": true,
        "type": "number"
-      }
+      },
+      "x-introduced": "3.53.0"
      },
      {
       "in": "query",
@@ -14528,7 +14789,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.53.0"
      },
      {
       "in": "query",
@@ -14537,7 +14799,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.53.0"
      },
      {
       "in": "query",
@@ -14546,7 +14809,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.112.0"
      },
      {
       "in": "query",
@@ -14555,7 +14819,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.133.0"
      },
      {
       "in": "query",
@@ -14564,7 +14829,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.133.0"
      },
      {
       "in": "query",
@@ -14573,7 +14839,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.153.0"
      },
      {
       "in": "query",
@@ -14582,7 +14849,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.53.0"
      },
      {
       "in": "query",
@@ -14599,7 +14867,8 @@
        "nullable": true,
        "title": "ScoreDataType",
        "type": "string"
-      }
+      },
+      "x-introduced": "3.53.0"
      },
      {
       "in": "query",
@@ -14611,7 +14880,8 @@
         "type": "string"
        },
        "type": "array"
-      }
+      },
+      "x-introduced": "3.53.0"
      },
      {
       "in": "query",
@@ -14620,7 +14890,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.144.0"
      },
      {
       "in": "query",
@@ -14629,7 +14900,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.153.0"
      }
     ],
     "tags": [
@@ -14651,7 +14923,8 @@
       "required": true,
       "schema": {
        "type": "string"
-      }
+      },
+      "x-introduced": "3.53.0"
      }
     ],
     "tags": [
@@ -14674,7 +14947,8 @@
       "schema": {
        "nullable": true,
        "type": "integer"
-      }
+      },
+      "x-introduced": "3.179.0"
      },
      {
       "in": "query",
@@ -14683,7 +14957,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.179.0"
      },
      {
       "in": "query",
@@ -14692,7 +14967,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.179.0"
      },
      {
       "in": "query",
@@ -14701,7 +14977,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.179.0"
      },
      {
       "in": "query",
@@ -14710,7 +14987,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.179.0"
      },
      {
       "in": "query",
@@ -14719,7 +14997,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.179.0"
      },
      {
       "in": "query",
@@ -14728,7 +15007,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.179.0"
      },
      {
       "in": "query",
@@ -14737,7 +15017,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.179.0"
      },
      {
       "in": "query",
@@ -14746,7 +15027,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.179.0"
      },
      {
       "in": "query",
@@ -14755,7 +15037,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.179.0"
      },
      {
       "in": "query",
@@ -14764,7 +15047,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.179.0"
      },
      {
       "in": "query",
@@ -14773,7 +15057,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.179.0"
      },
      {
       "in": "query",
@@ -14783,7 +15068,8 @@
        "format": "double",
        "nullable": true,
        "type": "number"
-      }
+      },
+      "x-introduced": "3.179.0"
      },
      {
       "in": "query",
@@ -14793,7 +15079,8 @@
        "format": "double",
        "nullable": true,
        "type": "number"
-      }
+      },
+      "x-introduced": "3.179.0"
      },
      {
       "in": "query",
@@ -14802,7 +15089,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.179.0"
      },
      {
       "in": "query",
@@ -14811,7 +15099,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.179.0"
      },
      {
       "in": "query",
@@ -14820,7 +15109,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.179.0"
      },
      {
       "in": "query",
@@ -14829,7 +15119,8 @@
       "schema": {
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.179.0"
      },
      {
       "in": "query",
@@ -14839,7 +15130,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.179.0"
      },
      {
       "in": "query",
@@ -14849,7 +15141,8 @@
        "format": "date-time",
        "nullable": true,
        "type": "string"
-      }
+      },
+      "x-introduced": "3.179.0"
      }
     ],
     "tags": [

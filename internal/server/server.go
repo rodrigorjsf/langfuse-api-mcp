@@ -277,6 +277,12 @@ const (
 	argumentsHint = "call execute_read again with operationId, a Langfuse read operation ID such as trace_list, " +
 		"and optionally parameters, an object of parameter name to value"
 	parametersHint = "fix the parameter named in the message and call again"
+	// notServedHint is the hint of a parameter the deployment's version does
+	// not serve (#173): static text, it holds no parameter name or value. The
+	// rows are filtered by the caller, over every page, because filtering one
+	// page would answer short and look complete.
+	notServedHint = "this deployment's Langfuse version does not serve that parameter: call again without it and " +
+		"filter the rows yourself over every page (page, or cursor from meta.cursor)"
 	// folderNameHint replaces the hint of a 404 or 400 answering a call with
 	// a Folder name: the name may be wrong, or the %2F may not have reached
 	// Langfuse intact. The runs-route claim is lifted once langfuse/langfuse#13933
@@ -380,8 +386,9 @@ func metricsQueryHint(op catalog.Operation) string {
 }
 
 // parametersHintFor is the hint for a parameter the catalog refused: a
-// malformed metrics query gets metricsQueryHint; a page size out of range gets
-// how to page instead, anything else the generic parametersHint. Those two
+// malformed metrics query gets metricsQueryHint; a parameter the deployment's
+// version does not serve gets notServedHint; a page size out of range gets
+// how to page instead, anything else the generic parametersHint. Those
 // go on with the operation's valid parameter names and describe_operation, so
 // one more call fixes the parameters.
 func parametersHintFor(err error, op catalog.Operation) string {
@@ -390,6 +397,8 @@ func parametersHintFor(err error, op catalog.Operation) string {
 	}
 	hint := parametersHint
 	switch {
+	case errors.Is(err, catalog.ErrParameterNotServed):
+		hint = notServedHint
 	case errors.Is(err, catalog.ErrLimitOutOfRange):
 		hint = "use a limit from 1 to " + strconv.Itoa(catalog.MaxLimit) +
 			" and page through the rest (page, or cursor from meta.cursor); without a limit the server asks for " +

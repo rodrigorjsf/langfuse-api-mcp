@@ -266,6 +266,33 @@ Per-family floors stay in `langfuse-api-versions.md`.
   `DELETE /projects/{projectId}/memberships`, `DELETE /v2/prompts/{promptName}`, `PATCH /score-configs/{configId}`.
 - **Every operation of the 4.46.0 spec is routed on 4.46.0 `dual`** (124 of 124, `langfuse-api-versions.md` §1), so
   the 4.x `dual` profile resolves to all 111 non-excluded operations.
+
+### 1.10 Served parameters: a version range per parameter (generator, 2026-10-10) `[verified]`
+
+Source: `scripts/gen-union-catalog.py` (#173) over the release specs from v3.0.0 to v4.50.0. Each path and query parameter
+of an operation carries the release that introduced it (`x-introduced`) and, when it left the spec while the operation
+stayed, the release that removed it (`x-removed`). Before this, an operation kept the parameters of the last spec that
+listed it, so a parameter a later release added was offered on an older deployment that ignores it (end-to-end campaign
+finding H1, `raw/2026-10-10-e2e-langfuse-3.80.0.md`).
+
+- **The three parameters of H1.** A 3.80.0 spec declares none of them; Langfuse 3.80.0 ignores each and answers the
+  unfiltered data with no error.
+
+  | Operation | Parameter | Introduced |
+  |---|---|---|
+  | `scores_get-many` (`GET /api/public/v2/scores`) | `traceId` | 3.133.0 |
+  | `legacy_observationsV1_getMany` (`GET /api/public/observations`) | `level` | 3.82.0 |
+  | `trace_get` (`GET /api/public/traces/{traceId}`) | `fields` | 3.166.0 |
+
+  `scores_get-many` also gained `datasetRunId` (3.133.0), `sessionId` (3.112.0), `fields` (3.144.0), `observationId`
+  and `filter` (3.153.0); 23 parameters of 12 operations were introduced after their operation.
+- **No parameter has left a spec while its operation stayed** (v3.0.0 to v4.50.0): no `x-removed` on any parameter. The
+  generator and the catalog still support it, proven on minimal specs.
+- **A spec error is dropped.** Releases 3.57.1 to 3.78.x list the response schema of `datasetRunItems_list` as a
+  required query parameter named `response`. The generator drops a parameter whose schema is an object, since a URL
+  carries none; kept, it would be a required parameter of the operation on those deployments.
+- **A change of a parameter's type or enum between releases is not tracked**: the definition of the newest release that
+  lists the parameter applies.
 ---
 
 ## 2. Deprecations

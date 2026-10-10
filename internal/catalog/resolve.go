@@ -44,6 +44,12 @@ type Profile struct {
 //     knows nothing older; its families are ignored.
 //
 // When several kept operations share an ID, the one introduced last wins.
+//
+// Each kept operation offers only its served parameters (#173): those whose
+// range holds the version, taken as above; an unknown version is the newest
+// known one, whose spec lists the parameters no later release removed. The
+// operation's other parameters stay known to Request, which refuses them
+// naming the release that serves them.
 func (c Catalog) Resolve(p Profile) Catalog {
 	u := c.union
 	at, known := parseVersion(p.Version)
@@ -53,6 +59,12 @@ func (c Catalog) Resolve(p Profile) Catalog {
 	}
 	if known && at.less(floor) {
 		at, byFamily = floor, false
+	}
+	servedAt, deployment := at, ""
+	if known {
+		deployment = p.Version
+	} else {
+		servedAt = u.newest
 	}
 	byID := map[string]rangedOperation{}
 	for _, op := range u.ops {
@@ -69,7 +81,7 @@ func (c Catalog) Resolve(p Profile) Catalog {
 	}
 	out := Catalog{union: u, byID: make(map[string]Operation, len(byID))}
 	for id, op := range byID {
-		out.byID[id] = op.Operation
+		out.byID[id] = op.servedAt(servedAt, deployment)
 	}
 	return out
 }
@@ -82,10 +94,29 @@ type union struct {
 	newest version
 }
 
-// rangedOperation is an operation and its parsed version range.
+// rangedOperation is an operation and its parsed version range, and the ranges
+// of its parameters, in the order of Operation.Params.
 type rangedOperation struct {
 	Operation
-	span span
+	span       span
+	paramSpans []span
+}
+
+// servedAt returns the operation with the parameters version v serves in
+// Params and the others in unserved; deployment is the deployment's plain
+// version, "" when it was not detected.
+func (o rangedOperation) servedAt(v version, deployment string) Operation {
+	out := o.Operation
+	out.deployment = deployment
+	out.Params, out.unserved = nil, nil
+	for i, p := range o.Params {
+		if o.paramSpans[i].servedAt(v) {
+			out.Params = append(out.Params, p)
+		} else {
+			out.unserved = append(out.unserved, p)
+		}
+	}
+	return out
 }
 
 // span is a version range: from introduced (zero: no lower bound) up to, not
@@ -94,6 +125,26 @@ type span struct{ introduced, removed version }
 
 func (s span) contains(v version) bool {
 	return !v.less(s.introduced) && (s.removed.isZero() || v.less(s.removed))
+}
+
+// servedAt reports whether a parameter with range s is served at version v.
+// The zero version, which no release has, is the newest known one that is
+// unknown: it serves the parameters no release removed.
+func (s span) servedAt(v version) bool {
+	if v.isZero() {
+		return s.removed.isZero()
+	}
+	return s.contains(v)
+}
+
+// parameterRange parses a parameter's version range.
+func parameterRange(p Param) (span, error) {
+	introduced, err := optionalVersion(p.Introduced)
+	if err != nil {
+		return span{}, err
+	}
+	removed, err := optionalVersion(p.Removed)
+	return span{introduced: introduced, removed: removed}, err
 }
 
 // rangeOf parses an operation's version range.
