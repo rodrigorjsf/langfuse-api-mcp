@@ -1,6 +1,8 @@
 *:Zone.Identifier
 .env
 .env.*
+# Answer key written by scripts/seed-langfuse.py next to the env file
+.seed-expected.json
 *.pem
 *.key
 .codegraph/
