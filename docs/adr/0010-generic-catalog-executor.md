@@ -14,3 +14,7 @@ status: accepted
 
 - Parameters are not compile-time typed; the catalog's schema validation is the safety net and must be exhaustively tested (one table-driven case per parameter style: path, query, repeated query, JSON body).
 - A spec update changes the executable surface without code changes — guarded by the ADR-0004 catalog test.
+
+## Amendment: a filter scan inside the executor (2026-10-10, M8 grilling)
+
+Planned for M8. The executor stays generic, with one exception that is data, not code per operation: for the `(operation, parameter, row field)` pairs of a static list in `internal/catalog`, a parameter the connected deployment does not serve is applied by the executor itself, as a **filter scan** over at most 10 pages (ADR-0012 amendment of the same date). The scan knows nothing about scores or observations: it reads a list, compares one named field of each row with one value, and reports whether it reached the end. A flow that needs more than that (joining two operations, building a tree) is still a workflow tool.
