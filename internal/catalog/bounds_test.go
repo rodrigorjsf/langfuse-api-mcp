@@ -37,12 +37,23 @@ func TestTheLimitOfAListOperationCarriesItsBoundsAndDefault(t *testing.T) {
 	}
 }
 
-func TestAParameterWithoutBoundsCarriesNone(t *testing.T) {
+// The page number of a list operation starts at 1 (#179), so its schema
+// carries that minimum and nothing else.
+func TestThePageOfAListOperationCarriesItsMinimumAndNothingElse(t *testing.T) {
 	t.Parallel()
 	s := param(t, mustLoad(t), "trace_list", "page").Schema
 
+	if s.Minimum == nil || *s.Minimum != 1 || s.Maximum != nil || s.MinLength != nil || s.MaxLength != nil || s.Default != nil {
+		t.Fatalf("page schema = %+v, want minimum 1 and no other bound and no default", s)
+	}
+}
+
+func TestAParameterWithoutBoundsCarriesNone(t *testing.T) {
+	t.Parallel()
+	s := param(t, mustLoad(t), "trace_list", "userId").Schema
+
 	if s.Minimum != nil || s.Maximum != nil || s.MinLength != nil || s.MaxLength != nil || s.Default != nil {
-		t.Fatalf("page schema = %+v, want no bounds and no default", s)
+		t.Fatalf("userId schema = %+v, want no bounds and no default", s)
 	}
 }
 
@@ -160,6 +171,15 @@ func FuzzRequestEnforcesALengthBoundWithoutRepeatingTheValue(f *testing.F) {
 	f.Fuzz(func(t *testing.T, value string) {
 		_, err := op.Request(map[string]any{"s": value})
 		n := utf8.RuneCountInString(value)
+		// A value within the bounds that holds a control or invisible character
+		// is refused by that rule (#179), which the bounds are checked before.
+		const hiddenRefusal = "invalid parameter: parameter s: must not contain control or invisible characters"
+		if err != nil && err.Error() == hiddenRefusal {
+			if n < 2 || n > 4 {
+				t.Fatalf("Request(%q) (%d runes) refused as hidden text, want the length bound checked first", value, n)
+			}
+			return
+		}
 		if inBounds := n >= 2 && n <= 4; inBounds != (err == nil) {
 			t.Fatalf("Request(%q) (%d runes) error = %v, want accepted only from 2 to 4 runes", value, n, err)
 		}

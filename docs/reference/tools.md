@@ -44,11 +44,14 @@ Every call is validated before anything is sent to Langfuse, and a bad call come
 | names an unknown or excluded operation, or a write operation while writes are off | `operation_not_found` | `unknown operation ID "trace_lst"` (the hint names `search_operations`; an ID that only resembles a known one is this, never `operation_unavailable`) |
 | names an operation that some Langfuse release has and your deployment's catalog does not offer (`describe_operation`, `execute_read`, `execute_write`) | `operation_unavailable` | `operation observations_getMany is not served by the connected Langfuse deployment (Langfuse 3.80.0)`; sent nowhere. The hint is static: the operations to use on this deployment instead, when there are any (taken from the catalog), `search_operations`, then the deployment: its Langfuse version and the families on and off |
 | calls `get_trace_tree` (valid arguments) on a deployment without the v4 read APIs | `operation_unavailable` | `get_trace_tree is not served by the connected Langfuse deployment (Langfuse 3.80.0): …`; sent nowhere. The hint is static: `trace_get` as the operation that reads one trace, when your deployment offers it, `search_operations`, then the deployment: its Langfuse version and the families on and off |
-| passes a path parameter holding `/` (except a Folder name, below), `\`, a `.` or `..` segment, an `http(s):` URL, a control character, or nothing | `invalid_argument` | `parameter traceId: must not contain "/": …` (never the value itself) |
+| passes a path parameter holding `/` (except a Folder name, below), `\`, a `.` or `..` segment, an `http(s):` URL, a control or invisible character (zero-width, bidi and the like: refused, never removed), or nothing | `invalid_argument` | `parameter traceId: must not contain "/": …` (never the value itself) |
+| passes a query parameter value holding a control or invisible character, in a list item too (tab, line feed and carriage return are allowed; a metrics `query` is checked once decoded) | `invalid_argument` | `parameter tags: item 1: must not contain control or invisible characters` |
+| passes a `page` below 1 | `invalid_argument` | `parameter page: want a value of at least 1` (`describe_operation` shows the minimum) |
+| passes a value that is not an RFC 3339 timestamp to a parameter the spec gives the format `date-time` (`fromTimestamp`, `toStartTime` and the like) | `invalid_argument` | `parameter fromTimestamp: want a date-time in RFC 3339 format, such as 2026-10-10T12:00:00Z` (never the value) |
 | passes a Folder name that starts or ends with `/` or holds `//` | `invalid_argument` | `parameter promptName: a Folder name must not start or end with "/" or contain "//"…` |
 | gets a redirect from Langfuse to another scheme, host or port | `redirect_refused` | not followed; the key pair never leaves the configured host |
 
-Path parameters are percent-encoded. Two dots inside a name (`v1..2`) are fine; only a whole `.` or `..` segment is refused.
+Path parameters are percent-encoded. Two dots inside a name (`v1..2`) are fine; only a whole `.` or `..` segment is refused. `orderBy` is not checked by the server: Langfuse answers a bad one.
 
 ## Served parameters
 

@@ -156,9 +156,10 @@ func TestAMetricsQueryThatIsNotAWellFormedQueryObjectIsRefusedWithoutEchoingIt(t
 	}
 }
 
-func TestInstructionsHiddenCharactersAndMarkupInAMetricsFilterReachLangfuseAsInertData(t *testing.T) {
+func TestInstructionsAndMarkupInAMetricsFilterReachLangfuseAsInertData(t *testing.T) {
 	t.Parallel()
-	value, _ := json.Marshal(injected)
+	text := strings.ReplaceAll(injected, "\u202e", "") // a hidden character is refused, see below
+	value, _ := json.Marshal(text)
 	query := strings.TrimSuffix(metricsQuery, "}") +
 		`,"filters":[{"column":"name","operator":"=","type":"string","value":` + string(value) + `}]}`
 
@@ -166,8 +167,8 @@ func TestInstructionsHiddenCharactersAndMarkupInAMetricsFilterReachLangfuseAsIne
 
 	filters, _ := sent["filters"].([]any)
 	filter, _ := filters[0].(map[string]any)
-	if filter["value"] != injected {
-		t.Fatalf("Langfuse received filter value %q, want the caller's value unchanged %q", filter["value"], injected)
+	if filter["value"] != text {
+		t.Fatalf("Langfuse received filter value %q, want the caller's value unchanged %q", filter["value"], text)
 	}
 }
 

@@ -97,9 +97,10 @@ func specBoundCases(cat catalog.Catalog, now time.Time) []boundCase {
 // execute_read with invalid_argument before any request reaches Langfuse,
 // and neither the refusal nor the audit line repeats the value. The cases
 // come from the embedded union catalog, so the test covers the first bounded
-// parameter a union-catalog regeneration brings, with no edit; until then it
-// has none and skips, see #90 (the bound checks are proven at the catalog seam,
-// internal/catalog/bounds_test.go).
+// parameter a union-catalog regeneration brings, with no edit. Today the only
+// bound is the minimum the catalog gives every page number (#179); a spec-given
+// bound is still awaited, see #90 (the bound checks are proven at the catalog
+// seam, internal/catalog/bounds_test.go).
 func TestExecuteReadRefusesAValueOutsideASpecGivenBoundOfTheCatalogWithoutCallingLangfuse(t *testing.T) {
 	t.Parallel()
 	cat, err := catalog.Load()

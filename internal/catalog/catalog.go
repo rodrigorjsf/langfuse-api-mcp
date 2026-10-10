@@ -166,7 +166,8 @@ type Schema struct {
 	Format string `json:"format"`
 	// Minimum and Maximum bound a number; MinLength and MaxLength bound a
 	// string's length. Nil when the spec gives no bound, except for the page
-	// size of a list operation, which the catalog bounds itself (MaxLimit).
+	// size of a list operation, which the catalog bounds itself (MaxLimit),
+	// and the page number, whose minimum 1 the catalog gives (#179).
 	Minimum   *float64 `json:"minimum"`
 	Maximum   *float64 `json:"maximum"`
 	MinLength *int     `json:"minLength"`
@@ -276,10 +277,15 @@ func load(spec []byte) (Catalog, error) {
 			o.DescriptionLine = indexLine(op.Summary, op.Description)
 			o.prefers, o.plainLine = splitPreferred(op.Summary, op.Description, o.DescriptionLine)
 			for i, p := range o.Params {
-				if o.isListLimit(p) {
+				switch {
+				case o.isListLimit(p):
 					// The catalog bounds the page size itself (Request).
 					o.Params[i].Schema.Minimum, o.Params[i].Schema.Maximum = new(float64(1)), new(float64(MaxLimit))
 					o.Params[i].Schema.Default = DefaultLimit
+				case isPageNumber(p):
+					// Pages start at 1: Langfuse answers 400 below it, so the
+					// server refuses it before any request (#179).
+					o.Params[i].Schema.Minimum = new(float64(1))
 				}
 			}
 			u.ops = append(u.ops, rangedOperation{Operation: o, span: r, paramSpans: paramSpans})

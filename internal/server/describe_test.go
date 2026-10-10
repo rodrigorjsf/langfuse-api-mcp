@@ -48,13 +48,13 @@ func TestDescribeOperationReturnsEveryParameterWithItsLocationTypeRequiredFlagEn
 				"parameters":[
 					{"name":"queueId","in":"path","type":"string","required":true},
 					{"name":"status","in":"query","type":"string","required":false,"enum":["PENDING","COMPLETED"]},
-					{"name":"page","in":"query","type":"integer","required":false},
+					{"name":"page","in":"query","type":"integer","required":false,"minimum":1},
 					{"name":"limit","in":"query","type":"integer","required":false,"minimum":1,"maximum":100,"default":50}]}`,
 			text: []string{
 				"annotationQueues_listQueueItems — Get items for a specific annotation queue\n",
 				"- queueId (path, string, required)\n",
 				"- status (query, string, one of: PENDING, COMPLETED)\n",
-				"- page (query, integer)\n",
+				"- page (query, integer, at least 1)\n",
 				"- limit (query, integer, from 1 to 100, default 50)\n",
 			},
 		},
@@ -62,7 +62,7 @@ func TestDescribeOperationReturnsEveryParameterWithItsLocationTypeRequiredFlagEn
 			operationID: "sessions_list",
 			structured: `{"operationId":"sessions_list","tag":"Sessions","method":"GET","tool":"execute_read",
 				"parameters":[
-					{"name":"page","in":"query","type":"integer","required":false},
+					{"name":"page","in":"query","type":"integer","required":false,"minimum":1},
 					{"name":"limit","in":"query","type":"integer","required":false,"minimum":1,"maximum":100,"default":50},
 					{"name":"fromTimestamp","in":"query","type":"string","format":"date-time","required":false},
 					{"name":"toTimestamp","in":"query","type":"string","format":"date-time","required":false},

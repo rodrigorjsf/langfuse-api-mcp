@@ -139,6 +139,12 @@ func metricsQuery(raw string) (string, error) {
 			return "", queryInvalidf("parameter query: %s: want %s, got %s", name, want, kind(v))
 		}
 	}
+	// A hidden character is refused wherever the query holds one, written as
+	// itself or as a JSON escape: the server decodes the query, so unlike the
+	// text of a JSON parameter it passes on unread, it sees what Langfuse will.
+	if holdsHiddenJSONText(q) {
+		return "", invalidf("parameter query: %s", hiddenTextRule)
+	}
 	config, _ := q["config"].(map[string]any)
 	if config == nil {
 		config = map[string]any{}
@@ -165,6 +171,24 @@ func metricsQuery(raw string) (string, error) {
 		return "", queryInvalidf("parameter query: cannot be re-encoded as JSON")
 	}
 	return strings.TrimSuffix(out.String(), "\n"), nil
+}
+
+// holdsHiddenJSONText reports whether a decoded JSON value holds a control or
+// invisible character in a string or in an object key (see holdsHiddenText).
+func holdsHiddenJSONText(v any) bool {
+	switch v := v.(type) {
+	case string:
+		return holdsHiddenText(v)
+	case []any:
+		return slices.ContainsFunc(v, holdsHiddenJSONText)
+	case map[string]any:
+		for key, x := range v {
+			if holdsHiddenText(key) || holdsHiddenJSONText(x) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // queryInvalidf is invalidf for a malformed metrics query: the error also

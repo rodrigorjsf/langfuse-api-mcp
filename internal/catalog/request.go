@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -117,6 +118,11 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 		if err := p.inBounds(v, values); err != nil {
 			return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
 		}
+		if p.In == "query" && !o.isMetricsQuery(p) { // metricsQuery checks the text it decodes
+			if err := p.wellFormed(values); err != nil {
+				return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
+			}
+		}
 		if o.isMetricsQuery(p) {
 			q, err := metricsQuery(values[0])
 			if err != nil {
@@ -142,8 +148,10 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 // safePathValue refuses a path parameter value that could change which
 // resource is requested or where the request goes, even before it is
 // percent-encoded: an empty value, a "\\", a "/" (unless the parameter takes
-// a Folder name), a "." or ".." segment, a control character, or a leading
-// http/https scheme. The messages name the rule, never the value.
+// a Folder name), a "." or ".." segment, a control or invisible character, or
+// a leading http/https scheme. A hidden character is refused, never removed:
+// removing it would look up an ID the caller did not send (#179). The
+// messages name the rule, never the value.
 //
 // A Folder name may hold "/" between non-empty segments, which rules out a
 // leading or trailing "/" and "//" (so also "scheme://host"); url.PathEscape
@@ -162,8 +170,8 @@ func safePathValue(v string, folderName bool) error {
 		return errors.New(`must not contain "/": a path parameter is a single ID or name`)
 	case strings.HasPrefix(lower, "http:") || strings.HasPrefix(lower, "https:"):
 		return errors.New("must not be a URL: pass the ID or name only")
-	case strings.ContainsFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f }):
-		return errors.New("must not contain control characters")
+	case strings.ContainsFunc(v, hidden):
+		return errors.New(hiddenTextRule)
 	}
 	for segment := range strings.SplitSeq(v, "/") {
 		switch segment {
@@ -200,6 +208,12 @@ func parsePageSize(s string, upper int) (int, bool) {
 // size as config.row_limit inside their JSON query instead (metricsQuery).
 func (o Operation) isListLimit(p Param) bool {
 	return o.IsRead() && p.In == "query" && p.Name == "limit"
+}
+
+// isPageNumber reports whether p is the page number of a list operation: the
+// "page" query parameter. Pages start at 1.
+func isPageNumber(p Param) bool {
+	return p.In == "query" && p.Name == "page"
 }
 
 func invalidf(format string, args ...any) error {
@@ -342,6 +356,57 @@ func (s Schema) scalar(v any) (string, error) {
 		return "", fmt.Errorf("want one of %s", strings.Join(s.Enum, ", "))
 	}
 	return out, nil
+}
+
+// wellFormed checks the text of the rendered values of a query parameter
+// (#179): none may hold a control or invisible character, and where the schema
+// says date-time each must be an RFC 3339 timestamp. The message names the
+// rule or the format, never the value; a repeated parameter's message names
+// the item.
+func (p Param) wellFormed(values []string) error {
+	s := p.Schema
+	if s.Type == "array" {
+		s = Schema{}
+		if p.Schema.Items != nil {
+			s = *p.Schema.Items
+		}
+	}
+	for i, value := range values {
+		err := s.wellFormedValue(value)
+		if err == nil {
+			continue
+		}
+		if p.Schema.Type == "array" {
+			return fmt.Errorf("item %d: %w", i, err)
+		}
+		return err
+	}
+	return nil
+}
+
+// hiddenTextRule is the refusal of a value that holds a control or invisible
+// character (see holdsHiddenText). It names the rule, never the value.
+const hiddenTextRule = "must not contain control or invisible characters"
+
+// holdsHiddenText reports whether s holds a control character or a character
+// that hides or reorders text (see hidden). Tab, line feed and carriage return
+// are visible whitespace, which the JSON-valued parameters (a metrics query, a
+// filter) legitimately hold.
+func holdsHiddenText(s string) bool {
+	return strings.ContainsFunc(s, func(r rune) bool { return hidden(r) && r != '\t' && r != '\n' && r != '\r' })
+}
+
+// wellFormedValue is wellFormed for one rendered value.
+func (s Schema) wellFormedValue(v string) error {
+	if holdsHiddenText(v) {
+		return errors.New(hiddenTextRule)
+	}
+	if s.Format == "date-time" {
+		if _, err := time.Parse(time.RFC3339, v); err != nil {
+			return errors.New("want a date-time in RFC 3339 format, such as 2026-10-10T12:00:00Z")
+		}
+	}
+	return nil
 }
 
 // inBounds checks the parameter's rendered values against the bounds its

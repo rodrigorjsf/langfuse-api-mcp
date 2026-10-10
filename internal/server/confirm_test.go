@@ -425,6 +425,10 @@ func TestADestructiveCallWithBadArgumentsIsRefusedBeforeTheUserIsAsked(t *testin
 	t.Parallel()
 	for name, args := range map[string]map[string]any{
 		"an unknown parameter": {"operationId": "trace_delete", "parameters": map[string]any{"nope": "x"}},
+		// A hidden character is refused, never stripped (#179): the user is
+		// never shown a name other than the one the agent sent.
+		"a path parameter holding an invisible character": {"operationId": "prompts_delete",
+			"parameters": map[string]any{"promptName": "folder/" + string(rune(0x202e)) + "gnp.exe"}},
 		"a body it does not take": {"operationId": "trace_delete",
 			"parameters": map[string]any{"traceId": "t"}, "body": map[string]any{"note": "x"}},
 		"a body that fails its schema": {"operationId": "trace_deleteMultiple",
@@ -571,11 +575,14 @@ func TestTheConfirmationShowsTheCleanKeyWhenTwoKeysReadTheSameOnceStripped(t *te
 	}
 }
 
-func TestTheConfirmationShowsAnInjectedPathParameterStripped(t *testing.T) {
+// A path parameter holding markup shows as text in the confirmation. One
+// holding a hidden character never gets that far: it is refused, not stripped
+// (#179, TestADestructiveCallWithBadArgumentsIsRefusedBeforeTheUserIsAsked).
+func TestTheConfirmationShowsAPathParameterWithMarkupAsText(t *testing.T) {
 	t.Parallel()
 
 	got := question(t, map[string]any{"operationId": "prompts_delete",
-		"parameters": map[string]any{"promptName": "folder/\u202egnp.exe<i>x</i>\u2066"}})
+		"parameters": map[string]any{"promptName": "folder/gnp.exe<i>x</i>"}})
 
 	if want := "  promptName = \"folder/gnp.exe<i>x</i>\"\n"; !strings.Contains(got, want) {
 		t.Errorf("confirmation lacks %q:\n%s", want, got)
