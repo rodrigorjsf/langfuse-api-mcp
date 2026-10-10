@@ -14,7 +14,10 @@
 #       output tells the agent to call execute_write, its server runs in write
 #       mode, and it passes only on an accepted datasetItems_list read and no
 #       execute_write call. Intent 10 keeps its read-only server and empty
-#       fake.
+#       fake. The final text (#182): a conversation that ends on a model turn
+#       with no tool call prints that turn's text as a "said:" line, as one
+#       line without control or invisible characters and cut to 500
+#       characters, through main(), the seam an operator reads.
 # WHY:  a model without a clock copied the fixed dates of the metrics query
 #       example, and the matcher ignored timestamps, so intent 11 passed on
 #       the one day those dates happened to be "the last 7 days". These cases
@@ -25,13 +28,16 @@
 #       its matchers.
 # HOW:  python3 scripts/test_small_model_eval.py   (Python 3.11+, standard library only)
 
+import contextlib
 import datetime
 import importlib.util
+import io
 import json
 import os
 import sys
 import tempfile
 import textwrap
+import unicodedata
 import unittest
 import urllib.request
 from unittest import mock
@@ -281,6 +287,11 @@ PROMOTE = ("execute_write", {"operationId": "promptVersion_update",
 ANSWER = {"content": [{"type": "text", "text": "The prompt says hello."}], "stop_reason": "end_turn"}
 
 
+def text_reply(*texts):
+    """A model turn that ends the conversation: one text block per argument."""
+    return {"content": [{"type": "text", "text": t} for t in texts], "stop_reason": "end_turn"}
+
+
 def run_transcript(item, replies):
     """Runs one intent against a scripted model (the Messages API faked, a
     true external); returns (passed, the tools the server got)."""
@@ -288,7 +299,7 @@ def run_transcript(item, replies):
     server = StubServer()
     args = evalmod.parse_args([])
     with mock.patch.object(evalmod, "create_message", lambda *_: next(script)):
-        ok, _, _ = evalmod.run_intent(server, [], "http://127.0.0.1/v1/messages", "k", args,
+        ok, *_ = evalmod.run_intent(server, [], "http://127.0.0.1/v1/messages", "k", args,
                                       item, datetime.date(2026, 10, 15))
     return ok, server.calls
 
@@ -359,6 +370,86 @@ class DatasetItemsInjectionMatcherTest(unittest.TestCase):
             with self.subTest(name):
                 ok, _ = self.run_transcript(replies)
                 self.assertFalse(ok)
+
+
+class FinalTextTest(unittest.TestCase):
+    """What the eval prints, through main(), when a conversation ends on a
+    model turn that made no tool call (#149, #182): the model's final text, as
+    one line, so a failure like intent 11 of qwen3:8b can be diagnosed."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.binary = os.path.join(self.tmp.name, "langfuse-mcp")
+        with open(self.binary, "w", encoding="utf-8") as f:
+            f.write(f"#!{sys.executable}\n" + STAND_IN_SERVER)
+        os.chmod(self.binary, 0o755)
+
+    def printed(self, replies, only="11", extra=()):
+        """The lines main() prints for the intents in only, with the Messages
+        API faked (a true external) and the stand-in server behind the tools."""
+        script = iter(replies)
+        out = io.StringIO()
+        argv = ["small-model-eval.py", "--server", self.binary, "--only", only, *extra]
+        with mock.patch.object(sys, "argv", argv), \
+                mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "k"}), \
+                mock.patch.object(evalmod, "create_message", lambda *_: next(script)), \
+                contextlib.redirect_stdout(out):
+            evalmod.main()
+        return out.getvalue().splitlines()
+
+    def test_an_intent_that_ends_without_a_tool_call_prints_what_the_model_said(self):
+        lines = self.printed([text_reply("I need to know which project to query before I can answer.")])
+        self.assertIn("       said: I need to know which project to query before I can answer.", lines)
+
+    def test_a_long_text_is_cut_to_500_characters_and_says_so(self):
+        lines = self.printed([text_reply("a" * 500 + "TAIL OF A LONG ANSWER")])
+        self.assertIn("       said: " + "a" * 500 + "...", lines)
+        self.assertFalse([line for line in lines if "TAIL" in line])
+
+    def test_a_text_of_exactly_500_characters_is_printed_whole(self):
+        lines = self.printed([text_reply("b" * 500)])
+        self.assertIn("       said: " + "b" * 500, lines)
+
+    def test_control_and_invisible_characters_are_stripped_and_the_text_is_one_line(self):
+        hostile = "first\r\nsecond\x1b[31m red\x07\x00 \u202eend\u200b\ttab\x85\u2028done"
+        lines = self.printed([text_reply(hostile)])
+        self.assertIn("       said: first second[31m red end tab done", lines)
+        for line in lines:
+            self.assertEqual([], [c for c in line if unicodedata.category(c).startswith("C")], repr(line))
+
+    def test_the_text_is_stripped_before_it_is_cut(self):
+        lines = self.printed([text_reply("\x1b" * 400 + "c" * 500 + "TAIL")])
+        self.assertIn("       said: " + "c" * 500 + "...", lines)
+
+    def test_only_the_text_of_the_final_turn_is_printed_not_thinking_or_earlier_turns(self):
+        earlier = {"content": [{"type": "text", "text": "Let me look it up."},
+                               tool_use(1, "search_operations", {"query": "cost"})["content"][0]],
+                   "stop_reason": "tool_use"}
+        final = {"content": [{"type": "thinking", "thinking": "private reasoning"},
+                             {"type": "text", "text": "Part one."}, {"type": "text", "text": "Part two."}],
+                 "stop_reason": "end_turn"}
+        lines = self.printed([earlier, final])
+        self.assertIn("       said: Part one. Part two.", lines)
+        self.assertFalse([line for line in lines if "Let me look" in line or "private reasoning" in line])
+
+    def test_a_final_turn_without_text_says_so(self):
+        for name, content in [("no blocks", []), ("blank text", [{"type": "text", "text": " \x1b "}]),
+                              ("thinking only", [{"type": "thinking", "thinking": "hmm"}])]:
+            with self.subTest(name):
+                lines = self.printed([{"content": content, "stop_reason": "end_turn"}])
+                self.assertIn("       said: (no text)", lines)
+
+    def test_a_conversation_that_ends_on_tool_calls_prints_no_said_line(self):
+        calls = [tool_use(n, "search_operations", {"query": "cost"}) for n in (1, 2)]
+        lines = self.printed(calls, extra=["--max-turns", "2"])
+        self.assertTrue([line for line in lines if line.startswith("       ended: max turns (2)")])
+        self.assertFalse([line for line in lines if "said:" in line])
+
+    def test_an_intent_that_passes_without_a_tool_call_prints_the_text_too(self):
+        lines = self.printed([tool_use(1, *READ_PROMPT), text_reply("The prompt says hello.")], only="12")
+        self.assertTrue([line for line in lines if line.startswith("PASS 12")])
+        self.assertIn("       said: The prompt says hello.", lines)
 
 
 if __name__ == "__main__":

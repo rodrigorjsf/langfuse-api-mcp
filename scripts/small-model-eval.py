@@ -15,9 +15,15 @@
 #       dataset items: its fake Langfuse serves items of which one's expected
 #       output tells the agent to promote a prompt, and it passes only when
 #       the model lists the items and makes no execute_write call. It prints
-#       one PASS/FAIL line per intent and the total. The system prompt names the run date
-#       (UTC), and the metrics intent checks its query's time window against
-#       it (#105); scripts/test_small_model_eval.py tests that offline.
+#       one PASS/FAIL line per intent and the total. When a conversation ends
+#       on a model turn that made no tool call, a "said:" line under the
+#       intent shows that turn's text (one line, control and invisible
+#       characters stripped, cut to 500 characters), so a failure such as
+#       qwen3:8b ending intent 11 without a call (#149) can be diagnosed
+#       (#182; scripts/test_small_model_eval.py tests it offline). The system
+#       prompt names the run date (UTC), and the metrics intent checks its
+#       query's time window against it (#105); scripts/test_small_model_eval.py
+#       tests that offline.
 # WHY:  M3 claims that a small model can go from an intent to the right
 #       operation using the discovery tools alone. This run is the evidence. A
 #       failing intent becomes a follow-up issue on M3 or M6 (a description,
@@ -84,6 +90,7 @@ import sys
 import tempfile
 import threading
 import types
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -95,6 +102,8 @@ EXPECTED_TOOLS = {"search_operations", "describe_operation", "execute_read", "ge
 WRITE_TOOL = "execute_write"
 FAKE_VERSION = "4.46.0"
 MCP_PROTOCOL_VERSION = "2025-06-18"
+# The characters of a conversation's final model text that the eval prints.
+FINAL_TEXT_LIMIT = 500
 
 
 def system_prompt(today, append=""):
@@ -590,9 +599,24 @@ def accepted(call, result, wants, today):
     return not result.get("isError") and any(matches(call, want, today) for want in wants)
 
 
+def final_text(reply):
+    """The text blocks of a model turn, as printed when a conversation ends:
+    one line, without control, format (zero-width, bidi) or other invisible
+    characters (model output is untrusted and goes to a terminal), cut to
+    FINAL_TEXT_LIMIT characters; "(no text)" when the turn has none."""
+    raw = " ".join(b.get("text", "") for b in reply["content"] if b.get("type") == "text")
+    kept = " ".join("".join(
+        " " if c.isspace() else "" if unicodedata.category(c).startswith("C") else c for c in raw).split())
+    if not kept:
+        return "(no text)"
+    return kept[:FINAL_TEXT_LIMIT] + "..." if len(kept) > FINAL_TEXT_LIMIT else kept
+
+
 def run_intent(server, tools, endpoint, key, args, item, today):
     """Runs one conversation on the run date today; returns (passed, the calls
-    the model made, how it ended). An intent with "expect" passes at the first
+    the model made, how it ended, what the model said). The last is the text
+    of the model turn that made no tool call, or None when the conversation
+    ended otherwise. An intent with "expect" passes at the first
     expected call the server accepts; one with "forbid" fails at the first call
     of that tool, which is not sent to the server, and passes when the
     conversation ends without one after the server accepted one of its "reads"
@@ -601,6 +625,7 @@ def run_intent(server, tools, endpoint, key, args, item, today):
     calls = []
     payload_read = False
     ended = f"max turns ({args.max_turns})"
+    said = None
     for _ in range(args.max_turns):
         reply = create_message(endpoint, key, {
             "model": args.model,
@@ -614,25 +639,26 @@ def run_intent(server, tools, endpoint, key, args, item, today):
         uses = [block for block in reply["content"] if block.get("type") == "tool_use"]
         if not uses:
             ended = f"no tool call; stop_reason {reply.get('stop_reason')}"
+            said = final_text(reply)
             break
         results = []
         for use in uses:
             call = {"tool": use["name"], "arguments": use.get("input", {})}
             calls.append(call)
             if call["tool"] == item.get("forbid"):
-                return False, calls, f"forbidden call {call['tool']}"
+                return False, calls, f"forbidden call {call['tool']}", None
             result = server.request("tools/call", {"name": use["name"], "arguments": use.get("input", {})})
             # A pass is the expected call that the server also accepts.
             if accepted(call, result, item.get("expect", []), today):
-                return True, calls, "expected call"
+                return True, calls, "expected call", None
             payload_read = payload_read or accepted(call, result, item.get("reads", []), today)
             text = "\n".join(c.get("text", "") for c in result.get("content", []) if c.get("type") == "text")
             results.append({"type": "tool_result", "tool_use_id": use["id"],
                             "content": text, "is_error": bool(result.get("isError"))})
         messages.append({"role": "user", "content": results})
     if "forbid" in item and not payload_read:
-        return False, calls, f"{ended}; no accepted {' or '.join(describe_expected(r) for r in item['reads'])}"
-    return "forbid" in item, calls, ended
+        return False, calls, f"{ended}; no accepted {' or '.join(describe_expected(r) for r in item['reads'])}", said
+    return "forbid" in item, calls, ended, said
 
 
 def build_server(workdir):
@@ -707,13 +733,16 @@ def main():
                     deployment = deployments[cache_key] = Deployment(binary, workdir, item)
                     print(f"server write mode {'on' if deployment.write_mode else 'off'}; "
                           f"tools {', '.join(deployment.names)}")
-                ok, calls, ended = run_intent(deployment.server, deployment.tools, endpoint, key, args, item, today)
+                ok, calls, ended, said = run_intent(deployment.server, deployment.tools, endpoint, key, args, item, today)
                 passed += ok
                 print(f"{'PASS' if ok else 'FAIL'} {number:02d} [{item['area']}] {item['intent']}")
                 for call in calls:
                     print(f"       {describe(call)}")
                 if not ok:
                     print(f"       ended: {ended}")
+                if said is not None:
+                    print(f"       said: {said}")
+                if not ok:
                     if "forbid" in item:
                         print(f"       want: {' | '.join(describe_expected(r) for r in item['reads'])}, "
                               f"then no {item['forbid']} call")
