@@ -66,7 +66,7 @@ func TestALegacyOperationsLineSaysWhatItDoesAndNamesItsReplacement(t *testing.T)
 		"legacy_metricsV1_metrics":      "Get metrics from the Langfuse project using a query object. (legacy: prefer metrics_metrics when it is available)",
 		"scores_get-many":               "Get a list of scores (supports both trace and session scores) (legacy: prefer scoresV3_getManyV3 when it is available)",
 		"unstable_evaluators_get":       "Get one evaluator by `id`. (legacy: prefer evaluators_get when it is available)",
-		"datasetRunItems_create":        "Create a dataset run item (legacy: prefer opentelemetry_exportTraces when it is available)",
+		"datasetRunItems_create":        "Create a dataset run item (legacy)", // its replacement is never exposed (ADR-0004)
 		"datasets_deleteRun":            "Delete a dataset run and all its run items. This action is irreversible. (legacy)",
 		"unstable_evaluationRules_list": "List evaluation rules in the authenticated project. (legacy: prefer evaluationRules_list when it is available)",
 	} {
@@ -167,8 +167,8 @@ func TestSearchWithoutTermsReturnsEveryOperationGroupedByTag(t *testing.T) {
 
 	got := cat.Search("")
 
-	if len(got) != 119 {
-		t.Fatalf("Search(\"\") returned %d operations, want all 119", len(got))
+	if len(got) != 120 {
+		t.Fatalf("Search(\"\") returned %d operations, want all 120", len(got))
 	}
 	// The tags holding a v4-family operation come first; then, from
 	// AnnotationQueues on, the tags in alphabetical order.

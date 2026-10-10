@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -171,15 +172,52 @@ func routeMissingFlavour(family catalog.Family, profile langfuse.DeploymentProfi
 	}
 }
 
+// notOffered returns the tool error of a call naming an operation of the
+// union catalog that the deployment's resolved catalog does not offer (ADR-0002
+// amendment of 2026-10-10), and the operation's HTTP method. ok is false when
+// id is not such an operation, or is a write operation while write mode is
+// off: that stays operation_not_found, so the write surface is not revealed.
+// The message and the hint hold the operation ID and the replacements from the
+// catalog, and the deployment profile; never the caller's text.
+func notOffered(cat catalog.Catalog, id string, writeMode bool, profile langfuse.DeploymentProfile,
+) (f toolErrorFields, method string, ok bool) {
+	u, found := cat.Unavailable(id)
+	if !found || (u.Method != http.MethodGet && !writeMode) {
+		return toolErrorFields{}, "", false
+	}
+	return toolErrorFields{
+		Code:        errorUnavailableOperation,
+		Message:     "operation " + u.ID + " is not served by the connected Langfuse deployment (" + deploymentVersion(profile) + ")",
+		Hint:        notOfferedHint(u, profile),
+		OperationID: u.ID,
+	}, u.Method, true
+}
+
+// notOfferedHint is the hint of an operation the deployment's catalog does not
+// offer: where the replacements are, then the deployment profile.
+func notOfferedHint(u catalog.Unavailable, profile langfuse.DeploymentProfile) string {
+	use := "no other operation does the same job on this deployment"
+	if len(u.Replacements) > 0 {
+		use = "operations that do the same job on this deployment: " + strings.Join(u.Replacements, ", ")
+	}
+	return use + "; " + searchServedOperations + "; " + profileSummary(profile)
+}
+
+// deploymentVersion names the detected Langfuse version, or says it is unknown.
+// The version is untrusted: it appears only when it is a plain
+// major.minor.patch version.
+func deploymentVersion(profile langfuse.DeploymentProfile) string {
+	if v, ok := profile.KnownVersion(); ok {
+		return "Langfuse " + v
+	}
+	return "Langfuse version unknown"
+}
+
 // profileSummary names the detected Langfuse version and the families on and
 // off. The version is untrusted: it appears only when it is a plain
 // major.minor.patch version. Family names come from the fixed list, never
 // from the profile's own strings.
 func profileSummary(profile langfuse.DeploymentProfile) string {
-	version := "Langfuse version unknown"
-	if v, ok := profile.KnownVersion(); ok {
-		version = "Langfuse " + v
-	}
 	var on, off []string
 	for _, f := range catalog.AllFamilies() {
 		if profile.On(f) {
@@ -188,7 +226,7 @@ func profileSummary(profile langfuse.DeploymentProfile) string {
 			off = append(off, string(f))
 		}
 	}
-	return "deployment: " + version + "; families on: " + listOrNone(on) + "; families off: " + listOrNone(off)
+	return "deployment: " + deploymentVersion(profile) + "; families on: " + listOrNone(on) + "; families off: " + listOrNone(off)
 }
 
 // listOrNone joins names with ", ", or returns "none" when there are none.

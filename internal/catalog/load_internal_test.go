@@ -77,7 +77,13 @@ func TestAnIndexLineIsTheSummaryCleanedOfHiddenCharactersLinksBoldAndExcess(t *t
 			if tc.summary != "" {
 				op["x-summary"] = tc.summary
 			}
-			spec, err := json.Marshal(map[string]any{"paths": map[string]any{"/api/public/x": map[string]any{"get": op}}})
+			// The operations the summaries name as preferred are offered, so the
+			// lines keep the mention.
+			offered := func(id string) map[string]any { return map[string]any{"get": map[string]any{"operationId": id}} }
+			spec, err := json.Marshal(map[string]any{"paths": map[string]any{
+				"/api/public/x": map[string]any{"get": op},
+				"/api/public/y": offered("y_get"), "/api/public/z": offered("observations_getMany"),
+			}})
 			if err != nil {
 				t.Fatal(err)
 			}

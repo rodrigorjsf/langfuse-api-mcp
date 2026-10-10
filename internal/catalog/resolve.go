@@ -69,9 +69,60 @@ func (c Catalog) Resolve(p Profile) Catalog {
 	}
 	out := Catalog{union: u, byID: make(map[string]Operation, len(byID))}
 	for id, op := range byID {
-		out.byID[id] = op.Operation
+		o := op.Operation
+		if _, offered := byID[o.prefers]; o.prefers != "" && !offered {
+			// The line must not send the agent to an operation this catalog
+			// does not offer.
+			o.DescriptionLine = o.plainLine
+		}
+		out.byID[id] = o
 	}
 	return out
+}
+
+// Unavailable is an operation the union catalog knows and a resolved catalog
+// does not offer: its version range or its family is off on the deployment.
+type Unavailable struct {
+	// ID is the operation ID, from the union catalog, never the caller's text.
+	ID string
+	// Method is the HTTP method, upper case.
+	Method string
+	// Replacements are the IDs of the operations this catalog offers that do
+	// the same job, in ID order: the one the operation's summary says to
+	// prefer, and the operations whose summary says to prefer this one, of the
+	// same method. Empty when none does.
+	Replacements []string
+}
+
+// Unavailable reports whether id is an operation of the union catalog that c,
+// resolved for a deployment profile, does not offer. An ID in no release, or
+// one the catalog never exposes (ADR-0004), is not.
+func (c Catalog) Unavailable(id string) (Unavailable, bool) {
+	if _, offered := c.byID[id]; offered {
+		return Unavailable{}, false
+	}
+	var found *rangedOperation
+	for i := range c.union.ops {
+		op := &c.union.ops[i]
+		if op.ID == id && (found == nil || found.span.introduced.less(op.span.introduced)) {
+			found = op
+		}
+	}
+	if found == nil {
+		return Unavailable{}, false
+	}
+	u := Unavailable{ID: id, Method: found.Method}
+	if _, ok := c.byID[found.prefers]; ok {
+		u.Replacements = append(u.Replacements, found.prefers)
+	}
+	for other, op := range c.byID {
+		if op.prefers == id && op.Method == found.Method {
+			u.Replacements = append(u.Replacements, other)
+		}
+	}
+	slices.Sort(u.Replacements)
+	u.Replacements = slices.Compact(u.Replacements)
+	return u, true
 }
 
 // union is the whole union catalog: every in-scope operation of every known

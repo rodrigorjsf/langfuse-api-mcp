@@ -369,8 +369,8 @@ func TestExecutableOffersOnlyTheOperationsOfTheDetectedDeploymentProfile(t *test
 		t.Errorf("search_operations lists a legacy operation the deployment does not serve: %s", listed)
 	}
 	toolErr, _ := call.StructuredContent["error"].(map[string]any)
-	if code, _ := toolErr["code"].(string); !call.IsError || code != "operation_not_found" {
-		t.Errorf("execute_read trace_get = %+v, want operation_not_found", call)
+	if code, _ := toolErr["code"].(string); !call.IsError || code != "operation_unavailable" {
+		t.Errorf("execute_read trace_get = %+v, want operation_unavailable", call)
 	}
 	select {
 	case got := <-gotRequest:

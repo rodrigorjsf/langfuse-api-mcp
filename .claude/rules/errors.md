@@ -12,7 +12,8 @@ Contract: ADR-0008. The agent must always receive a structured tool error it can
 |---|---|
 | Startup (config, CA explicit sources, invalid host) | exit non-zero with one clear stderr message naming the variable; never start half-configured |
 | Tool input invalid | tool result `isError: true`, code `invalid_argument`, which field and why |
-| Unknown / excluded operation | `operation_not_found` + hint to call `search_operations` |
+| Unknown / excluded operation, or a write operation while writes are off | `operation_not_found` + hint to call `search_operations` |
+| Operation in the union catalog that the deployment's resolved catalog does not offer (`describe_operation`, `execute_read`, `execute_write`; a write operation only in write mode) | `operation_unavailable`, static hint: the operations of the catalog that do the same job here (the preferred one a legacy operation names, and the legacy operations that name this one), `search_operations`, the deployment's version and families on and off; no caller text; nothing is sent |
 | Write requested with writes off | cannot happen via tools: `execute_write` is not registered, so the client gets the SDK's unknown-tool error (no `writes_disabled` code exists) |
 | Destructive write (DELETE, PUT, PATCH), client offers no form elicitation (none, or URL mode only; read per request) | `confirmation_unavailable`, static hint (use a client with form elicitation, or the Langfuse UI), not retryable; nothing is sent (#113) |
 | Destructive write the user declined or cancelled | `confirmation_declined`, static hint (do not call again unless the user asks again), not retryable; nothing is sent |

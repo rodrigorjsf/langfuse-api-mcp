@@ -122,7 +122,7 @@ func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets
 	ex := executor{catalog: cat, client: client, redact: redact, profile: profile, writeMode: o.writeMode,
 		confirmer: newConfirmer(o.now)}
 	traceTree := profile.On(catalog.V4ReadFamily)
-	d := discovery{catalog: cat, writeMode: o.writeMode, offersTraceTree: traceTree, redact: redact}
+	d := discovery{catalog: cat, writeMode: o.writeMode, offersTraceTree: traceTree, redact: redact, profile: profile}
 	s.AddTool(&mcp.Tool{
 		Name:         "search_operations",
 		Title:        searchOperationsTitle,
@@ -309,6 +309,10 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 			"read the data with a read operation instead, e.g. trace_list; search_operations lists them", in.OperationID)
 	}
 	if !ok {
+		if f, method, unavailable := notOffered(ex.catalog, in.OperationID, ex.writeMode, ex.profile); unavailable {
+			a.method = method
+			return errorResult(f)
+		}
 		return toolError(errorOperationNotFound, "unknown operation ID "+strconv.Quote(truncate(in.OperationID)),
 			notFoundHint, in.OperationID)
 	}
