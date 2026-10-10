@@ -133,7 +133,8 @@ func (ex executor) getTraceTree(ctx context.Context, req *mcp.CallToolRequest, a
 	if tree.Empty {
 		hints = append(hints, traceTreeEmptyHint)
 	}
-	env := sanitize.WrapWith(workflows.ObservationsOperationID, tree.Payload, strings.Join(hints, "; "), traceTreeCutHint)
+	env := sanitize.WrapWith(workflows.ObservationsOperationID, tree.Payload, ex.maxResultBytes,
+		strings.Join(hints, "; "), traceTreeCutHint)
 	return jsonResult(env, false)
 }
 

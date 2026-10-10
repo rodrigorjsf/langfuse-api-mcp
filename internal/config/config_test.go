@@ -56,6 +56,9 @@ func mustLoad(t *testing.T, env map[string]string, file config.File) config.Conf
 		t.Fatalf("Load: %v", err)
 	}
 	cfg.Connection = config.Connection{}
+	if cfg.ResultCap.Origin == "" {
+		cfg.ResultCap = config.ResultCap{} // the default: tests of other settings compare Config literals
+	}
 	if cfg.RateLimitSource != config.RateLimitExplicit {
 		cfg.RateLimit, cfg.RateLimitSource = 0, ""
 	}

@@ -353,6 +353,12 @@ Trusted roots = **your operating system's certificate store + every CA from the 
 | `LANGFUSE_MCP_RATE_LIMIT` | `30` on a Langfuse Cloud host, `1000` on any other host | whole number, 1 to 60000 | The most Langfuse requests the server sends per minute, retries included. **On a paid Cloud plan, raise it** to your plan's limit. |
 | `LANGFUSE_MCP_MAX_CONCURRENCY` | `4` | whole number, 1 to 64 | The most Langfuse requests in flight at once. |
 
+### Result size cap
+
+| Variable | Default | Allowed values | Meaning |
+|---|---|---|---|
+| `LANGFUSE_MCP_MAX_RESULT_BYTES` | `65536` (64 KiB) | whole number, 16384 to 1048576 | The most bytes one tool result carries; a result over it is cut and says `truncated`. Your MCP host may have its own, lower limit for showing a result: Claude Code did not show a result of about 100 KB inline, so raise the cap only if your host shows what you set. |
+
 ### Behavior
 
 | Variable | Default | Meaning |
@@ -364,7 +370,7 @@ The server detects the Langfuse version and the operations it serves at startup,
 
 ### Config file (non-secret settings)
 
-To set the CA, host, proxy, limits or write mode once for every client, put them in a config file at your OS's standard config location:
+To set the CA, host, proxy, limits, result size cap or write mode once for every client, put them in a config file at your OS's standard config location:
 
 | OS | Path |
 |---|---|

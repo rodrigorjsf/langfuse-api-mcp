@@ -84,7 +84,7 @@ type truncatedEnvelope struct {
 }
 
 // readTruncated calls operationID against a fake Langfuse answering body and
-// returns the envelope, after checking the result fits 100 KiB.
+// returns the envelope, after checking the result fits the default 64 KiB cap.
 func readTruncated(t *testing.T, operationID, body string) truncatedEnvelope {
 	t.Helper()
 	fake, _ := fakeLangfuse(t, http.StatusOK, body)
@@ -96,8 +96,8 @@ func readTruncated(t *testing.T, operationID, body string) truncatedEnvelope {
 	if res.IsError {
 		t.Fatalf("execute_read returned a tool error: %s", text[:min(200, len(text))])
 	}
-	if len(text) > 100<<10 {
-		t.Fatalf("result is %d bytes, want at most 102400", len(text))
+	if len(text) > 64<<10 {
+		t.Fatalf("result is %d bytes, want at most 65536", len(text))
 	}
 	var env truncatedEnvelope
 	if err := json.Unmarshal([]byte(text), &env); err != nil {

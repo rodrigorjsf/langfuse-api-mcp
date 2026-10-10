@@ -86,6 +86,8 @@ type Option func(*options)
 type options struct {
 	writeMode bool
 	version   string
+	// maxResultBytes is the result size cap.
+	maxResultBytes int
 	// now is the clock that dates confirmation states; tests replace it.
 	now func() time.Time
 }
@@ -104,6 +106,12 @@ const DevVersion = "0.0.0-dev"
 // version in initialize; the executable passes the version it was built with.
 func WithVersion(version string) Option { return func(o *options) { o.version = version } }
 
+// WithMaxResultBytes sets the result size cap: the most bytes of JSON one tool
+// result returns. The executable passes the value config validated (16384 to
+// 1048576); no tool argument reaches it. Without it the cap is
+// sanitize.DefaultMaxResultBytes.
+func WithMaxResultBytes(n int) Option { return func(o *options) { o.maxResultBytes = n } }
+
 // New returns the MCP server exposing the discovery tools and execute_read
 // over the catalog, and execute_write in write mode. The tool set is fixed
 // here, at startup, and is the same for every client. log receives one audit line per tool call; it must write
@@ -113,14 +121,14 @@ func WithVersion(version string) Option { return func(o *options) { o.version = 
 func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets Secrets,
 	profile langfuse.DeploymentProfile, opts ...Option,
 ) *mcp.Server {
-	o := options{now: time.Now, version: DevVersion}
+	o := options{now: time.Now, version: DevVersion, maxResultBytes: sanitize.DefaultMaxResultBytes}
 	for _, opt := range opts {
 		opt(&o)
 	}
 	s := mcp.NewServer(&mcp.Implementation{Name: "langfuse-mcp", Version: o.version}, nil)
 	redact := secrets.redactor()
 	ex := executor{catalog: cat, client: client, redact: redact, profile: profile, writeMode: o.writeMode,
-		confirmer: newConfirmer(o.now)}
+		confirmer: newConfirmer(o.now), maxResultBytes: o.maxResultBytes}
 	traceTree := profile.On(catalog.V4ReadFamily)
 	d := discovery{catalog: cat, writeMode: o.writeMode, offersTraceTree: traceTree, redact: redact, profile: profile}
 	s.AddTool(&mcp.Tool{
@@ -194,6 +202,8 @@ type executor struct {
 	// confirmer signs and checks the confirmation states of destructive
 	// writes; its key lives as long as the process.
 	confirmer confirmer
+	// maxResultBytes is the result size cap every tool result is cut at.
+	maxResultBytes int
 }
 
 // operationArguments are the operationId and parameters arguments of an
@@ -373,7 +383,7 @@ func (ex executor) run(ctx context.Context, op catalog.Operation, request catalo
 		a.cause = err.Error()
 		return failure(op.ID, err) // unreachable: the client returns valid JSON only
 	}
-	return jsonResult(sanitize.Wrap(op.ID, payload), false)
+	return jsonResult(sanitize.Wrap(op.ID, payload, ex.maxResultBytes), false)
 }
 
 // metricsQueryHint is the hint for a malformed metrics query (#104): how the

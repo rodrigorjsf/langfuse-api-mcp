@@ -66,13 +66,14 @@ func assertNoHiddenCharacter(t *testing.T, v any) {
 	}
 }
 
-// FuzzWrap checks that an envelope never exceeds MaxResultBytes and that a
+// FuzzWrap checks that an envelope never exceeds its limit and that a
 // truncated one still holds the payload's start, whatever the payload.
 func FuzzWrap(f *testing.F) {
-	f.Add(`"<p>\"quoted\" & é</p>"`, 30000)
-	f.Add(`{"a":"`+strings.Repeat("\\u0001", 10)+`"}`, 20000)
-	f.Fuzz(func(t *testing.T, item string, repeat int) {
+	f.Add(`"<p>\"quoted\" & é</p>"`, 30000, 65536)
+	f.Add(`{"a":"`+strings.Repeat("\\u0001", 10)+`"}`, 20000, 16384)
+	f.Fuzz(func(t *testing.T, item string, repeat, limit int) {
 		repeat = min(max(repeat, 1), 40000)
+		limit = min(max(limit, 16384), 1<<20) // the range config accepts
 		payload := `[` + strings.Repeat(strconv.Quote(item)+",", repeat) + `0]`
 		clean, err := sanitize.Payload(json.RawMessage(payload), sanitize.Redactor{})
 		if err != nil {
@@ -80,12 +81,12 @@ func FuzzWrap(f *testing.F) {
 		}
 		page := json.RawMessage(`{"data":` + string(clean) + `,"meta":{"cursor":"c"}}`)
 		for _, p := range []json.RawMessage{clean, page} {
-			got, err := json.Marshal(sanitize.Wrap("trace_list", p))
-			if err != nil || len(got) > sanitize.MaxResultBytes {
-				t.Fatalf("envelope is %d bytes (err %v), want at most %d", len(got), err, sanitize.MaxResultBytes)
+			got, err := json.Marshal(sanitize.Wrap("trace_list", p, limit))
+			if err != nil || len(got) > limit {
+				t.Fatalf("envelope is %d bytes (err %v), want at most %d", len(got), err, limit)
 			}
 		}
-		if env := sanitize.Wrap("trace_list", page); env.Truncated && !strings.Contains(string(env.Data), `"cursor":"c"`) {
+		if env := sanitize.Wrap("trace_list", page, limit); env.Truncated && !strings.Contains(string(env.Data), `"cursor":"c"`) {
 			t.Fatalf("a truncated page lost its meta: %.200s", env.Data)
 		}
 	})

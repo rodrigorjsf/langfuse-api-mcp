@@ -69,6 +69,9 @@ type Config struct {
 	ProxySettings ProxySettings
 	// AllowWrites is write mode (LANGFUSE_MCP_ALLOW_WRITES); off unless set to true.
 	AllowWrites WriteMode
+	// ResultCap is the result size cap (LANGFUSE_MCP_MAX_RESULT_BYTES); the
+	// default 65536 bytes unless set.
+	ResultCap ResultCap
 }
 
 // Ambient holds the values of the ambient CA source variables; "" when unset.
@@ -199,6 +202,9 @@ func Load(env map[string]string, file File) (Config, []IgnoredKey, error) {
 	if cfg.AllowWrites, err = loadWriteMode(setting(EnvAllowWrites), file.Path); err != nil {
 		return Config{}, nil, err
 	}
+	if cfg.ResultCap, err = loadResultCap(setting(EnvMaxResultBytes), file.Path); err != nil {
+		return Config{}, nil, err
+	}
 	if cfg.Connection, err = loadConnection(env, fromFile); err != nil {
 		return Config{}, nil, err
 	}
@@ -230,7 +236,7 @@ func isKnownFileKey(key string) bool {
 	switch key {
 	case EnvCACert, EnvCACertsPath, EnvIgnoreAmbientCA,
 		EnvSSLCertFile, EnvSSLCertDir, EnvNodeExtraCACerts, EnvRequestsCABundle, EnvCurlCABundle,
-		EnvBaseURL, EnvHost, EnvRateLimit, EnvMaxConcurrency,
+		EnvBaseURL, EnvHost, EnvRateLimit, EnvMaxConcurrency, EnvMaxResultBytes,
 		EnvHTTPSProxy, EnvHTTPSProxyLower, EnvHTTPProxy, EnvHTTPProxyLower, EnvNoProxy, EnvNoProxyLower,
 		EnvAllowWrites,
 		// Planned (README "Behavior"); no code reads it yet.
