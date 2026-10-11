@@ -56,7 +56,7 @@ _Avoid_: region preset
 **Legacy operation**: a deprecated operation, part of the legacy family; exposed only when the connected deployment still answers it.
 _Avoid_: v1 API, old API
 
-**Unavailable operation**: an operation of the catalog that the connected deployment does not serve (its version lacks the route, or its write mode turns the operation's family off); a call to it returns the tool error `operation_unavailable`, never Langfuse's body. `get_trace_tree` answers the same way on a deployment that answers neither the v4 read family nor the legacy family (on one that answers only the legacy family it builds the trace tree from the legacy observations list).
+**Unavailable operation**: an operation of the catalog that the connected deployment does not serve (its version lacks the route, or its write mode turns the operation's family off); a call to it returns the tool error `operation_unavailable`, never Langfuse's body. `get_trace_tree` answers the same way on a deployment that answers neither the v4 read family nor the legacy family.
 _Avoid_: missing endpoint, not found (that is a missing resource)
 
 **Served parameter**: a parameter of an operation that the connected deployment's Langfuse version declares; an operation description lists only its served parameters, and a call carrying any other parameter of that operation is refused before any request, naming the version that serves it.
@@ -93,7 +93,7 @@ _Avoid_: truststore (Java/Python term), CA bundle (when you mean the whole pool)
 
 **Observation**: a timed step inside a trace — span, generation, event and newer typed variants; forms a tree via `parentObservationId`.
 
-**Trace tree**: the observations of one trace in depth-first pre-order, each with its depth, the parent before its children; what `get_trace_tree` returns. It is built from Observations v2 where the deployment answers the v4 read APIs and from the legacy observations list where only the legacy APIs answer; a row holds the fields that deployment's Langfuse returns, not translated.
+**Trace tree**: the observations of one trace in depth-first pre-order, each with its depth, the parent before its children; what `get_trace_tree` returns on a deployment that answers the v4 read APIs or only the legacy ones.
 
 **Payload query**: an observation query that requests the `io` or `metadata` field groups — the application's own content, not timing or cost data.
 _Avoid_: heavy query, io query

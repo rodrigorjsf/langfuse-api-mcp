@@ -67,7 +67,8 @@ type TraceTree struct {
 	// "data" lists the observations in depth-first pre-order, each with its
 	// depth and, for an extra root whose parent is missing, orphan: true;
 	// "meta" holds observations (the row count), truncated (pages remain)
-	// and, when truncated, the cursor of the next page.
+	// and, when truncated on the Observations v2 path, the cursor of the next
+	// page (the legacy path has none: see NextPage).
 	Payload json.RawMessage
 	// Empty is set when the trace has no observations.
 	Empty bool
@@ -86,7 +87,8 @@ type TraceTree struct {
 	Bytes int
 }
 
-// errUnexpectedPage marks an Observations v2 answer that is not a page.
+// errUnexpectedPage marks an answer of either observations list that is not a
+// page of observation objects.
 var errUnexpectedPage = errors.New("the observations answer is not a page of observation objects")
 
 // GetTraceTree reads every observation of the trace traceID through
@@ -106,13 +108,11 @@ func GetTraceTree(ctx context.Context, client *langfuse.Client, r sanitize.Redac
 		if cursor != "" {
 			query.Set("cursor", cursor)
 		}
-		resp, err := client.Do(ctx, http.MethodGet, observationsPath, query, nil)
-		tree.Requests += resp.Attempts
-		tree.Status, tree.Bytes = resp.Status, tree.Bytes+len(resp.Body)
+		body, err := tree.fetchPage(ctx, client, ObservationsOperationID, observationsPath, page, query)
 		if err != nil {
-			return tree, fmt.Errorf("%s page %d: %w", ObservationsOperationID, page, err)
+			return tree, err
 		}
-		got, next, err := decodePage(resp.Body)
+		got, next, err := decodePage(body)
 		if err != nil {
 			return tree, fmt.Errorf("%s page %d: %w", ObservationsOperationID, page, err)
 		}
@@ -121,16 +121,35 @@ func GetTraceTree(ctx context.Context, client *langfuse.Client, r sanitize.Redac
 			break
 		}
 	}
-	tree.Empty, tree.More = len(rows) == 0, cursor != ""
-	payload, err := json.Marshal(tracePage{
-		Data: preOrder(rows),
-		Meta: traceMeta{Observations: len(rows), Truncated: tree.More, Cursor: cursorIf(tree.More, cursor)},
-	})
+	tree.More = cursor != ""
+	return tree, tree.finish(rows, traceMeta{Truncated: tree.More, Cursor: cursorIf(tree.More, cursor)}, r)
+}
+
+// fetchPage reads one page of an observations list, adds what the request cost
+// to t whether or not it failed, and returns the body. A failure comes back
+// wrapped with the operation and the page.
+func (t *TraceTree) fetchPage(ctx context.Context, client *langfuse.Client, operationID, path string, page int, query url.Values) (json.RawMessage, error) {
+	resp, err := client.Do(ctx, http.MethodGet, path, query, nil)
+	t.Requests += resp.Attempts
+	t.Status, t.Bytes = resp.Status, t.Bytes+len(resp.Body)
 	if err != nil {
-		return tree, err
+		return nil, fmt.Errorf("%s page %d: %w", operationID, page, err)
 	}
-	tree.Payload, err = sanitize.Payload(payload, r)
-	return tree, err
+	return resp.Body, nil
+}
+
+// finish orders rows into the page-shaped Payload, sanitized and redacted by r,
+// and sets Empty. meta carries what the reader knows (truncated, the cursor);
+// the row count is set here.
+func (t *TraceTree) finish(rows []observation, meta traceMeta, r sanitize.Redactor) error {
+	t.Empty = len(rows) == 0
+	meta.Observations = len(rows)
+	payload, err := json.Marshal(tracePage{Data: preOrder(rows), Meta: meta})
+	if err != nil {
+		return err
+	}
+	t.Payload, err = sanitize.Payload(payload, r)
+	return err
 }
 
 // cursorIf returns cursor when more pages remain, else "".
@@ -153,8 +172,8 @@ type traceMeta struct {
 	Cursor       string `json:"cursor,omitempty"`
 }
 
-// observation is one Observations v2 row: its fields as Langfuse sent them,
-// plus what ordering needs.
+// observation is one row of either observations list: its fields as Langfuse
+// sent them, plus what ordering needs.
 type observation struct {
 	fields map[string]json.RawMessage
 	id     string // "" when the row has no string id

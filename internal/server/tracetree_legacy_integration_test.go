@@ -135,10 +135,11 @@ func TestLiveLangfuse3800GetTraceTreeKeepsInputOutputAndMetadataWhenIncluded(t *
 }
 
 // A trace of more than one page of the legacy list (it pages at 100): the tree
-// reads page 2 and counts every observation. A legacy row is about 850 bytes
+// reads page 2 and counts every observation. A legacy row is about 870 bytes
 // even without input, output and metadata, so at the default result size cap
 // the rows past the first 70 or so are left out at a row boundary and the
-// result says so; meta.observations still counts all that were read.
+// result says so; meta.observations still counts all that were read (the row
+// width is open in #200).
 func TestLiveLangfuse3800GetTraceTreeReadsASecondPageOfTheLegacyList(t *testing.T) {
 	t.Parallel()
 	cs := liveScanSession(t)

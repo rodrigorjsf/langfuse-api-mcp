@@ -406,3 +406,18 @@ func TestGetTraceTreeKeepsOneStaticDescriptionOnEveryDeployment(t *testing.T) {
 		}
 	}
 }
+
+// The trace reads hint of search_operations on a deployment that serves only
+// the legacy family names get_trace_tree (legacyTraceReadsHint, unavailable_test.go);
+// where neither family answers it does not name the tool, which cannot run
+// there.
+func TestSearchOperationsAboutTracesWhereNeitherFamilyAnswersDoesNotNameGetTraceTree(t *testing.T) {
+	t.Parallel()
+	cs := connectNoTraceReads(t, noTraceReadsProfile)
+
+	res := callTool(t, cs, "search_operations", map[string]any{"query": "traces zqxj-nothing-matches"})
+
+	if text := resultText(t, res); strings.Contains(text, "get_trace_tree") {
+		t.Errorf("the result names get_trace_tree, which cannot run on this deployment:\n%s", text)
+	}
+}

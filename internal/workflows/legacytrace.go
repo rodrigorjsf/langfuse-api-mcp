@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strconv"
 
@@ -54,13 +53,11 @@ func GetLegacyTraceTree(ctx context.Context, client *langfuse.Client, r sanitize
 			"limit":   {strconv.Itoa(LegacyTracePageSize)},
 			"page":    {strconv.Itoa(page)},
 		}
-		resp, err := client.Do(ctx, http.MethodGet, legacyObservationsPath, query, nil)
-		tree.Requests += resp.Attempts
-		tree.Status, tree.Bytes = resp.Status, tree.Bytes+len(resp.Body)
+		body, err := tree.fetchPage(ctx, client, LegacyObservationsOperationID, legacyObservationsPath, page, query)
 		if err != nil {
-			return tree, fmt.Errorf("%s page %d: %w", LegacyObservationsOperationID, page, err)
+			return tree, err
 		}
-		clean, err := sanitize.Payload(resp.Body, r)
+		clean, err := sanitize.Payload(body, r)
 		if err != nil {
 			return tree, fmt.Errorf("%s page %d: %w", LegacyObservationsOperationID, page, err)
 		}
@@ -73,24 +70,15 @@ func GetLegacyTraceTree(ctx context.Context, client *langfuse.Client, r sanitize
 		}
 		rows = append(rows, got...)
 		pagesRead = page
-		tree.More = !endOfLegacyList(totalPages, len(got), page)
+		tree.More = !endOfList(totalPages, len(got), page)
 		if !tree.More {
 			break
 		}
 	}
-	tree.Empty = len(rows) == 0
 	if tree.More {
 		tree.NextPage = pagesRead + 1
 	}
-	payload, err := json.Marshal(tracePage{
-		Data: preOrder(rows),
-		Meta: traceMeta{Observations: len(rows), Truncated: tree.More},
-	})
-	if err != nil {
-		return tree, err
-	}
-	tree.Payload, err = sanitize.Payload(payload, r)
-	return tree, err
+	return tree, tree.finish(rows, traceMeta{Truncated: tree.More}, r)
 }
 
 // dropUnrequested removes from a row of the legacy list the field groups that
@@ -122,15 +110,4 @@ func decodeLegacyPage(body json.RawMessage) ([]observation, *int, error) {
 	}
 	rows, err := decodeObservations(page.Data)
 	return rows, page.Meta.TotalPages, err
-}
-
-// endOfLegacyList reports whether page, which held rows rows, is where the
-// list ends. meta.totalPages decides when Langfuse gives it; without it only
-// an empty page proves the end, because a short page may be a smaller page
-// size, and a tree called whole on it could be a partial one.
-func endOfLegacyList(totalPages *int, rows, page int) bool {
-	if totalPages != nil {
-		return page >= *totalPages
-	}
-	return rows == 0
 }

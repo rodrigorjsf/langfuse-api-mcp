@@ -364,7 +364,7 @@ operation is `legacy_observationsV1_getMany`. API reference `GET /api/public/obs
   `promptTokens`, `completionTokens`, `totalTokens`, `inputPrice`, `outputPrice`, `totalPrice`,
   `calculatedInputCost`, `calculatedOutputCost` and `calculatedTotalCost`; 39 keys, null where Langfuse has no value.
   There is no field selection: `input`, `output` and `metadata` come with every row. **Without them a row is about
-  850 bytes**, so at the default 64 KiB result size cap about 75 rows fit before rows are left out at a row boundary
+  870 bytes**, so at the default 64 KiB result size cap about 75 rows fit before rows are left out at a row boundary
   (a 130-observation trace read through `get_trace_tree` on 3.80.0 counted 130 in `meta.observations` and returned 76
   rows).
 - **Latency unit.** An observation of 1 s (`startTime` and `endTime` one second apart) has `latency` **1000** in this

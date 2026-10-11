@@ -123,7 +123,7 @@ func FilterScan(ctx context.Context, client *langfuse.Client, r sanitize.Redacto
 		if meta.totalItems != nil {
 			exist = *meta.totalItems
 		}
-		if endOfList(meta, len(rows), page) {
+		if endOfList(meta.totalPages, len(rows), page) {
 			sum.Complete = true
 			break
 		}
@@ -191,14 +191,15 @@ func rowField(fields map[string]json.RawMessage, name string) (string, bool) {
 	return s, true
 }
 
-// endOfList reports whether page, which held rows rows, is where the list ends.
-// Langfuse's meta.totalPages decides when it is there (it holds when the server
+// endOfList reports whether page, which held rows rows, is where the list ends,
+// for the filter scan and for the legacy trace tree. Langfuse's meta.totalPages
+// (nil when it gave none) decides when it is there (it holds when the server
 // caps the page size below the one asked for). Without it only an empty page
 // proves the end: a short page may be a smaller page size, and calling the
 // scan complete on it could present a partial answer as complete.
-func endOfList(meta scanMeta, rows, page int) bool {
-	if meta.totalPages != nil {
-		return page >= *meta.totalPages
+func endOfList(totalPages *int, rows, page int) bool {
+	if totalPages != nil {
+		return page >= *totalPages
 	}
 	return rows == 0
 }

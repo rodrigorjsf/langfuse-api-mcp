@@ -126,6 +126,11 @@ const (
 	traceTreeLegacyCutHint = "data.meta.observations is the number of rows read; execute_read with " +
 		"legacy_observationsV1_getMany (traceId, limit, page) pages through the observations, input, output and " +
 		"metadata included"
+	// traceTreeLegacyTooLargeHint answers a page over the response read cap:
+	// the legacy list has no field selection and the tool no time window, so
+	// the way to read the trace is a lower page size through execute_read.
+	traceTreeLegacyTooLargeHint = "a page of 100 observations is larger than the response this server reads; " +
+		"execute_read with legacy_observationsV1_getMany (traceId, a limit below 100, page) reads the trace in smaller pages"
 )
 
 // traceTreeLegacyMoreHint answers a trace longer than the pages read from the
@@ -153,14 +158,17 @@ type traceTreeSource struct {
 	empty string
 	// cut is the remedy of a tree cut to the result size cap.
 	cut string
+	// tooLarge is the hint of a page over the response read cap; "" keeps the
+	// generic one.
+	tooLarge string
 }
 
-// traceTreeSource returns where this deployment's trace tree is read from:
+// selectTraceTreeSource returns where this deployment's trace tree is read from:
 // Observations v2 when the v4 read family is on, whatever the legacy family
 // is; else the legacy observations list when the legacy family is on. It is
 // false when neither is on, and then the source is the one the unavailable
 // answer names.
-func (ex executor) traceTreeSource() (traceTreeSource, bool) {
+func (ex executor) selectTraceTreeSource() (traceTreeSource, bool) {
 	switch {
 	case ex.profile.On(catalog.V4ReadFamily):
 		return traceTreeSource{
@@ -174,14 +182,14 @@ func (ex executor) traceTreeSource() (traceTreeSource, bool) {
 			operationID: workflows.LegacyObservationsOperationID, family: catalog.LegacyFamily,
 			read:  workflows.GetLegacyTraceTree,
 			more:  func(t workflows.TraceTree) string { return traceTreeLegacyMoreHint(t.NextPage) },
-			empty: traceTreeLegacyEmptyHint, cut: traceTreeLegacyCutHint,
+			empty: traceTreeLegacyEmptyHint, cut: traceTreeLegacyCutHint, tooLarge: traceTreeLegacyTooLargeHint,
 		}, true
 	}
 	return traceTreeSource{operationID: workflows.ObservationsOperationID, family: catalog.V4ReadFamily}, false
 }
 
 func (ex executor) getTraceTree(ctx context.Context, req *mcp.CallToolRequest, a *audit) (*mcp.CallToolResult, error) {
-	src, served := ex.traceTreeSource()
+	src, served := ex.selectTraceTreeSource()
 	a.operationID = src.operationID
 	in, err := decodeTraceTreeInput(req.Params.Arguments, ex.redact)
 	if err != nil {
@@ -200,7 +208,12 @@ func (ex executor) getTraceTree(ctx context.Context, req *mcp.CallToolRequest, a
 			return errorResult(f)
 		}
 		a.cause = err.Error()
-		return failure(op.ID, err)
+		fields := failureFields(err)
+		fields.OperationID = truncate(op.ID)
+		if src.tooLarge != "" && errors.Is(err, langfuse.ErrResponseTooLarge) {
+			fields.Hint = src.tooLarge
+		}
+		return errorResult(fields)
 	}
 	var hints []string
 	if tree.More {
