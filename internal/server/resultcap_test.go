@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -81,6 +82,50 @@ func TestAConfiguredCapAboveTheDefaultLetsALargerResultThrough(t *testing.T) {
 
 	if env.Truncated || len(text) < 150<<10 {
 		t.Fatalf("result of %d bytes, truncated %v; want the whole 150-row page at a 1 MiB cap", len(text), env.Truncated)
+	}
+}
+
+// Known limit (#188): a result holds its payload twice, as the text content and
+// as the structured content, and the cap bounds each copy. A host that counts
+// both sees more than the cap, up to twice it. (The discovery tools' copies are
+// proven by TestDescribeOperationOfTheLargestWriteOperationsFitsTheSmallestCapAndSaysTruncated
+// and TestSearchOperationsWithoutQueryInWriteModeIsCutAtAnEntryBoundaryAtTheSmallestCap.)
+func TestAResultHoldsItsPayloadAsTextAndAsStructuredContentAndTheCapBoundsEachCopy(t *testing.T) {
+	t.Parallel()
+	const limit = 16384
+	for name, tc := range map[string]struct {
+		rows          int
+		wantTruncated bool
+	}{
+		"a page that fits":  {rows: 3, wantTruncated: false},
+		"a page cut to fit": {rows: 40, wantTruncated: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			fake, _ := fakeLangfuse(t, http.StatusOK, pageOfRows(tc.rows))
+			cs := startServer(t, langfuse.New(testOptions(t, fake.URL)), slog.New(slog.DiscardHandler),
+				server.Secrets{Keys: testKeys()}, langfuse.UnknownProfile(), server.WithMaxResultBytes(limit))
+
+			res := callExecuteRead(t, cs, map[string]any{"operationId": "observations_getMany"})
+
+			if res.IsError {
+				t.Fatalf("execute_read returned a tool error: %.200s", resultText(t, res))
+			}
+			text, structured := bytesOf(t, res)
+			if !reflect.DeepEqual(asJSON(t, text), asJSON(t, structured)) {
+				t.Errorf("the text content and the structured content differ:\n%.300s\n%.300s", text, structured)
+			}
+			if len(text) > limit || len(structured) > limit {
+				t.Errorf("text %d bytes, structured content %d bytes; want each at most %d", len(text), len(structured), limit)
+			}
+			if got := asJSON(t, text).(map[string]any)["truncated"] == true; got != tc.wantTruncated {
+				t.Errorf("truncated = %v, want %v", got, tc.wantTruncated)
+			}
+			if tc.wantTruncated && len(text)+len(structured) <= limit {
+				t.Errorf("both copies together are %d bytes, want more than the cap of %d: the cap is per copy",
+					len(text)+len(structured), limit)
+			}
+		})
 	}
 }
 

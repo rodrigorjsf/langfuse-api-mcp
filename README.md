@@ -357,7 +357,7 @@ Trusted roots = **your operating system's certificate store + every CA from the 
 
 | Variable | Default | Allowed values | Meaning |
 |---|---|---|---|
-| `LANGFUSE_MCP_MAX_RESULT_BYTES` | `65536` (64 KiB) | whole number, 16384 to 1048576 | The most bytes one tool result carries; a result over it has its largest text values shortened (each ends in `… [clipped]`) so every row stays, then, only if that is not enough, rows left out, and says `truncated`; the discovery tools' results (`describe_operation`, `search_operations`) are kept within it too, a body schema losing its descriptions and an operation index its last entries instead. Your MCP host may have its own, lower limit for showing a result: Claude Code did not show a result of about 100 KB inline, so raise the cap only if your host shows what you set. |
+| `LANGFUSE_MCP_MAX_RESULT_BYTES` | `65536` (64 KiB) | whole number, 16384 to 1048576 | The most bytes one tool result carries, counted for each of its two copies (the JSON as text and as structured content); a result over it has its largest text values shortened (each ends in `… [clipped]`) so every row stays, then, only if that is not enough, rows left out, and says `truncated`; the discovery tools' results (`describe_operation`, `search_operations`) are kept within it too, a body schema losing its descriptions and an operation index its last entries instead. Your MCP host may have its own, lower limit for showing a result: Claude Code did not show a result of about 100 KB inline, so raise the cap only if your host shows what you set. |
 
 ### Behavior
 

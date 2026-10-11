@@ -37,7 +37,7 @@ _Avoid_: exception, failure response
 
 ## Langfuse connection
 
-**Result size cap**: the most bytes one tool result carries, set by the operator; a result over it has values clipped and, if that is not enough, rows left out, and says so; a discovery result is reduced by its shape instead (a body schema loses its descriptions and titles, an operation index its last entries), never cut at a byte. Set with `LANGFUSE_MCP_MAX_RESULT_BYTES`, never by a tool argument; the default is 64 KiB.
+**Result size cap**: the most bytes one tool result carries, counted for each of its two copies (the JSON as text content and as structured content), set by the operator; a result over it has values clipped and, if that is not enough, rows left out, and says so; a discovery result is reduced by its shape instead (a body schema loses its descriptions and titles, an operation index its last entries), never cut at a byte. Set with `LANGFUSE_MCP_MAX_RESULT_BYTES`, never by a tool argument; the default is 64 KiB.
 _Avoid_: output limit, max tokens
 
 **Clipped value**: a string value inside a tool result that was shortened, with a marker, so that the result fits the size cap while every row and every other value stays whole.
