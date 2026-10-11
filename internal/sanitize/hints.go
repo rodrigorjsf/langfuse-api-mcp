@@ -22,6 +22,16 @@ type Remedies struct {
 	Page, Cursor bool
 }
 
+// PagingNote is the part of a hint that says how to read the rest of a list,
+// "page through the rest" and the parameters the operation pages by, or "" when
+// it has none.
+func (r Remedies) PagingNote() string {
+	if ways := r.PagingWays(); ways != "" {
+		return pagingNote + " (" + ways + ")"
+	}
+	return ""
+}
+
 // PagingWays names the parameters the operation pages by, as a hint writes
 // them in brackets: "page", "cursor from meta.cursor", both, or "" when the
 // operation has neither. No legacy list has a cursor.
@@ -109,7 +119,7 @@ func (n hints) clipped(tooBig bool) string {
 // its large values clipped when clipped.
 func (n hints) rows(kept, total int, clipped, tooBig bool) string {
 	head := fmt.Sprintf("only the first %d of %d rows fit the result size cap", kept, total)
-	note, again, page := "", "", ""
+	note, again := "", ""
 	if clipped {
 		head += " even with every large value clipped"
 		note = clipNote
@@ -117,10 +127,7 @@ func (n hints) rows(kept, total int, clipped, tooBig bool) string {
 	if n.remedies.Limit > 0 {
 		again = fmt.Sprintf("call again with limit %d", min(max(kept, 1), n.remedies.Limit))
 	}
-	if ways := n.remedies.PagingWays(); ways != "" {
-		page = pagingNote + " (" + ways + ")"
-	}
-	return n.join(head, note, again, n.remedy, page, tooBigIf(tooBig))
+	return n.join(head, note, again, n.remedy, n.remedies.PagingNote(), tooBigIf(tooBig))
 }
 
 // text is the hint of a payload cut to text.

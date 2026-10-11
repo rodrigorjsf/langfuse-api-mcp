@@ -24,6 +24,8 @@ var sequenceCases = map[string]struct{ in, want string }{
 	"a cursor movement":                  {"a\x1b[2;5Hb\x1b[3A\x1b[2Kc", "abc"},
 	"a private mode sequence":            {"\x1b[?25lhidden\x1b[?25h", "hidden"},
 	"an intermediate byte":               {"x\x1b[2 qy", "xy"},
+	"a quote as an intermediate byte":    {"x\x1b[61\"py", "xy"},
+	"a backslash as a final byte":        {"x\x1b[1\\y", "xy"},
 	"an OSC 8 hyperlink ended by BEL":    {"\x1b]8;;https://evil.example/pay\x07click here\x1b]8;;\x07", "click here"},
 	"an OSC ended by ESC and backslash":  {"\x1b]0;window title\x1b\\text", "text"},
 	"an OSC 8 hyperlink with parameters": {"\x1b]8;id=1;https://evil.example/a?b=c&d=e\x1b\\link\x1b]8;;\x1b\\", "link"},
@@ -51,6 +53,8 @@ var remainderCases = map[string]struct{ in, want string }{
 	"an escape before a space":                 {"a\x1b b", "a b"},
 	"an escape before an invisible character":  {"\x1b\u200b[31m", "[31m"},
 	"the single-character CSI cut at the end":  {"a\u009b31", "a31"},
+	"the single-character CSI before a quote":  {"a\u009b61\"pb", "a61\"pb"},
+	"the single-character CSI before a slash":  {"a\u009b1\\b", "a1\\b"},
 }
 
 // bareCases are the texts with no escape character: they are never changed.
@@ -152,9 +156,10 @@ func TestASequenceSplitAcrossTwoJSONStringsIsCleanedStringByString(t *testing.T)
 // cannot make the sanitizer eat the text that follows an unterminated sequence.
 func TestTheScanForTheEndOfASequenceIsBoundedByTheFixedLength(t *testing.T) {
 	t.Parallel()
-	limit := sanitize.MaxEscapeSequenceRunes
-	if limit < 32 || limit > 1024 {
-		t.Fatalf("MaxEscapeSequenceRunes = %d, want a small fixed length", limit)
+	// The docs state this length (256 characters) in five places.
+	const limit = 256
+	if sanitize.MaxEscapeSequenceRunes != limit {
+		t.Fatalf("MaxEscapeSequenceRunes = %d, want %d: the docs say so", sanitize.MaxEscapeSequenceRunes, limit)
 	}
 	osc := func(body int) string { return "\x1b]" + strings.Repeat("a", body) + "\x07" }  // 2 + body + 1 characters
 	csi := func(params int) string { return "\x1b[" + strings.Repeat("1", params) + "m" } // 2 + params + 1 characters

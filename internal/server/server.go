@@ -286,8 +286,8 @@ func notServedHintFor(op catalog.Operation) string {
 // way the operation pages on, which is the parameter it has and no other (#193).
 func limitHint(op catalog.Operation) string {
 	hint := "use a limit from 1 to " + strconv.Itoa(catalog.MaxLimit)
-	if ways := remediesOf(op).PagingWays(); ways != "" {
-		hint += " and page through the rest (" + ways + ")"
+	if note := remediesOf(op).PagingNote(); note != "" {
+		hint += " and " + note
 	}
 	return hint + "; without a limit the server asks for " + strconv.Itoa(catalog.DefaultLimit)
 }
@@ -300,8 +300,8 @@ const tooLargeNarrowing = "narrow the query: request fewer fields, a shorter tim
 // over the bytes this server reads): it says to page through the rest only by
 // the parameter the operation has (#193).
 func tooLargeHintFor(op catalog.Operation) string {
-	if ways := remediesOf(op).PagingWays(); ways != "" {
-		return tooLargeNarrowing + ", and page through the rest (" + ways + ")"
+	if note := remediesOf(op).PagingNote(); note != "" {
+		return tooLargeNarrowing + ", and " + note
 	}
 	return tooLargeNarrowing
 }
@@ -414,7 +414,7 @@ func (ex executor) run(ctx context.Context, op catalog.Operation, request catalo
 			}
 		} else {
 			a.cause = err.Error()
-			f = failureFields(err, op)
+			f = failureFields(op, err)
 		}
 		f.OperationID = truncate(op.ID)
 		if !op.IsRead() {

@@ -46,7 +46,7 @@ func (ex executor) filterScan(ctx context.Context, op catalog.Operation, scan ca
 			a.status = f.HTTPStatus
 		} else {
 			a.cause = err.Error()
-			f = failureFields(err, op)
+			f = failureFields(op, err)
 		}
 		f.OperationID = truncate(op.ID)
 		return errorResult(f)

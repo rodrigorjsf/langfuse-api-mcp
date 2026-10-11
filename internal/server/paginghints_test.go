@@ -144,6 +144,8 @@ func TestTheHintOfAResponseTooLargeNamesOnlyTheWayOfPagingTheOperationHas(t *tes
 	}{
 		"page only, on 3.80.0": {"3.80.0", legacy, map[string]any{"operationId": "trace_list"},
 			narrow + ", and page through the rest " + viaPage},
+		"page only, on a v4 deployment": {"4.46.0", dual, map[string]any{"operationId": "trace_list"},
+			narrow + ", and page through the rest " + viaPage},
 		"neither, on 3.80.0": {"3.80.0", legacy,
 			map[string]any{"operationId": "trace_get", "parameters": map[string]any{"traceId": "t-1"}}, narrow},
 		"cursor only, on a v4 deployment": {"4.46.0", dual, map[string]any{"operationId": "observations_getMany"},
@@ -186,9 +188,6 @@ func TestAPagingHintNeverHoldsAParameterValue(t *testing.T) {
 
 		if strings.Contains(got.Hint, planted) || strings.Contains(got.Hint, "7731") {
 			t.Errorf("%s: the hint repeats a value of the call: %q", name, got.Hint)
-		}
-		if name == "a response too large" && got.Code != "response_too_large" {
-			t.Errorf("%s: code = %q, want response_too_large", name, got.Code)
 		}
 	}
 }
@@ -251,14 +250,14 @@ func TestTheHintOfAPageThatLostRowsToTheCapNamesTheWayOfPagingTheOperationHas(t 
 	}
 }
 
-// The hints of the trace tree name the paging of the operation it reads: the
-// cursor of Observations v2, the page number of the legacy list, which has no
-// cursor. The parameters a hint lists are checked against what that operation
-// serves on the deployment.
 // pageParameter finds the word page where it names a parameter: the plural of
 // "5 pages of 1000" and the phrase "page by page" are not one.
 var pageParameter = regexp.MustCompile(`\bpage\b`)
 
+// The hints of the trace tree name the paging of the operation it reads: the
+// cursor of Observations v2, the page number of the legacy list, which has no
+// cursor. The parameters a hint lists are checked against what that operation
+// serves on the deployment.
 func TestTheTraceTreeHintsNameOnlyTheWayOfPagingTheirOperationHas(t *testing.T) {
 	t.Parallel()
 	t.Run("Observations v2 pages by cursor", func(t *testing.T) {

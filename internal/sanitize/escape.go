@@ -29,7 +29,8 @@ const (
 // is dropped:
 //   - CSI: ESC "[" or U+009B, then parameter bytes (0x30–0x3F), intermediate
 //     bytes (0x20–0x2F, after the parameter bytes) and one final byte
-//     (0x40–0x7E);
+//     (0x40–0x7E), except that U+009B takes neither a quote nor a backslash
+//     (see csiLen);
 //   - OSC: ESC "]", then any characters other than controls, up to BEL or ESC
 //     "\" (an OSC 8 hyperlink is one, URL included).
 //
@@ -81,9 +82,9 @@ func introducerLen(s string) int {
 // starts with, or 0 when s starts with an escape character that starts none.
 func escapeSequenceLen(s string) int {
 	switch {
-	case s[0] == csi8First:
+	case s[0] == csi8First: // U+009B: two bytes, one character
 		return csiLen(s, 2, 1)
-	case len(s) > 1 && s[1] == '[':
+	case len(s) > 1 && s[1] == '[': // ESC and "[": two bytes, two characters
 		return csiLen(s, 2, 2)
 	case len(s) > 1 && s[1] == ']':
 		return oscLen(s)
@@ -91,24 +92,32 @@ func escapeSequenceLen(s string) int {
 	return 0
 }
 
-// csiLen returns the length in bytes of the CSI whose body starts at s[body],
-// introducer of used characters included, or 0 when no final byte ends it
-// within MaxEscapeSequenceRunes. Every byte of a CSI is ASCII, so a character
-// that is not ends the scan, and so does a quote or a backslash: a raw U+009B
-// in the JSON text of a result then never takes the quote that closes a string
-// or the backslash of an escape with it, so redacting that text keeps it
-// valid JSON.
-func csiLen(s string, body, used int) int {
-	parameters := true
-	for i := body; i < len(s); i++ {
-		if used++; used > MaxEscapeSequenceRunes {
+// csiLen returns the length in bytes of the CSI that s starts with, whose
+// introducer is bodyAt bytes and introRunes characters long, or 0 when no final
+// byte ends it within MaxEscapeSequenceRunes. Every byte of a CSI is ASCII, so
+// a character that is not ends the scan.
+//
+// The one-character form (U+009B) also ends the scan at a quote or a backslash,
+// which ECMA-48 would take as an intermediate and a final byte: unlike the
+// escape character, U+009B can stand raw in the JSON text of a result, and it
+// must never take the quote that closes a string or the backslash of an escape
+// with it, so that redacting that text keeps it valid JSON.
+func csiLen(s string, bodyAt, introRunes int) int {
+	jsonSafe := s[0] == csi8First
+	parameters, runes := true, introRunes
+	for i := bodyAt; i < len(s); i++ {
+		if runes++; runes > MaxEscapeSequenceRunes {
 			return 0
 		}
-		switch c := s[i]; {
-		case c >= 0x30 && c <= 0x3f && parameters:
-		case c >= 0x20 && c <= 0x2f && c != '"':
+		c := s[i]
+		if jsonSafe && (c == '"' || c == '\\') {
+			return 0
+		}
+		switch {
+		case c >= 0x30 && c <= 0x3f && parameters: // parameter byte
+		case c >= 0x20 && c <= 0x2f: // intermediate byte, after the parameter bytes
 			parameters = false
-		case c >= 0x40 && c <= 0x7e && c != '\\':
+		case c >= 0x40 && c <= 0x7e: // final byte
 			return i + 1
 		default:
 			return 0

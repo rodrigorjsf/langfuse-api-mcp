@@ -32,14 +32,14 @@ const caHint = "set LANGFUSE_CA_CERT " +
 // error answer goes through langfuseErrorFields instead. err itself never
 // reaches the agent; the caller records it on the audit line (stderr).
 func failure(op catalog.Operation, err error) (*mcp.CallToolResult, error) {
-	fields := failureFields(err, op)
+	fields := failureFields(op, err)
 	fields.OperationID = truncate(op.ID)
 	return errorResult(fields)
 }
 
 // failureFields classifies err, the failure of a call of op, into the tool
 // error fields, without the operation ID.
-func failureFields(err error, op catalog.Operation) toolErrorFields {
+func failureFields(op catalog.Operation, err error) toolErrorFields {
 	switch {
 	case errors.Is(err, langfuse.ErrRedirectRefused):
 		return toolErrorFields{

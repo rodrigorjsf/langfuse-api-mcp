@@ -214,7 +214,7 @@ func (ex executor) getTraceTree(ctx context.Context, req *mcp.CallToolRequest, a
 			return errorResult(f)
 		}
 		a.cause = err.Error()
-		fields := failureFields(err, op)
+		fields := failureFields(op, err)
 		fields.OperationID = truncate(op.ID)
 		if src.tooLarge != "" && errors.Is(err, langfuse.ErrResponseTooLarge) {
 			fields.Hint = src.tooLarge

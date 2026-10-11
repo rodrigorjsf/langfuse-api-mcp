@@ -370,6 +370,29 @@ func TestHintsNameOnlyTheRemediesTheOperationHas(t *testing.T) {
 	}
 }
 
+// An operation pages by page, by cursor (from meta.cursor), by both or by
+// neither; the hint names the parameters it has and no other (#193).
+func TestPagingWaysNameOnlyTheParametersTheOperationHas(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct {
+		remedies   sanitize.Remedies
+		ways, note string
+	}{
+		"page":    {sanitize.Remedies{Page: true}, "page", "page through the rest (page)"},
+		"cursor":  {sanitize.Remedies{Cursor: true}, "cursor from meta.cursor", "page through the rest (cursor from meta.cursor)"},
+		"both":    {sanitize.Remedies{Page: true, Cursor: true}, "page, or cursor from meta.cursor", "page through the rest (page, or cursor from meta.cursor)"},
+		"neither": {sanitize.Remedies{Limit: 100, Fields: true, TimeWindow: true}, "", ""},
+	}
+	for name, tc := range tests {
+		if got := tc.remedies.PagingWays(); got != tc.ways {
+			t.Errorf("%s: PagingWays = %q, want %q", name, got, tc.ways)
+		}
+		if got := tc.remedies.PagingNote(); got != tc.note {
+			t.Errorf("%s: PagingNote = %q, want %q", name, got, tc.note)
+		}
+	}
+}
+
 // manyKeys returns an object of 6000 short values and no list, which clipping
 // cannot shorten and no row can be left out of.
 func manyKeys() map[string]string {
