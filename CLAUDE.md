@@ -56,3 +56,6 @@ When something fails repeatedly, when User has to re-explain, or when a workarou
 - System `gh` 2.45 lacks `gh attestation`; `go install github.com/cli/cli/v2/cmd/gh@latest` to scratch.
 - New `.claude/agents` and MCP registrations load only at Claude Code start; restart first.
 - Every `langfuse-selfhosted.sh up` makes new keys; restart MCP servers reading `.env.integration.selfhosted`.
+- `.env.integration.selfhosted` names are `LANGFUSE_TEST_BASE_URL`, `LANGFUSE_TEST_PUBLIC_KEY`, `LANGFUSE_TEST_SECRET_KEY`; map them before curl.
+- Terminal CLI replies to a desktop-app session expire held; give the user a paste block.
+- Stack swapped under a running session: `/mcp` reconnect both servers before any campaign call.
