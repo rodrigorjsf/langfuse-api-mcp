@@ -130,7 +130,7 @@ func TestNoArgumentChoosesTheWordsOfAHintAndTwoClientsGetTheSame(t *testing.T) {
 	for name, params := range map[string]map[string]any{
 		"no parameter":      {},
 		"a limit":           {"limit": 5},
-		"a time filter":     {"fromTimestamp": "2026-01-02T03:04:05Z"},
+		"a time window":     {"fromTimestamp": "2026-01-02T03:04:05Z"},
 		"a field selection": {"fields": "core"},
 		"every one":         {"limit": 5, "fromTimestamp": "2026-01-02T03:04:05Z", "fields": "core"},
 	} {
@@ -192,7 +192,7 @@ func TestAValueTheCatalogRefusesNeverReachesAHintOfThisTicket(t *testing.T) {
 		"a bidi override in a filter":        {"name": "n\u202e-1"},
 		"a timestamp with no timezone":       {"toTimestamp": "2026-01-02T03:04:05"},
 		"a limit that is not a number":       {"limit": "many"},
-		"a time filter that is a list":       {"fromTimestamp": []string{"2026-01-02T03:04:05Z"}},
+		"a time window that is a list":       {"fromTimestamp": []string{"2026-01-02T03:04:05Z"}},
 		"a field selection that is a number": {"fields": 7},
 	} {
 		fake, seen := fakeLangfuse(t, http.StatusOK, `{}`)

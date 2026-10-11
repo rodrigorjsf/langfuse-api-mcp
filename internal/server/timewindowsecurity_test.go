@@ -1,8 +1,11 @@
 package server_test
 
 import (
+	"encoding/json"
 	"log/slog"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -19,13 +22,6 @@ import (
 // argument, no value and no text of a Langfuse answer; whether a parameter is a
 // time window comes only from the compiled lists and the detected version; and the
 // parameter keeps every check of a date-time value.
-
-// datasetItemsTooLarge and datasetItemsSlow are the hints of datasetItems_list
-// (a limit and a page, no fields, no window).
-const (
-	datasetItemsTooLarge = "narrow the query: a lower limit, and page through the rest " + viaPage
-	datasetItemsSlow     = "narrow the query before calling again: a lower limit"
-)
 
 // A date-time parameter that bounds no window, by operation, with the call that
 // carries it.
@@ -89,24 +85,28 @@ func TestAFailedCallThatCarriedAStartTimeOrAVersionDoesNotEchoIt(t *testing.T) {
 	const planted = "2031-02-03T04:05:06Z"
 	dual := catalog.AllFamilies()
 	for name, tc := range noWindowCases {
-		for source, cs := range map[string]*mcp.ClientSession{
-			"a 413": func() *mcp.ClientSession {
+		for source, connect := range map[string]func(t *testing.T) *mcp.ClientSession{
+			"a 413": func(t *testing.T) *mcp.ClientSession {
 				fake, _ := scriptedLangfuse(t, answer{status: http.StatusRequestEntityTooLarge, body: `{"message":"Response too large"}`})
 				return connectServing(t, fake, "4.46.0", dual...)
-			}(),
-			"a body over 5 MiB": func() *mcp.ClientSession {
+			},
+			"a body over 5 MiB": func(t *testing.T) *mcp.ClientSession {
 				fake, _ := scriptedLangfuse(t, answer{status: http.StatusOK, body: `{"data":"` + strings.Repeat("a", 5<<20) + `"}`})
 				return connectServing(t, fake, "4.46.0", dual...)
-			}(),
-			"a timeout": connectServingSlow(t, stallingLangfuse(t), "4.46.0", dual...),
+			},
+			"a timeout": func(t *testing.T) *mcp.ClientSession {
+				return connectServingSlow(t, stallingLangfuse(t), "4.46.0", dual...)
+			},
 		} {
-			got := toolErrorOf(t, callExecuteRead(t, cs, tc.call(planted))).Error
+			t.Run(name+", "+source, func(t *testing.T) {
+				got := toolErrorOf(t, callExecuteRead(t, connect(t), tc.call(planted))).Error
 
-			for _, value := range []string{planted, "2031", "04:05:06"} {
-				if strings.Contains(got.Message, value) || strings.Contains(got.Hint, value) {
-					t.Errorf("%s, %s: message %q or hint %q echoes the value %q of the call", name, source, got.Message, got.Hint, value)
+				for _, value := range []string{planted, "2031", "04:05:06"} {
+					if strings.Contains(got.Message, value) || strings.Contains(got.Hint, value) {
+						t.Errorf("message %q or hint %q echoes the value %q of the call", got.Message, got.Hint, value)
+					}
 				}
-			}
+			})
 		}
 	}
 }
@@ -133,19 +133,21 @@ func TestNoValueOfADateTimeThatBoundsNoWindowChangesTheHintAndTwoClientsGetTheSa
 			"a timestamp far ahead": "9999-12-31T23:59:59Z",
 			"no value of the pair":  "",
 		} {
-			call := tc.call(value)
-			if value == "" {
-				call["parameters"] = map[string]any{}
-				if tc.operationID == observationByID {
-					call["parameters"] = map[string]any{"observationId": "o-1"}
+			t.Run(name+", "+valueName, func(t *testing.T) {
+				call := tc.call(value)
+				if value == "" {
+					call["parameters"] = map[string]any{}
+					if tc.operationID == observationByID {
+						call["parameters"] = map[string]any{"observationId": "o-1"}
+					}
 				}
-			}
-			a := toolErrorOf(t, callExecuteRead(t, first, call)).Error
-			b := toolErrorOf(t, callExecuteRead(t, second, call)).Error
+				a := toolErrorOf(t, callExecuteRead(t, first, call)).Error
+				b := toolErrorOf(t, callExecuteRead(t, second, call)).Error
 
-			if a.Hint != tc.tooLarge || b.Hint != tc.tooLarge {
-				t.Errorf("%s, %s: hints = %q and %q, want both %q", name, valueName, a.Hint, b.Hint, tc.tooLarge)
-			}
+				if a.Hint != tc.tooLarge || b.Hint != tc.tooLarge {
+					t.Errorf("hints = %q and %q, want both %q", a.Hint, b.Hint, tc.tooLarge)
+				}
+			})
 		}
 	}
 }
@@ -171,60 +173,109 @@ func TestAStartTimeAndAVersionKeepEveryCheckOfADateTimeParameter(t *testing.T) {
 			"a boolean":                 true,
 			"a looser form of RFC 3339": "2026-1-2T3:04:05Z",
 		} {
-			fake, seen := fakeLangfuse(t, http.StatusOK, `{}`)
-			cs := connectServing(t, fake, "4.46.0", catalog.AllFamilies()...)
+			t.Run(name+", "+valueName, func(t *testing.T) {
+				fake, seen := fakeLangfuse(t, http.StatusOK, `{}`)
+				cs := connectServing(t, fake, "4.46.0", catalog.AllFamilies()...)
 
-			got := toolErrorOf(t, callExecuteRead(t, cs, tc.call(value))).Error
+				got := toolErrorOf(t, callExecuteRead(t, cs, tc.call(value))).Error
 
-			if got.Code != "invalid_argument" || !strings.Contains(got.Message, tc.parameter) {
-				t.Errorf("%s, %s: error = %+v, want invalid_argument naming %s", name, valueName, got, tc.parameter)
-			}
-			for _, text := range []string{got.Message, got.Hint} {
-				for _, leaked := range []string{"yesterday", "2026-01-02", "\x07", "\u200b", "\u202e"} {
-					if strings.Contains(text, leaked) {
-						t.Errorf("%s, %s: %q holds the value %q", name, valueName, text, leaked)
+				if got.Code != "invalid_argument" || !strings.Contains(got.Message, tc.parameter) {
+					t.Errorf("error = %+v, want invalid_argument naming %s", got, tc.parameter)
+				}
+				for _, text := range []string{got.Message, got.Hint} {
+					for _, leaked := range []string{"yesterday", "2026-01-02", "\x07", "\u200b", "\u202e"} {
+						if strings.Contains(text, leaked) {
+							t.Errorf("%q holds the value %q", text, leaked)
+						}
 					}
 				}
-			}
-			for _, banned := range []string{"tell the user", "narrow the query"} {
-				if strings.Contains(got.Hint, banned) {
-					t.Errorf("%s, %s: hint %q holds %q, which a refused call must not reach", name, valueName, got.Hint, banned)
+				for _, banned := range []string{"tell the user", "narrow the query"} {
+					if strings.Contains(got.Hint, banned) {
+						t.Errorf("hint %q holds %q, which a refused call must not reach", got.Hint, banned)
+					}
 				}
-			}
-			assertNoRequest(t, seen)
+				assertNoRequest(t, seen)
+			})
 		}
 	}
 }
 
 // On a deployment that does not serve them (3.80.0 serves neither) each parameter
-// stays refused as not served, before any request, and an unknown parameter stays
-// refused with its name echoed only redacted and cut to 64 bytes.
+// stays refused as not served, before any request, never echoing the value.
 func TestAStartTimeAndAVersionStayRefusedWhereTheDeploymentDoesNotServeThem(t *testing.T) {
 	t.Parallel()
 	legacy := []catalog.Family{catalog.LegacyFamily}
 	for name, tc := range noWindowCases {
-		fake, seen := fakeLangfuse(t, http.StatusOK, `{}`)
-		cs := connectServing(t, fake, "3.80.0", legacy...)
+		t.Run(name, func(t *testing.T) {
+			fake, seen := fakeLangfuse(t, http.StatusOK, `{}`)
+			cs := connectServing(t, fake, "3.80.0", legacy...)
 
-		got := toolErrorOf(t, callExecuteRead(t, cs, tc.call("2026-01-02T03:04:05Z"))).Error
+			got := toolErrorOf(t, callExecuteRead(t, cs, tc.call("2026-01-02T03:04:05Z"))).Error
 
-		if got.Code != "invalid_argument" || !strings.Contains(got.Message, tc.parameter) ||
-			!strings.Contains(got.Message, "(Langfuse 3.80.0)") || strings.Contains(got.Message, "2026-01-02") {
-			t.Errorf("%s: error = %+v, want invalid_argument naming %s as not served on 3.80.0, never the value", name, got, tc.parameter)
-		}
-		assertNoRequest(t, seen)
+			if got.Code != "invalid_argument" || !strings.Contains(got.Message, tc.parameter) ||
+				!strings.Contains(got.Message, "(Langfuse 3.80.0)") || strings.Contains(got.Message, "2026-01-02") {
+				t.Errorf("error = %+v, want invalid_argument naming %s as not served on 3.80.0, never the value", got, tc.parameter)
+			}
+			assertNoRequest(t, seen)
+		})
 	}
-	long := "startTime" + strings.Repeat("x", 100)
-	fake, seen := fakeLangfuse(t, http.StatusOK, `{}`)
-	cs := connectServing(t, fake, "4.46.0", catalog.AllFamilies()...)
+}
 
-	got := toolErrorOf(t, callExecuteRead(t, cs, map[string]any{
-		"operationId": observationByID, "parameters": map[string]any{"observationId": "o-1", long: "2026-01-02T03:04:05Z"},
-	})).Error
+// An unknown parameter stays refused as today: its name is echoed only redacted
+// and cut to 64 bytes, and nothing is sent.
+func TestAnUnknownParameterNextToAStartTimeIsRefusedWithItsNameRedactedAndCut(t *testing.T) {
+	t.Parallel()
+	secretKey := "sk-lf-" + "00000000-0000-0000-0000-000000000000"
+	for name, unknown := range map[string]string{
+		"a name cut to 64 bytes":           "startTime" + strings.Repeat("x", 100),
+		"a name that holds a Langfuse key": secretKey,
+	} {
+		t.Run(name, func(t *testing.T) {
+			fake, seen := fakeLangfuse(t, http.StatusOK, `{}`)
+			cs := connectServing(t, fake, "4.46.0", catalog.AllFamilies()...)
 
-	if got.Code != "invalid_argument" || !strings.Contains(got.Message, "unknown parameter for operation "+observationByID) ||
-		strings.Contains(got.Message, long) {
-		t.Errorf("error = %+v, want an unknown-parameter refusal with the name cut", got)
+			got := toolErrorOf(t, callExecuteRead(t, cs, map[string]any{
+				"operationId": observationByID, "parameters": map[string]any{"observationId": "o-1", unknown: "2026-01-02T03:04:05Z"},
+			})).Error
+
+			if got.Code != "invalid_argument" || !strings.Contains(got.Message, "unknown parameter for operation "+observationByID) {
+				t.Fatalf("error = %+v, want an unknown-parameter refusal", got)
+			}
+			if strings.Contains(got.Message, unknown) || strings.Contains(got.Message, "sk-lf-0000") {
+				t.Errorf("message %q echoes the unknown name whole or its key", got.Message)
+			}
+			assertNoRequest(t, seen)
+		})
 	}
-	assertNoRequest(t, seen)
+}
+
+// No tool gains an argument with this ticket: whether a parameter is a time window
+// is the catalog's fact, so the arguments of the tools stay the ones below, and
+// startTime and version travel inside parameters as before.
+func TestNoToolGainsAnArgumentFromTheTimeWindowRule(t *testing.T) {
+	t.Parallel()
+	cs := connectOffline(t)
+	for tool, want := range map[string][]string{
+		"execute_read":       {"operationId", "parameters"},
+		"describe_operation": {"operationId"},
+		"search_operations":  {"query"},
+		"get_trace_tree":     {"include", "traceId"},
+	} {
+		t.Run(tool, func(t *testing.T) {
+			schema, err := json.Marshal(toolNamed(t, cs, tool).InputSchema)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var parsed struct {
+				Properties map[string]json.RawMessage `json:"properties"`
+			}
+			if err := json.Unmarshal(schema, &parsed); err != nil {
+				t.Fatal(err)
+			}
+			got := slices.Sorted(maps.Keys(parsed.Properties))
+			if !slices.Equal(got, want) {
+				t.Errorf("%s takes the arguments %v, want %v", tool, got, want)
+			}
+		})
+	}
 }

@@ -119,27 +119,24 @@ func operationWithTimeWindow(names ...string) catalog.Operation {
 // (datasets_list takes a limit and no time window; since #204 no operation has a
 // time window and no limit, because legacy_observationsV1_get, with a startTime
 // and no limit, has no window), so the second is proven on a literal operation
-// alone, and the tests after this one run the real operations through the tool.
+// alone. The real operations are run through the tool in timewindowhints_test.go.
 func TestAnOperationIsToldOnlyTheWaysOfNarrowingItHas(t *testing.T) {
 	t.Parallel()
-	const (
-		slowLead = "narrow the query before calling again: "
-		canceled = "if the call was canceled because it was slow, "
-	)
+	const slowLead = "narrow the query before calling again: "
 	tests := map[string]struct {
 		op                       catalog.Operation
 		tooLarge, slow, canceled string
 	}{
 		"a limit and no time window": {operationWith("limit"),
-			"narrow the query: a lower limit", slowLead + "a lower limit", canceled + slowLead + "a lower limit"},
+			"narrow the query: a lower limit", slowLead + "a lower limit", canceledLead + slowLead + "a lower limit"},
 		"a time window and no limit": {operationWithTimeWindow(),
-			"narrow the query: a shorter time window", slowLead + "a shorter time window", canceled + slowLead + "a shorter time window"},
+			"narrow the query: a shorter time window", slowLead + "a shorter time window", canceledLead + slowLead + "a shorter time window"},
 		"a limit and a time window": {operationWithTimeWindow("limit"),
 			"narrow the query: a lower limit or a shorter time window", slowLead + "a lower limit or a shorter time window",
-			canceled + slowLead + "a lower limit or a shorter time window"},
+			canceledLead + slowLead + "a lower limit or a shorter time window"},
 		"a limit and paging": {operationWith("limit", "page"),
 			"narrow the query: a lower limit, and page through the rest " + viaPage, slowLead + "a lower limit",
-			canceled + slowLead + "a lower limit"},
+			canceledLead + slowLead + "a lower limit"},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {

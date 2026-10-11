@@ -19,12 +19,24 @@ import (
 // for reading one observation by ID, and the version of datasetItems_list, the
 // state of the dataset at that timestamp. Expected hints are literals.
 
-// A date-time parameter that bounds no window is on a deployment that serves it:
-// 4.46.0 serves startTime (from 4.33.0) and version (from 3.153.0).
+// The two operations with a date-time parameter that bounds no window. 4.46.0
+// serves their startTime (from 4.33.0) and version (from 3.153.0).
 const (
 	observationByID = "legacy_observationsV1_get"
 	datasetItems    = "datasetItems_list"
 )
+
+// The hints of datasetItems_list (a limit and a page, no fields, no window).
+const (
+	datasetItemsTooLarge = "narrow the query: a lower limit, and page through the rest " + viaPage
+	datasetItemsSlow     = "narrow the query before calling again: a lower limit"
+)
+
+// The truncation hint of one observation larger than the result size cap, as a
+// literal: its large values clipped, no way of narrowing.
+const observationTruncated = "values ending in \"… [clipped]\" were shortened to fit the result size cap, each keeping its start; " +
+	"every other value is whole; a single value is larger than the result size cap and cannot be read whole through this server: " +
+	"tell the user instead of retrying"
 
 var observationByIDCall = map[string]any{"operationId": observationByID, "parameters": map[string]any{"observationId": "o-1"}}
 
@@ -94,13 +106,9 @@ func TestTheTruncationHintOfAnObservationReadByIDNamesNoTimeWindow(t *testing.T)
 
 	env := decodeResult(t, resultText(t, callExecuteRead(t, cs, observationByIDCall)))
 
-	if !env.Truncated {
-		t.Fatalf("truncated = false, want an observation of 100 KiB cut to the smallest cap")
-	}
-	for _, banned := range []string{"time window", "narrow the query", "limit"} {
-		if strings.Contains(env.Hint, banned) {
-			t.Errorf("hint %q names %q, but one observation read by its ID has no way of narrowing", env.Hint, banned)
-		}
+	if !env.Truncated || env.Hint != observationTruncated {
+		t.Fatalf("truncated %v, hint %q; want an observation of 100 KiB cut to the smallest cap with the hint %q",
+			env.Truncated, env.Hint, observationTruncated)
 	}
 }
 
@@ -111,10 +119,6 @@ func TestTheTruncationHintOfAnObservationReadByIDNamesNoTimeWindow(t *testing.T)
 // they are what they were.
 func TestTheHintsOfADatasetItemListNameALowerLimitAndNoTimeWindow(t *testing.T) {
 	t.Parallel()
-	const (
-		tooLarge = "narrow the query: a lower limit, and page through the rest " + viaPage
-		slow     = "narrow the query before calling again: a lower limit"
-	)
 	rows := make([]map[string]string, 400)
 	for i := range rows {
 		rows[i] = map[string]string{"id": strconv.Itoa(i), "input": strings.Repeat("a", 100)}
@@ -127,12 +131,12 @@ func TestTheHintsOfADatasetItemListNameALowerLimitAndNoTimeWindow(t *testing.T) 
 		version  string
 		families []catalog.Family
 	}{
-		"4.46.0, which serves version":        {"4.46.0", dual},
-		"3.80.0, which does not serve it":     {"3.80.0", legacy},
-		"3.153.0, the release that adds it":   {"3.153.0", legacy},
-		"3.152.0, the release before it":      {"3.152.0", legacy},
-		"4.46.0 on the events-only profile":   {"4.46.0", []catalog.Family{catalog.V4ReadFamily, catalog.ExperimentsFamily}},
-		"a deployment with no detected build": {"", dual},
+		"4.46.0, which serves version":      {"4.46.0", dual},
+		"3.80.0, which does not serve it":   {"3.80.0", legacy},
+		"3.153.0, the release that adds it": {"3.153.0", legacy},
+		"3.152.0, the release before it":    {"3.152.0", legacy},
+		"4.46.0 on the events-only profile": {"4.46.0", []catalog.Family{catalog.V4ReadFamily, catalog.ExperimentsFamily}},
+		"no detected version":               {"", dual},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -140,36 +144,49 @@ func TestTheHintsOfADatasetItemListNameALowerLimitAndNoTimeWindow(t *testing.T) 
 				"a 413":             {status: http.StatusRequestEntityTooLarge, body: `{"message":"Response too large"}`},
 				"a body over 5 MiB": {status: http.StatusOK, body: `{"data":"` + strings.Repeat("a", 5<<20) + `"}`},
 			} {
-				fake, _ := scriptedLangfuse(t, answered)
-				got := toolErrorOf(t, callExecuteRead(t, connectServing(t, fake, deployment.version, deployment.families...), call)).Error
+				t.Run(source, func(t *testing.T) {
+					fake, _ := scriptedLangfuse(t, answered)
 
-				if got.Code != "response_too_large" || got.Hint != tooLarge {
-					t.Errorf("%s: error = %+v, want response_too_large with the hint %q", source, got, tooLarge)
+					got := toolErrorOf(t, callExecuteRead(t, connectServing(t, fake, deployment.version, deployment.families...), call)).Error
+
+					if got.Code != "response_too_large" || got.Hint != datasetItemsTooLarge {
+						t.Errorf("error = %+v, want response_too_large with the hint %q", got, datasetItemsTooLarge)
+					}
+				})
+			}
+			t.Run("a timeout", func(t *testing.T) {
+				cs := connectServingSlow(t, stallingLangfuse(t), deployment.version, deployment.families...)
+
+				got := toolErrorOf(t, callExecuteRead(t, cs, call)).Error
+
+				if got.Code != "timeout" || got.Hint != datasetItemsSlow {
+					t.Errorf("error = %+v, want a timeout with the hint %q", got, datasetItemsSlow)
 				}
-			}
+			})
+			// The client of a canceled call reads no result, so the hint is checked
+			// where it is built.
+			t.Run("a canceled call", func(t *testing.T) {
+				op, ok := sharedCatalog(t).Resolve(catalog.Profile{Version: deployment.version, Families: deployment.families}).Lookup(datasetItems)
+				if !ok {
+					t.Fatalf("%s is not offered", datasetItems)
+				}
 
-			got := toolErrorOf(t, callExecuteRead(t, connectServingSlow(t, stallingLangfuse(t), deployment.version, deployment.families...), call)).Error
-			if got.Code != "timeout" || got.Hint != slow {
-				t.Errorf("a timeout: error = %+v, want a timeout with the hint %q", got, slow)
-			}
+				code, hint := server.FailureOf(op, langfuse.ErrCanceled)
 
-			op, ok := sharedCatalog(t).Resolve(catalog.Profile{Version: deployment.version, Families: deployment.families}).Lookup(datasetItems)
-			if !ok {
-				t.Fatalf("%s is not offered", datasetItems)
-			}
-			if code, hint := server.FailureOf(op, langfuse.ErrCanceled); code != "canceled" || hint != canceledLead+slow {
-				t.Errorf("a canceled call: code %q, hint %q; want canceled with the hint %q", code, hint, canceledLead+slow)
-			}
+				if want := canceledLead + datasetItemsSlow; code != "canceled" || hint != want {
+					t.Errorf("code %q, hint %q; want canceled with the hint %q", code, hint, want)
+				}
+			})
+			t.Run("a page cut at the cap", func(t *testing.T) {
+				fake, _ := fakeLangfuse(t, http.StatusOK, page)
 
-			fake, _ := fakeLangfuse(t, http.StatusOK, page)
-			env := decodeResult(t, resultText(t, callExecuteRead(t, connectServingCapped(t, fake, deployment.version, deployment.families), call)))
-			const wantTail = "narrow the query: a lower limit; page through the rest " + viaPage
-			if !env.Truncated || !strings.HasSuffix(env.Hint, wantTail) {
-				t.Errorf("a page cut at the cap: truncated %v, hint %q; want it to end with %q", env.Truncated, env.Hint, wantTail)
-			}
-			if strings.Contains(env.Hint, "time window") {
-				t.Errorf("a page cut at the cap: hint %q names a time window", env.Hint)
-			}
+				env := decodeResult(t, resultText(t, callExecuteRead(t, connectServingCapped(t, fake, deployment.version, deployment.families), call)))
+
+				const wantTail = "narrow the query: a lower limit; page through the rest " + viaPage
+				if !env.Truncated || !strings.HasPrefix(env.Hint, "only the first ") || !strings.HasSuffix(env.Hint, wantTail) {
+					t.Errorf("truncated %v, hint %q; want it to start with \"only the first \" and end with %q", env.Truncated, env.Hint, wantTail)
+				}
+			})
 		})
 	}
 }
@@ -181,25 +198,28 @@ func TestTheHintsOfADatasetItemListNameALowerLimitAndNoTimeWindow(t *testing.T) 
 func TestAParameterThatOnlyLooksLikeATimeWindowIsNotRecommended(t *testing.T) {
 	t.Parallel()
 	for _, name := range []string{"fromVersion", "to", "from", "startTime", "version", "since"} {
-		op := operationWith()
-		op.Params = append(op.Params, catalog.Param{Name: name, In: "query", Schema: catalog.Schema{Type: "string", Format: "date-time"}})
-		withLimit := operationWith("limit")
-		withLimit.Params = append(withLimit.Params, op.Params...)
-		_, timeoutHint := server.FailureOf(op, langfuse.ErrTimeout)
-		_, canceledHint := server.FailureOf(op, langfuse.ErrCanceled)
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			op := operationWith()
+			op.Params = append(op.Params, catalog.Param{Name: name, In: "query", Schema: catalog.Schema{Type: "string", Format: "date-time"}})
+			withLimit := operationWith("limit")
+			withLimit.Params = append(withLimit.Params, op.Params...)
+			_, timeoutHint := server.FailureOf(op, langfuse.ErrTimeout)
+			_, canceledHint := server.FailureOf(op, langfuse.ErrCanceled)
 
-		if got := server.TooLargeHint(op); got != tooLargeNoWay {
-			t.Errorf("%s: too large: hint = %q, want %q", name, got, tooLargeNoWay)
-		}
-		if timeoutHint != slowNoWay || canceledHint != canceledNoWay {
-			t.Errorf("%s: timeout hint %q, canceled hint %q; want %q and %q", name, timeoutHint, canceledHint, slowNoWay, canceledNoWay)
-		}
-		if got := server.TooLargeHint(withLimit); got != "narrow the query: a lower limit" {
-			t.Errorf("%s: with a limit: too large: hint = %q, want only the limit", name, got)
-		}
-		if got := server.TruncationHint(op); strings.Contains(got, "time window") {
-			t.Errorf("%s: truncation hint %q names a time window", name, got)
-		}
+			if got := server.TooLargeHint(op); got != tooLargeNoWay {
+				t.Errorf("too large: hint = %q, want %q", got, tooLargeNoWay)
+			}
+			if timeoutHint != slowNoWay || canceledHint != canceledNoWay {
+				t.Errorf("timeout hint %q, canceled hint %q; want %q and %q", timeoutHint, canceledHint, slowNoWay, canceledNoWay)
+			}
+			if got := server.TooLargeHint(withLimit); got != "narrow the query: a lower limit" {
+				t.Errorf("with a limit: too large: hint = %q, want only the limit", got)
+			}
+			if got := server.TruncationHint(op); strings.Contains(got, "time window") {
+				t.Errorf("truncation hint %q names a time window", got)
+			}
+		})
 	}
 }
 

@@ -17,7 +17,7 @@ func unclassifiedFilters(c Catalog) []string {
 	var found []string
 	for _, op := range c.Operations() {
 		for _, p := range slices.Concat(op.Params, op.unserved) {
-			key := operationParam{op.ID, p.Name}
+			key := filterParam{op.ID, p.Name}
 			if p.In == "query" && p.Name == "filter" && jsonFilters[key] == plainFilters[key] {
 				found = append(found, op.ID)
 			}
@@ -67,7 +67,7 @@ func TestEveryClassifiedFilterIsAFilterParameterOfTheUnionCatalog(t *testing.T) 
 	if err != nil {
 		t.Fatalf("load catalog: %v", err)
 	}
-	for _, list := range []map[operationParam]bool{jsonFilters, plainFilters} {
+	for _, list := range []map[filterParam]bool{jsonFilters, plainFilters} {
 		for pair := range list {
 			op, ok := cat.Lookup(pair.operationID)
 			if !ok {

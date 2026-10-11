@@ -65,6 +65,9 @@ _Avoid_: supported parameter, valid parameter
 **Filter scan**: the server's answer to a list call whose filter the connected deployment does not serve, for the few filters it is defined for: the server reads the list without the filter, keeps the rows that match, and says whether it read every row or stopped at its page limit. An operation description shows such a filter apart from the served parameters, as a filter the server applies itself.
 _Avoid_: client-side filtering, emulated filter
 
+**Time window**: a query parameter the catalog names as one (the `from...`/`to...` pairs, such as `fromTimestamp` and `toTimestamp`) that bounds the time range of what a list returns; the hints of a result too large or a slow call recommend "a shorter time window" only for an operation whose deployment serves one. A parameter with the format `date-time` is not a time window for that reason: the `startTime` of `legacy_observationsV1_get` (a hint that only makes the lookup faster) and the `version` of `datasetItems_list` (the state of the dataset at that point in time) bound none, and both are listed as such.
+_Avoid_: date filter, time filter
+
 **Deployment profile**: the detected Langfuse version plus the families that answered at startup; it decides which operations are in the catalog for the process lifetime.
 
 **Project key**: a public/secret key pair (`pk-lf-…`/`sk-lf-…`) scoped to one Langfuse project; it has full access to that project.

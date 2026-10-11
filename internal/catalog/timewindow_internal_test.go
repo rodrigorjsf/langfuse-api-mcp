@@ -11,14 +11,14 @@ import (
 // date-time parameter must be classified by a person before it ships, never by
 // its name or its format alone.
 
-// dateTimeQueryParams returns "operationId.parameter" for every query parameter
-// of c, served or not, whose schema has the format date-time.
-func dateTimeQueryParams(c Catalog) []string {
-	var found []string
+// dateTimeQueryParams returns every query parameter of c, served or not, whose
+// schema has the format date-time, as its operation and name.
+func dateTimeQueryParams(c Catalog) []timeParam {
+	var found []timeParam
 	for _, op := range c.Operations() {
 		for _, p := range slices.Concat(op.Params, op.unserved) {
 			if p.In == "query" && p.Schema.Format == "date-time" {
-				found = append(found, op.ID+"."+p.Name)
+				found = append(found, timeParam{op.ID, p.Name})
 			}
 		}
 	}
@@ -29,14 +29,9 @@ func dateTimeQueryParams(c Catalog) []string {
 // parameter of c that is on neither list, or on both.
 func unclassifiedTimeParams(c Catalog) []string {
 	var found []string
-	for _, op := range c.Operations() {
-		for _, p := range slices.Concat(op.Params, op.unserved) {
-			if p.In != "query" || p.Schema.Format != "date-time" {
-				continue
-			}
-			if timeWindowParams[p.Name] == notTimeWindows[operationParam{op.ID, p.Name}] {
-				found = append(found, op.ID+"."+p.Name)
-			}
+	for _, p := range dateTimeQueryParams(c) {
+		if timeWindowParams[p.param] == notTimeWindows[p] {
+			found = append(found, p.operationID+"."+p.param)
 		}
 	}
 	return found
@@ -102,8 +97,8 @@ func TestAParameterThatOnlyLooksLikeATimeWindowIsNoTimeWindow(t *testing.T) {
 	if !listed.HasTimeWindow() {
 		t.Error("toUpdatedAt, on the list, is not a time window")
 	}
-	inBody := Operation{ID: "things_list", Params: []Param{{Name: "fromTimestamp", In: "header"}}}
-	if inBody.HasTimeWindow() {
+	inHeader := Operation{ID: "things_list", Params: []Param{{Name: "fromTimestamp", In: "header"}}}
+	if inHeader.HasTimeWindow() {
 		t.Error("a header named fromTimestamp counts as a time window")
 	}
 }
@@ -119,12 +114,12 @@ func TestEveryListedTimeParameterIsADateTimeQueryParameterOfTheUnionCatalog(t *t
 	}
 	found := dateTimeQueryParams(cat)
 	for name := range timeWindowParams {
-		if !slices.ContainsFunc(found, func(s string) bool { return strings.HasSuffix(s, "."+name) }) {
+		if !slices.ContainsFunc(found, func(p timeParam) bool { return p.param == name }) {
 			t.Errorf("%s is on the list of time windows and no operation has it as a date-time query parameter", name)
 		}
 	}
 	for pair := range notTimeWindows {
-		if !slices.Contains(found, pair.operationID+"."+pair.param) {
+		if !slices.Contains(found, pair) {
 			t.Errorf("%s.%s is on the list of date-time parameters that bound no window and is not one of the catalog", pair.operationID, pair.param)
 		}
 		if timeWindowParams[pair.param] {
