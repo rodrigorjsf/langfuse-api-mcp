@@ -132,7 +132,7 @@ func New(cat catalog.Catalog, client *langfuse.Client, log *slog.Logger, secrets
 	redact := secrets.redactor()
 	ex := executor{catalog: cat, client: client, redact: redact, profile: profile, writeMode: o.writeMode,
 		confirmer: newConfirmer(o.now), maxResultBytes: o.maxResultBytes}
-	d := discovery{catalog: cat, writeMode: o.writeMode, redact: redact, profile: profile}
+	d := discovery{catalog: cat, writeMode: o.writeMode, redact: redact, profile: profile, maxResultBytes: o.maxResultBytes}
 	s.AddTool(&mcp.Tool{
 		Name:         "search_operations",
 		Title:        searchOperationsTitle,

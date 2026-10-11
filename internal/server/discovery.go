@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -31,7 +32,9 @@ const searchOperationsDescription = "Lists the Langfuse operations this server c
 	"With query, keeps only the operations where every whitespace-separated keyword appears, ignoring case, " +
 	"in the operation ID, the tag or the description line. Without query, lists every operation. " +
 	"When the query holds the word trace or traces, a hint names how trace data is read on this " +
-	"deployment: one trace, filtered lists, aggregates such as cost per day.\n\n" +
+	"deployment: one trace, filtered lists, aggregates such as cost per day. " +
+	"An index longer than the result size cap lists its leading operations only, says truncated, " +
+	"and keeps the count of all that matched.\n\n" +
 	"Reads the server's built-in catalog only: it does not call Langfuse and does not run any operation. " +
 	"describe_operation returns one operation's parameters; execute_read runs a read operation."
 
@@ -79,7 +82,8 @@ func operationIndexSchema() map[string]any {
 		"type":     "object",
 		"required": []any{"count", "groups"},
 		"properties": map[string]any{
-			"count": map[string]any{"type": "integer", "description": "Number of operations listed."},
+			"count": map[string]any{"type": "integer", "description": "Number of operations that matched the query; " +
+				"all of them are listed unless truncated is true."},
 			"groups": map[string]any{
 				"type":        "array",
 				"description": "The listed operations grouped by tag. Tags holding a v4-family operation come first and tags of legacy-family operations only come last; otherwise tags are in alphabetical order.",
@@ -108,10 +112,12 @@ func operationIndexSchema() map[string]any {
 				"items":       map[string]any{"type": "string"},
 				"description": "Every tag that has operations; present only when nothing matched the query.",
 			},
+			"truncated": map[string]any{"type": "boolean", "description": "Present and true only when the index did not " +
+				"fit the result size cap: groups lists the leading operations that fit, count still counts every match."},
 			"hint": map[string]any{
 				"type": "string",
-				"description": "How trace data is read on this deployment; present only when the query asks about traces " +
-					"(the word trace or traces).",
+				"description": "Fixed text. How trace data is read on this deployment, when the query asks about traces " +
+					"(the word trace or traces); and, when truncated is true, how to list the other operations.",
 			},
 		},
 	}
@@ -122,7 +128,11 @@ type operationIndex struct {
 	Count  int          `json:"count"`
 	Groups []indexGroup `json:"groups"`
 	Tags   []string     `json:"tags,omitempty"`
-	Hint   string       `json:"hint,omitempty"`
+	// Truncated is set when the index did not fit the result size cap and
+	// Groups lists only the leading operations; Count still counts every
+	// match (#190).
+	Truncated bool   `json:"truncated,omitempty"`
+	Hint      string `json:"hint,omitempty"`
 }
 
 type indexGroup struct {
@@ -152,6 +162,9 @@ type discovery struct {
 	// operation errors name it, and its v4 read and legacy families decide
 	// whether get_trace_tree can run.
 	profile langfuse.DeploymentProfile
+	// maxResultBytes is the result size cap: neither the text nor the
+	// structured content of a discovery result is longer (#190).
+	maxResultBytes int
 }
 
 // listed reports whether op is in the operation index: a read operation, or
@@ -193,7 +206,7 @@ func (d discovery) searchOperations(_ context.Context, req *mcp.CallToolRequest,
 	if asksAboutTraces(query) {
 		idx.Hint = d.traceReadsHint()
 	}
-	return indexResult(idx, d.writeMode)
+	return d.indexResult(idx)
 }
 
 // asksAboutTraces reports whether query holds the word trace or traces,
@@ -289,18 +302,86 @@ func (d discovery) tags() []string {
 	return tags
 }
 
-// indexResult renders the operation index as compact text plus
+// indexTruncatedHint is the static hint of an operation index that did not fit
+// the result size cap (#190). It holds neither the query nor any catalog text.
+const indexTruncatedHint = "The operation index does not fit the result size cap, so only its first operations are " +
+	"listed. Call search_operations again with query, keywords such as a tag or part of an operation ID, " +
+	"to list the others."
+
+// indexResult returns the operation index within the result size cap (#190).
+// An index that fits is returned as it is. One that does not keeps its leading
+// entries, as many as fit, cut at an entry boundary and never inside a line:
+// the text and the structured content list the same entries, count still
+// counts every operation that matched, and the result says truncated with a
+// static hint to narrow the search with a query.
+func (d discovery) indexResult(idx operationIndex) (*mcp.CallToolResult, error) {
+	whole, err := renderIndex(idx, d.writeMode)
+	if err != nil || whole.bytes() <= d.maxResultBytes {
+		return whole.result(), err
+	}
+	var failed error
+	// The largest k whose index fits: the size grows with k.
+	k := sort.Search(idx.Count+1, func(k int) bool {
+		r, err := renderIndex(idx.leading(k), d.writeMode)
+		failed = errors.Join(failed, err)
+		return r.bytes() > d.maxResultBytes
+	}) - 1
+	if failed != nil {
+		return nil, failed
+	}
+	r, err := renderIndex(idx.leading(max(k, 0)), d.writeMode)
+	if err != nil {
+		return nil, err
+	}
+	return r.result(), nil
+}
+
+// leading returns idx with only its first k entries, in the order of its
+// groups, and marked truncated; Count stays the number of matches.
+func (idx operationIndex) leading(k int) operationIndex {
+	out := idx
+	out.Truncated = true
+	out.Hint = indexTruncatedHint
+	if idx.Hint != "" {
+		out.Hint = idx.Hint + " " + indexTruncatedHint
+	}
+	out.Groups = make([]indexGroup, 0, len(idx.Groups))
+	for _, g := range idx.Groups {
+		if k == 0 {
+			break
+		}
+		n := min(k, len(g.Operations))
+		out.Groups = append(out.Groups, indexGroup{Tag: g.Tag, Operations: g.Operations[:n:n]})
+		k -= n
+	}
+	return out
+}
+
+// listed is the number of entries the groups list.
+func (idx operationIndex) listed() int {
+	n := 0
+	for _, g := range idx.Groups {
+		n += len(g.Operations)
+	}
+	return n
+}
+
+// renderIndex renders the operation index as compact text plus
 // structuredContent. The text names the tool of each line only in write mode,
 // where two tools run operations.
-func indexResult(idx operationIndex, writeMode bool) (*mcp.CallToolResult, error) {
+func renderIndex(idx operationIndex, writeMode bool) (rendered, error) {
 	var b strings.Builder
 	if idx.Count == 0 {
 		b.WriteString("No operation matches the query. The operations are grouped under these tags: " +
 			strings.Join(idx.Tags, ", ") + ". Call search_operations again without query to list every operation, " +
 			"or with other keywords.")
 	} else {
-		fmt.Fprintf(&b, "%d operations, grouped by tag. describe_operation returns an operation's parameters. %s\n",
-			idx.Count, thirdPartyNote)
+		if idx.Truncated {
+			fmt.Fprintf(&b, "%d operations match; the first %d are listed, grouped by tag.", idx.Count, idx.listed())
+		} else {
+			fmt.Fprintf(&b, "%d operations, grouped by tag.", idx.Count)
+		}
+		fmt.Fprintf(&b, " describe_operation returns an operation's parameters. %s\n", thirdPartyNote)
 		for _, g := range idx.Groups {
 			b.WriteString("\n" + g.Tag + "\n")
 			for _, op := range g.Operations {
@@ -315,19 +396,34 @@ func indexResult(idx operationIndex, writeMode bool) (*mcp.CallToolResult, error
 	if idx.Hint != "" {
 		b.WriteString("\n\n" + idx.Hint)
 	}
-	return textResult(b.String(), idx)
+	return render(b.String(), idx)
 }
 
-// textResult returns text for the model plus v as structuredContent.
-func textResult(text string, v any) (*mcp.CallToolResult, error) {
+// rendered is a discovery result before it is sent: the text for the model
+// and the JSON of structuredContent. The result size cap bounds both (#190).
+type rendered struct {
+	text       string
+	structured json.RawMessage
+}
+
+// render returns text for the model plus v as structuredContent.
+func render(text string, v any) (rendered, error) {
 	structured, err := json.Marshal(v)
 	if err != nil {
-		return nil, fmt.Errorf("encode structuredContent: %w", err)
+		return rendered{}, fmt.Errorf("encode structuredContent: %w", err)
 	}
+	return rendered{text: text, structured: structured}, nil
+}
+
+// bytes is the size of the larger of the two contents, which the result size
+// cap bounds.
+func (r rendered) bytes() int { return max(len(r.text), len(r.structured)) }
+
+func (r rendered) result() *mcp.CallToolResult {
 	return &mcp.CallToolResult{
-		Content:           []mcp.Content{&mcp.TextContent{Text: text}},
-		StructuredContent: json.RawMessage(structured),
-	}, nil
+		Content:           []mcp.Content{&mcp.TextContent{Text: r.text}},
+		StructuredContent: r.structured,
+	}
 }
 
 // decodeSearchInput decodes the search_operations arguments and returns the
@@ -381,7 +477,8 @@ const describeOperationDescription = "Returns the operation description of one L
 	"what it does, the tool that runs it, and every path and query parameter with its location, type, " +
 	"whether it is required, its allowed values, its bounds and its default. In write mode it also says " +
 	"whether the operation is destructive (DELETE, PUT, PATCH) and returns its JSON request body schema, " +
-	"which execute_write checks every body against.\n\n" +
+	"which execute_write checks every body against. A body schema that does not fit the result size cap is " +
+	"returned without its description and title annotations, or left out, and the result says truncated.\n\n" +
 	"Reads the server's built-in catalog only: it does not call Langfuse and does not run the operation. " +
 	"search_operations lists the operation IDs; execute_read runs a read operation."
 
@@ -424,13 +521,19 @@ func operationDescriptionSchema() map[string]any {
 			"body": map[string]any{
 				"type":        "object",
 				"description": "The operation's JSON request body; present only in write mode, for an operation that takes one.",
-				"required":    []any{"required", "schema"},
+				"required":    []any{"required"},
 				"properties": map[string]any{
 					"required": map[string]any{"type": "boolean", "description": "Whether the operation needs a body."},
 					"schema": map[string]any{"type": "object", "description": "JSON Schema 2020-12 of the body, " +
-						"which execute_write checks every body against. " + bodySchemaNote},
+						"which execute_write checks every body against. " + bodySchemaNote + " Absent only when " +
+						"truncated is true and the schema does not fit the result size cap."},
 				},
 			},
+			"truncated": map[string]any{"type": "boolean", "description": "Present and true only when the body schema " +
+				"was reduced to fit the result size cap: its description and title annotations were left out " +
+				"(every keyword execute_write checks a body against is kept), or the whole schema was."},
+			"hint": map[string]any{"type": "string", "description": "Fixed text saying what was left out of the " +
+				"body schema; present only when truncated is true."},
 			"parameters": map[string]any{
 				"type": "array",
 				"items": map[string]any{
@@ -471,13 +574,18 @@ type operationDescription struct {
 	Destructive *bool              `json:"destructive,omitempty"`
 	Body        *bodyDescription   `json:"body,omitempty"`
 	Parameters  []paramDescription `json:"parameters"`
+	// Truncated and Hint are set when the body schema was reduced to fit the
+	// result size cap (#190); Hint is one of two static texts.
+	Truncated bool   `json:"truncated,omitempty"`
+	Hint      string `json:"hint,omitempty"`
 }
 
 // bodyDescription is an operation's request body: whether it is required and
-// its JSON Schema 2020-12, as the catalog cleaned it of hidden characters.
+// its JSON Schema 2020-12, as the catalog cleaned it of hidden characters. The
+// schema is absent only when it did not fit the result size cap (#190).
 type bodyDescription struct {
 	Required bool            `json:"required"`
-	Schema   json.RawMessage `json:"schema"`
+	Schema   json.RawMessage `json:"schema,omitempty"`
 }
 
 // bodySchemaNote frames a body schema, in describe_operation's text and
@@ -525,7 +633,7 @@ func (d discovery) describeOperation(_ context.Context, req *mcp.CallToolRequest
 			notFoundHint, id)
 	}
 	a.method = op.Method
-	return descriptionResult(describe(op, d.writeMode))
+	return d.describeResult(op, describe(op, d.writeMode))
 }
 
 // describe returns the operation description of op; in write mode it says
@@ -562,9 +670,60 @@ func describe(op catalog.Operation, writeMode bool) operationDescription {
 	return out
 }
 
-// descriptionResult renders the operation description as compact text plus
+// The static hints of a body schema reduced to fit the result size cap (#190).
+// They hold neither the operation ID nor any text of the catalog.
+const (
+	annotationsLeftOutHint = "To fit the result size cap, the description and title annotations of the body schema " +
+		"were left out; every keyword execute_write checks a body against is kept."
+	bodySchemaLeftOutHint = "The body schema does not fit the result size cap and was left out; body.required says " +
+		"whether the operation needs a body. The operator can raise the cap with LANGFUSE_MCP_MAX_RESULT_BYTES."
+)
+
+// describeResult returns the operation description of op, within the result
+// size cap (#190). What fits is returned as it is. A body schema that does not
+// fit is reduced by its shape, never cut at a byte: first the description and
+// title annotations are left out, which no keyword execute_write checks a body
+// against depends on, so the schema accepts and refuses the same bodies; and
+// only if that is not enough the schema is left out as a whole, the result
+// still saying whether the operation takes a body and whether it is required.
+// Either way the result says truncated, with a static hint. The shipped catalog
+// never reaches the second step at the smallest cap (a test fails the build if
+// it would).
+func (d discovery) describeResult(op catalog.Operation, od operationDescription) (*mcp.CallToolResult, error) {
+	whole, err := renderDescription(od)
+	if err != nil {
+		return nil, err
+	}
+	if whole.bytes() <= d.maxResultBytes || od.Body == nil {
+		return whole.result(), nil
+	}
+	if schema, err := op.Body.SchemaWithoutAnnotations(); err == nil {
+		reduced, err := renderDescription(od.withBody(schema, annotationsLeftOutHint))
+		if err != nil {
+			return nil, err
+		}
+		if reduced.bytes() <= d.maxResultBytes {
+			return reduced.result(), nil
+		}
+	}
+	omitted, err := renderDescription(od.withBody(nil, bodySchemaLeftOutHint))
+	if err != nil {
+		return nil, err
+	}
+	return omitted.result(), nil
+}
+
+// withBody returns od with the body schema replaced by schema, which may be
+// nil, and marked truncated with the hint.
+func (od operationDescription) withBody(schema json.RawMessage, hint string) operationDescription {
+	od.Body = &bodyDescription{Required: od.Body.Required, Schema: schema}
+	od.Truncated, od.Hint = true, hint
+	return od
+}
+
+// renderDescription renders the operation description as compact text plus
 // structuredContent.
-func descriptionResult(od operationDescription) (*mcp.CallToolResult, error) {
+func renderDescription(od operationDescription) (rendered, error) {
 	var b strings.Builder
 	b.WriteString(od.OperationID + " — " + od.Description + "\n")
 	b.WriteString("Tag " + od.Tag + "; HTTP " + od.Method + "; run it with " + od.Tool + ". " +
@@ -599,12 +758,21 @@ func descriptionResult(od operationDescription) (*mcp.CallToolResult, error) {
 			if od.Body.Required {
 				need = "required"
 			}
-			b.WriteString("\nBody (" + need + "), as JSON Schema 2020-12. " + bodySchemaNote + "\n")
-			b.Write(od.Body.Schema)
-			b.WriteString("\n")
+			if od.Body.Schema == nil {
+				b.WriteString("\nBody (" + need + "): its JSON Schema 2020-12 is left out.\n")
+			} else {
+				b.WriteString("\nBody (" + need + "), as JSON Schema 2020-12. " + bodySchemaNote + "\n")
+			}
+			if od.Truncated {
+				b.WriteString("Truncated: " + od.Hint + "\n")
+			}
+			if od.Body.Schema != nil {
+				b.Write(od.Body.Schema)
+				b.WriteString("\n")
+			}
 		}
 	}
-	return textResult(b.String(), od)
+	return render(b.String(), od)
 }
 
 // facts lists what the text line of a parameter says about it.
