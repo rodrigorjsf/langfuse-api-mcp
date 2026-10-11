@@ -539,6 +539,34 @@ snapshot or lookup parameter is classified by a person. An operation has a time 
 serves at least one parameter of the first list. The value check of a `date-time` parameter (RFC 3339, before any request)
 covers all fourteen operations, a window or not.
 
+### 1.17 Rows written through the legacy ingestion API can reach Observations v2 late, or not at all (live on self-hosted 4.46.0 `dual`, 2026-10-11) `[verified]` for the observations, `[hypothesis]` for the cause
+
+Source: the end-to-end campaign on a self-hosted Langfuse 4.46.0 `dual` (`raw/2026-10-11-e2e-langfuse-4.46.0-dual.md`,
+finding H2): the Langfuse API straight, the ClickHouse tables and the worker log of that stack. One run on one stack;
+nothing here was measured on Langfuse Cloud, on 4.46.0 `events_only` or on 3.x.
+
+- **What was seen.** The seed posted 40 traces (303 observations) through the legacy ingestion API. Afterwards the legacy
+  list counted 303 observations and Observations v2 counted 180. `GET /api/public/v2/observations?traceId=…` returned 0
+  rows for `seed-trace-001` to `-020`, and for `-021` to `-040` the legacy count plus one (the root row Langfuse adds,
+  `t-<traceId>`). `trace_get` and `legacy_observationsV1_getMany` held the 20 lost traces whole. ClickHouse held 303 rows
+  in `observations`, 343 in the staging partition `2026-10-11 19:30:00` of `observations_batch_staging` and 180 in
+  `events_core`. The worker log said `[DUAL WRITE] Processing partition 2026-10-11 19:30:00 for events table fill`,
+  then `Successfully propagated`, then every minute `No partitions available for processing`: the job ran once and
+  never came back to that partition, so it was not lag. The tree of an affected trace stayed empty 23 minutes after the
+  seed and from then on.
+- **What reached Observations v2 late.** Two probe traces ingested directly at 19:54:58 (`e2e-probe-trace-1` and `-2`)
+  had no Observations v2 row at 20:02:24, were propagated when the worker processed their partition at 20:05:00, and had
+  all their rows at 20:07:59: fresh data reaches Observations v2 whole, about ten minutes after ingestion.
+- **Cause.** A hypothesis, seen once: the seed was posted 15 seconds after the Langfuse worker started, and a start-up
+  race may have lost its first rows. Whether a second load on a fresh stack loses rows again was not measured.
+- **What it means for the server.** During the roughly ten minutes after any ingestion through the legacy API, a
+  deployment that serves both read families shows an Observations v2 that lacks what the legacy reads hold, and in the
+  run above it never caught up for 20 traces. The tree is read from Observations v2 whatever the legacy family's state
+  (ADR-0002 amendment: the source is chosen once, from the deployment profile), so the server cannot fall back from a
+  Langfuse answer. It says so instead: the hint of an empty tree on such a deployment names the legacy reads that may
+  hold the trace, and the tool description says Observations v2 can lack observations the legacy ingestion API sent. A
+  tree that holds some of a trace and not all of it shows no sign of the gap.
+
 ---
 
 ## 2. Deprecations
