@@ -370,9 +370,24 @@ operation is `legacy_observationsV1_getMany`. API reference `GET /api/public/obs
   `promptTokens`, `completionTokens`, `totalTokens`, `inputPrice`, `outputPrice`, `totalPrice`,
   `calculatedInputCost`, `calculatedOutputCost` and `calculatedTotalCost`; 39 keys, null where Langfuse has no value.
   There is no field selection: `input`, `output` and `metadata` come with every row. **Without them a row is about
-  870 bytes**, so at the default 64 KiB result size cap about 75 rows fit before rows are left out at a row boundary
-  (a 130-observation trace read through `get_trace_tree` on 3.80.0 counted 130 in `meta.observations` and returned 76
-  rows).
+  870 bytes** as Langfuse sends it, so with every key kept about 75 rows fit the default 64 KiB result size cap before
+  rows are left out at a row boundary (a 130-observation trace read through `get_trace_tree` on 3.80.0 counted 130 in
+  `meta.observations` and returned 76 rows, #187).
+- **Which keys are `null` (#200).** One row of a span with no model, usage or cost was recorded from the pinned 3.80.0
+  (2026-10-11; `internal/server/testdata/legacy-observation-3.80.0.json`, 865 bytes, keys as test placeholders). 18 of
+  its 39 keys are `null`: `parentObservationId`, `statusMessage`, `version`, `input`, `output`, `modelParameters`,
+  `completionStartTime`, `promptId`, `model`, `promptName`, `promptVersion`, `timeToFirstToken`, `modelId`,
+  `inputPrice`, `outputPrice`, `totalPrice`, `calculatedInputCost` and `calculatedOutputCost`. A count of `0` is not
+  `null`: `promptTokens`, `completionTokens`, `totalTokens` and `calculatedTotalCost` are `0`, `metadata`,
+  `usageDetails` and `costDetails` are `{}`, `usage` is `{"unit":"TOKENS","input":0,"output":0,"total":0}`, and
+  `latency` is `1000` for the 1-second span. `get_trace_tree` leaves out the top-level keys that are `null`, keeping
+  `id`, `parentObservationId` and `startTime` (ADR-0002 amendment of 2026-10-11): the recorded row is **527 bytes** in
+  the result (key order sorted, `depth` added, `input`, `output` and `metadata` removed), so **124 such observations
+  fit the default cap whole**; of 130 the tree returns 123 rows, against 78 before the rule. The live
+  130-observation trace of `TestLiveLangfuse3800GetTraceTreeReadsASecondPageOfTheLegacyList` (spans with a start time
+  and no end time, so `endTime` and `latency` are `null` too) returns **125 of 130** rows, against 76. So 130
+  observations do not fit the default cap either way; the result is marked truncated, `meta.observations` says 130
+  and the hint says how many rows were kept.
 - **Latency unit.** An observation of 1 s (`startTime` and `endTime` one second apart) has `latency` **1000** in this
   list, and one of 2 s has 2000: **milliseconds**. The API reference documents the v2 `latency` filter and field in
   seconds `[sourced]`, and §6 row 12 says the legacy observation schema also uses seconds; on 3.80.0 the observation

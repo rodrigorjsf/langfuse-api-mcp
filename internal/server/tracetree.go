@@ -36,6 +36,8 @@ const getTraceTreeDescription = "Returns every observation of one Langfuse trace
 	"legacy observations list (legacy_observationsV1_getMany) where it serves only the legacy APIs (Langfuse v3). " +
 	"Each observation holds the fields that deployment's Langfuse returns, not translated, so they differ between " +
 	"the two: latency is in seconds from Observations v2 and in milliseconds from the legacy list. " +
+	"On the legacy list a field that Langfuse returned as null is left out, so an absent field means null; " +
+	"id, parentObservationId and startTime are always present, null or not. Observations v2 rows keep their null fields. " +
 	"Each observation carries its name, level, status message, timing, usage, model, cost and latency; " +
 	"input/output and metadata only when include names io or metadata (the legacy list always sends them, " +
 	"and the server removes them). Reads at most 5 pages of 1000 observations from Observations v2 and 10 pages " +

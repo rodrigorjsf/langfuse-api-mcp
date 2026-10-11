@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -135,11 +136,16 @@ func TestLiveLangfuse3800GetTraceTreeKeepsInputOutputAndMetadataWhenIncluded(t *
 }
 
 // A trace of more than one page of the legacy list (it pages at 100): the tree
-// reads page 2 and counts every observation. A legacy row is about 870 bytes
-// even without input, output and metadata, so at the default result size cap
-// the rows past the first 70 or so are left out at a row boundary and the
-// result says so; meta.observations still counts all that were read (the row
-// width is open in #200).
+// reads page 2 and counts every observation. The tree leaves out each key
+// Langfuse sent as null (#200), which makes a row of these spans (no model, usage,
+// cost or end time) smaller than the recorded one, but not small enough for 130
+// of them to fit the default result size cap: measured on 3.80.0 on 2026-10-11,
+// 125 of the 130 rows come back (the recorded row of the seam test gives 123),
+// the result is marked truncated and its hint says so. If the hint's wording
+// changes, this number and the one of tracetree_legacy_nullkeys_test.go move
+// with it: measure again, do not loosen.
+const liveRowsAtTheDefaultCap = 125
+
 func TestLiveLangfuse3800GetTraceTreeReadsASecondPageOfTheLegacyList(t *testing.T) {
 	t.Parallel()
 	cs := liveScanSession(t)
@@ -158,10 +164,16 @@ func TestLiveLangfuse3800GetTraceTreeReadsASecondPageOfTheLegacyList(t *testing.
 
 	env := liveTreeUntil(t, cs, map[string]any{"traceId": trace}, observations, legacyTreePagesReadBackTimeout)
 
-	if env.Data.Meta.Observations != observations || env.Data.Meta.Truncated || len(env.Data.Data) == 0 ||
-		(len(env.Data.Data) < observations) != env.Truncated {
-		t.Fatalf("tree holds %d rows (meta %+v, truncated %v), want all %d read by two pages, the result marked truncated "+
-			"exactly when rows were left out", len(env.Data.Data), env.Data.Meta, env.Truncated, observations)
+	wantHint := fmt.Sprintf("only the first %d of %d rows fit the result size cap", liveRowsAtTheDefaultCap, observations)
+	if env.Data.Meta.Observations != observations || env.Data.Meta.Truncated || len(env.Data.Data) != liveRowsAtTheDefaultCap ||
+		!env.Truncated || !strings.Contains(env.Hint, wantHint) {
+		t.Fatalf("tree holds %d rows (meta %+v, truncated %v, hint %q), want %d of the %d observations read by two pages, "+
+			"the result marked truncated with %q", len(env.Data.Data), env.Data.Meta, env.Truncated, env.Hint, liveRowsAtTheDefaultCap, observations, wantHint)
+	}
+	for _, key := range []string{"statusMessage", "version", "model", "input", "output"} {
+		if _, ok := env.Data.Data[0][key]; ok {
+			t.Errorf("the first row keeps %s, which Langfuse sent as null: %v", key, env.Data.Data[0])
+		}
 	}
 	if first := env.Data.Data[0]["name"]; first != "step-000" {
 		t.Errorf("the first row is %v, want step-000: the start-time order across the two pages", first)

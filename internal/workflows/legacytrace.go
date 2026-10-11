@@ -33,7 +33,8 @@ const (
 // legacy observations list, page by page from page 1, for at most
 // MaxLegacyTracePages pages, and orders them like GetTraceTree: the envelope
 // and the ordering are the same, and a row holds the fields that deployment's
-// Langfuse returns, not translated.
+// Langfuse returns, not translated: no name, value or unit changes. A key
+// Langfuse sent as null is left out (dropNullKeys), so an absent key means null.
 //
 // The legacy list has no field selection and always returns input, output and
 // metadata, so they are removed from every row here unless include asks for
@@ -67,6 +68,7 @@ func GetLegacyTraceTree(ctx context.Context, client *langfuse.Client, r sanitize
 		}
 		for _, o := range got {
 			include.dropUnrequested(o.fields)
+			dropNullKeys(o.fields)
 		}
 		rows = append(rows, got...)
 		pagesRead = page
@@ -93,6 +95,27 @@ func (in Include) dropUnrequested(fields map[string]json.RawMessage) {
 	if !in.Metadata {
 		delete(fields, "metadata")
 	}
+}
+
+// dropNullKeys removes from a row of the legacy list each top-level key whose
+// value is JSON null (the list sends 39 keys per row, most of them null for an
+// observation with no model, usage or cost; #200). Nothing inside a value is
+// changed, and only null counts: 0, false, "", {}, [] and the string "null"
+// stay. The three keys the tree is built from stay whatever they hold, so a
+// root still shows parentObservationId: null. The row is already cleaned, so a
+// key is matched by the name and the value the agent would read.
+func dropNullKeys(fields map[string]json.RawMessage) {
+	for key, value := range fields {
+		if string(value) == "null" && !builtFromKey(key) {
+			delete(fields, key)
+		}
+	}
+}
+
+// builtFromKey reports whether key is one of the three the trace tree is built
+// from: id and parentObservationId give the nesting, startTime the order.
+func builtFromKey(key string) bool {
+	return key == "id" || key == "parentObservationId" || key == "startTime"
 }
 
 // decodeLegacyPage decodes one cleaned page of the legacy observations list:
