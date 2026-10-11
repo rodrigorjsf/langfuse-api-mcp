@@ -134,6 +134,11 @@ type RequestBody struct {
 	compiled *jsonschema.Resolved
 }
 
+// operationParam names one parameter of one operation. It is the key of the
+// closed lists that say something of a parameter by name: folderCapable,
+// staticGuidance, jsonFilters, plainFilters and notTimeWindows.
+type operationParam struct{ operationID, param string }
+
 // Param is one path or query parameter of an operation.
 type Param struct {
 	Name string

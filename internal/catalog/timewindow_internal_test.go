@@ -13,12 +13,12 @@ import (
 
 // dateTimeQueryParams returns every query parameter of c, served or not, whose
 // schema has the format date-time, as its operation and name.
-func dateTimeQueryParams(c Catalog) []timeParam {
-	var found []timeParam
+func dateTimeQueryParams(c Catalog) []operationParam {
+	var found []operationParam
 	for _, op := range c.Operations() {
 		for _, p := range slices.Concat(op.Params, op.unserved) {
 			if p.In == "query" && p.Schema.Format == "date-time" {
-				found = append(found, timeParam{op.ID, p.Name})
+				found = append(found, operationParam{op.ID, p.Name})
 			}
 		}
 	}
@@ -114,7 +114,7 @@ func TestEveryListedTimeParameterIsADateTimeQueryParameterOfTheUnionCatalog(t *t
 	}
 	found := dateTimeQueryParams(cat)
 	for name := range timeWindowParams {
-		if !slices.ContainsFunc(found, func(p timeParam) bool { return p.param == name }) {
+		if !slices.ContainsFunc(found, func(p operationParam) bool { return p.param == name }) {
 			t.Errorf("%s is on the list of time windows and no operation has it as a date-time query parameter", name)
 		}
 	}

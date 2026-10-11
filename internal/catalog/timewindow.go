@@ -12,9 +12,6 @@ var timeWindowParams = map[string]bool{
 	"fromUpdatedAt": true, "toUpdatedAt": true,
 }
 
-// timeParam names a date-time query parameter of one operation.
-type timeParam struct{ operationID, param string }
-
 // notTimeWindows is the closed list of the date-time query parameters that
 // bound no window (#204): the startTime of legacy_observationsV1_get is a hint
 // for finding one observation by its ID, and the version of datasetItems_list
@@ -22,7 +19,7 @@ type timeParam struct{ operationID, param string }
 // page. A date-time parameter that is on neither list fails a test, so a new
 // one is never classified by its name alone. Both lists leave the value check of
 // a date-time parameter (RFC 3339, before any request) untouched.
-var notTimeWindows = map[timeParam]bool{
+var notTimeWindows = map[operationParam]bool{
 	{"legacy_observationsV1_get", "startTime"}: true,
 	{"datasetItems_list", "version"}:           true,
 }

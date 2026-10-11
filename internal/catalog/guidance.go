@@ -1,9 +1,5 @@
 package catalog
 
-// guidedParam names one query parameter of one operation that has static
-// guidance.
-type guidedParam struct{ operationID, param string }
-
 // promptsListOperationID is the operation that lists prompts; its tag and
 // filter parameters have static guidance.
 const promptsListOperationID = "prompts_list"
@@ -50,8 +46,8 @@ const (
 // the validator's own key list.
 var staticGuidance = buildStaticGuidance()
 
-func buildStaticGuidance() map[guidedParam]string {
-	guidance := map[guidedParam]string{
+func buildStaticGuidance() map[operationParam]string {
+	guidance := map[operationParam]string{
 		{MetricsOperationID, "query"}:       metricsQueryGuidance(),
 		{legacyMetricsOperationID, "query"}: legacyMetricsQueryGuidance(),
 		{promptsListOperationID, "tag"}:     promptsTagGuidance,
@@ -60,7 +56,7 @@ func buildStaticGuidance() map[guidedParam]string {
 		{promptsGetOperationID, "version"}:  promptsGetVersionGuidance,
 	}
 	for operationID, guide := range fieldsGuides {
-		guidance[guidedParam{operationID, fieldsParam}] = guide.guidance()
+		guidance[operationParam{operationID, fieldsParam}] = guide.guidance()
 	}
 	return guidance
 }
@@ -73,7 +69,7 @@ func (o Operation) ParamGuidance(p Param) string {
 	if p.In != "query" {
 		return ""
 	}
-	return staticGuidance[guidedParam{o.ID, p.Name}]
+	return staticGuidance[operationParam{o.ID, p.Name}]
 }
 
 // ImpliesProductionLabel reports whether r, a request of this operation,

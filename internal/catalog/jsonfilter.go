@@ -5,16 +5,13 @@ import (
 	"strconv"
 )
 
-// filterParam names the filter query parameter of one operation.
-type filterParam struct{ operationID, param string }
-
 // jsonFilters is the closed list of the filter parameters whose value is a JSON
 // text: a list of conditions that Langfuse parses (#195). The release specs
 // describe each as a JSON string of filter conditions
 // (docs/research/langfuse.md, section 1.15). A filter parameter
 // that is on neither this list nor plainFilters fails a test, so a new one is
 // never classified by its name alone.
-var jsonFilters = map[filterParam]bool{
+var jsonFilters = map[operationParam]bool{
 	{"trace_list", "filter"}:                    true,
 	{"legacy_observationsV1_getMany", "filter"}: true,
 	{"observations_getMany", "filter"}:          true,
@@ -27,14 +24,14 @@ var jsonFilters = map[filterParam]bool{
 // plainFilters is the closed list of the filter parameters that are not a JSON
 // text, so that they are checked as any query parameter value: the SCIM filter
 // expression of scim_listUsers (`userName eq "value"`).
-var plainFilters = map[filterParam]bool{
+var plainFilters = map[operationParam]bool{
 	{"scim_listUsers", "filter"}: true,
 }
 
 // isJSONFilter reports whether p is a query parameter of o that holds a JSON
 // filter (jsonFilters).
 func (o Operation) isJSONFilter(p Param) bool {
-	return p.In == "query" && jsonFilters[filterParam{o.ID, p.Name}]
+	return p.In == "query" && jsonFilters[operationParam{o.ID, p.Name}]
 }
 
 // ErrJSONFilter marks a JSON filter that the server refuses: not a string, too
