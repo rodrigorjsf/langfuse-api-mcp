@@ -92,10 +92,11 @@ func hiddenOrFormat(r rune) bool {
 		unicode.In(r, unicode.Variation_Selector, unicode.Other_Default_Ignorable_Code_Point)
 }
 
-// Whatever a caller passes as a plain query value, a filter or a path
-// parameter, Request accepts it only free of control, format and other
-// invisible characters (tab, line feed and carriage return excepted in a
-// filter, a JSON text), and a refusal never repeats such a character.
+// Whatever a caller passes as a plain query value, a JSON filter, a SCIM filter
+// or a path parameter, Request accepts it only free of control, format and
+// other invisible characters (tab, line feed and carriage return excepted in a
+// JSON filter, between its tokens), and a refusal never repeats such a
+// character.
 func FuzzRequestAcceptsNoControlOrFormatCharacter(f *testing.F) {
 	for _, seed := range []string{"", "a", "ab", "a\tb", "a\nb", "a\rb", "\xff\xfe"} {
 		f.Add(seed)

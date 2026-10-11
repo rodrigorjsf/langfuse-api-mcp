@@ -132,7 +132,7 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 			}
 			values = []string{q}
 		case o.isJSONFilter(p):
-			text, err := jsonFilter(values[0])
+			text, err := jsonFilter(p.Name, values[0])
 			if err != nil {
 				return Request{}, err
 			}

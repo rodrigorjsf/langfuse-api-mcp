@@ -248,7 +248,7 @@ func TestExecuteReadRefusesAControlOrInvisibleCharacterInAQueryParameterValueWit
 				{"tags", []any{"ok", value}, "parameter tags: item 1: must not contain control or invisible characters"},
 				{"tags", value, "parameter tags: item 0: must not contain control or invisible characters"},
 			}
-			if r != '\t' && r != '\n' && r != '\r' { // a filter is JSON text, which may span lines
+			if r != '\t' && r != '\n' && r != '\r' { // a JSON filter may span lines: there they are refused as malformed JSON, not by the rule
 				cases = append(cases, struct {
 					param string
 					value any

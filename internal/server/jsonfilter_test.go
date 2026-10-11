@@ -2,11 +2,10 @@ package server_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
-	"unicode/utf16"
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 )
@@ -17,22 +16,22 @@ import (
 // bound, never the value, and the fake Langfuse receives nothing.
 
 // jsonFilterOperations are the operations whose filter is a JSON text: a list
-// of conditions. The release specs describe each as "a JSON string containing
-// an array of filter conditions" (docs/research/langfuse.md, section 1.15).
+// of conditions. The release specs describe each as a JSON string of filter
+// conditions (docs/research/langfuse.md, section 1.15).
 var jsonFilterOperations = []string{
 	"trace_list", "legacy_observationsV1_getMany", "observations_getMany", "scores_get-many",
 	"experiments_list", "experiments_listItems", "prompts_list",
 }
 
-// jsonFilterOps returns the catalog operations of jsonFilterOperations.
-func jsonFilterOps(t *testing.T) []catalog.Operation {
+// operationsNamed returns the catalog operations with the given IDs.
+func operationsNamed(t *testing.T, ids ...string) []catalog.Operation {
 	t.Helper()
 	cat, err := catalog.Load()
 	if err != nil {
 		t.Fatalf("load catalog: %v", err)
 	}
-	ops := make([]catalog.Operation, 0, len(jsonFilterOperations))
-	for _, id := range jsonFilterOperations {
+	ops := make([]catalog.Operation, 0, len(ids))
+	for _, id := range ids {
 		op, ok := cat.Lookup(id)
 		if !ok {
 			t.Fatalf("%s missing from the catalog", id)
@@ -56,11 +55,7 @@ func decodedFilter(t *testing.T, got received) []any {
 
 // jsonEscapeUpper is jsonEscape with upper-case hexadecimal digits.
 func jsonEscapeUpper(r rune) string {
-	if r > 0xffff {
-		high, low := utf16.EncodeRune(r)
-		return fmt.Sprintf(`\u%04X\u%04X`, high, low)
-	}
-	return fmt.Sprintf(`\u%04X`, r)
+	return strings.NewReplacer("a", "A", "b", "B", "c", "C", "d", "D", "e", "E", "f", "F").Replace(jsonEscape(r))
 }
 
 // nestedFilter wraps innermost, the text of the deepest container, in
@@ -78,87 +73,53 @@ func nestedFilter(depth int, innermost string) string {
 	return text
 }
 
+// filterOfSize returns a valid filter of exactly size bytes.
+func filterOfSize(t *testing.T, size int) string {
+	t.Helper()
+	const head, tail = `[{"value":"`, `"}]`
+	if size < len(head)+len(tail) {
+		t.Fatalf("size %d is smaller than the smallest filter of this shape", size)
+	}
+	return head + strings.Repeat("a", size-len(head)-len(tail)) + tail
+}
+
 // filterRefusal is the message every refusal of a hidden character names.
 const filterRefusal = "parameter filter: must not contain control or invisible characters"
 
+// assertHiddenCharacterRefusal fails the test unless got is the invalid_argument
+// refusal of a hidden character that names filter and the rule and repeats
+// neither the planted text nor the character r.
+func assertHiddenCharacterRefusal(t *testing.T, label string, got toolErrorFields, r rune) {
+	t.Helper()
+	if got.Code != "invalid_argument" || !strings.Contains(got.Message, filterRefusal) {
+		t.Errorf("%s: error = %+v, want invalid_argument naming filter and the rule", label, got)
+	}
+	if all := got.Message + got.Hint; strings.Contains(all, plantedText) || strings.ContainsRune(all, r) {
+		t.Errorf("%s: the refusal repeats the filter or its hidden character: %+v", label, got)
+	}
+}
+
 // A character written as a JSON escape in a filter is what Langfuse decodes, so
-// it is refused like the character itself, for every JSON filter, with no
-// request.
+// it is refused like the character itself, for every JSON filter, with the
+// hexadecimal digits in lower and upper case, and with no request.
 func TestExecuteReadRefusesAJSONFilterHoldingTheEscapeOfAHiddenCharacterWithoutCallingLangfuse(t *testing.T) {
 	t.Parallel()
-	for _, op := range jsonFilterOps(t) {
+	for _, op := range operationsNamed(t, jsonFilterOperations...) {
 		t.Run(op.ID, func(t *testing.T) {
 			t.Parallel()
 			fake, seen := fakeLangfuse(t, http.StatusOK, `{"data":[]}`)
 			cs := connect(t, fake)
 			for name, r := range hiddenCharacters {
-				filter := `[{"column":"name","value":"` + plantedText + jsonEscape(r) + `"}]`
+				for digits, escape := range map[string]string{"lower-case": jsonEscape(r), "upper-case": jsonEscapeUpper(r)} {
+					filter := `[{"column":"name","value":"` + plantedText + escape + `"}]`
 
-				got := toolErrorOf(t, callExecuteRead(t, cs, withParameter(op, "filter", filter))).Error
+					got := toolErrorOf(t, callExecuteRead(t, cs, withParameter(op, "filter", filter))).Error
 
-				if got.Code != "invalid_argument" || got.OperationID != op.ID || !strings.Contains(got.Message, filterRefusal) {
-					t.Errorf("%s: error = %+v, want invalid_argument naming filter and the rule", name, got)
+					assertHiddenCharacterRefusal(t, name+", "+digits+" digits", got, r)
+					assertNoRequest(t, seen)
 				}
-				if all := got.Message + got.Hint; strings.Contains(all, plantedText) || strings.ContainsRune(all, r) {
-					t.Errorf("%s: the refusal repeats the filter or its hidden character: %+v", name, got)
-				}
-				assertNoRequest(t, seen)
 			}
 		})
-	}
-}
-
-// scimListUsers is the one read operation whose filter is not a JSON text: a
-// SCIM filter expression.
-func scimListUsers(t *testing.T) catalog.Operation {
-	t.Helper()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
-	op, ok := cat.Lookup("scim_listUsers")
-	if !ok {
-		t.Fatal("scim_listUsers missing from the catalog")
-	}
-	return op
-}
-
-// The filter of scim_listUsers is a SCIM expression, not JSON: ordinary text is
-// sent as it is, and is not refused for not being a list.
-func TestExecuteReadSendsAScimFilterAsOrdinaryText(t *testing.T) {
-	t.Parallel()
-	const filter = `userName eq "jdoe@example.test"`
-	fake, seen := fakeLangfuse(t, http.StatusOK, `{"Resources":[]}`)
-	cs := connect(t, fake)
-
-	res := callExecuteRead(t, cs, withParameter(scimListUsers(t), "filter", filter))
-
-	if res.IsError {
-		t.Fatalf("execute_read returned a tool error: %s", resultText(t, res))
-	}
-	if got := receivedOne(t, seen).query.Get("filter"); got != filter {
-		t.Errorf("Langfuse received filter %q, want %q unchanged", got, filter)
-	}
-}
-
-// A SCIM filter is an ordinary query parameter value: a control or invisible
-// character is refused, tab, line feed and carriage return too (a JSON text
-// may span lines, a SCIM expression does not).
-func TestExecuteReadRefusesAControlOrInvisibleCharacterInAScimFilterWithoutCallingLangfuse(t *testing.T) {
-	t.Parallel()
-	op := scimListUsers(t)
-	fake, seen := fakeLangfuse(t, http.StatusOK, `{"Resources":[]}`)
-	cs := connect(t, fake)
-	for name, r := range hiddenCharacters {
-		got := toolErrorOf(t, callExecuteRead(t, cs, withParameter(op, "filter", "userName eq "+string(r)+plantedText))).Error
-
-		if got.Code != "invalid_argument" || !strings.Contains(got.Message, filterRefusal) {
-			t.Errorf("%s: error = %+v, want invalid_argument naming filter and the rule", name, got)
-		}
-		if all := got.Message + got.Hint; strings.Contains(all, plantedText) || strings.ContainsRune(all, r) {
-			t.Errorf("%s: the refusal repeats the filter or its hidden character: %+v", name, got)
-		}
-		assertNoRequest(t, seen)
 	}
 }
 
@@ -177,7 +138,7 @@ func TestExecuteReadRefusesTheEscapeOfAHiddenCharacterInEveryPlaceAFilterHoldsAS
 	}
 	fake, seen := fakeLangfuse(t, http.StatusOK, `{"data":[]}`)
 	cs := connect(t, fake)
-	traceList := jsonFilterOps(t)[0]
+	traceList := operationsNamed(t, "trace_list")[0]
 	for name, r := range hiddenCharacters {
 		for where, build := range places {
 			for digits, escape := range map[string]string{"lower-case": jsonEscape(r), "upper-case": jsonEscapeUpper(r)} {
@@ -185,15 +146,44 @@ func TestExecuteReadRefusesTheEscapeOfAHiddenCharacterInEveryPlaceAFilterHoldsAS
 
 				got := toolErrorOf(t, callExecuteRead(t, cs, withParameter(traceList, "filter", filter))).Error
 
-				if got.Code != "invalid_argument" || !strings.Contains(got.Message, filterRefusal) {
-					t.Errorf("%s %s, %s digits: error = %+v, want invalid_argument naming filter and the rule", name, where, digits, got)
-				}
-				if all := got.Message + got.Hint; strings.Contains(all, plantedText) || strings.ContainsRune(all, r) {
-					t.Errorf("%s %s: the refusal repeats the filter or its hidden character: %+v", name, where, got)
-				}
+				assertHiddenCharacterRefusal(t, name+" "+where+", "+digits+" digits", got, r)
 				assertNoRequest(t, seen)
 			}
 		}
+	}
+}
+
+// The filter of scim_listUsers is a SCIM expression, not JSON: ordinary text is
+// sent as it is, and is not refused for not being a list.
+func TestExecuteReadSendsAScimFilterAsOrdinaryText(t *testing.T) {
+	t.Parallel()
+	const filter = `userName eq "jdoe@example.test"`
+	fake, seen := fakeLangfuse(t, http.StatusOK, `{"Resources":[]}`)
+	cs := connect(t, fake)
+
+	res := callExecuteRead(t, cs, withParameter(operationsNamed(t, "scim_listUsers")[0], "filter", filter))
+
+	if res.IsError {
+		t.Fatalf("execute_read returned a tool error: %s", resultText(t, res))
+	}
+	if got := receivedOne(t, seen).query.Get("filter"); got != filter {
+		t.Errorf("Langfuse received filter %q, want %q unchanged", got, filter)
+	}
+}
+
+// A SCIM filter is an ordinary query parameter value: a control or invisible
+// character is refused, tab, line feed and carriage return too (a JSON text
+// may span lines, a SCIM expression does not).
+func TestExecuteReadRefusesAControlOrInvisibleCharacterInAScimFilterWithoutCallingLangfuse(t *testing.T) {
+	t.Parallel()
+	op := operationsNamed(t, "scim_listUsers")[0]
+	fake, seen := fakeLangfuse(t, http.StatusOK, `{"Resources":[]}`)
+	cs := connect(t, fake)
+	for name, r := range hiddenCharacters {
+		got := toolErrorOf(t, callExecuteRead(t, cs, withParameter(op, "filter", "userName eq "+string(r)+plantedText))).Error
+
+		assertHiddenCharacterRefusal(t, name, got, r)
+		assertNoRequest(t, seen)
 	}
 }
 
@@ -243,17 +233,15 @@ func TestExecuteReadDoesNotSendTheEarlierValueOfADuplicatedKey(t *testing.T) {
 // there is refused.
 func TestExecuteReadRefusesAHiddenCharacterInTheLastValueOfADuplicatedKey(t *testing.T) {
 	t.Parallel()
-	escape := jsonEscape(hiddenCharacters["right-to-left override"])
+	r := hiddenCharacters["right-to-left override"]
 	fake, seen := fakeLangfuse(t, http.StatusOK, `{"data":[]}`)
 	cs := connect(t, fake)
 
 	got := toolErrorOf(t, callExecuteRead(t, cs, map[string]any{
-		"operationId": "trace_list", "parameters": map[string]any{"filter": `[{"value":"first","value":"` + escape + `"}]`},
+		"operationId": "trace_list", "parameters": map[string]any{"filter": `[{"value":"first","value":"` + plantedText + jsonEscape(r) + `"}]`},
 	})).Error
 
-	if got.Code != "invalid_argument" || !strings.Contains(got.Message, filterRefusal) {
-		t.Errorf("error = %+v, want invalid_argument naming filter and the rule", got)
-	}
+	assertHiddenCharacterRefusal(t, "the last of two values", got, r)
 	assertNoRequest(t, seen)
 }
 
@@ -310,39 +298,170 @@ func TestExecuteReadSendsNoEscapeOfAHalfSurrogatePair(t *testing.T) {
 }
 
 // A value that holds an instruction or markup and no hidden character is data:
-// it reaches Langfuse as it is, inside the query string, and changes neither
-// the path nor the host of the request.
+// it reaches Langfuse as it is, inside the query string.
 func TestExecuteReadSendsInstructionsAndMarkupInAFilterAsInertData(t *testing.T) {
 	t.Parallel()
 	const value = plantedText + ` <script>alert(1)</script> & https://evil.example/../../etc/passwd?x=1#y`
+
+	sent := sentFilter(t, `[{"column":"name","value":"`+value+`"}]`)
+
+	if want := `[{"column":"name","value":"` + value + `"}]`; sent != want {
+		t.Errorf("Langfuse received filter %q, want %q", sent, want)
+	}
+}
+
+// urlFilter holds a URL, a scheme, a host and traversal text.
+const urlFilter = `[{"value":"https://evil.example/../../etc/passwd"},{"value":"//evil.example\\..\\x"}]`
+
+// sendURLFilter calls trace_list with urlFilter and returns the request the
+// fake Langfuse received.
+func sendURLFilter(t *testing.T) received {
+	t.Helper()
 	fake, seen := fakeLangfuse(t, http.StatusOK, `{"data":[]}`)
 	cs := connect(t, fake)
 
-	res := callExecuteRead(t, cs, map[string]any{
-		"operationId": "trace_list", "parameters": map[string]any{"filter": `[{"column":"name","value":"` + value + `"}]`},
-	})
+	res := callExecuteRead(t, cs, map[string]any{"operationId": "trace_list", "parameters": map[string]any{"filter": urlFilter}})
 
 	if res.IsError {
 		t.Fatalf("execute_read returned a tool error: %s", resultText(t, res))
 	}
-	got := receivedOne(t, seen)
-	if got.path != "/api/public/traces" || got.method != http.MethodGet {
+	return receivedOne(t, seen)
+}
+
+// A URL, a scheme, a host or traversal text in a filter value changes neither
+// the path nor the method of the request.
+func TestExecuteReadSendsAURLInAFilterWithoutChangingThePathOfTheRequest(t *testing.T) {
+	t.Parallel()
+
+	got := sendURLFilter(t)
+
+	if got.method != http.MethodGet || got.path != "/api/public/traces" {
 		t.Errorf("request = %s %s, want GET /api/public/traces", got.method, got.path)
-	}
-	if want := `[{"column":"name","value":"` + value + `"}]`; got.query.Get("filter") != want {
-		t.Errorf("Langfuse received filter %q, want %q", got.query.Get("filter"), want)
 	}
 }
 
-// filterOfSize returns a valid filter of exactly size bytes.
-func filterOfSize(t *testing.T, size int) string {
-	t.Helper()
-	const head, tail = `[{"value":"`, `"}]`
-	if size < len(head)+len(tail) {
-		t.Fatalf("size %d is smaller than the smallest filter of this shape", size)
+// The same text is percent-encoded in the query: no raw "://", "../" or "//"
+// is left in it.
+func TestExecuteReadSendsAURLInAFilterAsPercentEncodedQueryText(t *testing.T) {
+	t.Parallel()
+
+	got := sendURLFilter(t)
+
+	for _, raw := range []string{"://", "../", "//"} {
+		if strings.Contains(got.rawQuery, raw) {
+			t.Errorf("raw query = %s, want %q percent-encoded", got.rawQuery, raw)
+		}
 	}
-	return head + strings.Repeat("a", size-len(head)-len(tail)) + tail
 }
+
+// The size and depth bounds of the metrics query are the bounds of a filter: a
+// filter at the bound is sent.
+func TestExecuteReadSendsAFilterOf16384Bytes(t *testing.T) {
+	t.Parallel()
+
+	sent := sentFilter(t, filterOfSize(t, 16384))
+
+	if len(sent) != 16384 {
+		t.Errorf("Langfuse received a filter of %d bytes, want 16384", len(sent))
+	}
+}
+
+func TestExecuteReadSendsAFilterNested10LevelsDeep(t *testing.T) {
+	t.Parallel()
+	filter := nestedFilter(10, `{}`)
+
+	sent := sentFilter(t, filter)
+
+	if sent != filter {
+		t.Errorf("Langfuse received filter %s, want %s", sent, filter)
+	}
+}
+
+// filterRefusals are the filters the server refuses, each with the whole
+// message of its refusal: a hidden character as itself or as a JSON escape, a
+// size or depth over the bound, an argument that is not a string, and a string
+// that is not the JSON text of one list. No message holds the filter.
+func filterRefusals(t *testing.T) map[string]struct {
+	filter  any
+	message string
+} {
+	t.Helper()
+	const prefix = "invalid parameter: parameter filter: "
+	wantList := prefix + "want a string holding the JSON text of one list"
+	hiddenRule := prefix + "must not contain control or invisible characters"
+	tooDeep := prefix + "want JSON nested at most 10 objects or lists deep"
+	zeroWidth := string(hiddenCharacters["zero width space"])
+	return map[string]struct {
+		filter  any
+		message string
+	}{
+		"16385 bytes":                                {filterOfSize(t, 16385), prefix + "want at most 16384 bytes of JSON, got 16385 bytes"},
+		"11 levels deep":                             {nestedFilter(11, `[]`), tooDeep},
+		"11 opening brackets":                        {strings.Repeat("[", 11), tooDeep},
+		"16 KiB of opening brackets":                 {strings.Repeat("[", 16384), tooDeep},
+		"an escaped hidden character":                {`[{"value":"` + plantedText + jsonEscape(hiddenCharacters["zero width space"]) + `"}]`, hiddenRule},
+		"a raw hidden character":                     {`[{"value":"` + plantedText + zeroWidth + `"}]`, hiddenRule},
+		"a raw hidden character in malformed JSON":   {`[{"value":` + plantedText + zeroWidth, hiddenRule},
+		"a raw hidden character over the size bound": {filterOfSize(t, 16384) + zeroWidth, hiddenRule},
+		"a list as the argument":                     {[]any{plantedText}, prefix + "want a string, got a list"},
+		"an object as the argument":                  {map[string]any{"column": plantedText}, prefix + "want a string, got an object"},
+		"a number as the argument":                   {42, prefix + "want a string, got a number"},
+		"a boolean as the argument":                  {true, prefix + "want a string, got a boolean"},
+		"the JSON text of an object":                 {`{"column":"` + plantedText + `"}`, wantList + ", got an object"},
+		"the JSON text of a string":                  {`"` + plantedText + `"`, wantList + ", got a string"},
+		"the JSON text of a number":                  {`42`, wantList + ", got a number"},
+		"the JSON text of true":                      {`true`, wantList + ", got a boolean"},
+		"the JSON text of null":                      {`null`, wantList + ", got null"},
+		"an empty string":                            {``, wantList},
+		"only blanks":                                {" \r\n\t ", wantList},
+		"malformed JSON":                             {`[{"column":"` + plantedText + `",}`, wantList},
+		"a list followed by more data":               {`[{"column":"name"}] {"x":"` + plantedText + `"}`, prefix + "want one JSON list, got data after it"},
+		"a list followed by text":                    {`[] ` + plantedText, prefix + "want one JSON list, got data after it"},
+	}
+}
+
+// A filter that breaks a rule is refused with a message that names filter and
+// the rule or the bound, in the words above, and never repeats the filter. A
+// raw hidden character is refused first, whatever else is wrong with the text.
+func TestExecuteReadRefusesAFilterThatBreaksARuleNamingTheRuleAndNeverTheFilter(t *testing.T) {
+	t.Parallel()
+	for name, tc := range filterRefusals(t) {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got := refusedFilter(t, tc.filter)
+
+			if got.Message != tc.message {
+				t.Errorf("message = %q, want %q", got.Message, tc.message)
+			}
+		})
+	}
+}
+
+// Every refusal of a filter carries the same static hint: how a filter is sent
+// and the rules it meets, not the hint of a refused metrics query.
+func TestExecuteReadGivesEveryFilterRefusalTheSameStaticHint(t *testing.T) {
+	t.Parallel()
+	for name, tc := range filterRefusals(t) {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got := refusedFilter(t, tc.filter)
+
+			if got.Hint != jsonFilterHint {
+				t.Errorf("hint = %q, want %q", got.Hint, jsonFilterHint)
+			}
+		})
+	}
+}
+
+// jsonFilterHint is the hint of every refusal of a JSON filter, as a literal:
+// text compiled into the binary that says how a filter is sent, never the
+// filter.
+const jsonFilterHint = `send filter as one string whose value is the JSON text of a list of conditions, ` +
+	`such as [{...},{...}]: not a list, and the value itself has no backslash before its quotes; ` +
+	`at most 16384 bytes and 10 levels deep, with no control or invisible character in any string or key, ` +
+	`written as itself or as a JSON escape`
 
 // refusedFilter calls trace_list with filter, checks that Langfuse is not
 // called, and returns the tool error.
@@ -356,143 +475,10 @@ func refusedFilter(t *testing.T, filter any) toolErrorFields {
 	})).Error
 
 	assertNoRequest(t, seen)
-	if got.Code != "invalid_argument" || got.OperationID != "trace_list" || got.Hint == "" {
-		t.Fatalf("tool error = %+v, want invalid_argument for trace_list with a hint", got)
+	if got.Code != "invalid_argument" || got.OperationID != "trace_list" {
+		t.Fatalf("tool error = %+v, want invalid_argument for trace_list", got)
 	}
 	return got
-}
-
-// A filter of 16384 bytes, the bound of the metrics query, is sent.
-func TestExecuteReadSendsAFilterOf16384Bytes(t *testing.T) {
-	t.Parallel()
-
-	sent := sentFilter(t, filterOfSize(t, 16384))
-
-	if len(sent) != 16384 {
-		t.Errorf("Langfuse received a filter of %d bytes, want 16384", len(sent))
-	}
-}
-
-// One byte more is refused, naming the bound and the size as numbers only.
-func TestExecuteReadRefusesAFilterOf16385BytesNamingTheBoundAndTheSize(t *testing.T) {
-	t.Parallel()
-
-	got := refusedFilter(t, filterOfSize(t, 16385))
-
-	if want := "parameter filter: want at most 16384 bytes of JSON, got 16385 bytes"; !strings.Contains(got.Message, want) {
-		t.Errorf("message = %q, want it to contain %q", got.Message, want)
-	}
-}
-
-// A filter nested 10 levels deep, the bound of the metrics query, is sent.
-func TestExecuteReadSendsAFilterNested10LevelsDeep(t *testing.T) {
-	t.Parallel()
-	filter := nestedFilter(10, `{}`)
-
-	sent := sentFilter(t, filter)
-
-	if sent != filter {
-		t.Errorf("Langfuse received filter %s, want %s", sent, filter)
-	}
-}
-
-// One level more is refused, naming the bound.
-func TestExecuteReadRefusesAFilterNested11LevelsDeepNamingTheBound(t *testing.T) {
-	t.Parallel()
-
-	got := refusedFilter(t, nestedFilter(11, `[]`))
-
-	if want := "parameter filter: want JSON nested at most 10 objects or lists deep"; !strings.Contains(got.Message, want) {
-		t.Errorf("message = %q, want it to contain %q", got.Message, want)
-	}
-}
-
-// The depth is checked before the text is decoded: 16 KiB of opening brackets
-// is no JSON, and is refused for its depth, not for being malformed.
-func TestExecuteReadChecksTheDepthOfAFilterBeforeDecodingIt(t *testing.T) {
-	t.Parallel()
-
-	got := refusedFilter(t, strings.Repeat("[", 16384))
-
-	if want := "parameter filter: want JSON nested at most 10 objects or lists deep"; !strings.Contains(got.Message, want) {
-		t.Errorf("message = %q, want it to contain %q", got.Message, want)
-	}
-}
-
-// jsonFilterHint is the hint of every refusal of a JSON filter, as a literal:
-// text compiled into the binary that says how a filter is sent, never the
-// filter, and not the hint of a refused metrics query.
-const jsonFilterHint = `send filter as one string whose value is the JSON text of a list of conditions, ` +
-	`such as [{...},{...}]: not a list, and the value itself has no backslash before its quotes; ` +
-	`at most 16384 bytes and 10 levels deep, with no control or invisible character in any string or key, ` +
-	`written as itself or as a JSON escape`
-
-// A filter that is not the JSON text of one list is refused naming filter and
-// what is wanted, with the static hint, and never repeats the filter.
-func TestExecuteReadRefusesAFilterThatIsNotTheJSONTextOfOneListWithoutEchoingIt(t *testing.T) {
-	t.Parallel()
-	tests := map[string]struct {
-		filter  any
-		message string
-	}{
-		"a list as the argument":    {[]any{plantedText}, "parameter filter: want a string, got a list"},
-		"an object as the argument": {map[string]any{"column": plantedText}, "parameter filter: want a string, got an object"},
-		"a number as the argument":  {42, "parameter filter: want a string, got a number"},
-		"a boolean as the argument": {true, "parameter filter: want a string, got a boolean"},
-		"the JSON text of an object": {`{"column":"` + plantedText + `"}`,
-			"parameter filter: want a string holding the JSON text of one list, got an object"},
-		"the JSON text of a string": {`"` + plantedText + `"`,
-			"parameter filter: want a string holding the JSON text of one list, got a string"},
-		"the JSON text of a number": {`42`, "parameter filter: want a string holding the JSON text of one list, got a number"},
-		"the JSON text of true":     {`true`, "parameter filter: want a string holding the JSON text of one list, got a boolean"},
-		"the JSON text of null":     {`null`, "parameter filter: want a string holding the JSON text of one list, got null"},
-		"an empty string":           {``, "parameter filter: want a string holding the JSON text of one list"},
-		"only blanks":               {" \r\n\t ", "parameter filter: want a string holding the JSON text of one list"},
-		"malformed JSON":            {`[{"column":"` + plantedText + `",}`, "parameter filter: want a string holding the JSON text of one list"},
-		"a list followed by more data": {`[{"column":"name"}] {"x":"` + plantedText + `"}`,
-			"parameter filter: want one JSON list, got data after it"},
-		"a list followed by text": {`[] ` + plantedText, "parameter filter: want one JSON list, got data after it"},
-	}
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			got := refusedFilter(t, tc.filter)
-
-			if !strings.Contains(got.Message, tc.message) {
-				t.Errorf("message = %q, want it to contain %q", got.Message, tc.message)
-			}
-			if got.Hint != jsonFilterHint {
-				t.Errorf("hint = %q, want %q", got.Hint, jsonFilterHint)
-			}
-			if strings.Contains(got.Message+got.Hint, plantedText) {
-				t.Errorf("the refusal repeats the filter: %+v", got)
-			}
-		})
-	}
-}
-
-// Every refusal of a filter, the size, the depth and the hidden character
-// included, carries the same static hint.
-func TestExecuteReadGivesEveryFilterRefusalTheSameStaticHint(t *testing.T) {
-	t.Parallel()
-	escape := jsonEscape(hiddenCharacters["zero width space"])
-	for name, filter := range map[string]string{
-		"too large":         filterOfSize(t, 16385),
-		"too deep":          nestedFilter(11, `[]`),
-		"an escaped hidden": `[{"value":"a` + escape + `"}]`,
-		"a raw hidden":      "[{\"value\":\"a" + string(hiddenCharacters["zero width space"]) + "\"}]",
-	} {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			got := refusedFilter(t, filter)
-
-			if got.Hint != jsonFilterHint {
-				t.Errorf("hint = %q, want %q", got.Hint, jsonFilterHint)
-			}
-		})
-	}
 }
 
 // A filter on a deployment whose version does not serve it keeps the refusal of
@@ -548,32 +534,54 @@ func TestExecuteReadDoesNotCheckTheGrammarOfAFilter(t *testing.T) {
 	}
 }
 
-// A value that holds a URL, a scheme, a host or traversal text is sent as
-// percent-encoded query text: it changes neither the path nor the host of the
-// request and leaves no raw "://" or "../" in the query.
-func TestExecuteReadSendsAURLInAFilterAsPercentEncodedQueryText(t *testing.T) {
+// execute_read takes an operation ID and its parameters and nothing else, so
+// no argument can change a bound of a filter.
+func TestExecuteReadTakesAnOperationIDAndParametersOnly(t *testing.T) {
 	t.Parallel()
-	fake, seen := fakeLangfuse(t, http.StatusOK, `{"data":[]}`)
-	cs := connect(t, fake)
 
-	res := callExecuteRead(t, cs, map[string]any{
-		"operationId": "trace_list", "parameters": map[string]any{
-			"filter": `[{"value":"https://evil.example/../../etc/passwd"},{"value":"//evil.example\\..\\x"}]`,
-		},
-	})
+	schema, err := json.Marshal(toolNamed(t, connectOffline(t), "execute_read").InputSchema)
+	if err != nil {
+		t.Fatalf("marshal input schema: %v", err)
+	}
 
-	if res.IsError {
-		t.Fatalf("execute_read returned a tool error: %s", resultText(t, res))
+	var got struct {
+		AdditionalProperties bool           `json:"additionalProperties"`
+		Properties           map[string]any `json:"properties"`
 	}
-	got := receivedOne(t, seen)
-	if got.path != "/api/public/traces" {
-		t.Errorf("path = %s, want /api/public/traces", got.path)
+	if err := json.Unmarshal(schema, &got); err != nil {
+		t.Fatalf("input schema: %v", err)
 	}
-	if strings.Contains(got.rawQuery, "://") || strings.Contains(got.rawQuery, "../") || strings.Contains(got.rawQuery, "//") {
-		t.Errorf("raw query = %s, want the URL percent-encoded", got.rawQuery)
+	var props []string
+	for name := range got.Properties {
+		props = append(props, name)
 	}
-	if got.query.Get("filter") != `[{"value":"https://evil.example/../../etc/passwd"},{"value":"//evil.example\\..\\x"}]` {
-		t.Errorf("Langfuse received filter %q, want the text unchanged", got.query.Get("filter"))
+	slices.Sort(props)
+	if got.AdditionalProperties || !slices.Equal(props, []string{"operationId", "parameters"}) {
+		t.Fatalf("input schema = %s, want operationId and parameters, nothing else", schema)
+	}
+}
+
+// An argument or a parameter that names a bound is refused as unknown, and the
+// filter it was meant to let through stays over its bound.
+func TestNoArgumentOrParameterOfExecuteReadChangesTheBoundsOfAFilter(t *testing.T) {
+	t.Parallel()
+	for name, args := range map[string]map[string]any{
+		"an argument":           {"operationId": "trace_list", "maxFilterBytes": 1 << 20, "parameters": map[string]any{"filter": filterOfSize(t, 16385)}},
+		"a parameter for size":  {"operationId": "trace_list", "parameters": map[string]any{"filterMaxBytes": 1 << 20, "filter": filterOfSize(t, 16385)}},
+		"a parameter for depth": {"operationId": "trace_list", "parameters": map[string]any{"maxDepth": 100, "filter": nestedFilter(11, `[]`)}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			fake, seen := fakeLangfuse(t, http.StatusOK, `{"data":[]}`)
+			cs := connect(t, fake)
+
+			got := toolErrorOf(t, callExecuteRead(t, cs, args)).Error
+
+			if got.Code != "invalid_argument" {
+				t.Errorf("error = %+v, want invalid_argument", got)
+			}
+			assertNoRequest(t, seen)
+		})
 	}
 }
 

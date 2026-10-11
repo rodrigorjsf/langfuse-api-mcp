@@ -31,10 +31,32 @@ func nested(depth int) string {
 	return strings.Repeat("[", depth) + strings.Repeat("]", depth)
 }
 
-// The size and depth bounds of a JSON filter are those of the metrics query: a
-// filter at the bound is accepted and one past it is refused as a malformed
-// filter, naming the bound.
-func TestAJSONFilterIsRefusedPastTheSizeAndDepthBoundsOfTheMetricsQuery(t *testing.T) {
+// A filter at the size bound (16384 bytes) or the depth bound (10 levels) of the
+// metrics query is accepted.
+func TestAJSONFilterAtTheSizeAndDepthBoundsOfTheMetricsQueryIsAccepted(t *testing.T) {
+	t.Parallel()
+	op := traceListOp(t)
+	head, tail := `["`, `"]`
+	for name, filter := range map[string]string{
+		"16384 bytes":    head + strings.Repeat("a", 16384-len(head)-len(tail)) + tail,
+		"10 levels deep": nested(10),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := op.Request(map[string]any{"filter": filter})
+
+			if err != nil {
+				t.Errorf("Request error = %v, want the filter accepted", err)
+			}
+		})
+	}
+}
+
+// One byte or one level more is refused as a malformed filter, naming the
+// bound; the depth is read before the text is decoded, so text that is no JSON
+// is refused for its depth.
+func TestAJSONFilterPastTheSizeOrDepthBoundIsRefusedAsAMalformedFilterNamingTheBound(t *testing.T) {
 	t.Parallel()
 	op := traceListOp(t)
 	head, tail := `["`, `"]`
@@ -42,9 +64,7 @@ func TestAJSONFilterIsRefusedPastTheSizeAndDepthBoundsOfTheMetricsQuery(t *testi
 		filter  string
 		wantErr string
 	}{
-		"16384 bytes":         {head + strings.Repeat("a", 16384-len(head)-len(tail)) + tail, ""},
 		"16385 bytes":         {head + strings.Repeat("a", 16385-len(head)-len(tail)) + tail, "want at most 16384 bytes of JSON, got 16385 bytes"},
-		"10 levels deep":      {nested(10), ""},
 		"11 levels deep":      {nested(11), "want JSON nested at most 10 objects or lists deep"},
 		"11 levels, no close": {strings.Repeat("[", 11), "want JSON nested at most 10 objects or lists deep"},
 	}
@@ -54,12 +74,6 @@ func TestAJSONFilterIsRefusedPastTheSizeAndDepthBoundsOfTheMetricsQuery(t *testi
 
 			_, err := op.Request(map[string]any{"filter": tc.filter})
 
-			if tc.wantErr == "" {
-				if err != nil {
-					t.Errorf("Request error = %v, want the filter accepted", err)
-				}
-				return
-			}
 			if !errors.Is(err, catalog.ErrJSONFilter) || !errors.Is(err, catalog.ErrInvalidParameter) ||
 				!strings.Contains(err.Error(), "parameter filter: "+tc.wantErr) {
 				t.Errorf("Request error = %v, want a malformed filter naming %q", err, tc.wantErr)
@@ -173,6 +187,9 @@ func FuzzAcceptedJSONFilterSendsNoHiddenCharacter(f *testing.F) {
 				t.Fatalf("Request(%q) sent %q, which holds the escape of %U", filter, sent, unit)
 			}
 		}
+		// The text sent can be longer than the text received (the encoder writes
+		// U+2028 and U+2029 as six-byte escapes), so it is sent again only while
+		// it still fits the size bound.
 		again, err := op.Request(map[string]any{"filter": sent})
 		if len(sent) <= 16384 && (err != nil || again.Query.Get("filter") != sent) {
 			t.Fatalf("Request(%q) sent %q, which is not accepted unchanged when sent again: %v", filter, sent, err)
@@ -213,17 +230,20 @@ func TestTheSCIMFilterIsAnOrdinaryQueryParameterValue(t *testing.T) {
 	}
 }
 
-// execute_write builds its request through Request as execute_read does, so a
-// JSON filter on a write operation meets the same checks. No write operation
-// has a filter query parameter today; this one is a POST that does.
-func TestAJSONFilterOnAWriteOperationIsChecked(t *testing.T) {
+// Whether a parameter is a JSON filter is decided by the operation ID and the
+// parameter name, never by the method: a filter on a POST operation, which
+// execute_write would run through the same Request, meets the same checks. No
+// write operation has a filter query parameter today (the walk of
+// TestEveryFilterParameterOfTheUnionCatalogIsClassified covers them all); this
+// one is built by hand.
+func TestAJSONFilterIsCheckedWhateverTheMethodOfTheOperation(t *testing.T) {
 	t.Parallel()
-	write := catalog.Operation{
+	post := catalog.Operation{
 		ID: "trace_list", Method: "POST", Path: "/api/public/x",
 		Params: []catalog.Param{{Name: "filter", In: "query", Schema: catalog.Schema{Type: "string"}}},
 	}
 
-	_, err := write.Request(map[string]any{"filter": `[{"value":"a` + "\\" + `u202eb"}]`})
+	_, err := post.Request(map[string]any{"filter": `[{"value":"a` + "\\" + `u202eb"}]`})
 
 	if !errors.Is(err, catalog.ErrJSONFilter) || !strings.Contains(err.Error(), "parameter filter: must not contain control or invisible characters") {
 		t.Errorf("Request error = %v, want the refusal of a hidden character in a filter", err)

@@ -82,13 +82,3 @@ func TestEveryClassifiedFilterIsAFilterParameterOfTheUnionCatalog(t *testing.T) 
 		}
 	}
 }
-
-// A filter parameter is never on both lists.
-func TestNoFilterIsBothJSONAndPlain(t *testing.T) {
-	t.Parallel()
-	for pair := range jsonFilters {
-		if plainFilters[pair] {
-			t.Errorf("%s %s is on both lists", pair.operationID, pair.param)
-		}
-	}
-}

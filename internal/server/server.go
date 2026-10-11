@@ -463,9 +463,15 @@ func metricsQueryHint(op catalog.Operation) string {
 		"; " + toolDescribeOperation + " with operationId " + op.ID + " returns the query's shape and a worked example"
 }
 
+// jsonFilterHint is the hint for a refused JSON filter (#195): how a filter is
+// sent and the rules it meets, in the catalog's own words. Static text: it never
+// holds the caller's filter, and it is not the hint of a malformed metrics
+// query.
+func jsonFilterHint() string { return "send filter as " + catalog.JSONFilterEncoding() }
+
 // parametersHintFor is the hint for a parameter the catalog refused: a
 // malformed metrics query gets metricsQueryHint and a refused JSON filter
-// catalog.JSONFilterHint (#195); a parameter the deployment's
+// jsonFilterHint (#195); a parameter the deployment's
 // version does not serve gets notServedHintFor; a page size out of range gets
 // how to page instead, anything else the generic parametersHint. Those
 // go on with the operation's valid parameter names and describe_operation, so
@@ -475,7 +481,7 @@ func parametersHintFor(err error, op catalog.Operation) string {
 		return metricsQueryHint(op)
 	}
 	if errors.Is(err, catalog.ErrJSONFilter) {
-		return catalog.JSONFilterHint()
+		return jsonFilterHint()
 	}
 	hint := parametersHint
 	switch {

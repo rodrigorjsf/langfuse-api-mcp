@@ -118,15 +118,14 @@ func metricsQuery(raw string) (string, error) {
 	if tooDeep(raw) {
 		return "", queryInvalidf("parameter query: want JSON nested at most %d objects or lists deep", maxJSONTextDepth)
 	}
-	dec := json.NewDecoder(strings.NewReader(raw))
-	dec.UseNumber()
 	var q map[string]any
 	// The decode error is dropped on purpose: its text quotes the caller's
 	// input, which an error message never repeats.
-	if err := dec.Decode(&q); err != nil || q == nil {
+	trailing, err := decodeJSON(raw, &q)
+	if err != nil || q == nil {
 		return "", queryInvalidf("parameter query: want a string holding the JSON text of one object")
 	}
-	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+	if trailing {
 		return "", queryInvalidf("parameter query: want one JSON object, got data after it")
 	}
 	for _, name := range slices.Sorted(maps.Keys(q)) {
@@ -141,8 +140,8 @@ func metricsQuery(raw string) (string, error) {
 		}
 	}
 	// A hidden character is refused wherever the query holds one, written as
-	// itself or as a JSON escape: the server decodes the query, so unlike the
-	// text of a JSON parameter it passes on unread, it sees what Langfuse will.
+	// itself or as a JSON escape: the server decodes the query, so it sees what
+	// Langfuse will.
 	if holdsHiddenJSONText(q) {
 		return "", invalidf("parameter query: %s", hiddenTextRule)
 	}
@@ -170,6 +169,20 @@ func metricsQuery(raw string) (string, error) {
 		return "", queryInvalidf("parameter query: cannot be re-encoded as JSON")
 	}
 	return text, nil
+}
+
+// decodeJSON decodes the first JSON value of raw into v, a number as the
+// json.Number that keeps the digits it was written with. It reports whether
+// more data follows the value. The error of a text that is no JSON value of v's
+// type quotes the text, so the caller says what it wanted instead.
+func decodeJSON(raw string, v any) (trailing bool, err error) {
+	dec := json.NewDecoder(strings.NewReader(raw))
+	dec.UseNumber()
+	if err := dec.Decode(v); err != nil {
+		return false, err
+	}
+	_, err = dec.Token()
+	return !errors.Is(err, io.EOF), nil
 }
 
 // encodeJSON writes a decoded JSON value as compact JSON text, without
