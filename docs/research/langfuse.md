@@ -340,6 +340,41 @@ name, and the issue was still open on 2026-10-10). The report rested on one repo
 - **A run item needs no trace.** `POST /dataset-run-items` accepted a `traceId` that no trace carries, on every
   deployment, so the test seeds none.
 
+### 1.12 The legacy observations list as the source of a trace tree (live on 3.80.0, 2026-10-11) `[verified]`
+
+Source: `TestLiveLangfuse3800GetTraceTree*` (`internal/server/tracetree_legacy_integration_test.go`, #187), and direct
+`GET /api/public/observations` calls to the pinned self-hosted 3.80.0 after it ingested the seeded traces; the
+operation is `legacy_observationsV1_getMany`. API reference `GET /api/public/observations` (`langfuse-docs` MCP,
+2026-10-11) for the shape `[sourced]`.
+
+- **`traceId` filter.** The union catalog serves `traceId` on this operation from 3.0.0 (`x-introduced`), and 3.80.0
+  honours it: a call with `traceId` returned only that trace's rows (4 of the project's 8 observations). The campaign
+  of 2026-10-10 saw the same (`raw/2026-10-10-e2e-langfuse-3.80.0.md`, H1). `level` is not served there (§1.10).
+- **Page size cap.** `limit` above 100 is a 400: `limit=101` answered `{"message":"Invalid request data","error":[{"origin":"number","code":"too_big","maximum":100,"inclusive":true,"path":["limit"],…}]}`.
+  The documentation table gives the same, v1 maximum 100 against 1,000 for v2 `[sourced]`.
+- **`meta`.** `{"page", "limit", "totalItems", "totalPages"}`, accurate: a trace of 130 observations gave
+  `totalItems` 130 and `totalPages` 2 on pages 1 and 2 (100 rows, then 30). A trace that does not exist is a 200 with
+  `data: []` and `totalItems` 0, `totalPages` 0 (also on page 999), not a 404. There is no cursor.
+- **Order.** Newest first (`startTime` descending): the first row of page 1 was the last observation started, the
+  last row of page 2 the first. The trace tree sorts the rows itself, so it does not depend on this.
+- **Row fields.** An observation row carries, besides `id`, `traceId`, `parentObservationId`, `type`, `name`,
+  `level`, `statusMessage`, `startTime`, `endTime`, `version`, `environment`, `projectId`, `createdAt` and `updatedAt`:
+  `input`, `output`, `metadata`, `model`, `modelId`, `modelParameters`, `promptId`, `promptName`, `promptVersion`,
+  `completionStartTime`, `timeToFirstToken`, `latency`, `usage`, `usageDetails`, `costDetails`, `unit`,
+  `promptTokens`, `completionTokens`, `totalTokens`, `inputPrice`, `outputPrice`, `totalPrice`,
+  `calculatedInputCost`, `calculatedOutputCost` and `calculatedTotalCost`; 39 keys, null where Langfuse has no value.
+  There is no field selection: `input`, `output` and `metadata` come with every row. **Without them a row is about
+  850 bytes**, so at the default 64 KiB result size cap about 75 rows fit before rows are left out at a row boundary
+  (a 130-observation trace read through `get_trace_tree` on 3.80.0 counted 130 in `meta.observations` and returned 76
+  rows).
+- **Latency unit.** An observation of 1 s (`startTime` and `endTime` one second apart) has `latency` **1000** in this
+  list, and one of 2 s has 2000: **milliseconds**. The API reference documents the v2 `latency` filter and field in
+  seconds `[sourced]`, and §6 row 12 says the legacy observation schema also uses seconds; on 3.80.0 the observation
+  rows disagree with that. The trace's own `latency` (`GET /api/public/traces/{traceId}`) is in seconds (128 for a
+  trace whose observations were started over about two minutes), as the campaign recorded ("trace `latency` is in seconds and observation
+  `latency` in milliseconds"). The trace tree does not convert: a row is what the deployment's Langfuse returns, and
+  the tool description names both units.
+
 ---
 
 ## 2. Deprecations
@@ -638,5 +673,5 @@ server should close with explicit `ca-file`/`proxy` config. `[sourced — unveri
 | 9 | The spec still exposes `parseIoAsJson`, and even flags "Deprecated" inside the v2 observations description. The docs say `true` returns 400. | spec |
 | 10 | Freshness is "about 10 minutes" in the spec and "up to 15 minutes" in the docs. | §1.1 |
 | 11 | The spec contains `unstable/dashboards*` and `unstable/dashboard-widgets*`, which are unversioned and unstable. MCP exposes them. | spec |
-| 12 | **Latency units differ by endpoint.** Metrics v2 measures `latency`, `streamingLatency` and `timeToFirstToken` in **ms**. Observations v2 filters and fields (and the legacy trace and observation schemas) use **seconds**. This is not a docs error, but any tool that bridges the two endpoints must convert. | spec `/v2/metrics` description vs the `/v2/observations` `filter` description and the `latency` schema descriptions |
+| 12 | **Latency units differ by endpoint.** Metrics v2 measures `latency`, `streamingLatency` and `timeToFirstToken` in **ms**. Observations v2 filters and fields (and the legacy trace schema) use **seconds**; the legacy observations list returns an observation's `latency` in **ms** on 3.80.0 (§1.12). This is not a docs error, but any tool that bridges the two endpoints must convert. | spec `/v2/metrics` description vs the `/v2/observations` `filter` description and the `latency` schema descriptions |
 | 13 | `ObservationsV2Meta` declares no own properties. It inherits `utilsCursorMetaResponse` through `allOf`, so a code generator must resolve the `allOf` to see `cursor`. | `components.schemas.ObservationsV2Meta` |

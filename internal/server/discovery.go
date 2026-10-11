@@ -149,8 +149,8 @@ type discovery struct {
 	writeMode bool
 	redact    sanitize.Redactor
 	// profile is the deployment profile detected at startup; the unavailable
-	// operation errors name it, and its v4 read family decides whether
-	// get_trace_tree can run.
+	// operation errors name it, and its v4 read and legacy families decide
+	// whether get_trace_tree can run.
 	profile langfuse.DeploymentProfile
 }
 
@@ -219,9 +219,10 @@ const (
 // traceReadsHint returns the hint of a search that asks about traces (#100,
 // #114): a v4 deployment has no Trace tag, so it names how trace
 // data is read instead; a deployment without the v4 read family names its
-// legacy trace reads. It is static text naming only the tools and
-// operations this deployment offers, never the query, and "" when it offers
-// none of them.
+// legacy trace reads, and get_trace_tree when the legacy family answers, which
+// builds the trace tree from the legacy list there (#187). It is static text
+// naming only the tools and operations this deployment offers, never the
+// query, and "" when it offers none of them.
 func (d discovery) traceReadsHint() string {
 	var reads []string
 	if d.profile.On(catalog.V4ReadFamily) {
@@ -250,10 +251,14 @@ func (d discovery) v4TraceReads() []string {
 	return reads
 }
 
-// legacyTraceReads lists the legacy operations that read traces and that this
-// deployment offers, each with what it reads.
+// legacyTraceReads lists get_trace_tree, when the legacy family answers, and the
+// legacy operations that read traces and that this deployment offers, each with
+// what it reads.
 func (d discovery) legacyTraceReads() []string {
 	var reads []string
+	if d.profile.On(catalog.LegacyFamily) {
+		reads = append(reads, "one trace as a trace tree: "+toolGetTraceTree)
+	}
 	for _, r := range []struct{ id, what string }{
 		{legacyTraceGet, "one trace by its ID"},
 		{legacyTraceList, "a filtered list of traces"},

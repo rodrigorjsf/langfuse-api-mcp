@@ -586,8 +586,9 @@ func TestSearchOperationsForAnOperationIDStartingWithTraceReturnsNoHint(t *testi
 }
 
 // #100: the hint names only trace reads the deployment offers. A 3.x deployment
-// serves the legacy family only: get_trace_tree is listed but cannot run there, and
-// observations_getMany and metrics_metrics are not offered, so none is named.
+// serves the legacy family only: observations_getMany and metrics_metrics are
+// not offered, so neither is named (get_trace_tree is: it reads the legacy list
+// there, #187).
 func TestSearchOperationsNamesNoTraceReadTheDeploymentDoesNotOffer(t *testing.T) {
 	t.Parallel()
 	cs := connectResolved(t, "3.225.11")
@@ -595,7 +596,7 @@ func TestSearchOperationsNamesNoTraceReadTheDeploymentDoesNotOffer(t *testing.T)
 	res := callTool(t, cs, "search_operations", map[string]any{"query": "traces zqxj-nothing-matches"})
 
 	text := resultText(t, res)
-	for _, route := range []string{"metrics_metrics", "observations_getMany", "get_trace_tree"} {
+	for _, route := range []string{"metrics_metrics", "observations_getMany"} {
 		if strings.Contains(text, route) || strings.Contains(hintOf(t, res), route) {
 			t.Errorf("result names %s, which deployment 3.225.11 does not offer:\n%s", route, text)
 		}

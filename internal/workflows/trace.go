@@ -71,8 +71,12 @@ type TraceTree struct {
 	Payload json.RawMessage
 	// Empty is set when the trace has no observations.
 	Empty bool
-	// More is set when pages remain after MaxTracePages.
+	// More is set when pages remain after the last one the tree read.
 	More bool
+	// NextPage is the number of the first page of the legacy observations
+	// list that was not read, when More is set on that path; 0 otherwise (the
+	// Observations v2 path continues with a cursor).
+	NextPage int
 	// Requests is the number of Langfuse requests made, retries and the
 	// failed one included.
 	Requests int
@@ -172,24 +176,34 @@ func decodePage(body json.RawMessage) ([]observation, string, error) {
 	if err := json.Unmarshal(body, &page); err != nil {
 		return nil, "", errUnexpectedPage
 	}
-	rows := make([]observation, 0, len(page.Data))
-	for _, raw := range page.Data {
-		var o observation
-		dec := json.NewDecoder(bytes.NewReader(raw))
-		dec.UseNumber()
-		if err := dec.Decode(&o.fields); err != nil || o.fields == nil {
-			return nil, "", errUnexpectedPage
-		}
-		o.id = stringField(o.fields["id"])
-		o.parent = stringField(o.fields["parentObservationId"])
-		o.start, o.hasStart = timeField(o.fields["startTime"])
-		rows = append(rows, o)
+	rows, err := decodeObservations(page.Data)
+	if err != nil {
+		return nil, "", err
 	}
 	next := ""
 	if page.Meta.Cursor != nil {
 		next = *page.Meta.Cursor
 	}
 	return rows, next, nil
+}
+
+// decodeObservations decodes the rows of a page, each of which must be a JSON
+// object.
+func decodeObservations(data []json.RawMessage) ([]observation, error) {
+	rows := make([]observation, 0, len(data))
+	for _, raw := range data {
+		var o observation
+		dec := json.NewDecoder(bytes.NewReader(raw))
+		dec.UseNumber()
+		if err := dec.Decode(&o.fields); err != nil || o.fields == nil {
+			return nil, errUnexpectedPage
+		}
+		o.id = stringField(o.fields["id"])
+		o.parent = stringField(o.fields["parentObservationId"])
+		o.start, o.hasStart = timeField(o.fields["startTime"])
+		rows = append(rows, o)
+	}
+	return rows, nil
 }
 
 // stringField returns raw as a string, or "" when it is not one.

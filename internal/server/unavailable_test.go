@@ -237,8 +237,10 @@ func TestEveryOperationNamedAsPreferredInTheIndexIsOfferedByTheDeployment(t *tes
 }
 
 // legacyTraceReadsHint is the trace reads hint on a deployment that offers the
-// legacy family only (3.80.0); a literal.
-const legacyTraceReadsHint = "Trace data is read with: one trace by its ID: execute_read with trace_get; " +
+// legacy family only (3.80.0); a literal. get_trace_tree is named first: it
+// builds the trace tree from the legacy observations list there (#187).
+const legacyTraceReadsHint = "Trace data is read with: one trace as a trace tree: get_trace_tree; " +
+	"one trace by its ID: execute_read with trace_get; " +
 	"a filtered list of traces: execute_read with trace_list; " +
 	"a filtered list of observations: execute_read with legacy_observationsV1_getMany; " +
 	"aggregates such as cost or latency per day, e.g. for a trace name: execute_read with legacy_metricsV1_metrics. " +
