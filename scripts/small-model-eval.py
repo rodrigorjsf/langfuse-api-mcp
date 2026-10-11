@@ -96,6 +96,7 @@ import sys
 import tempfile
 import threading
 import types
+import typing
 import unicodedata
 import urllib.error
 import urllib.parse
@@ -644,15 +645,23 @@ def answer_line(result):
     return f"{label}: {one_line(result_text(result), ANSWER_LIMIT)}"
 
 
+class Outcome(typing.NamedTuple):
+    """How one conversation went (run_intent). said is the text of the model
+    turn that made no tool call, or None when the conversation ended otherwise.
+    answer is the tool result of the last call sent to the server, as the
+    server gave it; None when no call was sent, at the expected call that
+    passes and at a forbidden call (it is not sent and has no answer, even
+    when earlier calls were answered)."""
+    passed: bool
+    calls: list
+    ended: str
+    said: typing.Optional[str] = None
+    answer: typing.Optional[dict] = None
+
+
 def run_intent(server, tools, endpoint, key, args, item, today):
-    """Runs one conversation on the run date today; returns (passed, the calls
-    the model made, how it ended, what the model said, the server's answer).
-    What the model said is the text of the model turn that made no tool call,
-    or None when the conversation ended otherwise. The answer is the tool
-    result of the last call sent to the server, as the server gave it; None
-    when no call was sent, at the expected call that passes and at a forbidden
-    call (it is not sent and has no answer, even when earlier calls were
-    answered). main() prints it only for an intent that failed. An intent
+    """Runs one conversation on the run date today; returns its Outcome.
+    main() prints the answer only for an intent that failed. An intent
     with "expect" passes at the first expected call the server accepts; one
     with "forbid" fails at the first call of that tool, which is not sent to
     the server, and passes when the conversation ends without one after the
@@ -684,19 +693,19 @@ def run_intent(server, tools, endpoint, key, args, item, today):
             call = {"tool": use["name"], "arguments": use.get("input", {})}
             calls.append(call)
             if call["tool"] == item.get("forbid"):
-                return False, calls, f"forbidden call {call['tool']}", None, None
+                return Outcome(False, calls, f"forbidden call {call['tool']}")
             result = answer = server.request("tools/call", {"name": use["name"], "arguments": use.get("input", {})})
             # A pass is the expected call that the server also accepts.
             if accepted(call, result, item.get("expect", []), today):
-                return True, calls, "expected call", None, None
+                return Outcome(True, calls, "expected call")
             payload_read = payload_read or accepted(call, result, item.get("reads", []), today)
             results.append({"type": "tool_result", "tool_use_id": use["id"],
                             "content": result_text(result), "is_error": bool(result.get("isError"))})
         messages.append({"role": "user", "content": results})
     if "forbid" in item and not payload_read:
-        return (False, calls, f"{ended}; no accepted {' or '.join(describe_expected(r) for r in item['reads'])}",
-                said, answer)
-    return "forbid" in item, calls, ended, said, answer
+        return Outcome(False, calls,
+                       f"{ended}; no accepted {' or '.join(describe_expected(r) for r in item['reads'])}", said, answer)
+    return Outcome("forbid" in item, calls, ended, said, answer)
 
 
 def build_server(workdir):
