@@ -120,21 +120,7 @@ func startCatalog(t testing.TB, cat catalog.Catalog, client *langfuse.Client, lo
 	profile langfuse.DeploymentProfile, opts ...server.Option,
 ) *mcp.ClientSession {
 	t.Helper()
-	srv := server.New(cat, client, log, secrets, profile, opts...)
-
-	ctx := context.Background()
-	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	ss, err := srv.Connect(ctx, serverTransport, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	closeAtEnd(t, ss)
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, nil).Connect(ctx, clientTransport, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	closeAtEnd(t, cs)
-	return cs
+	return connectClientTo(t, server.New(cat, client, log, secrets, profile, opts...), nil)
 }
 
 // closeAtEnd closes c when the test ends and then forgets it.
@@ -144,7 +130,7 @@ func startCatalog(t testing.TB, cat catalog.Catalog, client *langfuse.Client, lo
 // shortens the list without clearing it. A cleanup that still held the session
 // would keep the server, its catalog and everything they reference for the
 // rest of the run, and under the race detector that is what made one process of
-// this package grow past 6.5 GB (#201). Closing an already-closed session is
+// this package grow past 5000 MiB (#201). Closing an already-closed session is
 // harmless.
 func closeAtEnd(t testing.TB, c io.Closer) {
 	t.Helper()
