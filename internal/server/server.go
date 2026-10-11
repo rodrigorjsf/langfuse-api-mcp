@@ -312,11 +312,9 @@ const (
 	// notFoundHint answers an unknown operation ID (#36).
 	notFoundHint = "call search_operations to find the operation ID: without arguments it lists every " +
 		"operation, with query it keeps those matching keywords such as \"prompt get\""
-	// readInsteadHint closes the hints of a write refused by execute_read.
-	readInsteadHint  = "to read the data instead, use a read operation such as trace_list or trace_get"
-	writeRefusedHint = "this server changes no data; " + readInsteadHint
-	// writeModeRefusedHint replaces writeRefusedHint in write mode, where
-	// execute_write exists.
+	// readInsteadHint closes the hint of a write operation ID that execute_read
+	// refuses in write mode (with writes off the ID is not found, #192).
+	readInsteadHint      = "to read the data instead, use a read operation such as trace_list or trace_get"
 	writeModeRefusedHint = "run a write operation with execute_write; " + readInsteadHint
 )
 
@@ -326,6 +324,12 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 		return toolError(errorInvalidArgument, err.Error(), argumentsHint, in.OperationID)
 	}
 	op, ok := ex.catalog.Lookup(in.OperationID)
+	if ok && !op.IsRead() && !ex.writeMode {
+		// While writes are off a write operation is an operation that is not
+		// there, as describe_operation says (#192): any other answer would tell
+		// the agent that the write surface exists.
+		ok = false
+	}
 	if !ok && catalog.IsExcluded(in.OperationID) {
 		return toolError(errorOperationNotFound, "operation "+in.OperationID+" is not exposed by this server: "+
 			"trace ingestion and organization admin changes are out of its scope",
@@ -340,13 +344,9 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 			notFoundHint, in.OperationID)
 	}
 	a.method = op.Method
-	if !op.IsRead() {
-		hint := writeRefusedHint
-		if ex.writeMode {
-			hint = writeModeRefusedHint
-		}
+	if !op.IsRead() { // write mode only: with writes off the operation was not found above
 		return toolError(errorInvalidArgument, "operation "+op.ID+" is a "+op.Method+
-			" operation; execute_read runs read (GET) operations only", hint, op.ID)
+			" operation; execute_read runs read (GET) operations only", writeModeRefusedHint, op.ID)
 	}
 	scan, scanned, err := op.Scan(in.Parameters)
 	if err != nil {

@@ -400,6 +400,32 @@ latency units under "Calling an operation", the rest under "Known limits".
 
 ---
 
+### 1.14 What the body of `comments_create` and `scores_create` needs (release specs and sources, 2026-10-11) `[verified]`
+
+Source: the "Low" findings of the end-to-end campaign on a self-hosted 3.80.0 (`raw/2026-10-10-e2e-langfuse-3.80.0.md`,
+split out of #188 into #192): an agent learned from a Langfuse 400 where the `projectId` of a comment comes from and
+that a score needs a target. The server now says both in `describe_operation` (write mode), as static guidance. The facts
+below were checked before the text was coded: the OpenAPI specs at the tags `v3.0.0`, `v3.30.0`, `v3.35.0`, `v3.40.0`,
+`v3.45.0`, `v3.50.0`, `v3.51.0`, `v3.51.1`, `v3.52.0`, `v3.53.0`, `v3.54.0`, `v3.54.1`, `v3.55.0`, `v3.60.0`, `v3.80.0`,
+`v3.100.0`, `v3.112.0` and `v3.133.0` (`web/public/generated/api/openapi.yml` of `langfuse/langfuse`), the source at the
+tags named in the rows (paths are in `langfuse/langfuse`), the Langfuse docs (`langfuse-docs` MCP) and the union catalog
+(4.50.0). None was run again against a live Langfuse: the 400s are the campaign's.
+
+| Fact | Evidence | What the server does with it |
+|---|---|---|
+| `projectId` of `CreateCommentRequest` is required, and the spec describes it only as "The id of the project to attach the comment to." | Spec: `required` is `projectId`, `objectType`, `objectId`, `content` at every tag above from `v3.0.0` to `v3.133.0` and in the union catalog | The body schema already says it is required; the guidance says what to send |
+| A comment is stored under the project of the API key, whatever `projectId` the body holds | Source `web/src/pages/api/public/comments/index.ts` at `v3.80.0`: the `POST` handler creates the comment with `data: { ...body, id: v4(), projectId: auth.scope.projectId }`. Only this tag's source was read | The guidance says `projectId` is the ID of the project the server's keys belong to |
+| `projects_get` (`GET /api/public/projects`) returns the project of the API key, with its `id` | Spec summary "Get Project associated with API key" (`v3.80.0`; the union catalog adds "(requires project-scoped API key)"); response `Projects` = `{ data: [Project] }`, `Project` = `{ id, name, metadata, retentionDays }` (`v3.80.0`). `projects_get` is in every release since `v3.0.0` | The guidance names `projects_get` as the operation that returns that project, and its `id` as the value, only when the resolved catalog offers `projects_get` |
+| `CreateScoreRequest` has a `traceId` that is required, and no `sessionId` or `datasetRunId`, up to `v3.52.0` | Spec: `required` is `traceId`, `name`, `value` and the properties lack both at `v3.0.0` to `v3.52.0` (every tag listed up to there) | The union catalog keeps the newest release's body schema for every deployment (the generator keeps the last spec that holds an operation), so for a deployment before `3.55.0` the schema `describe_operation` returns lists properties that deployment does not have: the target guidance is given only from `3.55.0` (below) |
+| `sessionId` joins `CreateScoreRequest` in `v3.53.0` (`required` becomes `name`, `value`) and `datasetRunId` in `v3.55.0` | Spec at `v3.52.0` (neither), `v3.53.0` and `v3.54.0`/`v3.54.1` (`sessionId` only), `v3.55.0` (both) | The guidance names only the target properties the body schema has |
+| A score needs exactly one target, and `observationId` needs `traceId` | Source `packages/shared/src/utils/scores.ts` at `v3.55.0`, `v3.80.0` and `v3.112.0`: the body is valid only with a `traceId` and neither of the others, or a `sessionId` and none of `traceId`, `datasetRunId`, `observationId`, or a `datasetRunId` and none of the others; the message is "Provide exactly one of the following: traceId (with optional observationId), sessionId or datasetRunId. ObservationId requires traceId." Not found at that path at `v3.53.0`, where it was not traced. Docs `/docs/evaluation/evaluation-methods/scores-via-sdk`: a trace or observation score needs `traceId` (an observation score gives both IDs), a session score gives only `sessionId`. Langfuse answers 400 (the campaign on 3.80.0; langfuse/langfuse#9323 shows the same message on a self-hosted 3.112.0) | The guidance says a score needs exactly one target, names `traceId`, `sessionId`, `datasetRunId` (and `observationId` with `traceId`) as the body schema has them, and says a body with none or more than one is refused with HTTP 400; a deployment before `3.55.0` gets no guidance |
+
+The unknown that remains: the body schema of every write operation is the newest release's, not the deployment's. It has
+no per-release range (ADR-0012 gives one to operations and parameters only), so `execute_write` checks a body for a
+deployment before `3.55.0` against a schema with `sessionId` and `datasetRunId` and without a required `traceId`.
+
+---
+
 ## 2. Deprecations
 
 All deprecated routes are served on **Langfuse Cloud until 2026-11-16**, which is the v4 cutover. They get security

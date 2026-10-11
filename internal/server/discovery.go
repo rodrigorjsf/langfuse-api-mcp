@@ -32,6 +32,7 @@ const searchOperationsDescription = "Lists the Langfuse operations this server c
 	"in the operation ID, the tag or the description line. Without query, lists every operation. " +
 	"When the query holds the word trace or traces, a hint names how trace data is read on this " +
 	"deployment: one trace, filtered lists, aggregates such as cost per day. " +
+	"In write mode the line of a write operation also gives its HTTP method and whether it is destructive. " +
 	"An index longer than the result size cap lists its leading operations only, says truncated, " +
 	"and keeps the count of all that matched.\n\n" +
 	"Reads the server's built-in catalog only: it does not call Langfuse and does not run any operation. " +
@@ -100,6 +101,12 @@ func operationIndexSchema() map[string]any {
 									"operationId": map[string]any{"type": "string"},
 									"description": map[string]any{"type": "string", "description": "First line of the operation's description; for a legacy operation, what it does and the operation to prefer. " + thirdPartyNote},
 									"tool":        map[string]any{"type": "string", "enum": []any{toolExecuteRead, toolExecuteWrite}},
+									"method": map[string]any{"type": "string", "enum": []any{"POST", "PUT", "PATCH", "DELETE"},
+										"description": "HTTP method of a write operation, the one describe_operation returns; present only on " +
+											"a line that execute_write runs, so only in write mode."},
+									"destructive": map[string]any{"type": "boolean", "description": "Whether the write operation is destructive " +
+										"(HTTP DELETE, PUT or PATCH) and so needs the user's confirmation, as describe_operation says; " +
+										"present only on a line that execute_write runs, so only in write mode."},
 								},
 							},
 						},
@@ -143,6 +150,34 @@ type indexEntry struct {
 	OperationID string `json:"operationId"`
 	Description string `json:"description"`
 	Tool        string `json:"tool"`
+	// Method and Destructive are set only on a write operation, which only
+	// write mode lists (#192): they come from the catalog, as describe_operation's
+	// do.
+	Method      string `json:"method,omitempty"`
+	Destructive *bool  `json:"destructive,omitempty"`
+}
+
+// newIndexEntry returns the index entry of op.
+func newIndexEntry(op catalog.Operation) indexEntry {
+	e := indexEntry{OperationID: op.ID, Description: op.DescriptionLine, Tool: toolFor(op)}
+	if !op.IsRead() {
+		e.Method, e.Destructive = op.Method, new(op.IsDestructive())
+	}
+	return e
+}
+
+// toolText is the parenthesis that ends the text line of an operation in write
+// mode: the tool that runs it and, for a write operation, its HTTP method and
+// whether it is destructive.
+func (e indexEntry) toolText() string {
+	if e.Destructive == nil {
+		return "(" + e.Tool + ")"
+	}
+	destructive := "not destructive"
+	if *e.Destructive {
+		destructive = "destructive"
+	}
+	return "(" + e.Tool + ", " + e.Method + ", " + destructive + ")"
 }
 
 // searchArgumentsHint returns the hint of an invalid search_operations call.
@@ -195,7 +230,7 @@ func (d discovery) searchOperations(_ context.Context, req *mcp.CallToolRequest,
 			idx.Groups = append(idx.Groups, indexGroup{Tag: op.Tag})
 		}
 		g := &idx.Groups[len(idx.Groups)-1]
-		g.Operations = append(g.Operations, indexEntry{OperationID: op.ID, Description: op.DescriptionLine, Tool: toolFor(op)})
+		g.Operations = append(g.Operations, newIndexEntry(op))
 		idx.Count++
 	}
 	if idx.Count == 0 {
@@ -393,7 +428,7 @@ func renderIndex(idx operationIndex, writeMode bool) (rendered, error) {
 			for _, op := range g.Operations {
 				b.WriteString("- " + op.OperationID + " — " + op.Description)
 				if writeMode {
-					b.WriteString(" (" + op.Tool + ")")
+					b.WriteString(" " + op.toolText())
 				}
 				b.WriteString("\n")
 			}
@@ -483,7 +518,8 @@ const describeOperationDescription = "Returns the operation description of one L
 	"what it does, the tool that runs it, and every path and query parameter with its location, type, " +
 	"whether it is required, its allowed values, its bounds and its default. In write mode it also says " +
 	"whether the operation is destructive (DELETE, PUT, PATCH) and returns its JSON request body schema, " +
-	"which execute_write checks every body against. A body schema that does not fit the result size cap is " +
+	"which execute_write checks every body against; for comments_create and scores_create it also gives " +
+	"guidance on how to fill the body. A body schema that does not fit the result size cap is " +
 	"returned without its description and title annotations, or left out, and the result says truncated.\n\n" +
 	"Reads the server's built-in catalog only: it does not call Langfuse and does not run the operation. " +
 	"search_operations lists the operation IDs; execute_read runs a read operation."
@@ -530,6 +566,9 @@ func operationDescriptionSchema() map[string]any {
 				"required":    []any{"required"},
 				"properties": map[string]any{
 					"required": map[string]any{"type": "boolean", "description": "Whether the operation needs a body."},
+					"guidance": map[string]any{"type": "string", "description": "How to fill the body: static text written by " +
+						"this server, not from the Langfuse spec; present only where the spec's schema does not say it, " +
+						"e.g. where a comment's projectId comes from or that a score needs a target."},
 					"schema": map[string]any{"type": "object", "description": "JSON Schema 2020-12 of the body, " +
 						"which execute_write checks every body against. " + bodySchemaNote + " Absent only when " +
 						"truncated is true and the schema does not fit the result size cap."},
@@ -590,7 +629,10 @@ type operationDescription struct {
 // its JSON Schema 2020-12, as the catalog cleaned it of hidden characters. The
 // schema is absent only when it did not fit the result size cap (#190).
 type bodyDescription struct {
-	Required bool            `json:"required"`
+	Required bool `json:"required"`
+	// Guidance is static text on how to fill the body, from the catalog (#192);
+	// every reduction of the result keeps it.
+	Guidance string          `json:"guidance,omitempty"`
 	Schema   json.RawMessage `json:"schema,omitempty"`
 }
 
@@ -639,12 +681,13 @@ func (d discovery) describeOperation(_ context.Context, req *mcp.CallToolRequest
 			notFoundHint, id)
 	}
 	a.method = op.Method
-	return d.describeResult(op, describe(op, d.writeMode))
+	return d.describeResult(op, describe(op, d.writeMode, d.catalog.BodyGuidance(op)))
 }
 
 // describe returns the operation description of op; in write mode it says
-// whether op is destructive and gives its body schema.
-func describe(op catalog.Operation, writeMode bool) operationDescription {
+// whether op is destructive and gives its body schema and the static guidance
+// on its body, if any.
+func describe(op catalog.Operation, writeMode bool, bodyGuidance string) operationDescription {
 	out := operationDescription{
 		OperationID: op.ID, Tag: op.Tag, Description: op.DescriptionLine, Method: op.Method, Tool: toolFor(op),
 		Parameters: make([]paramDescription, 0, len(op.Params)),
@@ -652,7 +695,7 @@ func describe(op catalog.Operation, writeMode bool) operationDescription {
 	if writeMode {
 		out.Destructive = new(op.IsDestructive())
 		if op.Body != nil {
-			out.Body = &bodyDescription{Required: op.Body.Required, Schema: op.Body.Schema}
+			out.Body = &bodyDescription{Required: op.Body.Required, Guidance: bodyGuidance, Schema: op.Body.Schema}
 		}
 	}
 	for _, p := range op.Params {
@@ -725,7 +768,7 @@ func (d discovery) describeResult(op catalog.Operation, od operationDescription)
 // withBody returns od with the body schema replaced by schema, which may be
 // nil, and marked truncated with the hint.
 func (od operationDescription) withBody(schema json.RawMessage, hint string) operationDescription {
-	od.Body = &bodyDescription{Required: od.Body.Required, Schema: schema}
+	od.Body = &bodyDescription{Required: od.Body.Required, Guidance: od.Body.Guidance, Schema: schema}
 	od.Truncated, od.Hint = true, hint
 	return od
 }
@@ -771,6 +814,9 @@ func renderDescription(od operationDescription) (rendered, error) {
 				b.WriteString("\nBody (" + need + "): its JSON Schema 2020-12 is left out.\n")
 			} else {
 				b.WriteString("\nBody (" + need + "), as JSON Schema 2020-12. " + bodySchemaNote + "\n")
+			}
+			if od.Body.Guidance != "" {
+				b.WriteString("Body guidance: " + od.Body.Guidance + "\n")
 			}
 			if od.Truncated {
 				b.WriteString("Truncated: " + od.Hint + "\n")

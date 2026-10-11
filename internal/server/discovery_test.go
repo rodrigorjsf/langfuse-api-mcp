@@ -257,7 +257,7 @@ func TestSearchOperationsInWriteModeListsWriteOperationsNamingTheToolThatRunsThe
 	}
 	text := resultText(t, res)
 	for _, want := range []string{
-		"- prompts_create — Create a new version for the prompt with the given `name` (execute_write)\n",
+		"- prompts_create — Create a new version for the prompt with the given `name` (execute_write, POST, not destructive)\n",
 		"- prompts_get — Get a prompt (execute_read)\n",
 	} {
 		if !strings.Contains(text, want) {
