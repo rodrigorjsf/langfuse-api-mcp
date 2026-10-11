@@ -461,3 +461,28 @@ func TestAWrapperHintIsKeptWhenTheResultIsClipped(t *testing.T) {
 		t.Fatalf("a clipped result's hint = %q, want the remedy and the tool's own hint", cut.Hint)
 	}
 }
+
+// A result with a note of its own (a filter scan that stopped at its page
+// limit) keeps the note when it fits, and follows the remedies of the
+// operation with it when it is cut: the remedies are the operation's, the note
+// is fixed text.
+func TestANoteIsKeptWhenTheResultIsClippedAndFollowsTheOperationsRemedies(t *testing.T) {
+	t.Parallel()
+	remedies := sanitize.Remedies{TimeWindow: true}
+
+	fits := sanitize.WrapNoted("scores_get-many", payloadOf(t, map[string]any{"input": "x"}), 16384, remedies, "the scan stopped")
+	cut := sanitize.WrapNoted("scores_get-many", payloadOf(t, pageOf(30, 2000)), 16384, remedies, "the scan stopped")
+
+	if fits.Truncated || fits.Hint != "the scan stopped" {
+		t.Fatalf("a result that fits = {truncated: %v, hint: %q}, want the note only", fits.Truncated, fits.Hint)
+	}
+	if !cut.Truncated || !strings.HasSuffix(cut.Hint, "the scan stopped") || !strings.Contains(cut.Hint, "a shorter time window") {
+		t.Fatalf("a cut result's hint = %q, want the remedy and, last, the note", cut.Hint)
+	}
+	if strings.Contains(cut.Hint, "lower limit") {
+		t.Errorf("hint %q names a limit, which the operation's remedies lack", cut.Hint)
+	}
+	if size := jsonSize(t, cut); size > 16384 {
+		t.Errorf("the cut result is %d bytes, want at most 16384", size)
+	}
+}

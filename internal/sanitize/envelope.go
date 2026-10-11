@@ -60,6 +60,15 @@ func WrapWith(operationID string, payload json.RawMessage, limit int, hint, reme
 	return wrap(operationID, payload, limit, hints{remedy: remedy, resultHint: hint})
 }
 
+// WrapNoted is Wrap for a result that carries a fixed note besides: the note is
+// the hint of a result that is not cut, and follows the truncation hint of one
+// that is. The envelope, note included, fits limit bytes.
+func WrapNoted(operationID string, payload json.RawMessage, limit int, remedies Remedies, note string) Envelope {
+	h := hintsFor(remedies)
+	h.resultHint = note
+	return wrap(operationID, payload, limit, h)
+}
+
 // wrap builds the envelope, cutting the payload when it does not fit:
 // clipping its values, then leaving out rows, then cutting it to text.
 func wrap(operationID string, payload json.RawMessage, limit int, h hints) Envelope {

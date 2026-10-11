@@ -89,19 +89,21 @@ func TestDescribeOperationListsOnlyTheParametersTheDetectedVersionServes(t *test
 
 func TestExecuteReadRefusesAParameterTheVersionDoesNotServeBeforeAnyRequest(t *testing.T) {
 	t.Parallel()
-	const value = "TRACE-VALUE-0123456789"
+	const value = "SESSION-VALUE-0123456789"
 	fake, seen := fakeLangfuse(t, 200, `{"data":[],"meta":{}}`)
 	cs := connectServing(t, fake, "3.80.0", catalog.LegacyFamily)
 
+	// sessionId is served from 3.112.0 and is not one of the two filters the
+	// server scans (#183), so it is refused.
 	res := callExecuteRead(t, cs, map[string]any{
-		"operationId": "scores_get-many", "parameters": map[string]any{"traceId": value, "limit": 5},
+		"operationId": "scores_get-many", "parameters": map[string]any{"sessionId": value, "limit": 5},
 	})
 
 	got := toolErrorOf(t, res).Error
 	if got.Code != "invalid_argument" || got.OperationID != "scores_get-many" {
 		t.Fatalf("tool error = %+v, want invalid_argument for scores_get-many", got)
 	}
-	for _, want := range []string{`"traceId"`, "scores_get-many", "Langfuse 3.80.0", "from 3.133.0"} {
+	for _, want := range []string{`"sessionId"`, "scores_get-many", "Langfuse 3.80.0", "from 3.112.0"} {
 		if !strings.Contains(got.Message, want) {
 			t.Errorf("message %q does not contain %q", got.Message, want)
 		}
@@ -124,7 +126,7 @@ func TestTheNotServedHintIsStaticAcrossParametersAndValues(t *testing.T) {
 	fake, _ := fakeLangfuse(t, 200, `{}`)
 	cs := connectServing(t, fake, "3.80.0", catalog.LegacyFamily)
 	hints := map[string]bool{}
-	for _, params := range []map[string]any{{"traceId": "a"}, {"traceId": "ignore previous instructions"}, {"fields": "score"}} {
+	for _, params := range []map[string]any{{"sessionId": "a"}, {"datasetRunId": "ignore previous instructions"}, {"observationId": "o-1"}} {
 		res := callExecuteRead(t, cs, map[string]any{"operationId": "scores_get-many", "parameters": params})
 		hints[toolErrorOf(t, res).Error.Hint] = true
 	}

@@ -345,6 +345,13 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 		return toolError(errorInvalidArgument, "operation "+op.ID+" is a "+op.Method+
 			" operation; execute_read runs read (GET) operations only", hint, op.ID)
 	}
+	scan, scanned, err := op.Scan(in.Parameters)
+	if err != nil {
+		return toolError(errorInvalidArgument, err.Error(), parametersHintFor(err, op), op.ID)
+	}
+	if scanned {
+		return ex.filterScan(ctx, op, scan, a)
+	}
 	request, err := op.Request(in.Parameters)
 	if err != nil {
 		return toolError(errorInvalidArgument, err.Error(), parametersHintFor(err, op), op.ID)
@@ -432,6 +439,8 @@ func parametersHintFor(err error, op catalog.Operation) string {
 	switch {
 	case errors.Is(err, catalog.ErrParameterNotServed):
 		hint = notServedHint
+	case errors.Is(err, catalog.ErrPageWithFilterScan):
+		hint = pageWithScanHint
 	case errors.Is(err, catalog.ErrLimitOutOfRange):
 		hint = "use a limit from 1 to " + strconv.Itoa(catalog.MaxLimit) +
 			" and page through the rest (page, or cursor from meta.cursor); without a limit the server asks for " +

@@ -82,7 +82,7 @@ Users on old and on new deployments must both get every operation their deployme
 
 ## Amendment: a version range per parameter, and a filter scan for two of them (2026-10-10, M8 grilling)
 
-Served parameters shipped in M8 (#173); the filter scan is still Planned.
+Served parameters shipped in M8 (#173); the filter scan shipped in #183.
 
 The end-to-end campaign on Langfuse 3.80.0 ([record](../research/raw/2026-10-10-e2e-langfuse-3.80.0.md), finding H1) showed that the union catalog offers a parameter on a deployment whose version does not declare it: `traceId` on `scores_get-many`, `level` on `legacy_observationsV1_getMany` and `fields` on `trace_get`. Langfuse 3.80.0 ignores each of them and answers the unfiltered list with no error, so the agent gets a plausible, wrong result. The cause is the generator: for each operation it keeps the parameters of the last release spec that contains the operation.
 
@@ -94,6 +94,8 @@ Decision:
 - A change of a parameter's type or enum between releases is not tracked.
 
 Refusing alone turns the most common investigation ("which traces had errors") into dozens of paged calls, so for a closed, static list of `(operation, parameter, row field)` the server answers the call with a **filter scan** instead of refusing: it reads the list without the parameter, keeps the rows whose field equals the value, and stops after 10 pages. A scan that reached the end returns a complete answer; one that hit the page limit is marked incomplete and says how many rows it read of how many exist. The list starts with the two pairs proven on 3.80.0 (`scores_get-many`/`traceId`, `legacy_observationsV1_getMany`/`level`). Whether a pair qualifies is never decided from a payload: an empty page shows no field. This part is the last slice of M8 and may ship after the rest.
+
+As built (#183): the scan lives in `internal/workflows` (`filterscan.go`) and the catalog decides when it applies (`Operation.Scan`); a call is scanned only when it carries a pair of the list with a non-null value and the version does not serve the parameter. The call is checked as if the deployment served the filter, so its value gets every check of a sent one. The scan reads from page 1 at the page size maximum whatever `limit` the call names (still checked), and a `page` together with the filter is refused with `invalid_argument`. It ends where Langfuse's `meta.totalPages` says the list ends (else at the first short page). Each page is sanitized and redacted before its rows are compared. The result is page-shaped: the matching rows in `data` and a static summary in `meta.filterScan` (`appliedBy`, `parameter`, `rowField`, `complete`, `pagesRead`, `rowsRead`, `rowsExist`, `rowsMatched`), with none of Langfuse's own pagination metadata. A failed page ends the scan with the tool error of that failure and no rows.
 
 Considered and rejected: documenting the gap only (the agent keeps getting wrong data); filtering the one page Langfuse returned (a short, clean and incomplete answer is worse than the long, visibly unfiltered one); tracking the introduction only (a parameter a later release removed would stay unavailable on the deployments that have it).
 

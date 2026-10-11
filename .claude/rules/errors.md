@@ -11,7 +11,7 @@ Contract: ADR-0008. The agent must always receive a structured tool error it can
 | Where it fails | Behavior |
 |---|---|
 | Startup (config, CA explicit sources, invalid host) | exit non-zero with one clear stderr message naming the variable; never start half-configured |
-| Tool input invalid | tool result `isError: true`, code `invalid_argument`, which field and why; a parameter of the operation that the deployment's version does not serve (#173) names the parameter, operation, deployment version and the serving release (from the catalog) with a static hint: call without it and filter over every page |
+| Tool input invalid | tool result `isError: true`, code `invalid_argument`, which field and why; a parameter of the operation that the deployment's version does not serve (#173) names the parameter, operation, deployment version and the serving release (from the catalog) with a static hint: call without it and filter over every page; `page` together with a filter the server scans (#183) is `invalid_argument` too, hint: call again without `page` |
 | Unknown / excluded operation, or a write operation while writes are off | `operation_not_found` + hint to call `search_operations` |
 | `get_trace_tree` on a deployment whose v4 read family is off (#175; after the argument checks) | `operation_unavailable`, static hint: `execute_read` with `trace_get` when the catalog offers it, `search_operations`, the deployment's version and families on and off; no caller text; nothing is sent |
 | Operation in the union catalog that the deployment's resolved catalog does not offer (`describe_operation`, `execute_read`, `execute_write`; a write operation only in write mode) | `operation_unavailable`, static hint: the operations of the catalog to use here instead (the preferred one a legacy operation names, and the legacy operations that name this one), `search_operations`, the deployment's version and families on and off; no caller text; nothing is sent |
@@ -19,7 +19,7 @@ Contract: ADR-0008. The agent must always receive a structured tool error it can
 | Destructive write (DELETE, PUT, PATCH), client offers no form elicitation (none, or URL mode only; read per request) | `confirmation_unavailable`, static hint (use a client with form elicitation, or the Langfuse UI), not retryable; nothing is sent (#113) |
 | Destructive write the user declined or cancelled | `confirmation_declined`, static hint (do not call again unless the user asks again), not retryable; nothing is sent |
 | Destructive write re-sent with missing, forged, corrupted, expired or mismatched confirmation data (an accept sent before the server asked, other arguments, another process's state) | `confirmation_invalid`, static hint (call again without confirmation data to be asked afresh), not retryable; nothing is sent |
-| Langfuse HTTP error | map status (table below) |
+| Langfuse HTTP error (on a page of a filter scan, #183, the scan ends there and returns no rows, never a partial answer) | map status (table below) |
 | Network / TLS / timeout | classify with `errors.As` (e.g. `x509.UnknownAuthorityError`, `*tls.CertificateVerificationError`, `net.Error` timeout, `context.DeadlineExceeded`) |
 | Bug (panic) | recover at the tool-handler boundary → `internal_error`; stack only to stderr |
 

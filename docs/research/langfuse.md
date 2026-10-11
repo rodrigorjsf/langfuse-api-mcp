@@ -296,6 +296,14 @@ finding H1, `raw/2026-10-10-e2e-langfuse-3.80.0.md`).
 - **A change of a parameter's type or enum between releases is not tracked**: the definition of the newest release that
   lists the parameter applies.
 
+- **What the filter scan relies on** (#183, live on Langfuse 3.80.0, 2026-10-10). Both list routes answer
+  `{"data": [...], "meta": {"page", "limit", "totalItems", "totalPages"}}`; an empty list has `totalItems` 0 and
+  `totalPages` 0. A score of `GET /api/public/v2/scores` carries `traceId`, an observation of
+  `GET /api/public/observations` carries `level` (`ERROR` for an observation ingested with that level). Both ignore
+  the filter they do not declare, so the unfiltered list comes back. `TestLiveLangfuse3800AFilterScanOfScoresByTraceReturnsOnlyThatTracesScores`
+  and `TestLiveLangfuse3800AFilterScanOfLegacyObservationsByLevelReturnsOnlyThatLevel` seed rows through the ingestion
+  batch and read them back through the scan.
+
 ### 1.11 Dataset runs routes with a Folder name (live test, 2026-10-10) `[verified]`
 
 Source: `TestLiveLangfuseServesTheRunsOfADatasetReadByItsFolderName` and
