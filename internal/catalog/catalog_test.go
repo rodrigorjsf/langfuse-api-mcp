@@ -3,14 +3,22 @@ package catalog_test
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 )
 
+// loadedCatalog loads the embedded catalog once for the whole package: a
+// catalog is built once and shared read-only (.claude/rules/go.md), and a
+// resolution compiles the body schemas it chooses once per catalog (#202), so a
+// catalog of its own per test would compile them again for every test. No test
+// may write to what mustLoad returns or to a slice or map inside it.
+var loadedCatalog = sync.OnceValues(catalog.Load)
+
 func mustLoad(t testing.TB) catalog.Catalog {
 	t.Helper()
-	cat, err := catalog.Load()
+	cat, err := loadedCatalog()
 	if err != nil {
 		t.Fatalf("load catalog: %v", err)
 	}

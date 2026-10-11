@@ -441,11 +441,45 @@ tags named in the rows (paths are in `langfuse/langfuse`), the Langfuse docs (`l
 | `sessionId` joins `CreateScoreRequest` in `v3.53.0` (`required` becomes `name`, `value`) and `datasetRunId` in `v3.55.0` | Spec at `v3.52.0` (neither), `v3.53.0` and `v3.54.0`/`v3.54.1` (`sessionId` only), `v3.55.0` (both) | From 3.53.0 the guidance names `sessionId` too, from 3.55.0 `datasetRunId` too |
 | A score needs exactly one target, and `observationId` needs `traceId` | Source `packages/shared/src/utils/scores.ts`. `v3.53.0` and `v3.54.1`: valid only with a `traceId` and no `sessionId`, or a `sessionId` and neither `traceId` nor `observationId`; message "Either provide traceId (with optional observationId) or sessionId, but not both. ObservationId requires traceId." `v3.55.0`, `v3.80.0`, `v3.112.0`, `v3.225.11`, `v4.46.0`, `v4.50.0` and `main`: the same with a `datasetRunId` as a third target; message "Provide exactly one of the following: traceId (with optional observationId), sessionId or datasetRunId. ObservationId requires traceId." Docs `/docs/evaluation/evaluation-methods/scores-via-sdk`: a trace or observation score needs `traceId` (an observation score gives both IDs), a session score gives only `sessionId`. Langfuse answers 400 (the campaign on 3.80.0; langfuse/langfuse#9323 shows the same message on a self-hosted 3.112.0) | The guidance says a score needs exactly one target (a single target before 3.53.0, where `traceId` is required), names the target properties the body schema and the deployment's version have (`traceId`, `sessionId`, `datasetRunId`; `observationId` with `traceId`), and says a body with none, or more than one, is refused with HTTP 400 |
 
-The unknown that remains: the body schema of every write operation is the newest release's, not the deployment's. It has
-no per-release range (ADR-0012 gives one to operations and parameters only), so `describe_operation` returns, and
-`execute_write` checks a body against, a schema that has `sessionId` and `datasetRunId` and no required `traceId` for a
-deployment before 3.55.0 (#202). The guidance does not repeat the error: it names a target only from the release that has
-it.
+The unknown that remained here (#192) was that the body schema of every write operation was the newest release's, not the
+deployment's, so `describe_operation` returned and `execute_write` checked a schema with `sessionId` and `datasetRunId` and no
+required `traceId` for a deployment before 3.55.0. It is closed by #202, below.
+
+#### Request bodies change between releases (generator over v3.0.0 to v4.50.0, 2026-10-11) `[verified]`
+
+Source: `scripts/gen-union-catalog.py` (#202) over the OpenAPI spec of the 403 release tags from v3.0.0 to v4.50.0 (118 distinct
+specs, the set the committed catalog was built from), `$ref`s inlined from each spec and converted to JSON Schema 2020-12.
+Compared by `required` flag and schema, the `description` and `title` annotations apart. Read from the specs; none was run
+against a live deployment.
+
+- **Of the 35 write operations the server offers, 15 have more than one distinct body: 76 bodies in all** (the 17 operations
+  the server excludes keep one each). `scores_create` has 11, `models_create` 5 (7 spans), `prompts_create` 4 (6 spans),
+  `datasets_create` 3, `comments_create` 2, `scoreConfigs_create` 2, `evaluators_create` and `evaluators_update` 2 each, and the
+  three `unstable/` operations that left the spec in 4.31.0 up to 6.
+- **`scores_create`** (`POST /api/public/scores`, `score_create` in the oldest specs): `traceId`, `name` and `value` are required
+  up to 3.52.0; `environment` joins in 3.35.0, `metadata` in 3.49.0; **3.53.0** adds `sessionId` and requires only `name` and
+  `value`; **3.55.0** adds `datasetRunId`; `queueId` in 3.118.0; `source` in 3.171.0. Spans: 3.0.0, 3.35.0, 3.49.0, 3.53.0,
+  3.55.0, 3.118.0, 3.131.0, 3.143.0, 3.165.0, 3.171.0 and 3.188.0 each start a body.
+- **`models_create`** (`POST /api/public/models`): `unit` is required in the body of 3.0.0 to 3.7.x, **optional and nullable
+  (`"unit": null`) from 3.8.0 to 4.18.x**, required again from 4.19.0. The `PUT /models/{id}` body (4.19.0 on) requires it.
+  `pricingTiers` joins in 3.135.0.
+- **The release specs are not monotonic for bodies either.** The spec of v3.28.2 has the 3.0.0 bodies of `models_create` and
+  `prompts_create` (it also lacks one operation, §1.9): the generator stores each such body once, with both spans.
+  `comments_create` gains `objectStartTime` in 4.33.0.
+- **Changes below the top level**: `prompts_create` (inside its `oneOf`), `scoreConfigs_create` (from 3.165.0),
+  `annotationQueues_createQueueItem` (from 3.121.0), `datasets_create` (4.45.2), `evaluators_update` (a message
+  `role` constant becomes an enum in 4.27.0), `unstable_dashboardWidgets_update` (the `view` enum gains `scores-boolean` in
+  3.224.0).
+- **No older body has a property named like a credential** (`secret`, `password`, `accessKey`), so no exclusion follows. The
+  excluded operations that take one have 43 bodies; the generator keeps only the newest of each.
+- **The bodies of the first releases use the OpenAPI 3.0 `example` keyword** (`POST /ingestion` and `POST /scores` in 280
+  releases each, three `unstable/` operations in 23): the generator converts it to `examples: [value]`.
+- **Size.** The embedded catalog was 504,215 bytes and is 955,700 with the history (2,072,165 if the excluded operations kept
+  theirs too). The ADR-0012 amendment of #202 has the decision.
+
+The server now resolves one body per write operation for the detected version, the body of the newest release that is not newer
+than the deployment (the newest when no version was detected), and the `scores_create` guidance above names a target property
+only when that body has it.
 
 ### 1.15 The shape of `filter` per operation (release specs 4.42.0 and 4.46.0, API reference, 2026-10-11) `[verified]`
 

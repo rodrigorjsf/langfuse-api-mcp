@@ -5,7 +5,7 @@
 **Operation**: one method+path pair of the Langfuse public API, identified by its OpenAPI `operationId`.
 _Avoid_: endpoint (when you mean a single method), route, action
 
-**Catalog**: the set of in-scope operations the server can execute for the connected deployment: the bundled union of Langfuse release specs, minus the exclusion list, filtered by the deployment profile.
+**Catalog**: the set of in-scope operations the server can execute for the connected deployment: the bundled union of Langfuse release specs, minus the exclusion list, filtered by the deployment profile; each write operation has the request body of the deployment's Langfuse version.
 _Avoid_: registry, tool list
 
 **Operation index**: the compact listing `search_operations` returns — one line per catalog operation (its ID and the first line of its description; for a legacy operation, what it does and its replacement; in write mode, for a write operation, its HTTP method and whether it is destructive), grouped by tag, optionally filtered by a query.
