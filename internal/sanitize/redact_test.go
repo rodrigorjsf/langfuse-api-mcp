@@ -271,3 +271,26 @@ func BenchmarkRedact(b *testing.B) {
 		})
 	}
 }
+
+// BenchmarkPayload measures the object form of #196, which looks at the key of
+// every member of every object (isAuthorizationName). 64 KiB of rows, as a
+// list of objects with and without a header map. On the machine of
+// BenchmarkRedact, rows with no header map took 2.75 ms before and take
+// 2.80 ms now; rows with a header map took 2.5 ms before and take 3.1 ms now.
+func BenchmarkPayload(b *testing.B) {
+	for name, row := range map[string]string{
+		"rows with no header map": `{"name":"checkout-flow","input":"the user asked about a refund","n":12345,"tags":["a","b"]}`,
+		"rows with a header map":  `{"name":"checkout-flow","headers":{"Authorization":"Basic dXNlcjpwYXNzd29yZDEyMzQ1Njc4"},"n":12345}`,
+	} {
+		payload := json.RawMessage("[" + strings.TrimSuffix(strings.Repeat(row+",", 64<<10/len(row)+1), ",") + "]")
+		b.Run(name, func(b *testing.B) {
+			b.SetBytes(int64(len(payload)))
+			r := sanitize.NewRedactor("pk-lf-aaaa", "sk-lf-bbbb")
+			for b.Loop() {
+				if _, err := sanitize.Payload(payload, r); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}

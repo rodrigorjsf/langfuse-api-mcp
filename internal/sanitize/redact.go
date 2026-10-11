@@ -37,11 +37,18 @@ const scheme = "[A-Za-z][A-Za-z0-9_.+-]*"
 // The single quote is that of a Python dictionary printed as text.
 const quote = `\\*["']`
 
-// quotedName is the name rule (isAuthorizationName) as it reads between
+// space is a run of blanks in the quoted form: spaces, tabs and line breaks, so
+// a pretty-printed header map matches, and so does a name with a line break
+// around it, which isAuthorizationName also drops. The plain form of #180
+// keeps spaces and tabs only.
+const space = `[ \t\r\n]*`
+
+// quotedName encodes the name rule (isAuthorizationName) as it reads between
 // quotes: "authorization", or any text that ends in it after a character that
 // is not an ASCII letter or digit, blanks allowed around it. The text cannot
-// hold a quote or a backslash, which end it.
-const quotedName = `[ \t]*(?:[^"'\\]*[^A-Za-z0-9"'\\])?(?i:authorization)[ \t]*`
+// hold a quote or a backslash, which end it. A test walks the same names
+// through both.
+const quotedName = space + `(?:[^"'\\]*[^A-Za-z0-9"'\\])?(?i:authorization)` + space
 
 // headerPattern matches a credential sent in a header, in three forms, up to a
 // token of minTokenLength characters or more. The first group is what stays,
@@ -60,14 +67,14 @@ const quotedName = `[ \t]*(?:[^"'\\]*[^A-Za-z0-9"'\\])?(?i:authorization)[ \t]*`
 var headerPattern = regexp.MustCompile(
 	`((?:^|[^A-Za-z0-9])(?i:authorization)[ \t]*:[ \t]*` + scheme + `[ \t]+` +
 		`|\b(?i:bearer)[ \t]+` +
-		`|` + quote + quotedName + quote + `[ \t]*:[ \t]*(?:\[[ \t]*)?` + quote + `[ \t]*` + scheme + `[ \t]+)` +
+		`|` + quote + quotedName + quote + space + `:` + space + `(?:\[` + space + `)?` + quote + space + scheme + `[ \t]+)` +
 		valueChar + `{` + strconv.Itoa(minTokenLength) + `,}`)
 
 // headerValuePattern matches the value of a member of a header map: blanks, a
 // scheme, blanks and a token of minTokenLength characters or more (#196). The
 // first group is what stays.
 var headerValuePattern = regexp.MustCompile(
-	`^([ \t]*` + scheme + `[ \t]+)` + valueChar + `{` + strconv.Itoa(minTokenLength) + `,}`)
+	`^(` + space + scheme + `[ \t]+)` + valueChar + `{` + strconv.Itoa(minTokenLength) + `,}`)
 
 // authorizationWord is the word the name rule looks for, in lower case.
 const authorizationWord = "authorization"

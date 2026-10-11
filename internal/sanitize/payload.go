@@ -43,7 +43,7 @@ func Decode(raw json.RawMessage) (any, error) {
 // clean returns v with every string cleaned by Text and redacted by r. The
 // text r gets is already clean, so it skips the cleaning Redact does.
 func clean(v any, r Redactor) any {
-	return walk(v, func(s string) string { return r.redact(Text(s)) }, redactHeaderMember)
+	return walk(v, func(s string) string { return r.redact(Text(s)) })
 }
 
 // redactHeaderMember returns value, the value of the member key of a payload's
@@ -81,21 +81,22 @@ func Line(s string) string {
 }
 
 // LineValue returns v, a decoded JSON value, with every string, keys
-// included, passed through Line. Keys that read the same once cleaned keep
-// one value by Payload's rule: the key that was already clean, else the first
-// in byte order.
-func LineValue(v any) any { return walk(v, Line, nil) }
+// included, passed through Line, and the token of a header credential under an
+// Authorization name replaced by Redacted, as Payload does (#196). Keys that
+// read the same once cleaned keep one value by Payload's rule: the key that was
+// already clean, else the first in byte order.
+func LineValue(v any) any { return walk(v, Line) }
 
 // walk returns v, a decoded JSON value, with every string, keys included,
-// passed through f; then, if member is not nil, the value of each object
-// member is replaced by member(key, value), key being the cleaned key.
-func walk(v any, f func(string) string, member func(key string, value any) any) any {
+// passed through f; then the value of each object member is replaced by
+// redactHeaderMember(key, value), key being the cleaned key (#196).
+func walk(v any, f func(string) string) any {
 	switch v := v.(type) {
 	case string:
 		return f(v)
 	case []any:
 		for i, item := range v {
-			v[i] = walk(item, f, member)
+			v[i] = walk(item, f)
 		}
 		return v
 	case map[string]any:
@@ -107,11 +108,7 @@ func walk(v any, f func(string) string, member func(key string, value any) any) 
 			if _, taken := out[key]; taken && key != k {
 				continue
 			}
-			value := walk(v[k], f, member)
-			if member != nil {
-				value = member(key, value)
-			}
-			out[key] = value
+			out[key] = redactHeaderMember(key, walk(v[k], f))
 		}
 		return out
 	}

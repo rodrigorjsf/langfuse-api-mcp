@@ -473,6 +473,47 @@ func TestAParameterValueHoldingAHeaderMapIsSentAsCheckedAndAppearsInNoRefusalHin
 		}
 		assertNoToken(t, res, logs, otherHeaderMapToken)
 	})
+	t.Run("an accepted value with a URL and traversal text beside it", func(t *testing.T) {
+		t.Parallel()
+		value := mapText + " https://evil.example/../x"
+		fake, seen := fakeLangfuse(t, http.StatusOK, `{"data":[]}`)
+		cs, logs := connectLogged(t, fake)
+
+		res := callExecuteRead(t, cs, map[string]any{"operationId": "trace_list", "parameters": map[string]any{"name": value}})
+
+		if res.IsError {
+			t.Fatalf("execute_read returned a tool error: %s", resultText(t, res))
+		}
+		if got := receivedOne(t, seen).query.Get("name"); got != value {
+			t.Errorf("the query name = %q, want %q as the caller wrote it", got, value)
+		}
+		assertNoToken(t, res, logs, otherHeaderMapToken)
+	})
+	for name, parameters := range map[string]map[string]any{
+		"a control character in a query value":     {"name": mapText + "\u0007"},
+		"an invisible character in a query value":  {"name": mapText + "\u200b"},
+		"a traversal in a path value":              {"promptName": "../" + mapText},
+		"a URL in a path value":                    {"promptName": "https://evil.example/" + mapText},
+		"a control character in a path value":      {"promptName": mapText + "\u0007"},
+		"a name that is no parameter of the call":  {mapText: "x"},
+		"a header map as a parameter value's type": {"limit": mapText},
+	} {
+		t.Run("refused with "+name, func(t *testing.T) {
+			t.Parallel()
+			operationID := "trace_list"
+			if _, isPath := parameters["promptName"]; isPath {
+				operationID = "prompts_get"
+			}
+			cs, logs := connectLogged(t, idleLangfuse(t))
+
+			res := callExecuteRead(t, cs, map[string]any{"operationId": operationID, "parameters": parameters})
+
+			if got := toolErrorOf(t, res).Error.Code; got != "invalid_argument" {
+				t.Fatalf("code = %q, want invalid_argument", got)
+			}
+			assertNoToken(t, res, logs, otherHeaderMapToken)
+		})
+	}
 	t.Run("a metrics query holding it in a filter value", func(t *testing.T) {
 		t.Parallel()
 		query := strings.TrimSuffix(metricsQuery, "}") + `,"filters":[{"column":"name","operator":"=","type":"string","value":` + jsonOf(t, mapText) + `}]}`
@@ -666,7 +707,14 @@ func TestAHeaderMapInACallsOwnTextThatTheEchoCutWouldHaveLeftShortIsStillRedacte
 // user answering action, the requests the fake Langfuse received and the log.
 func confirmationOf(t *testing.T, action string, args map[string]any) (asked []string, res *mcp.CallToolResult, seen <-chan written, logs *syncBuffer) {
 	t.Helper()
-	fake, seen := writeLangfuse(t, http.StatusNoContent, "")
+	return confirmationAnswered(t, http.StatusNoContent, "", action, args)
+}
+
+// confirmationAnswered is confirmationOf against a Langfuse that answers status
+// and body.
+func confirmationAnswered(t *testing.T, status int, body, action string, args map[string]any) (asked []string, res *mcp.CallToolResult, seen <-chan written, logs *syncBuffer) {
+	t.Helper()
+	fake, seen := writeLangfuse(t, status, body)
 	client, u := answering(action)
 	logs = &syncBuffer{}
 	cs := startConfirm(t, langfuse.New(testOptions(t, fake.URL)), server.Secrets{Keys: testKeys()},
@@ -717,7 +765,8 @@ func TestAHeaderMapObjectInTheBodyOfADestructiveWriteIsShownRedactedAndSentUncha
 	args := map[string]any{"operationId": "unstable_dashboards_update",
 		"parameters": map[string]any{"dashboardId": "d-1"},
 		"body": map[string]any{"definition": map[string]any{"widgets": []any{}, "headers": map[string]any{
-			"Authorization": "Basic " + otherHeaderMapToken, "Proxy-Authorization": []string{"Token " + otherHeaderMapToken}}}}}
+			"Authorization":       "Basic " + otherHeaderMapToken,
+			"Proxy-Authorization": []string{"Token " + otherHeaderMapToken, "Digest " + headerMapToken}}}}}
 	realBody := jsonOf(t, args["body"])
 
 	asked, res, seen, logs := confirmationOf(t, "accept", args)
@@ -726,15 +775,92 @@ func TestAHeaderMapObjectInTheBodyOfADestructiveWriteIsShownRedactedAndSentUncha
 		t.Fatalf("the accepted call failed: %s", resultText(t, res))
 	}
 	want := "Body (" + strconv.Itoa(len(realBody)) + " bytes): " +
-		`{"definition":{"headers":{"Authorization":"Basic [REDACTED]","Proxy-Authorization":["Token [REDACTED]"]},"widgets":[]}}` + "\n"
+		`{"definition":{"headers":{"Authorization":"Basic [REDACTED]","Proxy-Authorization":["Token [REDACTED]","Digest [REDACTED]"]},"widgets":[]}}` + "\n"
 	if len(asked) != 1 || !strings.Contains(asked[0], want) {
 		t.Errorf("the confirmation lacks %q:\n%v", want, asked)
 	}
-	if leak, ok := bearerPartOf(otherHeaderMapToken, strings.Join(asked, "")+logs.String()+resultText(t, res)); ok {
-		t.Errorf("the confirmation, the log or the result carries %q of the token", leak)
+	for _, token := range []string{otherHeaderMapToken, headerMapToken} {
+		if leak, ok := bearerPartOf(token, strings.Join(asked, "")+logs.String()+resultText(t, res)); ok {
+			t.Errorf("the confirmation, the log or the result carries %q of the token", leak)
+		}
 	}
 	if sent := writtenOne(t, seen); sent.body != realBody {
 		t.Errorf("the fake Langfuse received the body %s, want %s", sent.body, realBody)
+	}
+}
+
+func TestAHeaderMapInALangfuseErrorAboutAWriteIsRedactedInTheToolError(t *testing.T) {
+	t.Parallel()
+	for name, form := range headerMapTexts(otherHeaderMapToken) {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			args := labelsUpdate(form.text)
+			body := jsonOf(t, map[string]string{"message": "rejected " + form.text + " as expired"})
+
+			_, res, _, logs := confirmationAnswered(t, http.StatusBadRequest, body, "accept", args)
+
+			if want, got := "Langfuse answered HTTP 400: rejected "+form.redacted+" as expired", toolErrorOf(t, res).Error.Message; got != want {
+				t.Fatalf("message = %q, want %q", got, want)
+			}
+			assertNoToken(t, res, logs, otherHeaderMapToken)
+		})
+	}
+}
+
+// A path parameter of execute_write holding the JSON text of a header map: the
+// confirmation shows it redacted and the request carries it as the caller wrote
+// it. One that the parameter checks refuse is refused as before, without the
+// user being asked, and the refusal does not hold it.
+func TestAParameterOfAWriteHoldingAHeaderMapIsShownRedactedAndSentAsChecked(t *testing.T) {
+	t.Parallel()
+	mapText := `{"Authorization": "Basic ` + otherHeaderMapToken + `"}`
+	call := func(name string) map[string]any {
+		return map[string]any{"operationId": "promptVersion_update",
+			"parameters": map[string]any{"name": name, "version": 2},
+			"body":       map[string]any{"newLabels": []any{"production"}}}
+	}
+	t.Run("an accepted value", func(t *testing.T) {
+		t.Parallel()
+
+		asked, res, seen, logs := confirmationOf(t, "accept", call(mapText))
+
+		if res.IsError {
+			t.Fatalf("the accepted call failed: %s", resultText(t, res))
+		}
+		if len(asked) != 1 || !strings.Contains(asked[0], "[REDACTED]") {
+			t.Errorf("the confirmation does not mark where the token was: %v", asked)
+		}
+		if leak, ok := bearerPartOf(otherHeaderMapToken, strings.Join(asked, "")+logs.String()+resultText(t, res)); ok {
+			t.Errorf("the confirmation, the log or the result carries %q of the token", leak)
+		}
+		if sent := writtenOne(t, seen); !strings.Contains(sent.path, otherHeaderMapToken) {
+			t.Errorf("the path sent = %s, want the value as the caller wrote it, token included", sent.path)
+		}
+	})
+	for name, value := range map[string]string{
+		"a traversal":                "../" + mapText,
+		"a URL":                      "https://evil.example/" + mapText,
+		"a control character":        mapText + "\u0007",
+		"an invisible character":     mapText + "\u200b",
+		"a backslash":                `a\` + mapText,
+		"an empty segment (a slash)": "a//" + mapText,
+	} {
+		t.Run("refused with "+name, func(t *testing.T) {
+			t.Parallel()
+
+			asked, res, seen, logs := confirmationOf(t, "accept", call(value))
+
+			if got := toolErrorOf(t, res).Error.Code; got != "invalid_argument" {
+				t.Fatalf("code = %q, want invalid_argument", got)
+			}
+			if len(asked) != 0 {
+				t.Errorf("the user was asked %d times about a refused call", len(asked))
+			}
+			writtenNothing(t, seen)
+			if leak, ok := bearerPartOf(otherHeaderMapToken, logs.String()+resultText(t, res)); ok {
+				t.Errorf("the refusal or the log carries %q of the token", leak)
+			}
+		})
 	}
 }
 

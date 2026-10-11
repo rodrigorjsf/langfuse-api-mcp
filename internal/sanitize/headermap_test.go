@@ -2,6 +2,7 @@ package sanitize_test
 
 import (
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -39,6 +40,7 @@ var (
 	authorizationNames = []string{
 		"Authorization", "authorization", "AUTHORIZATION", "Proxy-Authorization", "X-Upstream-Authorization",
 		"http.request.header.authorization", "HTTP_AUTHORIZATION", " Authorization ", "\tAuthorization", "x authorization",
+		"Authorization\n", "\r\n Proxy-Authorization",
 	}
 	notAuthorizationNames = []string{
 		"authorizationMode", "authorization_url", "reauthorization", "preauthorization", "Authorizations",
@@ -188,6 +190,14 @@ func TestRedactReplacesTheTokenOfAQuotedHeaderMapInsideAString(t *testing.T) {
 		"the list form with its quotes escaped": {
 			in: `{\"Authorization\": [\"Basic ` + tok + `\"]}`, want: `{\"Authorization\": [\"Basic [REDACTED]\"]}`,
 		},
+		"a pretty-printed list": {
+			in:   "{\n  \"Authorization\": [\n    \"Basic " + tok + "\"\n  ]\n}",
+			want: "{\n  \"Authorization\": [\n    \"Basic [REDACTED]\"\n  ]\n}",
+		},
+		"a line break after the colon": {
+			in:   "{\"Authorization\":\r\n  \"Basic " + tok + "\"}",
+			want: "{\"Authorization\":\r\n  \"Basic [REDACTED]\"}",
+		},
 		"blanks inside the quotes of the name and the value": {
 			in: `{" Authorization ": "  Basic ` + tok + `"}`, want: `{" Authorization ": "  Basic [REDACTED]"}`,
 		},
@@ -291,7 +301,7 @@ var unredactedValues = map[string]string{ //nolint:gosec // G101: fake values
 	"an object with a scheme and token": `{"value":"Basic abcdefghijklmnopqrstuvwxyz"}`,
 }
 
-func TestAValueThatIsNotACredentialComesBackUnchangedUnderAnAuthorizationName(t *testing.T) {
+func TestAValueThatIsNotACredentialComesBackUnchangedUnderAnAuthorizationNameInAPayload(t *testing.T) {
 	t.Parallel()
 	for name, value := range unredactedValues {
 		t.Run(name, func(t *testing.T) {
@@ -300,6 +310,16 @@ func TestAValueThatIsNotACredentialComesBackUnchangedUnderAnAuthorizationName(t 
 			if got := cleanedPayload(t, sanitize.Redactor{}, in); got != in {
 				t.Errorf("Payload(%s) = %s, want it unchanged", in, got)
 			}
+		})
+	}
+}
+
+func TestAValueThatIsNotACredentialComesBackUnchangedUnderAnAuthorizationNameInText(t *testing.T) {
+	t.Parallel()
+	for name, value := range unredactedValues {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			in := `{"Authorization":` + value + `}`
 			if got := redactOf(in); got != in {
 				t.Errorf("Redact(%q) = %q, want it unchanged", in, got)
 			}
@@ -363,6 +383,34 @@ func TestTheQuotedTextFormReadsOnlyTheFirstItemOfAList(t *testing.T) {
 	}
 }
 
+// A line break written as an escape (a backslash and an n, in the JSON text of
+// a header map that was put in a JSON string) is not a blank: a limit named in
+// the docs (#196). A real line break is one (the pretty-printed cases above).
+func TestAnEscapedLineBreakBetweenTheNameAndTheValueIsALimit(t *testing.T) {
+	t.Parallel()
+	in := `{\"Authorization\":\n [\n \"Basic ` + mapToken + `\"]}`
+	if got := redactOf(in); got != in {
+		t.Fatalf("Redact(%q) = %q, want it unchanged", in, got)
+	}
+}
+
+// LineValue is the cleaning of a value shown on one line (the confirmation of
+// a write): it applies the object form too, every string item of a list.
+func TestLineValueRedactsTheTokenOfAnAuthorizationMemberWhateverItsScheme(t *testing.T) {
+	t.Parallel()
+	in, err := sanitize.Decode(json.RawMessage(`{"headers":{"Proxy-Authorization":["Token ` + mapToken + `","Digest ` + otherMapToken + `"],"n":1}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := json.Marshal(sanitize.LineValue(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"headers":{"Proxy-Authorization":["Token [REDACTED]","Digest [REDACTED]"],"n":1}}`; string(out) != want {
+		t.Fatalf("LineValue = %s, want %s", out, want)
+	}
+}
+
 // A token ends at the first character that is not part of it (#180): only the
 // part before it is redacted, and only when that part has 16 characters.
 func TestAHeaderMapTokenEndsAtABackslashAQuoteOrANonASCIICharacter(t *testing.T) {
@@ -373,6 +421,12 @@ func TestAHeaderMapTokenEndsAtABackslashAQuoteOrANonASCIICharacter(t *testing.T)
 			`{"Authorization":"Basic abcdefghijklmnop\\qrstuvwxyz"}`, `{"Authorization":"Basic [REDACTED]\\qrstuvwxyz"}`},
 		"a backslash before 16": {
 			`{"Authorization":"Basic abcdefgh\\ijklmnopqrstuvwxyz"}`, `{"Authorization":"Basic abcdefgh\\ijklmnopqrstuvwxyz"}`},
+		"a double quote after 16 characters": {
+			`{"Authorization":"Basic abcdefghijklmnop\"qrstuvwxyz"}`, `{"Authorization":"Basic [REDACTED]\"qrstuvwxyz"}`},
+		"a single quote after 16 characters": {
+			`{"Authorization":"Basic abcdefghijklmnop'qrstuvwxyz"}`, `{"Authorization":"Basic [REDACTED]'qrstuvwxyz"}`},
+		"a quote before 16 characters": {
+			`{"Authorization":"Basic abcdefgh'ijklmnopqrstuvwxyz"}`, `{"Authorization":"Basic abcdefgh'ijklmnopqrstuvwxyz"}`},
 		"a non-ASCII letter after 16": {
 			`{"Authorization":"Basic abcdefghijklmnop` + umlaut + `qrst"}`, `{"Authorization":"Basic [REDACTED]` + umlaut + `qrst"}`},
 		"a non-ASCII letter before 16": {
@@ -430,10 +484,12 @@ func TestRedactingARedactedHeaderMapChangesNothing(t *testing.T) {
 		if twice := r.Redact(once); twice != once {
 			t.Errorf("Redact(%q) = %q, but redacting it again gives %q", in, once, twice)
 		}
-		if strings.Contains(once, mapToken) {
-			t.Errorf("Redact(%q) = %q, which still holds the token", in, once)
-		}
 	}
+}
+
+func TestCleaningARedactedHeaderMapPayloadChangesNothing(t *testing.T) {
+	t.Parallel()
+	r := sanitize.NewRedactor("hunter2-hunter2")
 	payload := `{"a":{"Authorization":"Basic ` + mapToken + `","b":["Authorization: Token ` + mapToken + `"]}}`
 	once := cleanedPayload(t, r, payload)
 	if twice := cleanedPayload(t, r, once); twice != once {
@@ -575,41 +631,41 @@ func TestAWrongTypeUnderAnAuthorizationNameCausesNoFailure(t *testing.T) {
 func TestATokenOfManyKilobytesIsRedactedWhole(t *testing.T) {
 	t.Parallel()
 	token := strings.Repeat(mapToken, 4000) // 112000 characters
-	tests := map[string]string{
-		"as an object member": cleanedPayload(t, sanitize.Redactor{}, `{"Authorization":"Basic `+token+`"}`),
-		"as quoted text":      redactOf(`{"Authorization": "Basic ` + token + `"}`),
-		"as the plain form":   redactOf("HTTP_AUTHORIZATION: Basic " + token),
+	tests := map[string]struct{ got, want string }{
+		"as an object member": {cleanedPayload(t, sanitize.Redactor{}, `{"Authorization":"Basic `+token+`"}`), `{"Authorization":"Basic [REDACTED]"}`},
+		"as quoted text":      {redactOf(`{"Authorization": "Basic ` + token + `"}`), `{"Authorization": "Basic [REDACTED]"}`},
+		"as the plain form":   {redactOf("HTTP_AUTHORIZATION: Basic " + token), "HTTP_AUTHORIZATION: Basic [REDACTED]"},
 	}
-	for name, got := range tests {
-		if strings.Contains(got, mapToken[:8]) || len(got) > 100 {
-			t.Errorf("%s: %.120s (%d bytes), want the token replaced whole", name, got, len(got))
+	for name, tc := range tests {
+		if tc.got != tc.want {
+			t.Errorf("%s: %.120s (%d bytes), want %s", name, tc.got, len(tc.got), tc.want)
 		}
 	}
 }
 
 func TestAnObjectWithThousandsOfAuthorizationMembersIsRedactedWhole(t *testing.T) {
 	t.Parallel()
+	const members = 20000
+	keys := make([]string, members)
+	for i := range members {
+		keys[i] = `"h` + strconv.Itoa(i) + `_Authorization"`
+	}
+	slices.Sort(keys) // a payload comes back with its keys in byte order
 	var in, want strings.Builder
 	in.WriteString("{")
 	want.WriteString("{")
-	const members = 20000
-	for i := range members {
+	for i, key := range keys {
 		if i > 0 {
 			in.WriteString(",")
 			want.WriteString(",")
 		}
-		key := `"h` + strconv.Itoa(i) + `_Authorization"`
 		in.WriteString(key + `:"Basic ` + mapToken + `"`)
 		want.WriteString(key + `:"Basic [REDACTED]"`)
 	}
 	in.WriteString("}")
 	want.WriteString("}")
-	got := cleanedPayload(t, sanitize.Redactor{}, in.String())
-	if strings.Contains(got, mapToken[:8]) {
-		t.Fatalf("a token survived among %d members", members)
-	}
-	if len(got) != want.Len() {
-		t.Fatalf("redacted payload is %d bytes, want %d", len(got), want.Len())
+	if got := cleanedPayload(t, sanitize.Redactor{}, in.String()); got != want.String() {
+		t.Fatalf("redacted payload of %d members is %d bytes, want %d bytes with every token replaced", members, len(got), want.Len())
 	}
 }
 
@@ -628,7 +684,7 @@ func TestAHeaderMapAtTheDeepestLevelAResponseCanHoldIsRedacted(t *testing.T) {
 // sixteen). The best of several runs of each size keeps a busy machine from
 // failing the test.
 func TestRedactionTimeGrowsInProportionToTheInput(t *testing.T) {
-	t.Parallel()
+	// Not parallel: the other tests would share the processor with the timing.
 	inputs := map[string]func(n int) string{
 		"object members": func(n int) string {
 			return `{` + strings.Repeat(`"Authorization":"Basic `+mapToken+`",`, n) + `"z":1}`
