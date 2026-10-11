@@ -115,14 +115,15 @@ func (ex executor) executeWrite(ctx context.Context, req *mcp.CallToolRequest, a
 	}
 	op, ok := ex.catalog.Lookup(in.OperationID)
 	if !ok {
-		if f, method, unavailable := notOffered(ex.catalog, in.OperationID, toolExecuteWrite, ex.writeMode, ex.profile); unavailable {
+		if f, method, unavailable := notOffered(ex.catalog, in.OperationID, ex.writeMode, ex.profile); unavailable {
 			a.method = method
 			return errorResult(f)
 		}
 	}
 	if !ok || op.IsRead() {
 		// Excluded, unknown and read operations look the same: none of them
-		// can be run by execute_write.
+		// can be run by execute_write. (An operation the deployment does not
+		// offer, read or write, was answered operation_unavailable above.)
 		return toolError(errorOperationNotFound, "no write operation "+strconv.Quote(truncate(in.OperationID))+
 			" can be run by this server", writeNotFoundHint, in.OperationID)
 	}

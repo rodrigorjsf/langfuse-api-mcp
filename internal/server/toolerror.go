@@ -170,15 +170,17 @@ func routeMissingFlavour(family catalog.Family, profile langfuse.DeploymentProfi
 
 // notOffered returns the tool error of a call naming an operation of the
 // union catalog that the deployment's resolved catalog does not offer (ADR-0002
-// amendment of 2026-10-10), and the operation's HTTP method. ok is false when
-// id is not such an operation, or is a write operation while write mode is
-// off: that stays operation_not_found, so the write surface is not revealed.
-// The message and the hint hold the operation ID and the replacements from the
-// catalog, and the deployment profile; never the caller's text.
-func notOffered(cat catalog.Catalog, id, tool string, writeMode bool, profile langfuse.DeploymentProfile,
+// amendment of 2026-10-10), and the operation's HTTP method. Every tool that
+// takes an operation ID answers it, whatever kind of operation the tool runs
+// (spec #172). ok is false when id is not such an operation, or is a write
+// operation while write mode is off: that stays operation_not_found, so the
+// write surface is not revealed. The message and the hint hold the operation
+// ID and the replacements from the catalog, and the deployment profile; never
+// the caller's text.
+func notOffered(cat catalog.Catalog, id string, writeMode bool, profile langfuse.DeploymentProfile,
 ) (f toolErrorFields, method string, ok bool) {
 	u, found := cat.Unavailable(id)
-	if !found || !toolRuns(tool, u.Method, writeMode) {
+	if !found || (u.Method != http.MethodGet && !writeMode) {
 		return toolErrorFields{}, "", false
 	}
 	return toolErrorFields{
@@ -187,22 +189,6 @@ func notOffered(cat catalog.Catalog, id, tool string, writeMode bool, profile la
 		Hint:        notOfferedHint(u, profile),
 		OperationID: u.ID,
 	}, u.Method, true
-}
-
-// toolRuns reports whether tool answers about an operation of the given HTTP
-// method: execute_read about reads, execute_write about writes, and
-// describe_operation about both, but a write only in write mode (a write
-// operation ID while write mode is off is operation_not_found everywhere).
-func toolRuns(tool, method string, writeMode bool) bool {
-	isRead := method == http.MethodGet
-	switch tool {
-	case toolExecuteRead:
-		return isRead
-	case toolExecuteWrite:
-		return !isRead
-	default:
-		return isRead || writeMode
-	}
 }
 
 // notOfferedHint is the hint of an operation the deployment's catalog does not

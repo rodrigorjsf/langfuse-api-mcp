@@ -732,7 +732,7 @@ func (d discovery) describeOperation(_ context.Context, req *mcp.CallToolRequest
 	}
 	op, ok := d.catalog.Lookup(id)
 	if !ok {
-		if f, method, unavailable := notOffered(d.catalog, id, toolDescribeOperation, d.writeMode, d.profile); unavailable {
+		if f, method, unavailable := notOffered(d.catalog, id, d.writeMode, d.profile); unavailable {
 			a.method = method
 			return errorResult(f)
 		}

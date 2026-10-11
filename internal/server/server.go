@@ -376,7 +376,7 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 			"read the data with a read operation instead, e.g. trace_list; search_operations lists them", in.OperationID)
 	}
 	if !ok {
-		if f, method, unavailable := notOffered(ex.catalog, in.OperationID, toolExecuteRead, ex.writeMode, ex.profile); unavailable {
+		if f, method, unavailable := notOffered(ex.catalog, in.OperationID, ex.writeMode, ex.profile); unavailable {
 			a.method = method
 			return errorResult(f)
 		}
