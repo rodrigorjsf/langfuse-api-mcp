@@ -17,7 +17,7 @@ The [README](../README.md) covers what the server does, how to install and confi
 | Document | What it holds |
 |---|---|
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | local checks, prerequisites, the cross-OS trust proof, the stack and the reading order for contributors |
-| [CI checks in depth](development/checks.md) | the union catalog generator, the user skill check and the security mapping check |
+| [CI checks in depth](development/checks.md) | the union catalog generator, the user skill check, the security mapping check and the memory of the race suite |
 | [Release pipeline](development/release-pipeline.md) | snapshot and tag runs, smoke tests per channel, signing and publishing, cutting a release |
 | [Integration tests and container stacks](development/integration-tests.md) | the live Langfuse suite, the pinned deployments, the seed, the end-to-end campaign and the container stack guard |
 | [Small-model discovery eval](development/small-model-eval.md) | the eval of tool discovery with a small model, and its recorded runs |

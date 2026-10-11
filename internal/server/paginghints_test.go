@@ -45,10 +45,7 @@ func operationWith(names ...string) catalog.Operation {
 // connectServingCapped is connectServing with the smallest result size cap.
 func connectServingCapped(t *testing.T, fake *httptest.Server, version string, families []catalog.Family) *mcp.ClientSession {
 	t.Helper()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 	return startCatalog(t, cat.Resolve(catalog.Profile{Version: version, Families: families}),
 		langfuse.New(testOptions(t, fake.URL)), slog.New(slog.DiscardHandler), server.Secrets{Keys: testKeys()},
 		langfuse.DeploymentProfile{Version: version, Families: families}, server.WithMaxResultBytes(16384))

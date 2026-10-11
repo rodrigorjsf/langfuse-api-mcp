@@ -26,10 +26,7 @@ var jsonFilterOperations = []string{
 // operationsNamed returns the catalog operations with the given IDs.
 func operationsNamed(t *testing.T, ids ...string) []catalog.Operation {
 	t.Helper()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 	ops := make([]catalog.Operation, 0, len(ids))
 	for _, id := range ids {
 		op, ok := cat.Lookup(id)

@@ -11,7 +11,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/server"
 )
@@ -446,10 +445,7 @@ func TestGetTraceTreeOnALegacyDeploymentTakesNoArgumentThatTurnsTheNullRuleOnOrO
 func TestGetTraceTreeOnALegacyDeploymentReturnsTheSameRowsToEveryClient(t *testing.T) {
 	t.Parallel()
 	fake, _ := legacyObservationsLangfuse(t, map[int]string{1: legacyPage(recordedLegacyRows(t, 0, 3), 1, 1, 3)})
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 	srv := server.New(cat, langfuse.New(testOptions(t, fake.URL)), slog.New(slog.DiscardHandler), server.Secrets{Keys: testKeys()}, legacyProfile)
 	eliciting, _ := answering("accept")
 	want := resultText(t, callTool(t, connectClientTo(t, srv, nil), "get_trace_tree", map[string]any{"traceId": "t-1"}))

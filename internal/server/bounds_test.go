@@ -103,10 +103,7 @@ func specBoundCases(cat catalog.Catalog, now time.Time) []boundCase {
 // seam, internal/catalog/bounds_test.go).
 func TestExecuteReadRefusesAValueOutsideASpecGivenBoundOfTheCatalogWithoutCallingLangfuse(t *testing.T) {
 	t.Parallel()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 	cases := specBoundCases(cat, time.Now())
 	if len(cases) == 0 {
 		t.Skip("no read operation of the embedded union catalog has a spec-given parameter bound yet (#83, #90)")

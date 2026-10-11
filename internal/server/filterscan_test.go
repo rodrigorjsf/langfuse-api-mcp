@@ -106,10 +106,7 @@ func connectScanningOn(t *testing.T, fake *httptest.Server, version string, tune
 ) *mcp.ClientSession {
 	t.Helper()
 	families := []catalog.Family{catalog.LegacyFamily}
-	all, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	all := sharedCatalog(t)
 	clientOpts := testOptions(t, fake.URL)
 	clientOpts.RateLimit = 60_000
 	if tune != nil {

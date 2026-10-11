@@ -62,10 +62,7 @@ func readCall(operationID string) map[string]any {
 // connectServingSlow is connectServing with a request deadline of 100 ms.
 func connectServingSlow(t *testing.T, fake *httptest.Server, version string, families ...catalog.Family) *mcp.ClientSession {
 	t.Helper()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 	opts := testOptions(t, fake.URL)
 	opts.RequestTimeout = 100 * time.Millisecond
 	return startCatalog(t, cat.Resolve(catalog.Profile{Version: version, Families: families}), langfuse.New(opts),
@@ -205,10 +202,7 @@ func TestTheHintOfATimeoutNamesTheFieldGroupsOnlyOfAnOperationThatServesThem(t *
 // is built.
 func TestTheHintOfACanceledCallNamesTheFieldGroupsOnlyOfAnOperationThatServesThem(t *testing.T) {
 	t.Parallel()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 	older := cat.Resolve(catalog.Profile{Version: "3.80.0", Families: []catalog.Family{catalog.LegacyFamily}})
 	traceList, _ := cat.Lookup("trace_list")
 	traceGet, _ := older.Lookup("trace_get")
@@ -236,10 +230,7 @@ func TestTheHintOfACanceledCallNamesTheFieldGroupsOnlyOfAnOperationThatServesThe
 // serves fields there.
 func TestNoHintRecommendsFieldsForAnOperationThatDoesNotServeThemOnTheDeployment(t *testing.T) {
 	t.Parallel()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 	legacy := []catalog.Family{catalog.LegacyFamily}
 	for name, profile := range map[string]catalog.Profile{
 		"3.80.0":                   {Version: "3.80.0", Families: legacy},
@@ -325,10 +316,7 @@ func TestTheHintsOfAFailedTraceTreeNeverRecommendFields(t *testing.T) {
 // source reads has none, so its hints name none.
 func TestTheTraceTreeHintsThatNameFieldsNameAnOperationThatServesThemOnTheDeployment(t *testing.T) {
 	t.Parallel()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 	for _, version := range []string{"3.141.0", "4.0.0", "4.46.0", ""} {
 		op, ok := cat.Resolve(catalog.Profile{Version: version, Families: []catalog.Family{catalog.V4ReadFamily}}).Lookup("observations_getMany")
 		if !ok || !op.HasQueryParam("fields") {

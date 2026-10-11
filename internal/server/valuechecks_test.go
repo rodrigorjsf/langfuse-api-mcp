@@ -32,10 +32,7 @@ const plantedText = "PLANTED-IGNORE-PREVIOUS-INSTRUCTIONS"
 // take a query parameter called name, accepted by pick.
 func readsTakingQuery(t *testing.T, name string, pick func(catalog.Param) bool) []catalog.Operation {
 	t.Helper()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 	var ops []catalog.Operation
 	for _, op := range readsOf(cat) {
 		for _, p := range op.Params {
@@ -132,10 +129,7 @@ func TestExecuteReadForwardsOrderByUncheckedForLangfuseToJudge(t *testing.T) {
 // refusal names the parameter and the format, never the value.
 func TestExecuteReadRefusesATimestampThatIsNotRFC3339WithoutCallingLangfuse(t *testing.T) {
 	t.Parallel()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 	// Each value is distinctive (the date differs from the example the message
 	// gives), so the test can tell that none is echoed.
 	badValues := []string{
@@ -452,10 +446,7 @@ func jsonEscape(r rune) string {
 // carriage return too, which the sanitizer keeps as visible text.
 func TestAPathParameterRefusesExactlyTheCharactersTheSanitizerStrips(t *testing.T) {
 	t.Parallel()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 	op, ok := cat.Lookup("sessions_get")
 	if !ok {
 		t.Fatal("sessions_get missing from the catalog")

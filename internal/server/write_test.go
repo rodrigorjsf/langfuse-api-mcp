@@ -280,10 +280,7 @@ func writeSample(op catalog.Operation) map[string]any {
 // confirmation_unavailable; its arguments are checked first (ticket #113).
 func TestExecuteWriteRefusesEveryDestructiveOperationWithConfirmationUnavailable(t *testing.T) {
 	t.Parallel()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 	fake, seen := writeLangfuse(t, http.StatusOK, `{}`)
 	cs := connectWrites(t, fake)
 	destructive, unavailable := 0, 0

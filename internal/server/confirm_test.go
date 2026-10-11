@@ -51,10 +51,7 @@ func startConfirm(t testing.TB, client *langfuse.Client, secrets server.Secrets,
 	t.Helper()
 	cat := s.catalog
 	if cat == nil {
-		loaded, err := catalog.Load()
-		if err != nil {
-			t.Fatalf("load catalog: %v", err)
-		}
+		loaded := sharedCatalog(t)
 		cat = &loaded
 	}
 	opts := []server.Option{server.WithWriteMode()}
@@ -72,13 +69,13 @@ func startConfirm(t testing.TB, client *langfuse.Client, secrets server.Secrets,
 	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
-	t.Cleanup(func() { _ = ss.Close() })
+	closeAtEnd(t, ss)
 	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, s.client).
 		Connect(ctx, ct, &mcp.ClientSessionOptions{ProtocolVersion: s.protocol})
 	if err != nil {
 		t.Fatalf("client connect: %v", err)
 	}
-	t.Cleanup(func() { _ = cs.Close() })
+	closeAtEnd(t, cs)
 	return cs
 }
 

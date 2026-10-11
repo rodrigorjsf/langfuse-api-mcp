@@ -14,7 +14,6 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/sanitize"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/server"
@@ -361,10 +360,7 @@ func TestSearchOperationsWithoutQueryInWriteModeIsCutAtAnEntryBoundaryAtTheSmall
 
 func TestATruncatedOperationIndexSaysHowManyOperationsMatchedAndHowManyAreListedAndKeepsTheThirdPartyNote(t *testing.T) {
 	t.Parallel()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 
 	got := discoveryAnswer(t, smallestCap, "search_operations", map[string]any{})
 
@@ -466,10 +462,7 @@ type discoveryCall struct {
 // what a cap above them returns, and none says truncated.
 func TestAtTheDefaultCapEveryOperationDescriptionAndTheOperationIndexAreReturnedWhole(t *testing.T) {
 	t.Parallel()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 	for name, mode := range map[string][]server.Option{"read mode": nil, "write mode": {server.WithWriteMode()}} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -502,10 +495,7 @@ func TestAtTheDefaultCapEveryOperationDescriptionAndTheOperationIndexAreReturned
 // time, and no operation of the shipped catalog loses its body schema.
 func TestEveryWriteOperationOfTheUnionCatalogFitsTheSmallestCapWithItsBodySchemaReduced(t *testing.T) {
 	t.Parallel()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 	cs := connectOffline(t, server.WithWriteMode(), server.WithMaxResultBytes(smallestCap))
 	tool := toolNamed(t, cs, "describe_operation")
 	writes := 0

@@ -31,10 +31,7 @@ import (
 // catalog, in ID order.
 func writeOperationIDs(t *testing.T) []string {
 	t.Helper()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 	var ids []string
 	for _, op := range cat.Operations() {
 		if !op.IsRead() {

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/sanitize"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/server"
 )
@@ -228,10 +227,7 @@ func describeWrite(t *testing.T, operationID string) (structured map[string]any,
 // the one execute_write checks against, and whether it is destructive.
 func TestDescribeOperationInWriteModeReturnsTheBodySchemaAndTheDestructiveFlag(t *testing.T) {
 	t.Parallel()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 	scores, _ := cat.Lookup("scores_create")
 
 	got, text := describeWrite(t, "scores_create")

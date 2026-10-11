@@ -144,10 +144,7 @@ func TestNoOperationShowsScannedFiltersWhereTheVersionServesThemOrAnywhereElse(t
 	t.Parallel()
 	fake, _ := fakeLangfuse(t, 200, `{}`)
 	legacy, dual := []catalog.Family{catalog.LegacyFamily}, catalog.AllFamilies()
-	all, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	all := sharedCatalog(t)
 	for _, tc := range []struct {
 		name     string
 		version  string
@@ -539,10 +536,7 @@ func TestTheOutputSchemaOfDescribeOperationDeclaresScannedFiltersWithAStaticNote
 func TestTwoClientsOfOneServerGetTheSameDescriptionWithTheSameScannedFilters(t *testing.T) {
 	t.Parallel()
 	fake, _ := fakeLangfuse(t, 200, `{}`)
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 	profile := langfuse.DeploymentProfile{Version: "3.80.0", Families: []catalog.Family{catalog.LegacyFamily}}
 	srv := server.New(cat.Resolve(catalog.Profile{Version: profile.Version, Families: profile.Families}),
 		langfuse.New(testOptions(t, fake.URL)), slog.New(slog.DiscardHandler), server.Secrets{Keys: testKeys()}, profile)
