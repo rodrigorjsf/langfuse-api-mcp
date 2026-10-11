@@ -19,7 +19,8 @@ const (
 	errorCanceled                = "canceled"
 )
 
-// narrowHint tells the agent how to make a slow read cheaper.
+// narrowHint tells the agent how to make a slow read cheaper. It names fields,
+// a time window and a limit for every operation (#194, #203).
 const narrowHint = "narrow the query before calling again: a shorter time window, fewer fields or a lower limit"
 
 // caHint tells the user how to trust the CA of the Langfuse server.

@@ -293,7 +293,8 @@ func limitHint(op catalog.Operation) string {
 }
 
 // tooLargeNarrowing is the first part of the hint of an answer too large to
-// read.
+// read. It names fields, a time window and a limit for every operation (#194
+// makes fields operation-aware; the other two words are tracked in #203).
 const tooLargeNarrowing = "narrow the query: request fewer fields, a shorter time window or a lower limit"
 
 // tooLargeHintFor is the hint of an answer too large to read (a 413, or a body
