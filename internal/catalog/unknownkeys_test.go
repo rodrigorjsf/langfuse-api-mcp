@@ -16,12 +16,18 @@ import (
 // (The refusal itself, where a schema does forbid, is proven by
 // TestCheckBodyRefusesWhatALiteralSchemaForbidsNamingTheLocationAndKeyword.)
 
-// unknownKeyBans returns the JSON pointers, relative to at, of every schema
-// inside v that forbids unknown keys: additionalProperties or
-// unevaluatedProperties set to false. It reads only schema positions, so a
-// property that is itself named additionalProperties, and the data held by
-// const, enum, default and examples, are not mistaken for the keyword.
-func unknownKeyBans(v any, at string) []string {
+// unknownKeyBans returns, sorted, the JSON pointers of every schema inside v
+// that forbids unknown keys: additionalProperties or unevaluatedProperties set
+// to false. It reads only schema positions, so a property that is itself named
+// additionalProperties, and the data held by const, enum, default and
+// examples, are not mistaken for the keyword.
+func unknownKeyBans(v any) []string {
+	found := walkForBans(v, "")
+	slices.Sort(found)
+	return found
+}
+
+func walkForBans(v any, at string) []string {
 	var found []string
 	switch v := v.(type) {
 	case map[string]any:
@@ -32,7 +38,7 @@ func unknownKeyBans(v any, at string) []string {
 			case "properties", "patternProperties", "$defs", "definitions", "dependentSchemas":
 				if subs, ok := x.(map[string]any); ok {
 					for name, sub := range subs {
-						found = append(found, unknownKeyBans(sub, at+"/"+key+"/"+name)...)
+						found = append(found, walkForBans(sub, at+"/"+key+"/"+name)...)
 					}
 				}
 				continue
@@ -42,14 +48,13 @@ func unknownKeyBans(v any, at string) []string {
 					continue
 				}
 			}
-			found = append(found, unknownKeyBans(x, at+"/"+key)...)
+			found = append(found, walkForBans(x, at+"/"+key)...)
 		}
 	case []any:
 		for i, x := range v {
-			found = append(found, unknownKeyBans(x, fmt.Sprintf("%s/%d", at, i))...)
+			found = append(found, walkForBans(x, fmt.Sprintf("%s/%d", at, i))...)
 		}
 	}
-	slices.Sort(found)
 	return found
 }
 
@@ -65,14 +70,14 @@ func TestNoInScopeWriteBodySchemaForbidsAnUnknownKey(t *testing.T) {
 		if err := json.Unmarshal(op.Body.Schema, &schema); err != nil {
 			t.Fatalf("%s body schema: %v", op.ID, err)
 		}
-		for _, at := range unknownKeyBans(schema, "") {
+		for _, at := range unknownKeyBans(schema) {
 			t.Errorf("operation %s forbids unknown body keys at %q: a misspelled key is now refused there, "+
-				"so update the known limit in docs/reference/tools.md, docs/reference/security-model.md and "+
-				".claude/rules/security.md, then this test", op.ID, at)
+				"so update the known limit in docs/reference/tools.md and docs/reference/security-model.md, "+
+				"then this test", op.ID, at)
 		}
 	}
 	if bodies < 20 {
-		t.Fatalf("the walk saw %d write bodies, want the whole catalog's (more than 20)", bodies)
+		t.Fatalf("the walk saw %d write bodies, want the whole catalog's (at least 20)", bodies)
 	}
 }
 
@@ -99,7 +104,7 @@ func TestTheUnknownKeyWalkFindsABanAtAnyDepthAndIgnoresNamesAndData(t *testing.T
 				t.Fatalf("bad schema literal: %v", err)
 			}
 
-			got := unknownKeyBans(schema, "")
+			got := unknownKeyBans(schema)
 
 			if !slices.Equal(got, tc.want) {
 				t.Errorf("bans = %v, want %v", got, tc.want)
