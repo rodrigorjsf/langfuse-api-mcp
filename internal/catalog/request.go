@@ -247,11 +247,13 @@ func (o Operation) WithoutQueryParam(name string) Operation {
 	return o
 }
 
-// HasTimeFilter reports whether the operation takes a query parameter that
-// bounds time (the spec gives it the format date-time), which narrows what a
-// list returns.
-func (o Operation) HasTimeFilter() bool {
-	return slices.ContainsFunc(o.Params, func(p Param) bool { return p.In == "query" && p.Schema.Format == "date-time" })
+// HasTimeWindow reports whether the operation takes, on this deployment, a
+// query parameter that bounds the time range of what it returns (timeWindowParams,
+// #204): the pairs from... and to... that narrow a list. A date-time parameter
+// that bounds no window, the startTime lookup hint of legacy_observationsV1_get
+// or the version snapshot of datasetItems_list, does not count (notTimeWindows).
+func (o Operation) HasTimeWindow() bool {
+	return slices.ContainsFunc(o.Params, func(p Param) bool { return p.In == "query" && timeWindowParams[p.Name] })
 }
 
 func (o Operation) hasParam(name string) bool {

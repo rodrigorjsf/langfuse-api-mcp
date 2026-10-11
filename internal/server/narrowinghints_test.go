@@ -42,7 +42,7 @@ func assertNamesNoWayToNarrow(t *testing.T, hint string) {
 	}
 }
 
-// trace_get on 3.80.0 serves no fields, no limit, no time filter and no paging:
+// trace_get on 3.80.0 serves no fields, no limit, no time window and no paging:
 // a Langfuse 413 and a body over the bytes this server reads both say that no
 // parameter makes the answer smaller.
 func TestTheHintOfAResponseTooLargeSaysThatNoParameterMakesTheAnswerSmallerForAnOperationWithNoWayOfNarrowing(t *testing.T) {
@@ -103,21 +103,23 @@ func TestTheHintOfASlowCallSaysThatNoParameterMakesItCheaperForAnOperationWithNo
 	})
 }
 
-// operationWithTimeFilter is a GET operation that takes the query parameters
-// named and one more, from, which the release spec gives the format date-time:
-// a time filter.
-func operationWithTimeFilter(names ...string) catalog.Operation {
+// operationWithTimeWindow is a GET operation that takes the query parameters
+// named and one more, fromTimestamp, which the catalog lists as a time window
+// (#204) and the release spec gives the format date-time.
+func operationWithTimeWindow(names ...string) catalog.Operation {
 	op := operationWith(names...)
-	op.Params = append(op.Params, catalog.Param{Name: "from", In: "query", Schema: catalog.Schema{Type: "string", Format: "date-time"}})
+	op.Params = append(op.Params, catalog.Param{Name: "fromTimestamp", In: "query", Schema: catalog.Schema{Type: "string", Format: "date-time"}})
 	return op
 }
 
 // An operation names only the ways of narrowing it has: a limit and no time
-// filter gets the limit alone, a time filter and no limit the time window
+// window gets the limit alone, a time window and no limit the time window
 // alone, proven on literal operations so that every combination is covered, as
-// #193 proved "both ways of paging". The catalog has both kinds too (datasets_list
-// takes a limit and no time filter; legacy_observationsV1_get takes a time filter
-// and no limit), and the tests after this one run them through the tool.
+// #193 proved "both ways of paging". The catalog has only the first kind left
+// (datasets_list takes a limit and no time window; since #204 no operation has a
+// time window and no limit, because legacy_observationsV1_get, with a startTime
+// and no limit, has no window), so the second is proven on a literal operation
+// alone, and the tests after this one run the real operations through the tool.
 func TestAnOperationIsToldOnlyTheWaysOfNarrowingItHas(t *testing.T) {
 	t.Parallel()
 	const (
@@ -128,11 +130,11 @@ func TestAnOperationIsToldOnlyTheWaysOfNarrowingItHas(t *testing.T) {
 		op                       catalog.Operation
 		tooLarge, slow, canceled string
 	}{
-		"a limit and no time filter": {operationWith("limit"),
+		"a limit and no time window": {operationWith("limit"),
 			"narrow the query: a lower limit", slowLead + "a lower limit", canceled + slowLead + "a lower limit"},
-		"a time filter and no limit": {operationWithTimeFilter(),
+		"a time window and no limit": {operationWithTimeWindow(),
 			"narrow the query: a shorter time window", slowLead + "a shorter time window", canceled + slowLead + "a shorter time window"},
-		"a limit and a time filter": {operationWithTimeFilter("limit"),
+		"a limit and a time window": {operationWithTimeWindow("limit"),
 			"narrow the query: a lower limit or a shorter time window", slowLead + "a lower limit or a shorter time window",
 			canceled + slowLead + "a lower limit or a shorter time window"},
 		"a limit and paging": {operationWith("limit", "page"),
@@ -236,7 +238,7 @@ func TestTheTooLargeAndTheSlowHintsNameNoWayThatTheTruncationHintWouldNot(t *tes
 			truncation := server.TruncationHint(op)
 			serves := map[string]bool{
 				wordsOfFields: op.HasQueryParam("fields"), wordsOfLimit: op.HasQueryParam("limit"),
-				wordsOfWindow: op.HasTimeFilter(), wordsOfMetrics: op.HasMetricsQuery(),
+				wordsOfWindow: op.HasTimeWindow(), wordsOfMetrics: op.HasMetricsQuery(),
 			}
 			narrows := false
 			for _, served := range serves {
@@ -368,7 +370,7 @@ func TestTheHintOfATraceTreePageAnswered413IsTheTooLargeHintOfTheSourceItReads(t
 // A filter scan replaces the limit and reads from page 1, so the hint of a failed
 // scan (a page too large, a timeout, a canceled call) names neither a lower limit
 // nor paging, by the rule the truncation hint of the scan already follows (#183).
-// It names a time window where the operation takes a time filter.
+// It names a time window where the operation takes a time window.
 func TestTheHintOfAFailedFilterScanNamesNeitherALowerLimitNorPaging(t *testing.T) {
 	t.Parallel()
 	legacy := []catalog.Family{catalog.LegacyFamily}
@@ -433,7 +435,7 @@ func TestTheHintOfACanceledFilterScanNamesNeitherALowerLimitNorPaging(t *testing
 const notRetriedOnly = "the write was not retried and may or may not have been applied: read the resource before calling again"
 
 // A write that timed out is not sent again, and its hint holds the not-retried
-// note and nothing more: scores_create has no limit, no time filter and no fields.
+// note and nothing more: scores_create has no limit, no time window and no fields.
 func TestTheHintOfAWriteThatTimedOutIsTheNotRetriedNoteAndNothingMore(t *testing.T) {
 	t.Parallel()
 	var requests atomic.Int32
@@ -470,7 +472,7 @@ func TestTheHintOfACanceledWriteIsTheNotRetriedNoteAndNamesOnlyTheWaysTheOperati
 	if !ok {
 		t.Fatal("scores_create is not offered")
 	}
-	withWindow := operationWithTimeFilter()
+	withWindow := operationWithTimeWindow()
 	withWindow.Method = http.MethodPost
 	for name, tc := range map[string]struct {
 		op   catalog.Operation
@@ -480,9 +482,9 @@ func TestTheHintOfACanceledWriteIsTheNotRetriedNoteAndNamesOnlyTheWaysTheOperati
 	}{
 		"scores_create, canceled": {scoresCreate, langfuse.ErrCanceled, "canceled", notRetriedOnly},
 		"scores_create, timeout":  {scoresCreate, langfuse.ErrTimeout, "timeout", notRetriedOnly},
-		"a write with a time filter, canceled": {withWindow, langfuse.ErrCanceled, "canceled",
+		"a write with a time window, canceled": {withWindow, langfuse.ErrCanceled, "canceled",
 			notRetriedOnly + "; if the call was canceled because it was slow, narrow the query before calling again: a shorter time window"},
-		"a write with a time filter, timeout": {withWindow, langfuse.ErrTimeout, "timeout",
+		"a write with a time window, timeout": {withWindow, langfuse.ErrTimeout, "timeout",
 			notRetriedOnly + "; narrow the query before calling again: a shorter time window"},
 	} {
 		code, hint := server.WriteFailureOf(tc.op, tc.err)
@@ -519,52 +521,6 @@ func TestTheHintOfACallHeldByTheServersOwnLimitIsUnchanged(t *testing.T) {
 	}
 	if code, hint := server.WriteFailureOf(scoresCreate, langfuse.ErrThrottled); code != "timeout" || hint != notRetriedOnly+"; "+want {
 		t.Errorf("a throttled write: code %q, hint %q; want timeout with the note and %q", code, hint, want)
-	}
-}
-
-// The catalog's own operations of the two kinds, through the tool. datasets_list
-// takes a limit and no time filter; legacy_observationsV1_get takes a time filter
-// (startTime, from 4.33.0) and no limit, so each is told its own word and no
-// other. That startTime is a lookup hint and does not shrink one observation is
-// #204; the ticket's rule, a date-time parameter, is what this test pins.
-func TestARealOperationWithALimitAndNoTimeFilterAndOneWithTheOtherWayRoundGetOnlyTheirOwnWord(t *testing.T) {
-	t.Parallel()
-	dual := catalog.AllFamilies()
-	tests := map[string]struct {
-		call                      map[string]any
-		tooLarge, timeout         string
-		wantTooLarge, wantTimeout string
-	}{
-		"datasets_list, a limit": {call: map[string]any{"operationId": "datasets_list"},
-			wantTooLarge: "narrow the query: a lower limit, and page through the rest " + viaPage,
-			wantTimeout:  "narrow the query before calling again: a lower limit"},
-		"legacy_observationsV1_get, a time filter": {call: map[string]any{
-			"operationId": "legacy_observationsV1_get", "parameters": map[string]any{"observationId": "o-1"}},
-			wantTooLarge: "narrow the query: a shorter time window",
-			wantTimeout:  "narrow the query before calling again: a shorter time window"},
-	}
-	for name, tc := range tests {
-		t.Run(name+", a 413", func(t *testing.T) {
-			t.Parallel()
-			fake, _ := scriptedLangfuse(t, answer{status: http.StatusRequestEntityTooLarge, body: `{"message":"Response too large"}`})
-			cs := connectServing(t, fake, "4.46.0", dual...)
-
-			got := toolErrorOf(t, callExecuteRead(t, cs, tc.call)).Error
-
-			if got.Code != "response_too_large" || got.Hint != tc.wantTooLarge {
-				t.Fatalf("error = %+v, want response_too_large with the hint %q", got, tc.wantTooLarge)
-			}
-		})
-		t.Run(name+", a timeout", func(t *testing.T) {
-			t.Parallel()
-			cs := connectServingSlow(t, stallingLangfuse(t), "4.46.0", dual...)
-
-			got := toolErrorOf(t, callExecuteRead(t, cs, tc.call)).Error
-
-			if got.Code != "timeout" || got.Hint != tc.wantTimeout {
-				t.Fatalf("error = %+v, want a timeout with the hint %q", got, tc.wantTimeout)
-			}
-		})
 	}
 }
 

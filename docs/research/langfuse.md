@@ -518,6 +518,27 @@ deep, with no control or invisible character in the raw text or in any decoded s
 written again as compact JSON (order of conditions and list items kept, numbers as written, object keys sorted, a
 duplicated key once with its last value). The grammar (types, columns, operators, required keys) stays Langfuse's.
 
+### 1.16 Two `date-time` query parameters that bound no time window (release specs 4.33.0 and 4.46.0, API reference, 2026-10-11) `[verified]`
+
+Source: ticket #204 (the hints of #203 told an agent to use "a shorter time window" for an operation whose only
+`date-time` parameter is none). Fourteen operations of the union catalog have a query parameter with the format
+`date-time`. Twelve take a `from...`/`to...` pair that bounds the time range of a list: `fromStartTime`/`toStartTime`
+(`legacy_observationsV1_getMany`, `observations_getMany`, `experiments_list`, `experiments_listItems`),
+`fromTimestamp`/`toTimestamp` (`trace_list`, `sessions_list`, `scores_get-many`, `scoresV3_getManyV3`, `score_get`,
+`metrics_daily`) and `fromUpdatedAt`/`toUpdatedAt` (`prompts_list`, `unstable_skills_list`). The other two bound no window:
+
+| Operation | Parameter (served from) | What Langfuse says | What it means for a hint |
+|---|---|---|---|
+| `legacy_observationsV1_get` | `startTime` (4.33.0) | "The start time of the observation (ISO 8601 with offset, e.g. 2024-01-01T00:00:00Z). Optional performance hint - when provided, Langfuse narrows the lookup to make the request substantially faster. It only affects speed - an incorrect or omitted value never changes the result." Read from the `description` of the parameter in the release specs `v4.33.0` and `v4.46.0` (`web/public/generated/api/openapi.yml` of `langfuse/langfuse`; the union catalog keeps no parameter description). The API reference page of the operation (`api.reference.langfuse.com`) lists only `observationId`. | One observation is read by its ID: there is no list, no `limit`, no `fields` and no paging, and `startTime` never makes the answer smaller. The operation has no way of narrowing. |
+| `datasetItems_list` | `version` (3.153.0) | API reference: "ISO 8601 timestamp (RFC 3339, Section 5.6) in UTC (e.g., "2026-01-21T14:35:42Z"). If provided, returns state of dataset at this timestamp. If not provided, returns the latest version. Requires datasetName to be specified." | A point in time: an earlier timestamp is another state of the dataset, not a smaller page. The ways of narrowing the operation has are `limit` and `page`. |
+
+The server keeps two closed lists in `internal/catalog` (`timeWindowParams`, the six parameter names above, and
+`notTimeWindows`, the two `(operationId, parameter)` pairs of the table); a test fails, naming the operation and the
+parameter, when a `date-time` query parameter of the union catalog is on neither or on both, so the next release's
+snapshot or lookup parameter is classified by a person. An operation has a time window when the deployment's version
+serves at least one parameter of the first list. The value check of a `date-time` parameter (RFC 3339, before any request)
+covers all fourteen operations, a window or not.
+
 ---
 
 ## 2. Deprecations

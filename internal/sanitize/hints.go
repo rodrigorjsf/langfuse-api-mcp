@@ -16,7 +16,8 @@ type Remedies struct {
 	// Limit is the largest page size the operation accepts; 0 when it takes
 	// none.
 	Limit int
-	// TimeWindow is set when the operation takes a time range.
+	// TimeWindow is set when the operation takes a time-window parameter
+	// (catalog.Operation.HasTimeWindow), not merely a date-time one (#204).
 	TimeWindow bool
 	// MetricsQuery is set for an operation whose query parameter is the JSON of a
 	// metrics query: it holds the time range, the filters and config.row_limit,
