@@ -293,18 +293,20 @@ func limitHint(op catalog.Operation) string {
 }
 
 // tooLargeNarrowing is the first part of the hint of an answer too large to
-// read. It names fields, a time window and a limit for every operation (#194
-// makes fields operation-aware; the other two words are tracked in #203).
-const tooLargeNarrowing = "narrow the query: request fewer fields, a shorter time window or a lower limit"
+// read. It names the field groups of op when the deployment serves fields on it
+// (#194), and a time window and a limit for every operation (#203).
+func tooLargeNarrowing(op catalog.Operation) string {
+	return "narrow the query: " + sanitize.JoinWays(remediesOf(op).FieldsWay(), "a shorter time window", "a lower limit")
+}
 
 // tooLargeHintFor is the hint of an answer too large to read (a 413, or a body
 // over the bytes this server reads): it says to page through the rest only by
 // the parameter the operation has (#193).
 func tooLargeHintFor(op catalog.Operation) string {
 	if note := remediesOf(op).PagingNote(); note != "" {
-		return tooLargeNarrowing + ", and " + note
+		return tooLargeNarrowing(op) + ", and " + note
 	}
-	return tooLargeNarrowing
+	return tooLargeNarrowing(op)
 }
 
 // maxEchoed bounds how much of a caller-supplied name an error repeats.
@@ -440,7 +442,7 @@ func (ex executor) run(ctx context.Context, op catalog.Operation, request catalo
 // deployment that does not serve fields is never told to use it).
 func remediesOf(op catalog.Operation) sanitize.Remedies {
 	r := sanitize.Remedies{
-		Fields:     op.HasQueryParam("fields"),
+		Fields:     op.FieldGroups(),
 		TimeWindow: op.HasTimeFilter(),
 		Page:       op.HasQueryParam("page"),
 		Cursor:     op.HasQueryParam("cursor"),

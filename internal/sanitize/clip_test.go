@@ -332,7 +332,7 @@ func TestHintsNameOnlyTheRemediesTheOperationHas(t *testing.T) {
 		not      []string
 	}{
 		"none": {not: []string{"fields", "limit", "time window", "page"}},
-		"fields": {remedies: sanitize.Remedies{Fields: true}, want: []string{"fields"},
+		"fields": {remedies: sanitize.Remedies{Fields: "core and io"}, want: []string{"fields"},
 			not: []string{"limit", "time window", "page"}},
 		"limit and page": {remedies: sanitize.Remedies{Limit: 100, Page: true}, want: []string{"limit"},
 			wantRows: []string{"page through the rest (page)"}, not: []string{"fields", "time window", "cursor"}},
@@ -370,6 +370,65 @@ func TestHintsNameOnlyTheRemediesTheOperationHas(t *testing.T) {
 	}
 }
 
+// The words of the hints that ask for fewer field groups name the groups of the
+// operation (#194), from the one list the guidance is built from, and are left
+// out for an operation without fields. Expected hints are literals.
+func TestTheHintsNameTheFieldGroupsOfTheOperationInTheWordsThatAskForFewerOfThem(t *testing.T) {
+	t.Parallel()
+	const groups = "core, io, scores, observations and metrics"
+	tests := map[string]struct {
+		remedies sanitize.Remedies
+		want     string
+	}{
+		"fields alone": {sanitize.Remedies{Fields: groups},
+			"narrow the query: fewer field groups in fields (core, io, scores, observations and metrics)"},
+		"fields and limit": {sanitize.Remedies{Fields: groups, Limit: 100},
+			"narrow the query: fewer field groups in fields (core, io, scores, observations and metrics) or a lower limit"},
+		"fields and a time window": {sanitize.Remedies{Fields: groups, TimeWindow: true},
+			"narrow the query: fewer field groups in fields (core, io, scores, observations and metrics) or a shorter time window"},
+		"all three": {sanitize.Remedies{Fields: groups, Limit: 100, TimeWindow: true},
+			"narrow the query: fewer field groups in fields (core, io, scores, observations and metrics), a lower limit or a shorter time window"},
+		"no fields": {sanitize.Remedies{Limit: 100, TimeWindow: true}, "narrow the query: a lower limit or a shorter time window"},
+		"one other group": {sanitize.Remedies{Fields: "score and trace"},
+			"narrow the query: fewer field groups in fields (score and trace)"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			env := sanitize.Wrap("op", payloadOf(t, pageOf(10, 30000)), 16384, tc.remedies)
+
+			if !env.Truncated || !strings.Contains(env.Hint, tc.want) {
+				t.Fatalf("truncated %v, hint %q; want it to contain %q", env.Truncated, env.Hint, tc.want)
+			}
+		})
+	}
+}
+
+// FieldsWay is the shared words, for the hints of a failed call that the
+// envelope does not build; JoinWays joins them with the other ways.
+func TestFieldsWayNamesTheGroupsAndIsEmptyForAnOperationWithoutFields(t *testing.T) {
+	t.Parallel()
+
+	if got, want := (sanitize.Remedies{Fields: "details, subject and annotation"}).FieldsWay(),
+		"fewer field groups in fields (details, subject and annotation)"; got != want {
+		t.Errorf("FieldsWay = %q, want %q", got, want)
+	}
+	if got := (sanitize.Remedies{Limit: 100, TimeWindow: true}).FieldsWay(); got != "" {
+		t.Errorf("FieldsWay of an operation without fields = %q, want none", got)
+	}
+	for name, tc := range map[string]struct {
+		ways []string
+		want string
+	}{
+		"none": {nil, ""}, "one": {[]string{"a"}, "a"}, "two": {[]string{"a", "b"}, "a or b"},
+		"three": {[]string{"a", "b", "c"}, "a, b or c"}, "an empty way is left out": {[]string{"a", "", "c"}, "a or c"},
+	} {
+		if got := sanitize.JoinWays(tc.ways...); got != tc.want {
+			t.Errorf("%s: JoinWays = %q, want %q", name, got, tc.want)
+		}
+	}
+}
+
 // An operation pages by page, by cursor (from meta.cursor), by both or by
 // neither; the hint names the parameters it has and no other (#193).
 func TestPagingWaysNameOnlyTheParametersTheOperationHas(t *testing.T) {
@@ -381,7 +440,7 @@ func TestPagingWaysNameOnlyTheParametersTheOperationHas(t *testing.T) {
 		"page":    {sanitize.Remedies{Page: true}, "page", "page through the rest (page)"},
 		"cursor":  {sanitize.Remedies{Cursor: true}, "cursor from meta.cursor", "page through the rest (cursor from meta.cursor)"},
 		"both":    {sanitize.Remedies{Page: true, Cursor: true}, "page, or cursor from meta.cursor", "page through the rest (page, or cursor from meta.cursor)"},
-		"neither": {sanitize.Remedies{Limit: 100, Fields: true, TimeWindow: true}, "", ""},
+		"neither": {sanitize.Remedies{Limit: 100, Fields: "core and io", TimeWindow: true}, "", ""},
 	}
 	for name, tc := range tests {
 		if got := tc.remedies.PagingWays(); got != tc.ways {
@@ -433,7 +492,7 @@ func TestTheMarkerAndTheHintAreStaticWhateverThePayloadSays(t *testing.T) {
 	t.Parallel()
 	hintOf := func(injected string) (string, string) {
 		payload := payloadOf(t, map[string]any{"input": injected + strings.Repeat("x", 40000)})
-		env := sanitize.Wrap("trace_get", payload, 16384, sanitize.Remedies{Fields: true})
+		env := sanitize.Wrap("trace_get", payload, 16384, sanitize.Remedies{Fields: "core and io"})
 		got, _ := objectOf(t, env)["input"].(string)
 		return env.Hint, got[len(got)-len(clipped):]
 	}

@@ -39,37 +39,28 @@ const (
 		"version. Send version or label, not both."
 )
 
-// traceListOperationID is the legacy operation that lists traces; its fields
-// parameter has static guidance.
-const traceListOperationID = "trace_list"
-
-// The guidance on the fields query parameter of trace_list (#178, campaign
-// finding H2). The union catalog keeps no description of a parameter, so
-// nothing else tells an agent the values; they are those of the Langfuse API
-// reference of GET /api/public/traces (checked with the langfuse-docs MCP),
-// and the campaign saw the parameter work on 3.80.0 (144,257 bytes of
-// trace_list rows against 537 with fields=core). Only a deployment whose
-// version serves fields lists the parameter, so only there does it carry this.
-// The fields of the other six operations that take it have no guidance yet: see #194.
-const traceListFieldsGuidance = "Comma-separated field groups to return: core (always included), io (input, output, " +
-	"metadata), scores, observations and metrics; for example core,scores. Without fields every group is returned, " +
-	"which makes rows large; core alone is the smallest row. A group left out comes back empty: scores and " +
-	"observations as empty lists, metrics as -1 for totalCost and latency."
-
 // staticGuidance is the guidance of every parameter that has any, keyed by
 // operation and query parameter: the query of the two metrics operations
 // (#104, #178), the tag and filter of prompts_list (#141), the label and
-// version of prompts_get and the fields of trace_list (#178). Every text is
-// compiled into the binary, never built from API data or caller input; the
-// metrics ones are built once, from the validator's own key list.
-var staticGuidance = map[guidedParam]string{
-	{MetricsOperationID, "query"}:       metricsQueryGuidance(),
-	{legacyMetricsOperationID, "query"}: legacyMetricsQueryGuidance(),
-	{promptsListOperationID, "tag"}:     promptsTagGuidance,
-	{promptsListOperationID, "filter"}:  promptsFilterGuidance,
-	{promptsGetOperationID, "label"}:    promptsGetLabelGuidance,
-	{promptsGetOperationID, "version"}:  promptsGetVersionGuidance,
-	{traceListOperationID, "fields"}:    traceListFieldsGuidance,
+// version of prompts_get (#178) and the fields of every operation that takes it
+// (#178, #194; fieldgroups.go). Every text is compiled into the binary, never
+// built from API data or caller input; the metrics ones are built once, from
+// the validator's own key list.
+var staticGuidance = buildStaticGuidance()
+
+func buildStaticGuidance() map[guidedParam]string {
+	guidance := map[guidedParam]string{
+		{MetricsOperationID, "query"}:       metricsQueryGuidance(),
+		{legacyMetricsOperationID, "query"}: legacyMetricsQueryGuidance(),
+		{promptsListOperationID, "tag"}:     promptsTagGuidance,
+		{promptsListOperationID, "filter"}:  promptsFilterGuidance,
+		{promptsGetOperationID, "label"}:    promptsGetLabelGuidance,
+		{promptsGetOperationID, "version"}:  promptsGetVersionGuidance,
+	}
+	for operationID, guide := range fieldsGuides {
+		guidance[guidedParam{operationID, fieldsParam}] = guide.guidance()
+	}
+	return guidance
 }
 
 // ParamGuidance returns static guidance on how to fill parameter p of the

@@ -9,8 +9,10 @@ import (
 // the truncation hint names only these, so that it never sends the agent to a
 // parameter the operation lacks.
 type Remedies struct {
-	// Fields is set when the operation takes the fields parameter.
-	Fields bool
+	// Fields names the field groups of the operation's fields parameter ("core,
+	// io and metrics"); "" when the operation does not take it. The hints name
+	// the groups, from the same compiled source as the guidance (#194).
+	Fields string
 	// Limit is the largest page size the operation accepts; 0 when it takes
 	// none.
 	Limit int
@@ -47,25 +49,48 @@ func (r Remedies) PagingWays() string {
 	return ""
 }
 
-// clause is the remedies as one sentence part, "" when there are none.
-func (r Remedies) clause() string {
-	var ways []string
-	if r.Fields {
-		ways = append(ways, "fewer field groups in fields")
+// FieldsWay is the words that ask for fewer field groups and name them, or ""
+// when the operation lacks fields. Every hint that recommends fewer fields uses
+// it, so that none sends the agent to a parameter the operation lacks and none
+// names groups the guidance does not (#194).
+func (r Remedies) FieldsWay() string {
+	if r.Fields == "" {
+		return ""
 	}
-	if r.Limit > 0 {
-		ways = append(ways, "a lower limit")
+	return "fewer field groups in fields (" + r.Fields + ")"
+}
+
+// JoinWays writes the ways to narrow a query as one alternative: "a", "a or b",
+// "a, b or c". A way that is empty is left out.
+func JoinWays(ways ...string) string {
+	var kept []string
+	for _, w := range ways {
+		if w != "" {
+			kept = append(kept, w)
+		}
 	}
-	if r.TimeWindow {
-		ways = append(ways, "a shorter time window")
-	}
-	switch len(ways) {
+	switch len(kept) {
 	case 0:
 		return ""
 	case 1:
-		return "narrow the query: " + ways[0]
+		return kept[0]
 	}
-	return "narrow the query: " + strings.Join(ways[:len(ways)-1], ", ") + " or " + ways[len(ways)-1]
+	return strings.Join(kept[:len(kept)-1], ", ") + " or " + kept[len(kept)-1]
+}
+
+// clause is the remedies as one sentence part, "" when there are none.
+func (r Remedies) clause() string {
+	var limit, window string
+	if r.Limit > 0 {
+		limit = "a lower limit"
+	}
+	if r.TimeWindow {
+		window = "a shorter time window"
+	}
+	if ways := JoinWays(r.FieldsWay(), limit, window); ways != "" {
+		return "narrow the query: " + ways
+	}
+	return ""
 }
 
 // The static parts of the truncation hints. None holds payload text.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse"
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/sanitize"
 )
 
 // Tool error codes for requests that never got a Langfuse answer (ADR-0008).
@@ -19,9 +20,13 @@ const (
 	errorCanceled                = "canceled"
 )
 
-// narrowHint tells the agent how to make a slow read cheaper. It names fields,
-// a time window and a limit for every operation (#194, #203).
-const narrowHint = "narrow the query before calling again: a shorter time window, fewer fields or a lower limit"
+// narrowHintFor tells the agent how to make a slow read cheaper. It names the
+// field groups of op when the deployment serves fields on it (#194), and a time
+// window and a limit for every operation (#203).
+func narrowHintFor(op catalog.Operation) string {
+	return "narrow the query before calling again: " +
+		sanitize.JoinWays("a shorter time window", remediesOf(op).FieldsWay(), "a lower limit")
+}
 
 // caHint tells the user how to trust the CA of the Langfuse server.
 const caHint = "set LANGFUSE_CA_CERT " +
@@ -92,13 +97,13 @@ func failureFields(op catalog.Operation, err error) toolErrorFields {
 		return toolErrorFields{
 			Code:    errorTimeout,
 			Message: "Langfuse did not answer before the request deadline",
-			Hint:    narrowHint,
+			Hint:    narrowHintFor(op),
 		}
 	case errors.Is(err, langfuse.ErrCanceled):
 		return toolErrorFields{
 			Code:    errorCanceled,
 			Message: "the request was canceled before Langfuse answered",
-			Hint:    "if the call was canceled because it was slow, " + narrowHint,
+			Hint:    "if the call was canceled because it was slow, " + narrowHintFor(op),
 		}
 	default:
 		return toolErrorFields{

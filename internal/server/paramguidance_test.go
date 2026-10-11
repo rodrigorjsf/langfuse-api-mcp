@@ -358,7 +358,7 @@ func TestOperationsOutsideTheGuidedOnesCarryNoGuidance(t *testing.T) {
 	cs := connectOffline(t)
 
 	for _, operationID := range []string{
-		"trace_get", "observations_getMany", "legacy_observationsV1_getMany", "scores_get-many", "datasets_get", "metrics_daily",
+		"legacy_observationsV1_getMany", "datasets_get", "datasets_list", "metrics_daily", "models_list", "sessions_list",
 	} {
 		res := callTool(t, cs, "describe_operation", map[string]any{"operationId": operationID})
 		if res.IsError {

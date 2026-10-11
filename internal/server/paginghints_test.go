@@ -135,7 +135,13 @@ func TestTheHintOfAResponseTooLargeNamesOnlyTheWayOfPagingTheOperationHas(t *tes
 	t.Parallel()
 	dual := catalog.AllFamilies()
 	legacy := []catalog.Family{catalog.LegacyFamily}
-	const narrow = "narrow the query: request fewer fields, a shorter time window or a lower limit"
+	// The words about fields name the groups of the operation (#194); the words
+	// about the time window and the limit are #203's and unchanged.
+	const (
+		narrow         = "narrow the query: fewer field groups in fields (" + traceGroups + "), a shorter time window or a lower limit"
+		narrowObserved = "narrow the query: fewer field groups in fields (" + observationsGroups + "), a shorter time window or a lower limit"
+		narrowNoFields = "narrow the query: a shorter time window or a lower limit"
+	)
 	tests := map[string]struct {
 		version  string
 		families []catalog.Family
@@ -146,10 +152,10 @@ func TestTheHintOfAResponseTooLargeNamesOnlyTheWayOfPagingTheOperationHas(t *tes
 			narrow + ", and page through the rest " + viaPage},
 		"page only, on a v4 deployment": {"4.46.0", dual, map[string]any{"operationId": "trace_list"},
 			narrow + ", and page through the rest " + viaPage},
-		"neither, on 3.80.0": {"3.80.0", legacy,
-			map[string]any{"operationId": "trace_get", "parameters": map[string]any{"traceId": "t-1"}}, narrow},
+		"neither, on 3.80.0, which does not serve fields": {"3.80.0", legacy,
+			map[string]any{"operationId": "trace_get", "parameters": map[string]any{"traceId": "t-1"}}, narrowNoFields},
 		"cursor only, on a v4 deployment": {"4.46.0", dual, map[string]any{"operationId": "observations_getMany"},
-			narrow + ", and page through the rest " + viaCursor},
+			narrowObserved + ", and page through the rest " + viaCursor},
 	}
 	for name, tc := range tests {
 		for source, answered := range map[string]answer{
@@ -215,9 +221,9 @@ func TestTheHintsOfAnOperationWithBothWaysOfPagingNameBothAndOfOneWithNeitherNam
 		"not served, neither": {server.NotServedHint(neither),
 			"this deployment's Langfuse version does not serve that parameter: call again without it and filter the result yourself"},
 		"too large, both": {server.TooLargeHint(both),
-			"narrow the query: request fewer fields, a shorter time window or a lower limit, and page through the rest " + viaBoth},
+			"narrow the query: a shorter time window or a lower limit, and page through the rest " + viaBoth},
 		"too large, neither": {server.TooLargeHint(neither),
-			"narrow the query: request fewer fields, a shorter time window or a lower limit"},
+			"narrow the query: a shorter time window or a lower limit"},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s: hint = %q, want %q", name, tc.got, tc.want)
