@@ -104,9 +104,8 @@ func TestTheHintOfASlowCallSaysThatNoParameterMakesItCheaperForAnOperationWithNo
 }
 
 // operationWithTimeFilter is a GET operation that takes the query parameters
-// named and one more, from, which the release spec would give the format
-// date-time: a time filter. No operation of a deployment profile fixture takes a
-// time filter and a limit the other way round in the way the cases below need.
+// named and one more, from, which the release spec gives the format date-time:
+// a time filter.
 func operationWithTimeFilter(names ...string) catalog.Operation {
 	op := operationWith(names...)
 	op.Params = append(op.Params, catalog.Param{Name: "from", In: "query", Schema: catalog.Schema{Type: "string", Format: "date-time"}})
@@ -115,9 +114,10 @@ func operationWithTimeFilter(names ...string) catalog.Operation {
 
 // An operation names only the ways of narrowing it has: a limit and no time
 // filter gets the limit alone, a time filter and no limit the time window
-// alone. No operation of the catalog takes a time filter and no limit that a
-// window narrows, so the rule is proven on literal operations, as #193 proved
-// "both ways of paging".
+// alone, proven on literal operations so that every combination is covered, as
+// #193 proved "both ways of paging". The catalog has both kinds too (datasets_list
+// takes a limit and no time filter; legacy_observationsV1_get takes a time filter
+// and no limit), and the tests after this one run them through the tool.
 func TestAnOperationIsToldOnlyTheWaysOfNarrowingItHas(t *testing.T) {
 	t.Parallel()
 	const (
@@ -125,8 +125,8 @@ func TestAnOperationIsToldOnlyTheWaysOfNarrowingItHas(t *testing.T) {
 		canceled = "if the call was canceled because it was slow, "
 	)
 	tests := map[string]struct {
-		op                  catalog.Operation
-		tooLarge, slow, ask string
+		op                       catalog.Operation
+		tooLarge, slow, canceled string
 	}{
 		"a limit and no time filter": {operationWith("limit"),
 			"narrow the query: a lower limit", slowLead + "a lower limit", canceled + slowLead + "a lower limit"},
@@ -151,8 +151,8 @@ func TestAnOperationIsToldOnlyTheWaysOfNarrowingItHas(t *testing.T) {
 			if timeoutHint != tc.slow {
 				t.Errorf("timeout: hint = %q, want %q", timeoutHint, tc.slow)
 			}
-			if canceledHint != tc.ask {
-				t.Errorf("canceled: hint = %q, want %q", canceledHint, tc.ask)
+			if canceledHint != tc.canceled {
+				t.Errorf("canceled: hint = %q, want %q", canceledHint, tc.canceled)
 			}
 		})
 	}
@@ -231,7 +231,7 @@ func TestTheTooLargeAndTheSlowHintsNameNoWayThatTheTruncationHintWouldNot(t *tes
 			walked++
 			_, canceledHint := server.FailureOf(op, langfuse.ErrCanceled)
 			hints := map[string]string{
-				"too large": server.TooLargeHint(op), "timeout": server.NarrowHint(op), "canceled": canceledHint,
+				"too large": server.TooLargeHint(op), "timeout": server.TimeoutHint(op), "canceled": canceledHint,
 			}
 			truncation := server.TruncationHint(op)
 			serves := map[string]bool{
@@ -513,8 +513,187 @@ func TestTheHintOfACallHeldByTheServersOwnLimitIsUnchanged(t *testing.T) {
 			t.Errorf("%s: code %q, hint %q; want timeout with the hint %q", id, code, hint, want)
 		}
 	}
-	scoresCreate, _ := sharedCatalog(t).Resolve(catalog.Profile{Families: catalog.AllFamilies()}).Lookup("scores_create")
+	scoresCreate, ok := sharedCatalog(t).Resolve(catalog.Profile{Families: catalog.AllFamilies()}).Lookup("scores_create")
+	if !ok {
+		t.Fatal("scores_create is not offered")
+	}
 	if code, hint := server.WriteFailureOf(scoresCreate, langfuse.ErrThrottled); code != "timeout" || hint != notRetriedOnly+"; "+want {
 		t.Errorf("a throttled write: code %q, hint %q; want timeout with the note and %q", code, hint, want)
+	}
+}
+
+// The catalog's own operations of the two kinds, through the tool. datasets_list
+// takes a limit and no time filter; legacy_observationsV1_get takes a time filter
+// (startTime, from 4.33.0) and no limit, so each is told its own word and no
+// other. That startTime is a lookup hint and does not shrink one observation is
+// #204; the ticket's rule, a date-time parameter, is what this test pins.
+func TestARealOperationWithALimitAndNoTimeFilterAndOneWithTheOtherWayRoundGetOnlyTheirOwnWord(t *testing.T) {
+	t.Parallel()
+	dual := catalog.AllFamilies()
+	tests := map[string]struct {
+		call                      map[string]any
+		tooLarge, timeout         string
+		wantTooLarge, wantTimeout string
+	}{
+		"datasets_list, a limit": {call: map[string]any{"operationId": "datasets_list"},
+			wantTooLarge: "narrow the query: a lower limit, and page through the rest " + viaPage,
+			wantTimeout:  "narrow the query before calling again: a lower limit"},
+		"legacy_observationsV1_get, a time filter": {call: map[string]any{
+			"operationId": "legacy_observationsV1_get", "parameters": map[string]any{"observationId": "o-1"}},
+			wantTooLarge: "narrow the query: a shorter time window",
+			wantTimeout:  "narrow the query before calling again: a shorter time window"},
+	}
+	for name, tc := range tests {
+		t.Run(name+", a 413", func(t *testing.T) {
+			t.Parallel()
+			fake, _ := scriptedLangfuse(t, answer{status: http.StatusRequestEntityTooLarge, body: `{"message":"Response too large"}`})
+			cs := connectServing(t, fake, "4.46.0", dual...)
+
+			got := toolErrorOf(t, callExecuteRead(t, cs, tc.call)).Error
+
+			if got.Code != "response_too_large" || got.Hint != tc.wantTooLarge {
+				t.Fatalf("error = %+v, want response_too_large with the hint %q", got, tc.wantTooLarge)
+			}
+		})
+		t.Run(name+", a timeout", func(t *testing.T) {
+			t.Parallel()
+			cs := connectServingSlow(t, stallingLangfuse(t), "4.46.0", dual...)
+
+			got := toolErrorOf(t, callExecuteRead(t, cs, tc.call)).Error
+
+			if got.Code != "timeout" || got.Hint != tc.wantTimeout {
+				t.Fatalf("error = %+v, want a timeout with the hint %q", got, tc.wantTimeout)
+			}
+		})
+	}
+}
+
+// trace_list serves fields from 3.73.0: on an older deployment it names a lower
+// limit and a time window and no field group, for the three failures.
+func TestTheHintsOfTraceListOnADeploymentBeforeFieldsNameNoFieldGroup(t *testing.T) {
+	t.Parallel()
+	legacy := []catalog.Family{catalog.LegacyFamily}
+	const (
+		tooLarge = "narrow the query: a lower limit or a shorter time window, and page through the rest " + viaPage
+		timeout  = "narrow the query before calling again: a lower limit or a shorter time window"
+	)
+	t.Run("a 413", func(t *testing.T) {
+		t.Parallel()
+		fake, _ := scriptedLangfuse(t, answer{status: http.StatusRequestEntityTooLarge, body: `{"message":"Response too large"}`})
+		cs := connectServing(t, fake, "3.72.0", legacy...)
+
+		got := toolErrorOf(t, callExecuteRead(t, cs, map[string]any{"operationId": "trace_list"})).Error
+
+		if got.Code != "response_too_large" || got.Hint != tooLarge {
+			t.Fatalf("error = %+v, want response_too_large with the hint %q", got, tooLarge)
+		}
+	})
+	t.Run("a timeout", func(t *testing.T) {
+		t.Parallel()
+		cs := connectServingSlow(t, stallingLangfuse(t), "3.72.0", legacy...)
+
+		got := toolErrorOf(t, callExecuteRead(t, cs, map[string]any{"operationId": "trace_list"})).Error
+
+		if got.Code != "timeout" || got.Hint != timeout {
+			t.Fatalf("error = %+v, want a timeout with the hint %q", got, timeout)
+		}
+	})
+	t.Run("a canceled call", func(t *testing.T) {
+		t.Parallel()
+		op, ok := sharedCatalog(t).Resolve(catalog.Profile{Version: "3.72.0", Families: legacy}).Lookup("trace_list")
+		if !ok || op.HasQueryParam("fields") {
+			t.Fatalf("trace_list offered: %v, serves fields: %v; want offered and not serving fields on 3.72.0", ok, ok && op.HasQueryParam("fields"))
+		}
+
+		code, hint := server.FailureOf(op, langfuse.ErrCanceled)
+
+		if want := "if the call was canceled because it was slow, " + timeout; code != "canceled" || hint != want {
+			t.Fatalf("code %q, hint %q; want canceled with the hint %q", code, hint, want)
+		}
+	})
+}
+
+// The metrics operations take their narrowing inside the JSON query, so a failed
+// call is told to narrow it, through the tool as well as in the truncation hint.
+func TestAFailedMetricsCallIsToldToNarrowItsQueryJSON(t *testing.T) {
+	t.Parallel()
+	const way = "a shorter time range, more filters or a lower config.row_limit in the query JSON"
+	call := map[string]any{"operationId": "metrics_metrics", "parameters": map[string]any{"query": `{"view":"traces"}`}}
+	t.Run("a 413", func(t *testing.T) {
+		t.Parallel()
+		fake, _ := scriptedLangfuse(t, answer{status: http.StatusRequestEntityTooLarge, body: `{"message":"Response too large"}`})
+		cs := connectServing(t, fake, "4.46.0", catalog.AllFamilies()...)
+
+		got := toolErrorOf(t, callExecuteRead(t, cs, call)).Error
+
+		if want := "narrow the query: " + way; got.Code != "response_too_large" || got.Hint != want {
+			t.Fatalf("error = %+v, want response_too_large with the hint %q", got, want)
+		}
+	})
+	t.Run("a timeout", func(t *testing.T) {
+		t.Parallel()
+		cs := connectServingSlow(t, stallingLangfuse(t), "4.46.0", catalog.AllFamilies()...)
+
+		got := toolErrorOf(t, callExecuteRead(t, cs, call)).Error
+
+		if want := "narrow the query before calling again: " + way; got.Code != "timeout" || got.Hint != want {
+			t.Fatalf("error = %+v, want a timeout with the hint %q", got, want)
+		}
+	})
+}
+
+// A call held by the server's own rate limit past its deadline keeps its hint, on
+// an operation that has ways of narrowing and on one that has none: it was never
+// sent, and the hint is about the limits, not about the query.
+func TestTheHintOfACallHeldByTheRateLimitIsTheSameForEveryOperation(t *testing.T) {
+	t.Parallel()
+	const want = "wait a few seconds, then call again, one call at a time; the operator sets the limits with " +
+		"LANGFUSE_MCP_RATE_LIMIT and LANGFUSE_MCP_MAX_CONCURRENCY"
+	for name, call := range map[string]map[string]any{
+		"trace_list, which has ways of narrowing": traceList,
+		"trace_get, which has none":               {"operationId": "trace_get", "parameters": map[string]any{"traceId": "t-1"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			fake, calls := scriptedLangfuse(t, answer{status: http.StatusOK, body: `{"data":[],"meta":{}}`})
+			opts := clientOptions(t, fake)
+			opts.RateLimit, opts.MaxConcurrency = 1, 1 // the next call may leave in a minute
+			opts.RequestTimeout = 5 * time.Second
+			cs := connectClient(t, langfuse.New(opts), slog.New(slog.DiscardHandler))
+			if first := callExecuteRead(t, cs, traceList); first.IsError {
+				t.Fatalf("first call returned a tool error: %s", resultText(t, first))
+			}
+
+			got := toolErrorOf(t, callExecuteRead(t, cs, call)).Error
+
+			if got.Code != "timeout" || !got.Retryable || got.Hint != want {
+				t.Fatalf("error = %+v, want a retryable timeout with the hint %q", got, want)
+			}
+			if calls.Load() != 1 {
+				t.Errorf("Langfuse received %d requests, want 1: the held call is never sent", calls.Load())
+			}
+		})
+	}
+}
+
+// A write answered 413, or whose answer is over the bytes this server reads, has
+// no way of narrowing either: the hint says so and does not invite another call.
+func TestTheHintOfAWriteWhoseAnswerIsTooLargeSaysThatNoParameterMakesItSmaller(t *testing.T) {
+	t.Parallel()
+	for source, answered := range map[string]answer{
+		"a 413 from Langfuse": {status: http.StatusRequestEntityTooLarge, body: `{"message":"Response too large"}`},
+		"a body over 5 MiB":   {status: http.StatusOK, body: `{"id":"` + strings.Repeat("a", 5<<20) + `"}`},
+	} {
+		t.Run(source, func(t *testing.T) {
+			t.Parallel()
+			fake, _ := scriptedLangfuse(t, answered)
+			cs := connectWrites(t, fake)
+
+			got := toolErrorOf(t, callExecuteWrite(t, cs, map[string]any{"operationId": "scores_create", "body": scoreBody()})).Error
+
+			if got.Code != "response_too_large" || got.Hint != tooLargeNoWay {
+				t.Fatalf("error = %+v, want response_too_large with the hint %q", got, tooLargeNoWay)
+			}
+		})
 	}
 }

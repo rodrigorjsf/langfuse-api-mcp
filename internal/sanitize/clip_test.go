@@ -404,31 +404,6 @@ func TestTheHintsNameTheFieldGroupsOfTheOperationInTheWordsThatAskForFewerOfThem
 	}
 }
 
-// FieldsWay is the shared words, for the hints of a failed call that the
-// envelope does not build; JoinWays joins them with the other ways.
-func TestFieldsWayNamesTheGroupsAndIsEmptyForAnOperationWithoutFields(t *testing.T) {
-	t.Parallel()
-
-	if got, want := (sanitize.Remedies{FieldGroups: "details, subject and annotation"}).FieldsWay(),
-		"fewer field groups in fields (details, subject and annotation)"; got != want {
-		t.Errorf("FieldsWay = %q, want %q", got, want)
-	}
-	if got := (sanitize.Remedies{Limit: 100, TimeWindow: true}).FieldsWay(); got != "" {
-		t.Errorf("FieldsWay of an operation without fields = %q, want none", got)
-	}
-	for name, tc := range map[string]struct {
-		ways []string
-		want string
-	}{
-		"none": {nil, ""}, "one": {[]string{"a"}, "a"}, "two": {[]string{"a", "b"}, "a or b"},
-		"three": {[]string{"a", "b", "c"}, "a, b or c"}, "an empty way is left out": {[]string{"a", "", "c"}, "a or c"},
-	} {
-		if got := sanitize.JoinWays(tc.ways...); got != tc.want {
-			t.Errorf("%s: JoinWays = %q, want %q", name, got, tc.want)
-		}
-	}
-}
-
 // An operation pages by page, by cursor (from meta.cursor), by both or by
 // neither; the hint names the parameters it has and no other (#193).
 func TestPagingWaysNameOnlyTheParametersTheOperationHas(t *testing.T) {

@@ -54,20 +54,20 @@ func (r Remedies) PagingWays() string {
 	return ""
 }
 
-// FieldsWay is the words that ask for fewer field groups and name them, or ""
-// when the operation lacks fields. Every hint that recommends fewer fields uses
-// it, so that none sends the agent to a parameter the operation lacks and none
-// names groups the guidance does not (#194).
-func (r Remedies) FieldsWay() string {
+// fieldsWay is the words that ask for fewer field groups and name them, or ""
+// when the operation lacks fields. NarrowWays uses it, so that no hint sends the
+// agent to a parameter the operation lacks or names groups the guidance does not
+// (#194).
+func (r Remedies) fieldsWay() string {
 	if r.FieldGroups == "" {
 		return ""
 	}
 	return "fewer field groups in fields (" + r.FieldGroups + ")"
 }
 
-// JoinWays writes the ways to narrow a query as one alternative: "a", "a or b",
+// joinWays writes the ways to narrow a query as one alternative: "a", "a or b",
 // "a, b or c". A way that is empty is left out.
-func JoinWays(ways ...string) string {
+func joinWays(ways ...string) string {
 	var kept []string
 	for _, w := range ways {
 		if w != "" {
@@ -108,7 +108,7 @@ func (r Remedies) NarrowWays() string {
 	if r.MetricsQuery {
 		metrics = metricsQueryWay
 	}
-	return JoinWays(r.FieldsWay(), limit, window, metrics)
+	return joinWays(r.fieldsWay(), limit, window, metrics)
 }
 
 // NarrowClause is the ways of NarrowWays as one sentence part, "narrow the

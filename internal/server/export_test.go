@@ -22,9 +22,9 @@ func LimitHint(op catalog.Operation) string     { return limitHint(op) }
 func NotServedHint(op catalog.Operation) string { return notServedHintFor(op) }
 func TooLargeHint(op catalog.Operation) string  { return tooLargeHintFor(op) }
 
-// NarrowHint is the hint of a slow call of op, built from an operation the
-// test chooses (#194).
-func NarrowHint(op catalog.Operation) string { return slowHintFor(op, false) }
+// TimeoutHint is the hint of a read of op that timed out, built from an operation
+// the test chooses (#194).
+func TimeoutHint(op catalog.Operation) string { return slowHintFor(op, false) }
 
 // FailureOf returns the code and the hint of the tool error for a Langfuse
 // request of op that failed with err, for a failure the client of a test cannot
@@ -39,6 +39,7 @@ func FailureOf(op catalog.Operation, err error) (code, hint string) {
 // call must agree with (#203). It is built from an operation the test chooses,
 // so a walk can take it from every operation of a deployment profile.
 func TruncationHint(op catalog.Operation) string {
+	const smallestResultCap = 16384
 	rows := make([]map[string]string, 400)
 	for i := range rows {
 		rows[i] = map[string]string{"id": strconv.Itoa(i), "input": strings.Repeat("a", 100)}
@@ -47,7 +48,7 @@ func TruncationHint(op catalog.Operation) string {
 	if err != nil {
 		panic(err) // rows of strings always marshal
 	}
-	return sanitize.Wrap(op.ID, payload, 16384, remediesOf(op)).Hint
+	return sanitize.Wrap(op.ID, payload, smallestResultCap, remediesOf(op)).Hint
 }
 
 // TraceTreeFailureOf returns the code and the hint of the tool error for a read
@@ -55,7 +56,10 @@ func TruncationHint(op catalog.Operation) string {
 // err, for a failure the client of a test cannot read, such as a canceled call.
 func TraceTreeFailureOf(cat catalog.Catalog, profile langfuse.DeploymentProfile, err error) (code, hint string) {
 	ex := executor{catalog: cat, profile: profile}
-	src, _ := ex.selectTraceTreeSource()
+	src, served := ex.selectTraceTreeSource()
+	if !served {
+		panic("TraceTreeFailureOf: the profile reads no trace tree")
+	}
 	f := ex.traceTreeFailure(src, err, &audit{})
 	return f.Code, f.Hint
 }

@@ -171,7 +171,7 @@ func notRetriedHint(f toolErrorFields, op catalog.Operation) string {
 	switch {
 	case f.Code == errorLangfuseUnavailable:
 		return "Langfuse is temporarily unavailable; " + notRetriedNote
-	case f.Code == errorCanceled || (f.Code == errorTimeout && !f.Retryable):
+	case f.gotNoAnswerInTime():
 		if advice := slowAdvice(op, f.Code == errorCanceled); advice != "" {
 			return notRetriedNote + "; " + advice
 		}

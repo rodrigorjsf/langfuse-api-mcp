@@ -260,10 +260,8 @@ func (ex executor) traceTreeFailure(src traceTreeSource, err error, a *audit) to
 	switch {
 	case f.Code == errorResponseTooLarge && src.tooLarge != "":
 		f.Hint = src.tooLarge
-	case f.Code == errorTimeout && !f.Retryable:
-		f.Hint = src.slow
-	case f.Code == errorCanceled:
-		f.Hint = canceledLead + src.slow
+	case f.gotNoAnswerInTime():
+		f.Hint = slowHint(src.slow, f.Code == errorCanceled)
 	}
 	return f
 }

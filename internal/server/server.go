@@ -446,7 +446,9 @@ func (ex executor) run(ctx context.Context, op catalog.Operation, request catalo
 // remediesOf returns the ways to ask op for a smaller result, from the
 // parameters the deployment serves: the truncation hint, the hint of a response
 // too large and the hint of a slow call name only these (a deployment that does
-// not serve fields is never told to use it, #203).
+// not serve fields is never told to use it, #203). A time window is any
+// date-time query parameter, so legacy_observationsV1_get, a single-resource read
+// with a startTime lookup hint, is told to use one too (#204).
 func remediesOf(op catalog.Operation) sanitize.Remedies {
 	r := sanitize.Remedies{
 		FieldGroups:  op.FieldGroups(),

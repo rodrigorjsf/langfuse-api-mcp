@@ -247,7 +247,7 @@ func TestNoHintRecommendsFieldsForAnOperationThatDoesNotServeThemOnTheDeployment
 			}
 			walked++
 			for what, hint := range map[string]string{
-				"too large": server.TooLargeHint(op), "slow": server.NarrowHint(op),
+				"too large": server.TooLargeHint(op), "slow": server.TimeoutHint(op),
 			} {
 				serves := op.HasQueryParam("fields")
 				if got := strings.Contains(hint, "fields"); got != serves {
@@ -263,6 +263,13 @@ func TestNoHintRecommendsFieldsForAnOperationThatDoesNotServeThemOnTheDeployment
 			t.Errorf("%s: the walk found no read operation", name)
 		}
 	}
+}
+
+// namesFieldsForTheTool reports whether hint names fields anywhere but as a
+// parameter of the execute_read call it sends the agent to: get_trace_tree takes
+// no fields argument.
+func namesFieldsForTheTool(hint string) bool {
+	return strings.Contains(strings.ReplaceAll(hint, "execute_read with observations_getMany (traceId, fields, a lower limit, cursor)", ""), "fields")
 }
 
 // get_trace_tree takes no fields argument, so no hint of a failed call of the
@@ -289,7 +296,7 @@ func TestTheHintsOfAFailedTraceTreeNeverRecommendFields(t *testing.T) {
 
 				got := toolErrorOf(t, callTool(t, cs, "get_trace_tree", map[string]any{"traceId": "t-1"})).Error
 
-				if got.Code != "response_too_large" || (strings.Contains(got.Hint, "fields") && !strings.Contains(got.Hint, "execute_read")) {
+				if got.Code != "response_too_large" || namesFieldsForTheTool(got.Hint) {
 					t.Fatalf("error = %+v, want response_too_large without fields as a way to narrow the tool's call", got)
 				}
 			})
@@ -300,7 +307,7 @@ func TestTheHintsOfAFailedTraceTreeNeverRecommendFields(t *testing.T) {
 
 			got := toolErrorOf(t, callTool(t, cs, "get_trace_tree", map[string]any{"traceId": "t-1"})).Error
 
-			if got.Code != "timeout" || (strings.Contains(got.Hint, "fields") && !strings.Contains(got.Hint, "execute_read")) {
+			if got.Code != "timeout" || namesFieldsForTheTool(got.Hint) {
 				t.Fatalf("error = %+v, want a timeout whose hint does not recommend fields as an argument of the tool", got)
 			}
 		})

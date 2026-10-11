@@ -48,25 +48,39 @@ func TestNarrowWaysNamesEachWayOfNarrowingTheOperationHasAndNoOther(t *testing.T
 	}
 }
 
-// The truncation hint is built from the same words: whatever NarrowWays names,
-// the hint of a result cut to the cap names after "narrow the query: ".
+// The truncation hint is built from the same words: it names the ways of
+// narrowing that NarrowWays names, after "narrow the query: ", and none for an
+// operation that has only paging.
 func TestTheTruncationHintNamesTheWaysOfNarrowingThatNarrowWaysNames(t *testing.T) {
 	t.Parallel()
-	for name, remedies := range map[string]sanitize.Remedies{
-		"limit alone":       {Limit: 100},
-		"time window alone": {TimeWindow: true},
-		"limit and window":  {Limit: 100, TimeWindow: true},
-		"the metrics query": {MetricsQuery: true},
-		"fields and window": {FieldGroups: "core and io", TimeWindow: true},
-	} {
-		env := sanitize.Wrap("op", payloadOf(t, pageOf(10, 30000)), 16384, remedies)
+	tests := map[string]struct {
+		remedies sanitize.Remedies
+		want     string
+	}{
+		"limit alone":       {sanitize.Remedies{Limit: 100}, "narrow the query: a lower limit"},
+		"time window alone": {sanitize.Remedies{TimeWindow: true}, "narrow the query: a shorter time window"},
+		"limit and window":  {sanitize.Remedies{Limit: 100, TimeWindow: true}, "narrow the query: a lower limit or a shorter time window"},
+		"the metrics query": {sanitize.Remedies{MetricsQuery: true},
+			"narrow the query: a shorter time range, more filters or a lower config.row_limit in the query JSON"},
+		"fields and window": {sanitize.Remedies{FieldGroups: "core and io", TimeWindow: true},
+			"narrow the query: fewer field groups in fields (core and io) or a shorter time window"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			env := sanitize.Wrap("op", payloadOf(t, pageOf(10, 30000)), 16384, tc.remedies)
 
-		if want := "narrow the query: " + remedies.NarrowWays(); !env.Truncated || !strings.Contains(env.Hint, want) {
-			t.Errorf("%s: truncated %v, hint %q; want it to contain %q", name, env.Truncated, env.Hint, want)
+			if !env.Truncated || !strings.Contains(env.Hint, tc.want) {
+				t.Errorf("truncated %v, hint %q; want it to contain %q", env.Truncated, env.Hint, tc.want)
+			}
+		})
+	}
+	t.Run("paging alone is not a way of narrowing", func(t *testing.T) {
+		t.Parallel()
+		env := sanitize.Wrap("op", payloadOf(t, pageOf(10, 30000)), 16384, sanitize.Remedies{Page: true})
+
+		if strings.Contains(env.Hint, "narrow the query") {
+			t.Errorf("hint %q has narrowing words for an operation that has only paging", env.Hint)
 		}
-	}
-	env := sanitize.Wrap("op", payloadOf(t, pageOf(10, 30000)), 16384, sanitize.Remedies{Page: true})
-	if strings.Contains(env.Hint, "narrow the query") {
-		t.Errorf("an operation with no way of narrowing and paging only has hint %q, want no narrowing words", env.Hint)
-	}
+	})
 }

@@ -26,7 +26,24 @@ const (
 	slowNoWayHint = "no parameter of this operation makes the call cheaper: tell the user instead of calling again"
 )
 
-// slowAdvice tells the agent how to make a slow read cheaper: the ways of
+// gotNoAnswerInTime reports whether f is the failure of a call that was sent and
+// got no answer in time: a timeout of Langfuse or a canceled call. A call held by
+// the server's own rate limit or concurrency cap is a retryable timeout that was
+// never sent, and is not one.
+func (f toolErrorFields) gotNoAnswerInTime() bool {
+	return f.Code == errorCanceled || (f.Code == errorTimeout && !f.Retryable)
+}
+
+// slowHint is the hint text of a timeout, or of a canceled call behind its
+// lead-in when canceled.
+func slowHint(text string, canceled bool) string {
+	if canceled {
+		return canceledLead + text
+	}
+	return text
+}
+
+// slowAdvice tells the agent how to make a slow call cheaper: the ways of
 // narrowing op has, in the words of the truncation hint (#203), or "" when it
 // has none.
 func slowAdvice(op catalog.Operation, canceled bool) string {
@@ -34,11 +51,7 @@ func slowAdvice(op catalog.Operation, canceled bool) string {
 	if ways == "" {
 		return ""
 	}
-	advice := "narrow the query before calling again: " + ways
-	if canceled {
-		return canceledLead + advice
-	}
-	return advice
+	return slowHint("narrow the query before calling again: "+ways, canceled)
 }
 
 // slowHintFor is the hint of a read of op that timed out, or was canceled when
@@ -48,10 +61,7 @@ func slowHintFor(op catalog.Operation, canceled bool) string {
 	if advice := slowAdvice(op, canceled); advice != "" {
 		return advice
 	}
-	if canceled {
-		return canceledLead + slowNoWayHint
-	}
-	return slowNoWayHint
+	return slowHint(slowNoWayHint, canceled)
 }
 
 // caHint tells the user how to trust the CA of the Langfuse server.
