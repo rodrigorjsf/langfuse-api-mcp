@@ -231,6 +231,13 @@ func FuzzRedact(f *testing.F) {
 	f.Add(`{'Proxy-Authorization': 'Digest dXNlcjpwYXNzd29yZDEyMzQ1Njc4'}`)
 	f.Add("HTTP_AUTHORIZATION: Basic dXNlcjpwYXNzd29yZDEyMzQ1Njc4 \"x authorization\": \"Token abcdefghijklmnop\"")
 	f.Add(`{"Authorization": "Basic [REDACTED]abcdefghijklmnop", "x": ["Authorization": 'Bearer abcdefghijklmnopq']}`)
+	// A Langfuse key directly after each JSON escape written as text, with one,
+	// two and four backslashes, alone and inside JSON text (#208).
+	f.Add(`{"output":"{\"a\":\"x\\nsk-lf-abc123\\ny\"}"}`)
+	f.Add(`"x\tsk-lf-abc\rpk-lf-def\bsk-lf-ghi\fpk-lf-jkl"`)
+	f.Add(`"\\u000ask-lf-abc \\\\u00E9pk-lf-def \\\\nsk-lf-ghi"`)
+	f.Add(`x\\nsk-lf-a\\\\tpk-lf-b\u000ask-lf-c`)
+	f.Add("\\n\\u200b\u200bsk-lf-abc\\nsk-lf-\\n")
 	r := sanitize.NewRedactor("hunter2-hunter2")
 	f.Fuzz(func(t *testing.T, s string) {
 		once := r.Redact(s)
@@ -252,6 +259,11 @@ func FuzzRedact(f *testing.F) {
 // header, so that the pattern runs over all of it, took 3.0 ms before the
 // quoted form and the name rule of #196 and takes 8.6 ms now (a header map:
 // 2.7 ms before, 8.2 ms now); the text with no header name is unchanged.
+// The key after an escape (#208) leaves the text with no "k-lf-" as it was
+// (ASCII 0.16 ms before and after, the other three within the noise of a run):
+// it skips the key pattern. Text made of nothing but keys, each pair with one
+// after an escape, took 1.8 ms before and takes 3.4 ms now, the cost of the
+// second way in to the key and of the group that keeps the escape.
 func BenchmarkRedact(b *testing.B) {
 	for name, input := range map[string]string{
 		"ASCII":     `{"name":"checkout-flow","input":"the user asked about authorisation of a bearish, ok","n":12345},`,
@@ -260,6 +272,9 @@ func BenchmarkRedact(b *testing.B) {
 		// passes, so the pattern runs over every byte of it (#196).
 		"mentions the header": `{"name":"checkout-flow","input":"the Authorization header is required, send Basic or Bearer auth","n":12345},`,
 		"a header map":        `{"name":"checkout-flow","headers":{"Authorization":"Basic dXNlcjpwYXNzd29yZDEyMzQ1Njc4"},"n":12345},`,
+		// Text that holds Langfuse keys, so that the key pattern runs over all
+		// of it, with and without a JSON escape before the key (#208).
+		"keys, some after an escape": `{"name":"checkout-flow","input":"{\"k\":\"x\\nsk-lf-abc123 and pk-lf-def456\"}","n":12345},`,
 	} {
 		text := strings.Repeat(input, 64<<10/len(input)+1)
 		b.Run(name, func(b *testing.B) {

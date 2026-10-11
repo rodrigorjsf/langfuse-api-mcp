@@ -712,6 +712,22 @@ func TestRedactionTimeGrowsInProportionToTheInput(t *testing.T) {
 		"escapes with no match": func(n int) string {
 			return strings.Repeat(`\\\\\\\\\\\\"x authorization `, n)
 		},
+		// The key after an escape (#208): the key pattern runs on every text
+		// that holds "k-lf-", so a run of backslashes, of escapes and of "\u"
+		// with too few hex digits, each ending in a key, must cost no more per
+		// byte at 16 KiB than at 2 KiB.
+		"keys after escapes": func(n int) string {
+			return strings.Repeat(`x\nsk-lf-abc123\\tpk-lf-def456\\\\u000ask-lf-g `, n)
+		},
+		"backslashes before a key": func(n int) string {
+			return strings.Repeat(`\`, 8*n) + "sk-lf-abc123"
+		},
+		"line feed escapes before a key": func(n int) string {
+			return strings.Repeat(`\n`, 4*n) + "sk-lf-abc123"
+		},
+		"unicode escapes with too few hex digits": func(n int) string {
+			return strings.Repeat(`\u12 `, 2*n) + "pk-lf-abc123"
+		},
 	}
 	elapsed := func(f func()) time.Duration {
 		start := time.Now()

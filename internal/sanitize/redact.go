@@ -11,9 +11,23 @@ import (
 // Redacted replaces a secret wherever the server would otherwise show it.
 const Redacted = "[REDACTED]"
 
+// jsonEscape is a JSON escape that ends in a letter or a hex digit, written as
+// text: one or more backslashes, then b, f, n, r or t, or u and four
+// hexadecimal digits (#208). In a string that holds JSON text (the Observations
+// v2 input and output) a line feed is the two characters backslash and n, so a
+// key after it has a word character before it and no word boundary.
+const jsonEscape = `\\+(?:[bfnrt]|u[0-9A-Fa-f]{4})`
+
 // keyPattern matches any Langfuse API key, the configured pair or not:
-// pk-lf-… and sk-lf-…, not a word that merely ends in "pk" or "sk".
-var keyPattern = regexp.MustCompile(`\b[ps]k-lf-[A-Za-z0-9_-]+`)
+// pk-lf-… and sk-lf-…, at a word boundary (not a word that merely ends in "pk"
+// or "sk") or directly after a jsonEscape. The first group is the escape,
+// which stays: the text around the key keeps its meaning as JSON text. The
+// rule reads the text only. It does not decode it and does not count
+// backslashes, so a literal backslash and a letter before a key (C:\nsk-lf-…)
+// are taken for an escape, an over-redaction accepted for the sake of a rule
+// no payload can steer. The two alternatives never match the same key: a
+// letter or digit before the key is a word character, which has no boundary.
+var keyPattern = regexp.MustCompile(`(?:\b|(` + jsonEscape + `))[ps]k-lf-[A-Za-z0-9_-]+`)
 
 // minTokenLength is the fewest characters a token must have for Redact to take
 // it for a credential (#180). It must stay above the length of Redacted, so
@@ -124,7 +138,8 @@ func NewRedactor(secrets ...string) Redactor {
 	return Redactor{secrets: kept}
 }
 
-// Redact returns s with every secret of r, every Langfuse API key and the
+// Redact returns s with every secret of r, every Langfuse API key (at a word
+// boundary or directly after a JSON escape written as text, keyPattern) and the
 // token of every Authorization or Bearer header replaced by Redacted: a header
 // written "Authorization: <scheme> <token>", "Bearer <token>", or as the
 // quoted name and value of a header map (headerPattern). A secret
@@ -146,7 +161,7 @@ func (r Redactor) redact(s string) string {
 		s = strings.ReplaceAll(s, secret, Redacted)
 	}
 	if strings.Contains(s, "k-lf-") { // the common case skips the regular expression
-		s = keyPattern.ReplaceAllString(s, Redacted)
+		s = keyPattern.ReplaceAllString(s, "${1}"+Redacted)
 	}
 	if !mentionsHeader(s) {
 		return s
