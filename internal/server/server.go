@@ -412,19 +412,7 @@ func (ex executor) run(ctx context.Context, op catalog.Operation, request catalo
 	resp, err := ex.client.Do(ctx, request.Method, request.Path, request.Query, body)
 	a.requests, a.status, a.bytes = resp.Attempts, resp.Status, len(resp.Body)
 	if err != nil {
-		f, answered := ex.failureOf(op, err, a)
-		if answered {
-			if request.FolderName && (f.HTTPStatus == http.StatusNotFound || f.HTTPStatus == http.StatusBadRequest) {
-				f.Hint = folderNameHintFor(f)
-			}
-			if f.Code == errorNotFound && op.ImpliesProductionLabel(request) {
-				f.Hint += "; " + productionLabelHint
-			}
-		}
-		if !op.IsRead() {
-			f.Hint = notRetriedHint(f, op)
-		}
-		return errorResult(f)
+		return errorResult(ex.requestFailure(op, request, err, a))
 	}
 	raw := resp.Body
 	if len(raw) == 0 {
@@ -432,10 +420,30 @@ func (ex executor) run(ctx context.Context, op catalog.Operation, request catalo
 	}
 	payload, err := sanitize.Payload(raw, ex.redact)
 	if err != nil {
-		a.cause = err.Error()
-		return failure(op, err) // unreachable: the client returns valid JSON only
+		f, _ := ex.failureOf(op, err, a) // unreachable: the client returns valid JSON only
+		return errorResult(f)
 	}
 	return jsonResult(sanitize.Wrap(op.ID, payload, ex.maxResultBytes, remediesOf(op)), false)
+}
+
+// requestFailure is the tool error of request, a call of op the generic
+// executor sent, that failed with err: failureOf's translation with the hints
+// only this path gives, the Folder name and implicit production label hints of
+// a Langfuse answer and the not-retried note of a write.
+func (ex executor) requestFailure(op catalog.Operation, request catalog.Request, err error, a *audit) toolErrorFields {
+	f, answered := ex.failureOf(op, err, a)
+	if answered {
+		if request.FolderName && (f.HTTPStatus == http.StatusNotFound || f.HTTPStatus == http.StatusBadRequest) {
+			f.Hint = folderNameHintFor(f)
+		}
+		if f.Code == errorNotFound && op.ImpliesProductionLabel(request) {
+			f.Hint += "; " + productionLabelHint
+		}
+	}
+	if !op.IsRead() {
+		f.Hint = notRetriedHint(f, op)
+	}
+	return f
 }
 
 // remediesOf returns the ways to ask op for a smaller result, from the

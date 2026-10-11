@@ -28,9 +28,10 @@ func TimeoutHint(op catalog.Operation) string { return slowHintFor(op, false) }
 
 // FailureOf returns the code and the hint of the tool error for a Langfuse
 // request of op that failed with err, for a failure the client of a test cannot
-// read, such as a canceled call.
+// read, such as a canceled call: the executor's own failureOf, which the
+// generic executor, the filter scan and the trace tree share.
 func FailureOf(op catalog.Operation, err error) (code, hint string) {
-	f := failureFields(op, err)
+	f, _ := executor{}.failureOf(op, err, &audit{})
 	return f.Code, f.Hint
 }
 
@@ -70,8 +71,9 @@ func ScanOperation(op catalog.Operation) catalog.Operation { return scanReads(op
 
 // WriteFailureOf returns the code and the hint of the tool error for a write of
 // op that failed with err before Langfuse answered, for a failure the client of
-// a test cannot read, such as a canceled call: the hint execute_write gives.
+// a test cannot read, such as a canceled call: the executor's own
+// requestFailure, the translation execute_write runs.
 func WriteFailureOf(op catalog.Operation, err error) (code, hint string) {
-	f := failureFields(op, err)
-	return f.Code, notRetriedHint(f, op)
+	f := executor{}.requestFailure(op, catalog.Request{}, err, &audit{})
+	return f.Code, f.Hint
 }

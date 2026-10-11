@@ -4,8 +4,6 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse"
 )
@@ -69,21 +67,12 @@ const caHint = "set LANGFUSE_CA_CERT " +
 	"(a PEM file) or LANGFUSE_CA_CERTS_PATH (a directory of PEM files) to the CA that signed it, " +
 	"then check the 'CA sources loaded' line of the server's startup log"
 
-// failure is the tool error for a Langfuse request that got no usable answer
-// (a transport failure, a refused redirect or an oversized body); a Langfuse
-// error answer goes through langfuseErrorFields instead. err itself never
-// reaches the agent; the caller records it on the audit line (stderr).
-func failure(op catalog.Operation, err error) (*mcp.CallToolResult, error) {
-	fields := failureFields(op, err)
-	fields.OperationID = truncate(op.ID)
-	return errorResult(fields)
-}
-
 // failureOf is the tool error of a call of op that failed with err, with the
 // operation ID, and records the failure in the audit line: the HTTP status of
 // a Langfuse error answer, or the cause of a call that got none. answered
 // says that Langfuse answered. The one translation every executor path
-// shares (the generic executor, the filter scan, the trace tree).
+// shares (the generic executor, the filter scan, the trace tree). err itself
+// never reaches the agent: only the audit line (stderr) holds it.
 func (ex executor) failureOf(op catalog.Operation, err error, a *audit) (f toolErrorFields, answered bool) {
 	f, answered = langfuseErrorFields(err, op, ex.redact, ex.profile)
 	if answered {
@@ -96,8 +85,10 @@ func (ex executor) failureOf(op catalog.Operation, err error, a *audit) (f toolE
 	return f, answered
 }
 
-// failureFields classifies err, the failure of a call of op, into the tool
-// error fields, without the operation ID.
+// failureFields classifies err, the failure of a call of op that got no usable
+// answer (a transport failure, a refused redirect or an oversized body), into
+// the tool error fields, without the operation ID. Only failureOf calls it; a
+// Langfuse error answer goes through langfuseErrorFields instead.
 func failureFields(op catalog.Operation, err error) toolErrorFields {
 	switch {
 	case errors.Is(err, langfuse.ErrRedirectRefused):
