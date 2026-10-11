@@ -24,7 +24,7 @@ This record is for #145 (spec #150). It was run on Linux (WSL2) on 2026-09-28; c
 
 Claude Code does not re-send `initialize`, which was #145's first hypothesis. It probes `server/discover` (protocol 2026-07-28) first. After 3.0 s with no answer, it falls back to one legacy `initialize` on the same pipe. The server reads stdin only after it has detected the deployment profile, so both lines wait in the pipe. go-sdk v1.8.0 `(*Server).discover` stores the probe's parameters on the session, because the stdio transport supports 2026-07-28. `(*ServerSession).initialize` then finds the session initialized and refuses the queued `initialize` as `duplicate "initialize" received`. The limit that matters is Claude Code's 3 s probe timeout, not the 5 s detection budget or the 30 s connection timeout.
 
-After the fix, the stdio transport reports only protocols older than 2026-07-28 as supported. `server/discover` is then answered with `supportedVersions` lacking 2026-07-28, and it stores nothing on the session. The legacy `initialize` succeeds, whether it waited in the pipe or not. The SDK does not refuse the probe with an error: it answers it with the versions stdio offers, and Claude Code falls back to `initialize` because 2026-07-28 is missing.
+After the fix, the stdio transport reports only protocols older than 2026-07-28 as supported. `server/discover` is then answered with `supportedVersions` lacking 2026-07-28, and it stores nothing on the session. The legacy `initialize` succeeds when the SDK has recorded the stdio transport's protocols before it handles the probe, which it did not always do (see "Update 2026-10-11 (#191)" below: the first fix left a window open, and a later change closed it). The SDK does not refuse the probe with an error: it answers it with the versions stdio offers, and Claude Code falls back to `initialize` because 2026-07-28 is missing.
 
 Claude Code 2.1.284 recovers on its own: capture 2 connects before the fix. It still logs the refused `initialize` first. 2.1.283, the version #145 was found with, does not recover (capture 1), so capture 2 cannot show the fix is what connects a client. Capture 6 does: the same 2.1.283 under the same 5 s delay connects after the fix, and it does not re-probe. The fix does not rely on the client retrying.
 
@@ -115,6 +115,59 @@ The double logged no request other than GETs. The confirmation reaches Claude Co
 
 `init` event: `mcp_servers: [{'name': 'langfuse', 'status': 'connected'}]`, tools `describe_operation`, `execute_read`, `get_trace_tree`, `search_operations`. Against capture 1, only the server changed.
 
+## Update 2026-10-11 (#191): the window the first fix left open
+
+Captures 3 to 6 above ran with a stdio transport that reports no protocol from 2026-07-28 as supported. That works only once the session has recorded the list, and go-sdk v1.8.0 `(*Server).Connect` records it after it has started the session's read loop (`connect()` starts the loop, then `Connect` takes `ss.mu` and sets `ss.supportedVersions`). The `server/discover` handler reads that field, and when it is not set yet it falls back to every protocol the server supports, 2026-07-28 included, and stores the probe's parameters as the session's `initialize` parameters. Over stdio the bytes are already in the pipe, so the read loop can hand the probe to the handler in the few instructions between the two steps. The SDK's comment at that point says no message is dispatched before the caller feeds the transport; over stdio that is false. The window needs a preempted goroutine: one failure in three full-suite runs with the race detector and none in 12 isolated runs (the report in #191). The effect is capture 1's: the probe is answered with 2026-07-28 and the host's `initialize` is refused as a duplicate.
+
+**Reproduction, before the fix** (a scratch copy of the repository at `13ea717`; go-sdk v1.8.0 copied out of the module cache with `time.Sleep(300 * time.Millisecond)` added in `(*Server).Connect` immediately before `ss.mu.Lock()`; `go mod edit -replace github.com/modelcontextprotocol/go-sdk=<copy>`):
+
+```text
+$ go test -count=1 -run 'TestClientCapabilitiesInTheHandshakeChangeNeitherTheToolSetNorTheWriteModeGate|TestExecutableAnswersALegacyInitializeQueuedBehindADiscoverProbeDuringASlowStartup|TestExecutableRefusesAMalformedDiscoverProbeAndKeepsTheConnection' ./cmd/langfuse-mcp/
+--- FAIL: TestClientCapabilitiesInTheHandshakeChangeNeitherTheToolSetNorTheWriteModeGate (0.00s)
+    --- FAIL: TestClientCapabilitiesInTheHandshakeChangeNeitherTheToolSetNorTheWriteModeGate/LANGFUSE_MCP_ALLOW_WRITES= (0.11s)
+        handshake_test.go:188: initialize error = &{Code:0 Message:duplicate "initialize" received}, want success
+    --- FAIL: TestClientCapabilitiesInTheHandshakeChangeNeitherTheToolSetNorTheWriteModeGate/LANGFUSE_MCP_ALLOW_WRITES=true (0.11s)
+        handshake_test.go:188: initialize error = &{Code:0 Message:duplicate "initialize" received}, want success
+--- FAIL: TestExecutableAnswersALegacyInitializeQueuedBehindADiscoverProbeDuringASlowStartup (5.08s)
+    handshake_test.go:143: server/discover result = {"resultType":"complete","_meta":{"io.modelcontextprotocol/serverInfo":{"name":"langfuse-mcp","version":"0.0.0-dev"}},"ttlMs":0,"cacheScope":"public","supportedVersions":["2026-07-28","2025-11-25","2025-06-18","2025-03-26","2024-11-05"],"capabilities":{"logging":{},"tools":{"listChanged":true}}}, want it to offer no protocol 2026-07-28 over stdio
+    handshake_test.go:154: initialize error = &{Code:0 Message:duplicate "initialize" received}, want the legacy handshake to succeed
+FAIL
+FAIL	github.com/rodrigorjsf/langfuse-api-mcp/cmd/langfuse-mcp	5.082s
+FAIL
+```
+
+**The fix.** The stdio transport reads no byte of stdin until `Server.Connect` has returned, that is until the session has recorded its protocols. `transport.Stdio` connects the session itself, with stdin wrapped in a reader that waits, and opens the reader after `Connect` returns; it then waits for the session as `Server.Run` does. A probe waiting in the pipe is therefore handled after the record exists, and is answered as before: a result without 2026-07-28 that stores nothing. The workaround of #145 stays, and so does the order of startup (detection first, then stdin).
+
+**Same reproduction, after the fix** (the same scratch copy with only `internal/transport/stdio.go` changed; the 300 ms sleep is still in `Connect`, and the three tests pass with it):
+
+```text
+$ go test -count=1 -v -run '<the same three tests>' ./cmd/langfuse-mcp/
+--- PASS: TestExecutableRefusesAMalformedDiscoverProbeAndKeepsTheConnection (0.00s)
+    --- PASS: TestExecutableRefusesAMalformedDiscoverProbeAndKeepsTheConnection/unknown_version (0.37s)
+    --- PASS: TestExecutableRefusesAMalformedDiscoverProbeAndKeepsTheConnection/version_not_a_string (0.38s)
+    --- PASS: TestExecutableRefusesAMalformedDiscoverProbeAndKeepsTheConnection/no_protocol_version (0.38s)
+    --- PASS: TestExecutableRefusesAMalformedDiscoverProbeAndKeepsTheConnection/params_not_an_object (0.38s)
+    --- PASS: TestExecutableRefusesAMalformedDiscoverProbeAndKeepsTheConnection/capabilities_not_an_object (0.38s)
+--- PASS: TestClientCapabilitiesInTheHandshakeChangeNeitherTheToolSetNorTheWriteModeGate (0.00s)
+    --- PASS: TestClientCapabilitiesInTheHandshakeChangeNeitherTheToolSetNorTheWriteModeGate/LANGFUSE_MCP_ALLOW_WRITES=true (0.39s)
+    --- PASS: TestClientCapabilitiesInTheHandshakeChangeNeitherTheToolSetNorTheWriteModeGate/LANGFUSE_MCP_ALLOW_WRITES= (0.39s)
+--- PASS: TestExecutableAnswersALegacyInitializeQueuedBehindADiscoverProbeDuringASlowStartup (5.38s)
+PASS
+ok  	github.com/rodrigorjsf/langfuse-api-mcp/cmd/langfuse-mcp	5.383s
+```
+
+**The answer to the probe is unchanged**, so the host sees what it saw in captures 3 to 6 and no new Claude Code start was needed (the question of how Claude Code reacts to a different answer does not arise). Capture 7 is the captured Claude Code 2.1.283 handshake (probe, then `initialize`, both written before the server reads) sent by hand to the server built before and after the fix, with a fast Langfuse double (the common case, where the window is closed in both). Both servers answer the probe with `supportedVersions` `["2025-11-25","2025-06-18","2025-03-26","2024-11-05"]` and the same `capabilities`, and the `initialize` with protocol 2025-11-25:
+
+```text
+before: {"jsonrpc":"2.0","id":"server-discover-probe-1","result":{"resultType":"complete","_meta":{"io.modelcontextprotocol/serverInfo":{"name":"langfuse-mcp","version":"0.0.0-dev"}},"ttlMs":0,"cacheScope":"public","supportedVersions":["2025-11-25","2025-06-18","2025-03-26","2024-11-05"],"capabilities":{…
+after:  {"jsonrpc":"2.0","id":"server-discover-probe-1","result":{"resultType":"complete","_meta":{"io.modelcontextprotocol/serverInfo":{"name":"langfuse-mcp","version":"0.0.0-dev"}},"ttlMs":0,"cacheScope":"public","supportedVersions":["2025-11-25","2025-06-18","2025-03-26","2024-11-05"],"capabilities":{…
+both:   {"jsonrpc":"2.0","id":0,"result":{"capabilities":{"logging":{},"tools":{"listChanged":true}},"protocolVersion":"2025-11-25","serverInfo":{"name":"langfuse-mcp","version":"0.0.0-dev"}}}
+```
+
+**The regression test** is `TestStdioHandshakeDoesNotDependOnWhenTheSDKRecordsItsProtocols` (`cmd/langfuse-mcp`). It forces the order instead of waiting for it: it builds the executable a second time against a copy of go-sdk (go build `-modfile` with a temporary `replace`; the module cache and the repository's `go.mod` are untouched) in which `Connect` holds, just before it records the protocols, until a `server/discover` has been handled. Against the code before the fix, the probe is handled inside the hold on every run: all 4 handshake cases of that build fail, in 3 of 3 runs, with the message above (`duplicate "initialize" received`, and a result offering 2026-07-28). Against the fixed code they pass: no probe can be handled during the hold, which then ends at its 3 s bound. The cases are Claude Code's handshake, probes before, between and after the `initialize` messages in both write modes, and a hostile probe; each also runs against the executable as built.
+
+**Consequence for #162.** The workaround has two parts now (the filtered protocol list and the held stdin), and the SDK has two faults behind them: it handles a legacy `initialize` after a probe as a duplicate, and it records a transport's protocols after it starts reading from it. Reverting needs both fixed upstream.
+
 ## Upstream report draft (option D, not posted)
 
 Spec #150 says the go-sdk issue is posted only after the maintainer approves its text. This is the draft; posting it and reverting the workaround are tracked in #162.
@@ -130,3 +183,16 @@ Spec #150 says the go-sdk issue is posted only after the maintainer approves its
 > **Reproduction.** Connect a server over `StdioTransport`. Before `Server.Run` reads, write `{"jsonrpc":"2.0","id":"p","method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}` and then `{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"c","version":"1"}}}`. The second answer is the duplicate error.
 >
 > **Workaround in use.** A stdio transport implementing `ProtocolVersionSupporter` that rejects `2026-07-28`, so `discover` stores nothing. It costs the sessionless protocol on stdio.
+
+## Second upstream report draft (found in #191, not posted)
+
+> **Title:** `Server.Connect` starts reading before it records the transport's protocol versions, so a `server/discover` already in a stdio pipe can be answered with every protocol
+>
+> **Version:** go-sdk v1.8.0, `mcp.StdioTransport` (any transport whose bytes are available at once).
+>
+> **What happens.** `Server.Connect` calls `connect()`, which starts the session's read loop, and only then sets `ss.supportedVersions` under `ss.mu`. `(*Server).discover` reads that field and falls back to `s.protocolVersions` when it is nil, then stores the probe's parameters as the session's `InitializeParams` when the list holds a version from 2026-07-28. The comment in `Connect` says no message is dispatched before the caller feeds the transport, which is not true over stdio.
+>
+> **Expected.** The transport's protocols are recorded before the first message is read, or the handler waits for them.
+>
+> **Reproduction.** Add `time.Sleep(300 * time.Millisecond)` immediately before `ss.mu.Lock()` in `Connect`, write a `server/discover` probe to the pipe before `Server.Run`, and read its answer.
+
