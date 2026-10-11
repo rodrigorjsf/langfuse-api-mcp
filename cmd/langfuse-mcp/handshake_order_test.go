@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -51,7 +50,8 @@ const (
 )
 
 // sdkProbeHookFile is the file added to go-sdk's `mcp` package.
-var sdkProbeHookFile = fmt.Sprintf(`package mcp
+func sdkProbeHookFile() string {
+	return fmt.Sprintf(`package mcp
 
 import (
 	"sync"
@@ -74,6 +74,7 @@ func handshakeTestHoldUntilProbeHandled() {
 	}
 }
 `, sdkProbeHoldBound.Milliseconds())
+}
 
 // buildExecutableHandlingTheProbeInsideTheSDKsWindow builds this package's
 // executable against a copy of go-sdk in which `Connect` waits, before it
@@ -102,7 +103,7 @@ func buildExecutableHandlingTheProbeInsideTheSDKsWindow(t *testing.T) []string {
 		}
 		patched = strings.Replace(patched, anchor, edit(anchor), 1)
 	}
-	for path, content := range map[string]string{serverGo: patched, filepath.Join(sdk, "mcp", "zz_handshake_test_hook.go"): sdkProbeHookFile} {
+	for path, content := range map[string]string{serverGo: patched, filepath.Join(sdk, "mcp", "zz_handshake_test_hook.go"): sdkProbeHookFile()} {
 		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 			t.Fatalf("write %s: %v", path, err)
 		}
@@ -115,18 +116,7 @@ func buildExecutableHandlingTheProbeInsideTheSDKsWindow(t *testing.T) []string {
 	copyFile(t, strings.TrimSuffix(mainMod, ".mod")+".sum", filepath.Join(dir, "alt.sum"))
 	goOutput(t, "mod", "edit", "-modfile="+altMod, "-replace=github.com/modelcontextprotocol/go-sdk="+sdk)
 
-	bin := filepath.Join(dir, "langfuse-mcp")
-	if runtime.GOOS == "windows" {
-		bin += ".exe"
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	build := exec.CommandContext(ctx, "go", "build", "-trimpath", "-modfile="+altMod, "-o", bin, ".") //nolint:gosec // G204: the go tool and temp paths
-	build.Env = append(build.Environ(), "CGO_ENABLED=0")
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build the executable against the edited go-sdk: %v\n%s", err, out)
-	}
-	return []string{bin}
+	return buildExecutable(t, developmentVersion, "-modfile="+altMod)
 }
 
 // goOutput runs the go tool in this package's directory and returns its
@@ -179,32 +169,47 @@ func discoverLine(id, meta string) string {
 	return `{"jsonrpc":"2.0","id":` + id + `,"method":"server/discover","params":{"_meta":` + meta + `}}`
 }
 
-// offeredVersions returns the protocol versions a `server/discover` answer
-// offers; nil for an answer that is an error.
-func offeredVersions(t *testing.T, answer rpcResponse) []string {
+// claimsEveryCapability is the capabilities object of a client that names every
+// capability and write access, in the standard keys and as experimental keys
+// named after the write setting.
+const claimsEveryCapability = `{"roots":{"listChanged":true},"sampling":{},"elicitation":{"form":{},"url":{}},` +
+	`"experimental":{"writes":{"allow":true},"LANGFUSE_MCP_ALLOW_WRITES":{"value":"true"}}}`
+
+// probeMeta is the `_meta` object of a probe for protocol 2026-07-28 with the
+// raw client capabilities capabilities.
+func probeMeta(capabilities string) string {
+	return `{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":` + capabilities + `}`
+}
+
+// wantLegacyProtocolsOnly fails the test unless a probe's answer is a result
+// that offers the legacy protocols and no protocol 2026-07-28, which stdio never
+// offers (security rules "Transport").
+func wantLegacyProtocolsOnly(t *testing.T, step string, answer rpcResponse) {
 	t.Helper()
 	if answer.Error != nil {
-		return nil
+		t.Errorf("%s: server/discover error = %+v, want a result", step, answer.Error)
+		return
 	}
 	var result struct {
 		SupportedVersions []string `json:"supportedVersions"`
 	}
 	if err := json.Unmarshal(answer.Result, &result); err != nil {
-		t.Fatalf("decode server/discover result %s: %v", answer.Result, err)
+		t.Fatalf("%s: decode server/discover result %s: %v", step, answer.Result, err)
 	}
-	return result.SupportedVersions
+	if slices.Contains(result.SupportedVersions, "2026-07-28") || !slices.Contains(result.SupportedVersions, "2025-11-25") {
+		t.Errorf("%s: server/discover result = %s, want it to offer 2025-11-25 and no protocol 2026-07-28 over stdio", step, answer.Result)
+	}
 }
 
-// wantNoSessionlessProtocol fails the test when a probe's answer offers
-// protocol 2026-07-28, which stdio never offers (security rules "Transport").
-func wantNoSessionlessProtocol(t *testing.T, step string, answer rpcResponse) {
+// wantRefused fails the test unless a probe's answer is a JSON-RPC error.
+func wantRefused(t *testing.T, step string, answer rpcResponse) {
 	t.Helper()
-	if slices.Contains(offeredVersions(t, answer), "2026-07-28") {
-		t.Errorf("%s: server/discover result = %s, want it to offer no protocol 2026-07-28 over stdio", step, answer.Result)
+	if answer.Error == nil {
+		t.Errorf("%s: server/discover result = %s, want a JSON-RPC error", step, answer.Result)
 	}
 }
 
-func TestStdioHandshakeDoesNotDependOnWhenTheSDKRecordsItsProtocols(t *testing.T) {
+func TestADiscoverProbeNeverNegotiatesAStdioSessionHoweverEarlyTheSDKHandlesIt(t *testing.T) {
 	t.Parallel()
 	targets := []struct {
 		name string
@@ -225,11 +230,7 @@ func TestStdioHandshakeDoesNotDependOnWhenTheSDKRecordsItsProtocols(t *testing.T
 				s.writeLine(claudeCodeInitialize)
 				got := s.readResponses(2)
 
-				probed := got[`"server-discover-probe-1"`]
-				wantNoSessionlessProtocol(t, "Claude Code's probe", probed)
-				if !slices.Contains(offeredVersions(t, probed), "2025-11-25") {
-					t.Errorf("server/discover answer = %+v, want a result offering 2025-11-25", probed)
-				}
+				wantLegacyProtocolsOnly(t, "Claude Code's probe", got[`"server-discover-probe-1"`])
 				initialize := got["0"]
 				var initialized struct {
 					ProtocolVersion string `json:"protocolVersion"`
@@ -260,25 +261,21 @@ func TestStdioHandshakeDoesNotDependOnWhenTheSDKRecordsItsProtocols(t *testing.T
 					fake := deploymentLangfuse(t, health4460, nil, http.NotFound)
 					s := startCommand(t, target.argv, "", "LANGFUSE_BASE_URL="+fake.URL, setting)
 
-					claimsEverything := `{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":` +
-						`{"roots":{"listChanged":true},"sampling":{},"elicitation":{"form":{},"url":{}},` +
-						`"experimental":{"writes":{"allow":true},"LANGFUSE_MCP_ALLOW_WRITES":{"value":"true"}}}}`
-					s.writeLine(discoverLine(`"before"`, `{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}`))
-					wantNoSessionlessProtocol(t, "probe before", s.readResponses(1)[`"before"`])
-					s.initializeWith(`{"roots":{"listChanged":true},"sampling":{},"elicitation":{"form":{},"url":{}},` +
-						`"experimental":{"writes":{"allow":true},"LANGFUSE_MCP_ALLOW_WRITES":{"value":"true"}}}`)
+					s.writeLine(discoverLine(`"before"`, probeMeta(`{}`)))
+					wantLegacyProtocolsOnly(t, "probe before", s.readResponses(1)[`"before"`])
+					s.initializeWith(claimsEveryCapability)
 					first := s.listedTools("1")
 
-					s.writeLine(discoverLine(`"between"`, claimsEverything))
-					wantNoSessionlessProtocol(t, "probe between", s.readResponses(1)[`"between"`])
+					s.writeLine(discoverLine(`"between"`, probeMeta(claimsEveryCapability)))
+					wantLegacyProtocolsOnly(t, "probe between", s.readResponses(1)[`"between"`])
 					s.writeLine(discoverLine(`"future"`, `{"io.modelcontextprotocol/protocolVersion":"2027-01-01","io.modelcontextprotocol/clientCapabilities":{}}`))
-					wantNoSessionlessProtocol(t, "probe of a future protocol", s.readResponses(1)[`"future"`])
+					wantRefused(t, "probe of a future protocol", s.readResponses(1)[`"future"`])
 					s.writeLine(`{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":"2025-06-18",` +
 						`"capabilities":{},"clientInfo":{"name":"third-client","version":"1"}}}`)
 					second := s.readResponses(1)["2"]
 
-					s.writeLine(discoverLine(`"after"`, claimsEverything))
-					wantNoSessionlessProtocol(t, "probe after", s.readResponses(1)[`"after"`])
+					s.writeLine(discoverLine(`"after"`, probeMeta(claimsEveryCapability)))
+					wantLegacyProtocolsOnly(t, "probe after", s.readResponses(1)[`"after"`])
 					s.writeLine(`{"jsonrpc":"2.0","id":3,"method":"initialize","params":{"protocolVersion":"2026-07-28",` +
 						`"capabilities":{},"clientInfo":{"name":"fourth-client","version":"1"}}}`)
 					third := s.readResponses(1)["3"]
@@ -289,12 +286,52 @@ func TestStdioHandshakeDoesNotDependOnWhenTheSDKRecordsItsProtocols(t *testing.T
 						t.Errorf("tools = %v, then %v after the probes and two more initialize messages, want exactly %v both times", first, last, want)
 					}
 					if second.Error == nil || third.Error == nil {
-						t.Errorf("a second and a third initialize = %s, then %s, want both refused", second.Result, third.Result)
+						t.Fatalf("a second and a third initialize = %s, then %s, want both refused", second.Result, third.Result)
+					}
+					if refusals := second.Error.Message + third.Error.Message; strings.Contains(refusals, "-client") {
+						t.Errorf("the refusals echo the client's name: %q", refusals)
 					}
 				})
 			}
 
-			t.Run("a hostile probe is never echoed and the answers name the binary and its capabilities, not the client's", func(t *testing.T) {
+			for name, c := range map[string]struct {
+				params  string
+				refused bool
+			}{
+				"a version of protocol 2026-07-28":  {`{"protocolVersion":"2026-07-28","capabilities":{},"clientInfo":{"name":"c","version":"1"}}`, false},
+				"a future version":                  {`{"protocolVersion":"2027-01-01","capabilities":{},"clientInfo":{"name":"c","version":"1"}}`, false},
+				"a version that is not a date":      {`{"protocolVersion":"not-a-date","capabilities":{},"clientInfo":{"name":"c","version":"1"}}`, false},
+				"wrong types for every parameter":   {`{"protocolVersion":20251125,"capabilities":"all","clientInfo":[]}`, true},
+				"every capability and write access": {`{"protocolVersion":"2025-11-25","capabilities":` + claimsEveryCapability + `,"clientInfo":{"name":"c","version":"1"}}`, false},
+			} {
+				t.Run("a first initialize with "+name+" negotiates no sessionless protocol and leaves the tool set fixed", func(t *testing.T) {
+					t.Parallel()
+					fake := deploymentLangfuse(t, health4460, nil, http.NotFound)
+					s := startCommand(t, target.argv, "", "LANGFUSE_BASE_URL="+fake.URL)
+
+					s.writeLine(`{"jsonrpc":"2.0","id":0,"method":"initialize","params":` + c.params + `}`)
+					answer := s.readResponses(1)["0"]
+					if c.refused {
+						s.initializeWith(`{}`) // the refused message left the session uninitialized
+					} else {
+						s.writeLine(`{"jsonrpc":"2.0","method":"notifications/initialized"}`)
+					}
+					tools := s.listedTools("1")
+					s.stop()
+
+					if c.refused != (answer.Error != nil) {
+						t.Errorf("initialize answer = %+v %s, want refused: %t", answer.Error, answer.Result, c.refused)
+					}
+					if !c.refused && !strings.Contains(string(answer.Result), `"protocolVersion":"2025-11-25"`) {
+						t.Errorf("initialize result = %s, want protocol 2025-11-25", answer.Result)
+					}
+					if !slices.Equal(tools, readTools) {
+						t.Errorf("tools = %v, want exactly %v", tools, readTools)
+					}
+				})
+			}
+
+			t.Run("a hostile probe and a hostile initialize are never echoed and the answers name the binary and its capabilities, not the client's", func(t *testing.T) {
 				t.Parallel()
 				fake := deploymentLangfuse(t, health4460, nil, http.NotFound)
 				s := startCommand(t, target.argv, "", "LANGFUSE_BASE_URL="+fake.URL)
@@ -304,14 +341,16 @@ func TestStdioHandshakeDoesNotDependOnWhenTheSDKRecordsItsProtocols(t *testing.T
 					`"io.modelcontextprotocol/clientInfo":{"name":"\u202e`+instruction+`","version":"\ufeff9.9.9"},`+
 					`"io.modelcontextprotocol/clientCapabilities":{"experimental":{"`+instruction+`":{}}}}`))
 				probed := s.readResponses(1)[`"probe"`]
-				wantNoSessionlessProtocol(t, "hostile probe", probed)
-				s.initializeWith(`{"experimental":{"` + instruction + `":{}}}`)
+				s.writeLine(`{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25",` +
+					`"capabilities":{"experimental":{"` + instruction + `":{}}},"clientInfo":{"name":"\u202e` + instruction + `","version":"\ufeff9.9.9"}}}`)
+				initialized := s.readResponses(1)["0"]
 				s.stop()
 
-				if text := string(probed.Result) + s.stderr.String(); strings.Contains(text, "ignore previous") || strings.Contains(text, "9.9.9") {
-					t.Errorf("the probe's text is echoed.\nanswer: %s\nstderr:\n%s", probed.Result, s.stderr)
+				wantLegacyProtocolsOnly(t, "hostile probe", probed)
+				if text := string(probed.Result) + string(initialized.Result) + s.stderr.String(); strings.Contains(text, "ignore previous") || strings.Contains(text, "9.9.9") {
+					t.Errorf("the client's text is echoed.\nprobe answer: %s\ninitialize answer: %s\nstderr:\n%s", probed.Result, initialized.Result, s.stderr)
 				}
-				var answer struct {
+				var probeAnswer struct {
 					Meta struct {
 						ServerInfo struct {
 							Name string `json:"name"`
@@ -319,9 +358,21 @@ func TestStdioHandshakeDoesNotDependOnWhenTheSDKRecordsItsProtocols(t *testing.T
 					} `json:"_meta"`
 					Capabilities json.RawMessage `json:"capabilities"`
 				}
-				if err := json.Unmarshal(probed.Result, &answer); err != nil || answer.Meta.ServerInfo.Name != "langfuse-mcp" ||
-					strings.Contains(string(answer.Capabilities), "experimental") {
-					t.Errorf("server/discover result = %s, want the server's own name and capabilities", probed.Result)
+				var initializeAnswer struct {
+					ServerInfo struct {
+						Name string `json:"name"`
+					} `json:"serverInfo"`
+					Capabilities json.RawMessage `json:"capabilities"`
+				}
+				if err := json.Unmarshal(probed.Result, &probeAnswer); err != nil {
+					t.Fatalf("decode the probe's answer %s: %v", probed.Result, err)
+				}
+				if err := json.Unmarshal(initialized.Result, &initializeAnswer); err != nil {
+					t.Fatalf("decode the initialize answer %s (error %+v): %v", initialized.Result, initialized.Error, err)
+				}
+				if probeAnswer.Meta.ServerInfo.Name != "langfuse-mcp" || initializeAnswer.ServerInfo.Name != "langfuse-mcp" ||
+					string(probeAnswer.Capabilities) != string(initializeAnswer.Capabilities) || strings.Contains(string(probeAnswer.Capabilities), "experimental") {
+					t.Errorf("answers = %s and %s, want the server's own name and the same capabilities of its own", probed.Result, initialized.Result)
 				}
 			})
 		})

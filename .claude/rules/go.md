@@ -15,7 +15,7 @@ Measure before optimizing; never trade a security control for speed. Error handl
 - Accept interfaces at a seam, return concrete types; declare an interface in the consumer only when two adapters exist.
 
 ## Security
-- No `unsafe`, no cgo (`CGO_ENABLED=0` builds; only `go test -race` needs cgo, because the race detector does), no `os/exec` in production code (tests may start the test binary as a child process, spec #7, a binary they `go build` with an injected version, or the installed artifact under test, spec #119 seam S2; depguard enforces both), no `reflect` on untrusted input, no `text/template`/`html/template` over payloads.
+- No `unsafe`, no cgo (`CGO_ENABLED=0` builds; only `go test -race` needs cgo, because the race detector does), no `os/exec` in production code (tests may start the test binary as a child process, spec #7, a binary they `go build` with an injected version, a binary they `go build` against an edited temporary copy of go-sdk through `-modfile` to force the order of events inside the SDK, #191, or the installed artifact under test, spec #119 seam S2; depguard enforces these), no `reflect` on untrusted input, no `text/template`/`html/template` over payloads.
 - Randomness for secrets: `crypto/rand` only. Token comparison: `crypto/subtle.ConstantTimeCompare`.
 - TLS: `tls.Config{MinVersion: tls.VersionTLS12, RootCAs: pool}`; `InsecureSkipVerify` must never appear in the codebase (lint rule).
 - Validate every tool input before use: enums, bounds, formats, max lengths; reject unknown fields. Guard integer conversions (`limit`, page) against overflow and negative values.
