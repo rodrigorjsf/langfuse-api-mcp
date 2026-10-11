@@ -11,23 +11,25 @@ import (
 // Redacted replaces a secret wherever the server would otherwise show it.
 const Redacted = "[REDACTED]"
 
-// jsonEscape is a JSON escape that ends in a letter or a hex digit, written as
+// wordEndedEscape is a JSON escape that ends in a word character, written as
 // text: one or more backslashes, then b, f, n, r or t, or u and four
-// hexadecimal digits (#208). In a string that holds JSON text (the Observations
-// v2 input and output) a line feed is the two characters backslash and n, so a
-// key after it has a word character before it and no word boundary.
-const jsonEscape = `\\+(?:[bfnrt]|u[0-9A-Fa-f]{4})`
+// hexadecimal digits (#208). The escapes of a quote, a backslash and a slash
+// end in a non-word character and need none of this. In a string that holds
+// JSON text (the Observations v2 input and output) a line feed is the two
+// characters backslash and n, so a key after it has a word character before it
+// and no word boundary.
+const wordEndedEscape = `\\+(?:[bfnrt]|u[0-9A-Fa-f]{4})`
 
 // keyPattern matches any Langfuse API key, the configured pair or not:
 // pk-lf-… and sk-lf-…, at a word boundary (not a word that merely ends in "pk"
-// or "sk") or directly after a jsonEscape. The first group is the escape,
+// or "sk") or directly after a wordEndedEscape. The first group is the escape,
 // which stays: the text around the key keeps its meaning as JSON text. The
 // rule reads the text only. It does not decode it and does not count
 // backslashes, so a literal backslash and a letter before a key (C:\nsk-lf-…)
 // are taken for an escape, an over-redaction accepted for the sake of a rule
 // no payload can steer. The two alternatives never match the same key: a
 // letter or digit before the key is a word character, which has no boundary.
-var keyPattern = regexp.MustCompile(`(?:\b|(` + jsonEscape + `))[ps]k-lf-[A-Za-z0-9_-]+`)
+var keyPattern = regexp.MustCompile(`(?:\b|(` + wordEndedEscape + `))[ps]k-lf-[A-Za-z0-9_-]+`)
 
 // minTokenLength is the fewest characters a token must have for Redact to take
 // it for a credential (#180). It must stay above the length of Redacted, so

@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -148,7 +149,10 @@ func TestAKeyAfterAJSONEscapeInAnObservationsV2StringIsRedactedByExecuteReadAndG
 					t.Fatalf("get_trace_tree returned a tool error: %s", resultText(t, res))
 				}
 				assertNoLangfuseKey(t, res, logs)
-				output, _ := traceTreeRow(t, resultText(t, res))["output"].(string)
+				output, ok := traceTreeRow(t, resultText(t, res))["output"].(string)
+				if !ok {
+					t.Fatalf("the row has no output string: %.300s", resultText(t, res))
+				}
 				if got := bodyOfObservationOutput(t, output, depth); got != wantBody {
 					t.Fatalf("body = %q, want %q", got, wantBody)
 				}
@@ -166,6 +170,9 @@ func TestTheConfiguredKeyPairAfterAJSONEscapeIsRedactedInAStringHoldingJSONText(
 
 	res := callTool(t, cs, "get_trace_tree", map[string]any{"traceId": "t-1", "include": []string{"io"}})
 
+	if res.IsError {
+		t.Fatalf("get_trace_tree returned a tool error: %s", resultText(t, res))
+	}
 	assertNoLangfuseKey(t, res, logs)
 	for _, secret := range []string{testSecretKey, testPublicKey} {
 		if strings.Contains(resultText(t, res), secret) {
@@ -235,7 +242,7 @@ func TestAKeyAfterAnEscapeInAnObjectKeyOfAPayloadIsRedacted(t *testing.T) {
 		t.Fatalf("result is not a page of one row (%v): %.300s", err, resultText(t, res))
 	}
 	want := map[string]string{`a\n[REDACTED]`: "x", `tab\t[REDACTED]`: "y"}
-	if got := page.Data[0].Metadata; len(got) != 2 || got[`a\n[REDACTED]`] != "x" || got[`tab\t[REDACTED]`] != "y" {
+	if got := page.Data[0].Metadata; !maps.Equal(got, want) {
 		t.Fatalf("metadata = %q, want %q", got, want)
 	}
 }
@@ -395,21 +402,44 @@ func TestAKeyAfterAnEscapeInAValueThatARefusalCouldEchoIsNotShown(t *testing.T) 
 }
 
 // No argument, parameter or payload changes the rule or turns it off: it is
-// compiled in. An argument that asks for it is an unknown argument, and the
-// next call is redacted as before.
-func TestNoArgumentTurnsTheKeyRedactionOff(t *testing.T) {
+// compiled in. An argument or a parameter that asks for it is an unknown name,
+// and the next call is redacted as before.
+func TestNoArgumentOrParameterTurnsTheKeyRedactionOff(t *testing.T) {
 	t.Parallel()
 	fake, _ := observationsLangfuse(t, map[string]string{"": observationsV2Page(t, stringifiedObservationOutput(t, escapedSecretKey, 1))})
 	cs, logs := connectLogged(t, fake)
 
 	for _, name := range []string{"redact", "raw", "unredacted", "verbose"} {
-		refused := callExecuteRead(t, cs, map[string]any{
-			"operationId": "observations_getMany", name: false, "parameters": map[string]any{name: false}})
-		if !refused.IsError {
-			t.Fatalf("an argument %q was accepted: %s", name, resultText(t, refused))
+		argument := callExecuteRead(t, cs, map[string]any{"operationId": "observations_getMany", name: false})
+		if !argument.IsError {
+			t.Fatalf("an argument %q was accepted: %s", name, resultText(t, argument))
+		}
+		parameter := callExecuteRead(t, cs, map[string]any{"operationId": "observations_getMany", "parameters": map[string]any{name: false}})
+		if !parameter.IsError {
+			t.Fatalf("a parameter %q was accepted: %s", name, resultText(t, parameter))
 		}
 	}
 	res := callExecuteRead(t, cs, map[string]any{"operationId": "observations_getMany", "parameters": map[string]any{"traceId": "t-1"}})
 
+	if res.IsError {
+		t.Fatalf("execute_read returned a tool error: %s", resultText(t, res))
+	}
 	assertNoLangfuseKey(t, res, logs)
+}
+
+// A documented limit (see the security rule): the confirmation shows the body
+// with its line breaks dropped, after the redaction has already read it, so a
+// key that stood after a real line feed is glued to the word before it and is
+// shown. The key rule does not see a character another function removes later.
+func TestAKeyAfterALineBreakThatTheConfirmationDropsIsShownGluedToTheWordBeforeIt(t *testing.T) {
+	t.Parallel()
+	label := "word\n" + escapedSecretKey
+
+	got := question(t, map[string]any{"operationId": "promptVersion_update",
+		"parameters": map[string]any{"name": "greeting", "version": 2},
+		"body":       map[string]any{"newLabels": []any{label}}})
+
+	if !strings.Contains(got, "word"+escapedSecretKey) {
+		t.Fatalf("the confirmation does not show the key glued to the word, the limit this test documents:\n%s", got)
+	}
 }

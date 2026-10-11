@@ -41,6 +41,32 @@ func holdsAKey(text string) bool {
 	return false
 }
 
+// assertRedacts fails the test unless Redact turns in into want and redacting
+// want again changes nothing: the idempotence the ticket asks for, in every case.
+func assertRedacts(t *testing.T, r sanitize.Redactor, in, want string) {
+	t.Helper()
+	if got := r.Redact(in); got != want {
+		t.Fatalf("Redact(%q) = %q, want %q", in, got, want)
+	}
+	if again := r.Redact(want); again != want {
+		t.Fatalf("Redact(%q) = %q, but redacting it again gives %q", in, want, again)
+	}
+}
+
+// assertPayloadIs fails the test unless Payload turns in into want and a Payload
+// of that result is byte-identical.
+func assertPayloadIs(t *testing.T, in, want string) {
+	t.Helper()
+	got, err := sanitize.Payload(json.RawMessage(in), sanitize.Redactor{})
+	if err != nil || string(got) != want {
+		t.Fatalf("Payload(%s) = %s (err %v), want %s", in, got, err, want)
+	}
+	again, err := sanitize.Payload(got, sanitize.Redactor{})
+	if err != nil || !bytes.Equal(again, got) {
+		t.Fatalf("Payload of that result = %s (err %v), want it byte-identical", again, err)
+	}
+}
+
 func TestRedactReplacesAKeyDirectlyAfterAJSONEscapeWrittenAsText(t *testing.T) {
 	t.Parallel()
 	tests := map[string]struct{ in, want string }{
@@ -77,9 +103,7 @@ func TestRedactReplacesAKeyDirectlyAfterAJSONEscapeWrittenAsText(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			if got := (sanitize.Redactor{}).Redact(tc.in); got != tc.want {
-				t.Fatalf("Redact(%q) = %q, want %q", tc.in, got, tc.want)
-			}
+			assertRedacts(t, sanitize.Redactor{}, tc.in, tc.want)
 		})
 	}
 }
@@ -97,9 +121,7 @@ func TestRedactReplacesAKeyAfterEveryEscapeFormAtEveryStringifyingDepth(t *testi
 				want := "before" + escape + "[REDACTED]" + escape + "after"
 				t.Run(strings.ReplaceAll(escape, `\`, "/")+"/"+key[:2], func(t *testing.T) {
 					t.Parallel()
-					if got := (sanitize.Redactor{}).Redact(in); got != want {
-						t.Fatalf("Redact(%q) = %q, want %q", in, got, want)
-					}
+					assertRedacts(t, sanitize.Redactor{}, in, want)
 				})
 			}
 		}
@@ -128,9 +150,7 @@ func TestRedactKeepsTheKeyBoundariesItAlreadyHad(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			if got := (sanitize.Redactor{}).Redact(tc.in); got != tc.want {
-				t.Fatalf("Redact(%q) = %q, want %q", tc.in, got, tc.want)
-			}
+			assertRedacts(t, sanitize.Redactor{}, tc.in, tc.want)
 		})
 	}
 }
@@ -155,9 +175,7 @@ func TestRedactDoesNotRedactAKeyGluedToLettersDigitsOrAnIncompleteEscape(t *test
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			if got := (sanitize.Redactor{}).Redact(tc.in); got != tc.want {
-				t.Fatalf("Redact(%q) = %q, want %q", tc.in, got, tc.want)
-			}
+			assertRedacts(t, sanitize.Redactor{}, tc.in, tc.want)
 		})
 	}
 }
@@ -179,10 +197,7 @@ func TestPayloadDoesNotRedactAKeyThatTheStrippingOfAnInvisibleCharacterGluedToAW
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			got, err := sanitize.Payload(json.RawMessage(tc.in), sanitize.Redactor{})
-			if err != nil || string(got) != tc.want {
-				t.Fatalf("Payload(%s) = %s (err %v), want %s", tc.in, got, err, tc.want)
-			}
+			assertPayloadIs(t, tc.in, tc.want)
 		})
 	}
 }
@@ -194,9 +209,7 @@ func TestRedactReplacesOnlyTheKeyUpToAnEscapedInvisibleCharacter(t *testing.T) {
 	t.Parallel()
 	in := `x\nsk-lf-abc\u200bdef-ghi end`
 	want := `x\n[REDACTED]\u200bdef-ghi end`
-	if got := (sanitize.Redactor{}).Redact(in); got != want {
-		t.Fatalf("Redact(%q) = %q, want %q", in, got, want)
-	}
+	assertRedacts(t, sanitize.Redactor{}, in, want)
 }
 
 func TestRedactingAKeyAfterAnEscapeTwiceChangesNothing(t *testing.T) {
@@ -225,9 +238,7 @@ func TestRedactReplacesTheConfiguredSecretAfterAnEscapeByItsExactValue(t *testin
 	t.Parallel()
 	r := sanitize.NewRedactor("pk-lf-0000-configured", "sk-lf-1111-configured")
 	in := `a\nsk-lf-1111-configured\tpk-lf-0000-configured\n`
-	if got, want := r.Redact(in), `a\n[REDACTED]\t[REDACTED]\n`; got != want {
-		t.Fatalf("Redact(%q) = %q, want %q", in, got, want)
-	}
+	assertRedacts(t, r, in, `a\n[REDACTED]\t[REDACTED]\n`)
 }
 
 // Hidden characters are stripped before the key rule reads the text, so they
@@ -253,9 +264,7 @@ func TestRedactFindsAKeyAfterAnEscapeThatHiddenCharactersSurround(t *testing.T) 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			if got := (sanitize.Redactor{}).Redact(tc.in); got != tc.want {
-				t.Fatalf("Redact(%q) = %q, want %q", tc.in, got, tc.want)
-			}
+			assertRedacts(t, sanitize.Redactor{}, tc.in, tc.want)
 		})
 	}
 }
@@ -293,18 +302,48 @@ func unstringified(t *testing.T, text string, depth int) any {
 		}
 		text = inner
 	}
+	dec := json.NewDecoder(strings.NewReader(text))
+	dec.UseNumber() // a number too large for float64 is compared as written
 	var v any
-	if err := json.Unmarshal([]byte(text), &v); err != nil {
+	if err := dec.Decode(&v); err != nil {
 		t.Fatalf("%q is not JSON: %v", text, err)
 	}
 	return v
 }
 
-// The Observations v2 shape: a string that holds JSON text, itself holding a
-// line feed, the key, and another line feed. A payload string comes back with
-// the key replaced and still decoding, level by level, to the original value
-// with the key replaced.
-func TestPayloadRedactsAKeyInAStringHoldingJSONTextAtEveryLevelAndKeepsItValid(t *testing.T) {
+// Worked examples: a string that holds JSON text, stringified once, twice and
+// three times, so the line feed around the key is written with one, two and
+// four backslashes. The fixtures are compact with sorted keys, as Payload writes
+// a payload, and written by hand, not by the encoder Payload uses.
+func TestPayloadRedactsAKeyInAStringHoldingJSONTextStringifiedOneTwoAndThreeTimes(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct{ in, want string }{
+		"once": {
+			in:   `{"output":"{\"a\":\"x\\nsk-lf-abc123\\ny\"}"}`,
+			want: `{"output":"{\"a\":\"x\\n[REDACTED]\\ny\"}"}`,
+		},
+		"twice": {
+			in:   `{"output":"{\"w\":\"{\\\"a\\\":\\\"x\\\\nsk-lf-abc123\\\\ny\\\"}\"}"}`,
+			want: `{"output":"{\"w\":\"{\\\"a\\\":\\\"x\\\\n[REDACTED]\\\\ny\\\"}\"}"}`,
+		},
+		"three times": {
+			in:   `{"output":"{\"v\":\"{\\\"w\\\":\\\"{\\\\\\\"a\\\\\\\":\\\\\\\"x\\\\\\\\nsk-lf-abc123\\\\\\\\ny\\\\\\\"}\\\"}\"}"}`,
+			want: `{"output":"{\"v\":\"{\\\"w\\\":\\\"{\\\\\\\"a\\\\\\\":\\\\\\\"x\\\\\\\\n[REDACTED]\\\\\\\\ny\\\\\\\"}\\\"}\"}"}`,
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			assertPayloadIs(t, tc.in, tc.want)
+		})
+	}
+}
+
+// The Observations v2 shape, for both keys and one to three levels, with a
+// number, a list and a nested object beside the line feeds: the result is valid
+// JSON, holds no key, and its inner text decodes, level by level, to the
+// original value with the key replaced.
+func TestPayloadKeepsAStringHoldingJSONTextDecodingToTheOriginalWithTheKeyReplaced(t *testing.T) {
 	t.Parallel()
 	original := func(key string) map[string]any {
 		return map[string]any{
@@ -318,17 +357,12 @@ func TestPayloadRedactsAKeyInAStringHoldingJSONTextAtEveryLevelAndKeepsItValid(t
 		for _, key := range []string{plantedSecretKey, plantedPublicKey} {
 			t.Run(key[:2]+"/"+string(rune('0'+depth)), func(t *testing.T) {
 				t.Parallel()
-				// The payload is one object whose member holds the JSON text.
 				in := `{"output":` + stringified(t, original(key), depth) + `}`
-				want := `{"output":` + stringified(t, original("[REDACTED]"), depth) + `}`
 
 				got, err := sanitize.Payload(json.RawMessage(in), sanitize.Redactor{})
 
 				if err != nil {
 					t.Fatalf("Payload(%s) failed: %v", in, err)
-				}
-				if string(got) != want {
-					t.Fatalf("Payload(%s)\n got %s\nwant %s", in, got, want)
 				}
 				var outer map[string]json.RawMessage
 				if err := json.Unmarshal(got, &outer); err != nil {
@@ -337,17 +371,9 @@ func TestPayloadRedactsAKeyInAStringHoldingJSONTextAtEveryLevelAndKeepsItValid(t
 				if holdsAKey(string(got)) {
 					t.Fatalf("result still holds a key: %s", got)
 				}
-				// The inner text decodes, level by level, to the original with
-				// the key replaced: a value, not just a string.
 				decoded := unstringified(t, string(outer["output"]), depth)
-				wantDecoded := unstringified(t, stringified(t, original("[REDACTED]"), depth), depth)
-				if diff := compareJSON(decoded, wantDecoded); diff != "" {
+				if diff := compareJSON(decoded, original("[REDACTED]")); diff != "" {
 					t.Fatalf("decoded output differs: %s", diff)
-				}
-				// Redacting the result again changes nothing, byte for byte.
-				again, err := sanitize.Payload(got, sanitize.Redactor{})
-				if err != nil || !bytes.Equal(again, got) {
-					t.Fatalf("Payload of a Payload result = %s (err %v), want %s", again, err, got)
 				}
 			})
 		}
@@ -373,11 +399,7 @@ func TestPayloadRedactsAKeyAfterAnEscapeInAnObjectKey(t *testing.T) {
 	in := `{"metadata":{"a\\nsk-lf-abc123":"x","tab\\tpk-lf-def456":"y"}}`
 	want := `{"metadata":{"a\\n[REDACTED]":"x","tab\\t[REDACTED]":"y"}}`
 
-	got, err := sanitize.Payload(json.RawMessage(in), sanitize.Redactor{})
-
-	if err != nil || string(got) != want {
-		t.Fatalf("Payload(%s) = %s (err %v), want %s", in, got, err, want)
-	}
+	assertPayloadIs(t, in, want)
 }
 
 // A JSON text kept compact with sorted keys, as Payload writes it, comes back
@@ -387,11 +409,16 @@ func TestPayloadKeepsTheLayoutOfAStringHoldingCompactJSONText(t *testing.T) {
 	in := `{"output":"{\"a\":\"x\\nsk-lf-abc123\\ny\",\"b\":[1,2]}"}`
 	want := `{"output":"{\"a\":\"x\\n[REDACTED]\\ny\",\"b\":[1,2]}"}`
 
-	got, err := sanitize.Payload(json.RawMessage(in), sanitize.Redactor{})
+	assertPayloadIs(t, in, want)
+}
 
-	if err != nil || string(got) != want {
-		t.Fatalf("Payload(%s) = %s (err %v), want %s", in, got, err, want)
-	}
+// A control or invisible character written as a JSON escape inside a string that
+// holds JSON text is not removed: the cleaning reads the string as plain text.
+// Documented as a limit of #208; #210 decodes and cleans such a string.
+func TestPayloadKeepsAControlCharacterWrittenAsAJSONEscapeInsideAStringHoldingJSONText(t *testing.T) {
+	t.Parallel()
+	in := `{"output":"{\"a\":\"x\\u001b[31my\\u200bz\"}"}`
+	assertPayloadIs(t, in, in)
 }
 
 // 1 MiB of backslashes, of "\n" runs and of "\u" followed by too few hex digits
@@ -435,6 +462,9 @@ func TestRedactingAMegabyteOfEscapeLikeTextEndsAndGivesTheRuleOfTheKey(t *testin
 			if got != tc.want {
 				t.Fatalf("Redact of %d bytes ended %q, want %q", len(in), tail(got, 24), tail(tc.want, 24))
 			}
+			if again := (sanitize.Redactor{}).Redact(got); again != got {
+				t.Fatalf("Redact of that result ended %q, want it unchanged", tail(again, 24))
+			}
 		})
 	}
 }
@@ -458,6 +488,9 @@ func TestPayloadOfAMegabyteStringOfEscapeLikeTextRedactsTheKeyAtItsEnd(t *testin
 			if err != nil || string(got) != want {
 				t.Fatalf("Payload of %d bytes ended %q (err %v), want %q", len(in), tail(string(got), 24), err, tail(want, 24))
 			}
+			if again, err := sanitize.Payload(got, sanitize.Redactor{}); err != nil || !bytes.Equal(again, got) {
+				t.Fatalf("Payload of that result ended %q (err %v), want it byte-identical", tail(string(again), 24), err)
+			}
 		})
 	}
 }
@@ -466,8 +499,10 @@ func TestPayloadOfAMegabyteStringOfEscapeLikeTextRedactsTheKeyAtItsEnd(t *testin
 func tail(s string, n int) string { return s[max(len(s)-n, 0):] }
 
 // FuzzRedactKeyAfterEscape checks, for any text put around an escape and a
-// key, that the key does not survive, the escape does, and redacting twice
-// changes nothing.
+// key, that redacting twice changes nothing and that valid JSON stays valid
+// JSON. That the key goes and the escape stays is the business of the tables
+// above: cleaning can remove the characters of an escape that a fuzzed text
+// puts before it, so no such property holds for every input.
 func FuzzRedactKeyAfterEscape(f *testing.F) {
 	f.Add("x", `\n`, plantedSecretKey, "y")
 	f.Add("", `\\t`, plantedPublicKey, "")
