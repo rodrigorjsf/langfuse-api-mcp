@@ -48,13 +48,14 @@ func (o Operation) isMetricsQuery(p Param) bool {
 	return metricsOperations[o.ID] && p.In == "query" && p.Name == "query"
 }
 
-// A metrics query JSON is bounded before it is decoded: at most
-// maxMetricsQueryBytes long (the first query-JSON size cap; the M3 workflow
-// payload-query guard, #42, is to reuse it) and nested at most maxMetricsQueryDepth objects
-// and lists deep (the query object itself is depth 1).
+// A JSON text the server decodes before it sends it on, a metrics query or a
+// JSON filter (#195), is bounded before it is decoded: at most maxJSONTextBytes
+// long (the first query-JSON size cap; the M3 workflow payload-query guard, #42,
+// is to reuse it) and nested at most maxJSONTextDepth objects and lists deep
+// (the query object or the filter list itself is depth 1).
 const (
-	maxMetricsQueryBytes = 16 << 10
-	maxMetricsQueryDepth = 10
+	maxJSONTextBytes = 16 << 10
+	maxJSONTextDepth = 10
 )
 
 // jsonType is the JSON type a top-level value of a metrics query must have.
@@ -111,11 +112,11 @@ var metricsQueryKeyNames = slices.Sorted(maps.Keys(metricsQueryKeys))
 // duplicated key, the one that was checked.
 // Langfuse checks the rest (required keys, allowed views and measures).
 func metricsQuery(raw string) (string, error) {
-	if len(raw) > maxMetricsQueryBytes {
-		return "", queryInvalidf("parameter query: want at most %d bytes of JSON, got %d bytes", maxMetricsQueryBytes, len(raw))
+	if len(raw) > maxJSONTextBytes {
+		return "", queryInvalidf("parameter query: want at most %d bytes of JSON, got %d bytes", maxJSONTextBytes, len(raw))
 	}
-	if err := checkDepth(raw); err != nil {
-		return "", err
+	if tooDeep(raw) {
+		return "", queryInvalidf("parameter query: want JSON nested at most %d objects or lists deep", maxJSONTextDepth)
 	}
 	dec := json.NewDecoder(strings.NewReader(raw))
 	dec.UseNumber()
@@ -164,11 +165,22 @@ func metricsQuery(raw string) (string, error) {
 		rowLimit = n
 	}
 	config["row_limit"] = json.Number(strconv.Itoa(rowLimit))
+	text, err := encodeJSON(q)
+	if err != nil {
+		return "", queryInvalidf("parameter query: cannot be re-encoded as JSON")
+	}
+	return text, nil
+}
+
+// encodeJSON writes a decoded JSON value as compact JSON text, without
+// escaping markup: the text sent is the value that was checked, with no
+// whitespace, the keys of an object sorted and a number as it was written.
+func encodeJSON(v any) (string, error) {
 	var out bytes.Buffer
 	enc := json.NewEncoder(&out)
 	enc.SetEscapeHTML(false)
-	if err := enc.Encode(q); err != nil {
-		return "", queryInvalidf("parameter query: cannot be re-encoded as JSON")
+	if err := enc.Encode(v); err != nil {
+		return "", err
 	}
 	return strings.TrimSuffix(out.String(), "\n"), nil
 }
@@ -197,26 +209,28 @@ func queryInvalidf(format string, args ...any) error {
 	return sentinelError{ErrMetricsQuery, invalidf(format, args...)}
 }
 
-// checkDepth refuses JSON nested deeper than maxMetricsQueryDepth, before it
-// is decoded into memory.
-func checkDepth(raw string) error {
+// tooDeep reports whether raw is nested deeper than maxJSONTextDepth, before it
+// is decoded into memory. It reads tokens only, and stops at the first one that
+// is too deep; text that is not JSON is not too deep, and the decode that
+// follows refuses it.
+func tooDeep(raw string) bool {
 	dec := json.NewDecoder(strings.NewReader(raw))
 	depth := 0
 	for {
 		tok, err := dec.Token()
 		if err != nil {
-			return nil // malformed JSON is refused by the decode that follows
+			return false
 		}
 		switch tok {
 		case json.Delim('{'), json.Delim('['):
 			depth++
-			if depth > maxMetricsQueryDepth {
-				return queryInvalidf("parameter query: want JSON nested at most %d objects or lists deep", maxMetricsQueryDepth)
+			if depth > maxJSONTextDepth {
+				return true
 			}
 		case json.Delim('}'), json.Delim(']'):
 			depth--
 			if depth == 0 {
-				return nil
+				return false
 			}
 		}
 	}

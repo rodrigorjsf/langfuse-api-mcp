@@ -102,11 +102,15 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 		}
 		values, err := p.values(v)
 		if err != nil {
-			if o.isMetricsQuery(p) {
+			switch {
+			case o.isMetricsQuery(p):
 				// A metrics query that is not a string (an object, a list, a
 				// number) gets the metrics query refusal, whose hint says how
 				// the query is sent as a string (#106).
 				return Request{}, queryInvalidf("parameter %s: %s", p.Name, err.Error())
+			case o.isJSONFilter(p):
+				// The same for a JSON filter (#195).
+				return Request{}, filterInvalidf("parameter %s: %s", p.Name, err.Error())
 			}
 			return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
 		}
@@ -127,6 +131,12 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 				return Request{}, err
 			}
 			values = []string{q}
+		case o.isJSONFilter(p):
+			text, err := jsonFilter(values[0])
+			if err != nil {
+				return Request{}, err
+			}
+			values = []string{text}
 		case p.In == "query":
 			if err := p.checkText(values); err != nil {
 				return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
@@ -383,7 +393,7 @@ func (p Param) checkText(values []string) error {
 		}
 	}
 	for i, value := range values {
-		err := s.checkText(value, p.holdsJSONText())
+		err := s.checkText(value)
 		if err == nil {
 			continue
 		}
@@ -394,13 +404,6 @@ func (p Param) checkText(values []string) error {
 	}
 	return nil
 }
-
-// holdsJSONText reports whether the parameter is a JSON text that Langfuse
-// parses and the server passes on: a filter. Pretty-printed, it holds tab, line
-// feed and carriage return, which a parameter of any other kind refuses. The
-// server does not decode it, so a JSON escape inside it is Langfuse's to decode
-// (#195).
-func (p Param) holdsJSONText() bool { return p.Name == "filter" }
 
 // hiddenTextRule is the refusal of a value that holds a control or invisible
 // character (see holdsHiddenText). It names the rule, never the value.
@@ -423,8 +426,8 @@ func holdsHiddenText(s string, keepWhitespace bool) bool {
 var rfc3339 = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$`)
 
 // checkText is Param.checkText for one rendered value.
-func (s Schema) checkText(v string, keepWhitespace bool) error {
-	if holdsHiddenText(v, keepWhitespace) {
+func (s Schema) checkText(v string) error {
+	if holdsHiddenText(v, false) {
 		return errors.New(hiddenTextRule)
 	}
 	if s.Format == "date-time" {

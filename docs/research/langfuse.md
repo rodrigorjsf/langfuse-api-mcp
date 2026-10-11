@@ -432,6 +432,43 @@ no per-release range (ADR-0012 gives one to operations and parameters only), so 
 deployment before 3.55.0 (#202). The guidance does not repeat the error: it names a target only from the release that has
 it.
 
+### 1.15 The shape of `filter` per operation (release specs 4.42.0 and 4.46.0, API reference, 2026-10-11) `[verified]`
+
+Source: ticket #195 (a JSON escape of a hidden character inside a `filter` reached Langfuse unchecked, found while
+the text checks of #179 were built). The server now decodes, checks and re-encodes a `filter` that
+is a JSON text, so which `filter` parameters are JSON had to be known per operation, not guessed from the name. Checked
+against the `description` of the parameter in the release specs `v4.42.0` and `v4.46.0`
+(`web/public/generated/api/openapi.yml` of `langfuse/langfuse`; the union catalog keeps no parameter description) and the
+API reference (`langfuse-docs` MCP, `api.reference.langfuse.com`). None was run against a live Langfuse.
+
+| Operation | `filter` served from (union catalog) | What the 4.46.0 release spec says | The server reads it as |
+|---|---|---|---|
+| `trace_list` | 3.116.1 | "JSON string containing an array of filter conditions" | a JSON filter |
+| `legacy_observationsV1_getMany` | 3.120.0 | the same | a JSON filter |
+| `observations_getMany` | 3.141.0 | the same | a JSON filter |
+| `scores_get-many` | 3.153.0 | "A JSON stringified array of filter objects" | a JSON filter |
+| `experiments_list`, `experiments_listItems` | 3.206.0 | "JSON string containing an array of structured filter conditions" | a JSON filter |
+| `prompts_list` | 4.42.0 | "JSON string containing an array of filter conditions, combined with AND" (finding below) | a JSON filter |
+| `scim_listUsers` | 3.50.0 | "Filter expression (e.g. userName eq "value")": a SCIM filter | an ordinary query parameter value |
+
+The `prompts_list` finding. The release specs from `v4.42.0` (identical text at `v4.46.0`) give `GET /api/public/v2/prompts` a
+`filter` parameter: a JSON string of filter conditions combined with AND, which "takes precedence over name, version, label,
+tag, fromUpdatedAt, and toUpdatedAt", where "an empty array applies no filters". A condition needs `type`, `column`,
+`operator` and `value`; the types and columns the spec lists are `string` and `stringOptions` on `id`, `name` and `type`,
+`number` on `version`, `datetime` on `createdAt` and `updatedAt`, `arrayOptions` on `labels` and `tags`, and
+`stringObject` on `config` (with a `key`). The spec adds that a backslash escapes `%` and `_` in the search operators and
+that the backslash is JSON-escaped in the filter value: the server reads that as an escaped backslash, ordinary text, and
+sends it as it was written. The current API reference lists no `filter` for the operation (`name`, `label`, `tag`, `page`,
+`limit`, `fromUpdatedAt` and `toUpdatedAt` only), so the reference lags the release spec (section 6, row 14). The earlier
+reading that its meaning was unverified (#141) is settled: it is a JSON filter, and a plain word such as `billing` is no
+valid value for it. The static guidance of `describe_operation` on `filter` (it is not the tag filter, send `tag`) is
+unchanged.
+
+What the server does with a JSON filter: a string holding the JSON text of one list, at most 16384 bytes and 10 levels
+deep, with no control or invisible character in the raw text or in any decoded string or key; the decoded list is sent
+written again as compact JSON (order of conditions and list items kept, numbers as written, object keys sorted, a
+duplicated key once with its last value). The grammar (types, columns, operators, required keys) stays Langfuse's.
+
 ---
 
 ## 2. Deprecations
@@ -732,3 +769,4 @@ server should close with explicit `ca-file`/`proxy` config. `[sourced — unveri
 | 11 | The spec contains `unstable/dashboards*` and `unstable/dashboard-widgets*`, which are unversioned and unstable. MCP exposes them. | spec |
 | 12 | **Latency units differ by endpoint.** Metrics v2 measures `latency`, `streamingLatency` and `timeToFirstToken` in **ms**. Observations v2 filters and fields (and the legacy trace schema) use **seconds**; the legacy observations list returns an observation's `latency` in **ms** on 3.80.0 (§1.12). This is not a docs error, but any tool that bridges the two endpoints must convert. | spec `/v2/metrics` description vs the `/v2/observations` `filter` description and the `latency` schema descriptions |
 | 13 | `ObservationsV2Meta` declares no own properties. It inherits `utilsCursorMetaResponse` through `allOf`, so a code generator must resolve the `allOf` to see `cursor`. | `components.schemas.ObservationsV2Meta` |
+| 14 | `GET /api/public/v2/prompts` has a `filter` query parameter in the release specs from 4.42.0 (a JSON string of filter conditions combined with AND) that the current API reference does not list. | Release specs `v4.42.0` and `v4.46.0` against the reference page of `prompts_list` (`langfuse-docs` MCP, 2026-10-11); §1.15 |

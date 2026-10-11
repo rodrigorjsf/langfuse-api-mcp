@@ -464,7 +464,8 @@ func metricsQueryHint(op catalog.Operation) string {
 }
 
 // parametersHintFor is the hint for a parameter the catalog refused: a
-// malformed metrics query gets metricsQueryHint; a parameter the deployment's
+// malformed metrics query gets metricsQueryHint and a refused JSON filter
+// catalog.JSONFilterHint (#195); a parameter the deployment's
 // version does not serve gets notServedHintFor; a page size out of range gets
 // how to page instead, anything else the generic parametersHint. Those
 // go on with the operation's valid parameter names and describe_operation, so
@@ -472,6 +473,9 @@ func metricsQueryHint(op catalog.Operation) string {
 func parametersHintFor(err error, op catalog.Operation) string {
 	if errors.Is(err, catalog.ErrMetricsQuery) {
 		return metricsQueryHint(op)
+	}
+	if errors.Is(err, catalog.ErrJSONFilter) {
+		return catalog.JSONFilterHint()
 	}
 	hint := parametersHint
 	switch {

@@ -114,12 +114,19 @@ func FuzzRequestAcceptsNoControlOrFormatCharacter(f *testing.F) {
 	if !ok {
 		f.Fatal("sessions_get missing from the catalog")
 	}
+	scimListUsers, ok := cat.Lookup("scim_listUsers")
+	if !ok {
+		f.Fatal("scim_listUsers missing from the catalog")
+	}
 	f.Fuzz(func(t *testing.T, value string) {
 		for _, tc := range []struct {
 			op              catalog.Operation
 			param           string
 			keepsWhitespace bool
-		}{{traceList, "filter", true}, {traceList, "userId", false}, {sessionGet, "sessionId", false}} {
+		}{
+			{traceList, "filter", true}, {traceList, "userId", false}, {sessionGet, "sessionId", false},
+			{scimListUsers, "filter", false},
+		} {
 			_, err := tc.op.Request(map[string]any{tc.param: value})
 			if err != nil {
 				if !errors.Is(err, catalog.ErrInvalidParameter) {

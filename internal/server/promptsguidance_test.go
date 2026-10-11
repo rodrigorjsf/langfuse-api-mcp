@@ -3,6 +3,7 @@ package server_test
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -145,13 +146,16 @@ func TestAPromptsListCallWithFilterIsStillSent(t *testing.T) {
 	cs := connect(t, fake)
 
 	res := callExecuteRead(t, cs, map[string]any{
-		"operationId": "prompts_list", "parameters": map[string]any{"filter": "billing"},
+		"operationId": "prompts_list", "parameters": map[string]any{
+			"filter": `[{"type":"string","column":"name","operator":"=","value":"billing"}]`,
+		},
 	})
 
 	if res.IsError {
 		t.Fatalf("execute_read returned a tool error: %s", resultText(t, res))
 	}
-	if got := receivedOne(t, seen); got.query.Get("filter") != "billing" {
-		t.Fatalf("Langfuse received query %v, want filter=billing", got.query)
+	want := []any{map[string]any{"type": "string", "column": "name", "operator": "=", "value": "billing"}}
+	if got := decodedFilter(t, receivedOne(t, seen)); !reflect.DeepEqual(got, want) {
+		t.Fatalf("Langfuse received filter %v, want %v", got, want)
 	}
 }

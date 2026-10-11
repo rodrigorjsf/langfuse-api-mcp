@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -275,7 +276,8 @@ func TestExecuteReadRefusesAControlOrInvisibleCharacterInAQueryParameterValueWit
 }
 
 // A filter is a JSON text that Langfuse parses, so a pretty-printed one holds
-// tab, line feed and carriage return: it is sent as it is.
+// tab, line feed and carriage return between its tokens: it is accepted and
+// Langfuse receives the same JSON value.
 func TestExecuteReadSendsAPrettyPrintedFilter(t *testing.T) {
 	t.Parallel()
 	const filter = "[\r\n\t{\"column\": \"name\",\n\t \"value\": \"x\"}\r\n]"
@@ -289,8 +291,9 @@ func TestExecuteReadSendsAPrettyPrintedFilter(t *testing.T) {
 	if res.IsError {
 		t.Fatalf("execute_read returned a tool error: %s", resultText(t, res))
 	}
-	if got := receivedOne(t, seen).query.Get("filter"); got != filter {
-		t.Errorf("Langfuse received filter %q, want %q unchanged", got, filter)
+	want := []any{map[string]any{"column": "name", "value": "x"}}
+	if got := decodedFilter(t, receivedOne(t, seen)); !reflect.DeepEqual(got, want) {
+		t.Errorf("Langfuse received filter %v, want %v", got, want)
 	}
 }
 
@@ -305,27 +308,6 @@ func TestExecuteReadSendsAPrettyPrintedMetricsQuery(t *testing.T) {
 
 	if sent["view"] != "observations" {
 		t.Errorf("Langfuse received %v, want the pretty-printed query's view observations", sent)
-	}
-}
-
-// What the server does not decode, it does not read: an escape inside a filter
-// is Langfuse's to decode, so a filter holding one is sent as it is (the
-// documented limit of the text checks).
-func TestExecuteReadSendsAJSONEscapeInsideAFilterUnread(t *testing.T) {
-	t.Parallel()
-	const filter = `[{"column":"name","value":"a` + `\` + `u200bb"}]`
-	fake, seen := fakeLangfuse(t, http.StatusOK, `{"data":[]}`)
-	cs := connect(t, fake)
-
-	res := callExecuteRead(t, cs, map[string]any{
-		"operationId": "trace_list", "parameters": map[string]any{"filter": filter},
-	})
-
-	if res.IsError {
-		t.Fatalf("execute_read returned a tool error: %s", resultText(t, res))
-	}
-	if got := receivedOne(t, seen).query.Get("filter"); got != filter {
-		t.Errorf("Langfuse received filter %q, want %q unchanged", got, filter)
 	}
 }
 

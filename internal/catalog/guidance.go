@@ -14,11 +14,13 @@ const promptsListOperationID = "prompts_list"
 const promptsGetOperationID = "prompts_get"
 
 // The guidance on the tag and filter query parameters of prompts_list (#141).
-// The Langfuse spec describes neither, and its current API reference lists
-// only tag, so a small model asked for the prompts with a tag sent filter
-// instead. The guidance names tag as the tag filter and says filter is not;
-// it says nothing more about filter, whose meaning is unverified. filter
-// stays in the catalog: it comes from the Langfuse release spec (ADR-0004).
+// The Langfuse spec describes neither up to 4.41.0, and its current API
+// reference lists only tag, so a small model asked for the prompts with a tag
+// sent filter instead. The guidance names tag as the tag filter and says filter
+// is not; it says nothing more about filter. From 4.42.0 the release specs
+// describe filter as a JSON string of filter conditions, and the server checks
+// it as one (jsonFilters, #195). filter stays in the catalog: it comes from the
+// Langfuse release spec (ADR-0004).
 const (
 	promptsTagGuidance    = "The tag filter: send one tag name as a string to list only the prompts that carry that tag."
 	promptsFilterGuidance = "Not the tag filter: to list the prompts that carry a tag, send the tag name in tag instead."
