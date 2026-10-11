@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -162,8 +161,11 @@ type discovery struct {
 	// operation errors name it, and its v4 read and legacy families decide
 	// whether get_trace_tree can run.
 	profile langfuse.DeploymentProfile
-	// maxResultBytes is the result size cap: neither the text nor the
-	// structured content of a discovery result is longer (#190).
+	// maxResultBytes is the result size cap (#190). A discovery result is
+	// reduced by its shape until neither its text nor its structured content is
+	// longer; one with nothing left to reduce (no body schema, no entry) is
+	// returned as it is, which only a cap below the smallest an operator can
+	// set (16384 bytes) could make longer than the cap.
 	maxResultBytes int
 }
 
@@ -316,24 +318,28 @@ const indexTruncatedHint = "The operation index does not fit the result size cap
 // static hint to narrow the search with a query.
 func (d discovery) indexResult(idx operationIndex) (*mcp.CallToolResult, error) {
 	whole, err := renderIndex(idx, d.writeMode)
-	if err != nil || whole.bytes() <= d.maxResultBytes {
+	if err != nil || whole.largest() <= d.maxResultBytes {
 		return whole.result(), err
 	}
-	var failed error
-	// The largest k whose index fits: the size grows with k.
-	k := sort.Search(idx.Count+1, func(k int) bool {
-		r, err := renderIndex(idx.leading(k), d.writeMode)
-		failed = errors.Join(failed, err)
-		return r.bytes() > d.maxResultBytes
-	}) - 1
-	if failed != nil {
-		return nil, failed
-	}
-	r, err := renderIndex(idx.leading(max(k, 0)), d.writeMode)
+	// The largest k whose index fits (the size grows with k), by bisection; no
+	// entry at all is the answer when not even one fits.
+	best, err := renderIndex(idx.leading(0), d.writeMode)
 	if err != nil {
 		return nil, err
 	}
-	return r.result(), nil
+	for lo, hi := 1, idx.Count-1; lo <= hi; {
+		mid := (lo + hi) / 2
+		r, err := renderIndex(idx.leading(mid), d.writeMode)
+		if err != nil {
+			return nil, err
+		}
+		if r.largest() > d.maxResultBytes {
+			hi = mid - 1
+			continue
+		}
+		best, lo = r, mid+1
+	}
+	return best.result(), nil
 }
 
 // leading returns idx with only its first k entries, in the order of its
@@ -357,8 +363,8 @@ func (idx operationIndex) leading(k int) operationIndex {
 	return out
 }
 
-// listed is the number of entries the groups list.
-func (idx operationIndex) listed() int {
+// entries is the number of entries the groups list.
+func (idx operationIndex) entries() int {
 	n := 0
 	for _, g := range idx.Groups {
 		n += len(g.Operations)
@@ -377,7 +383,7 @@ func renderIndex(idx operationIndex, writeMode bool) (rendered, error) {
 			"or with other keywords.")
 	} else {
 		if idx.Truncated {
-			fmt.Fprintf(&b, "%d operations match; the first %d are listed, grouped by tag.", idx.Count, idx.listed())
+			fmt.Fprintf(&b, "%d operations match; the first %d are listed, grouped by tag.", idx.Count, idx.entries())
 		} else {
 			fmt.Fprintf(&b, "%d operations, grouped by tag.", idx.Count)
 		}
@@ -415,9 +421,9 @@ func render(text string, v any) (rendered, error) {
 	return rendered{text: text, structured: structured}, nil
 }
 
-// bytes is the size of the larger of the two contents, which the result size
+// largest is the size of the larger of the two contents, which the result size
 // cap bounds.
-func (r rendered) bytes() int { return max(len(r.text), len(r.structured)) }
+func (r rendered) largest() int { return max(len(r.text), len(r.structured)) }
 
 func (r rendered) result() *mcp.CallToolResult {
 	return &mcp.CallToolResult{
@@ -694,15 +700,18 @@ func (d discovery) describeResult(op catalog.Operation, od operationDescription)
 	if err != nil {
 		return nil, err
 	}
-	if whole.bytes() <= d.maxResultBytes || od.Body == nil {
+	if whole.largest() <= d.maxResultBytes || od.Body == nil {
 		return whole.result(), nil
 	}
+	// A schema that cannot be read again (it cannot happen: the catalog wrote
+	// it) is not worth an internal error: the agent still learns whether the
+	// operation takes a body, which is the next step.
 	if schema, err := op.Body.SchemaWithoutAnnotations(); err == nil {
 		reduced, err := renderDescription(od.withBody(schema, annotationsLeftOutHint))
 		if err != nil {
 			return nil, err
 		}
-		if reduced.bytes() <= d.maxResultBytes {
+		if reduced.largest() <= d.maxResultBytes {
 			return reduced.result(), nil
 		}
 	}
