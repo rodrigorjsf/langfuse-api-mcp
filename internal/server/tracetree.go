@@ -249,14 +249,7 @@ func (ex executor) getTraceTree(ctx context.Context, req *mcp.CallToolRequest, a
 // other failure keeps the hint of its kind.
 func (ex executor) traceTreeFailure(src traceTreeSource, err error, a *audit) toolErrorFields {
 	op := ex.catalogOperation(src).WithoutQueryParam("fields")
-	f, ok := langfuseErrorFields(err, op, ex.redact, ex.profile)
-	if ok {
-		a.status = f.HTTPStatus
-	} else {
-		a.cause = err.Error()
-		f = failureFields(op, err)
-	}
-	f.OperationID = truncate(op.ID)
+	f, _ := ex.failureOf(op, err, a)
 	switch {
 	case f.Code == errorResponseTooLarge && src.tooLarge != "":
 		f.Hint = src.tooLarge

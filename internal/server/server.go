@@ -412,20 +412,15 @@ func (ex executor) run(ctx context.Context, op catalog.Operation, request catalo
 	resp, err := ex.client.Do(ctx, request.Method, request.Path, request.Query, body)
 	a.requests, a.status, a.bytes = resp.Attempts, resp.Status, len(resp.Body)
 	if err != nil {
-		f, ok := langfuseErrorFields(err, op, ex.redact, ex.profile)
-		if ok {
-			a.status = f.HTTPStatus
+		f, answered := ex.failureOf(op, err, a)
+		if answered {
 			if request.FolderName && (f.HTTPStatus == http.StatusNotFound || f.HTTPStatus == http.StatusBadRequest) {
 				f.Hint = folderNameHintFor(f)
 			}
 			if f.Code == errorNotFound && op.ImpliesProductionLabel(request) {
 				f.Hint += "; " + productionLabelHint
 			}
-		} else {
-			a.cause = err.Error()
-			f = failureFields(op, err)
 		}
-		f.OperationID = truncate(op.ID)
 		if !op.IsRead() {
 			f.Hint = notRetriedHint(f, op)
 		}

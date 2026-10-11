@@ -74,14 +74,7 @@ func (ex executor) filterScan(ctx context.Context, called catalog.Operation, sca
 	})
 	a.requests, a.status, a.bytes = res.Requests, res.Status, res.Bytes
 	if err != nil {
-		f, ok := langfuseErrorFields(err, op, ex.redact, ex.profile)
-		if ok {
-			a.status = f.HTTPStatus
-		} else {
-			a.cause = err.Error()
-			f = failureFields(op, err)
-		}
-		f.OperationID = truncate(op.ID)
+		f, _ := ex.failureOf(op, err, a)
 		return errorResult(f)
 	}
 	note := ""

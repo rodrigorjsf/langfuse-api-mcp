@@ -79,6 +79,23 @@ func failure(op catalog.Operation, err error) (*mcp.CallToolResult, error) {
 	return errorResult(fields)
 }
 
+// failureOf is the tool error of a call of op that failed with err, with the
+// operation ID, and records the failure in the audit line: the HTTP status of
+// a Langfuse error answer, or the cause of a call that got none. answered
+// says that Langfuse answered. The one translation every executor path
+// shares (the generic executor, the filter scan, the trace tree).
+func (ex executor) failureOf(op catalog.Operation, err error, a *audit) (f toolErrorFields, answered bool) {
+	f, answered = langfuseErrorFields(err, op, ex.redact, ex.profile)
+	if answered {
+		a.status = f.HTTPStatus
+	} else {
+		a.cause = err.Error()
+		f = failureFields(op, err)
+	}
+	f.OperationID = truncate(op.ID)
+	return f, answered
+}
+
 // failureFields classifies err, the failure of a call of op, into the tool
 // error fields, without the operation ID.
 func failureFields(op catalog.Operation, err error) toolErrorFields {
