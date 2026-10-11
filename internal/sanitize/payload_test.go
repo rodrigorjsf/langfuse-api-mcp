@@ -19,6 +19,7 @@ func FuzzPayload(f *testing.F) {
 	f.Add(`["pr` + "\U000E0041\u2066" + `od",null,true,1.5e3,{"a\u200Bb":"line 1\nline 2"}]`)
 	f.Add(`"\xff\xfe broken UTF-8"`)
 	f.Add(`{"sec\u200Bret":"a secret, sec\u202Eret"}`)
+	f.Add(`{"c\u001b[31molour":"\u001b[1;32mgreen\u001b[m \u001b]8;;https://x.example\u0007link\u001b]8;;\u0007 sec\u001b[0mret \u009b2J"}`)
 	f.Fuzz(func(t *testing.T, s string) {
 		if !json.Valid([]byte(s)) {
 			return // the client passes only valid JSON

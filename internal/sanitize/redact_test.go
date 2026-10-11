@@ -224,6 +224,8 @@ func FuzzRedact(f *testing.F) {
 	f.Add(`["Bearer abcdefghijklmnop\nnext", "authorization:\tBasic 0123456789abcdefgh"]`)
 	f.Add(`{"k":"Bea\u200brer abcdefghijklmnop pk-lf-abc"}`)
 	f.Add("Authorization: Bearer\nabcdefghijklmnopqrstuvwxyz")
+	f.Add("{\"k\":\"x\u009b\",\"s\":\"sk-lf-abc\u009b1m\\n\"}") // a raw single-character CSI beside a quote
+	f.Add("sk-lf-abc\x1b[31mdef Bearer \x1b]8;;u\x07abcdefghijklmnopqrstuvwxyz")
 	r := sanitize.NewRedactor("hunter2-hunter2")
 	f.Fuzz(func(t *testing.T, s string) {
 		once := r.Redact(s)

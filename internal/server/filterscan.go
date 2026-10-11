@@ -46,7 +46,7 @@ func (ex executor) filterScan(ctx context.Context, op catalog.Operation, scan ca
 			a.status = f.HTTPStatus
 		} else {
 			a.cause = err.Error()
-			f = failureFields(err)
+			f = failureFields(err, op)
 		}
 		f.OperationID = truncate(op.ID)
 		return errorResult(f)
@@ -58,6 +58,6 @@ func (ex executor) filterScan(ctx context.Context, op catalog.Operation, scan ca
 	// The scan reads from page 1 at the page size maximum: neither a lower limit
 	// nor paging asks for less.
 	remedies := remediesOf(op)
-	remedies.Limit, remedies.Paging = 0, false
+	remedies.Limit, remedies.Page, remedies.Cursor = 0, false, false
 	return jsonResult(sanitize.WrapNoted(op.ID, res.Payload, ex.maxResultBytes, remedies, note), false)
 }

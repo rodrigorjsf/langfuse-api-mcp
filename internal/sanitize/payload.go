@@ -93,7 +93,10 @@ func walk(v any, f func(string) string) any {
 
 // Text drops the characters of s that hide or reorder text: invisible and
 // bidirectional formatting characters (hidden) and control characters other
-// than tab, line feed and carriage return.
+// than tab, line feed and carriage return. A terminal control sequence (a
+// colour, a cursor movement, an OSC 8 hyperlink: see withoutEscapeSequences)
+// goes whole, not with its escape character alone; text that only looks like
+// the rest of one, with no escape character before it, stays.
 func Text(s string) string {
 	if plain(s) {
 		return s
@@ -103,7 +106,7 @@ func Text(s string) string {
 			return -1
 		}
 		return r
-	}, strings.ToValidUTF8(s, "�"))
+	}, withoutEscapeSequences(strings.ToValidUTF8(s, "�")))
 }
 
 // plain reports whether s is ASCII with no control character other than tab,

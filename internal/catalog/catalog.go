@@ -427,7 +427,9 @@ func resolve(s *Schema, components map[string]Schema) error {
 // characters, the Unicode format category Cf (zero-width characters, bidi
 // overrides and isolates, the byte order mark) and the tag block
 // U+E0000–E007F. Invalid UTF-8 is dropped too. It mirrors sanitize.Text,
-// which catalog may not import (ADR-0009).
+// which catalog may not import (ADR-0009), except that it does not remove a
+// terminal escape sequence whole (#193): its text is the embedded OpenAPI spec,
+// not Langfuse data read at run time.
 func visible(s string) string {
 	return strings.Map(func(r rune) rune {
 		if hidden(r) {

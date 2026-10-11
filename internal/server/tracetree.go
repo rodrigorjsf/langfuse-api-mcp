@@ -118,6 +118,12 @@ const (
 	traceTreeCutHint = "data.meta.observations is the number of rows read; the tree without include has smaller " +
 		"rows, and execute_read with observations_getMany (traceId, fields, limit, cursor) pages through every observation"
 
+	// traceTreeTooLargeHint answers a page over the response read cap: the tool
+	// takes no limit, field or cursor, so the way to read the trace is
+	// execute_read with the paging Observations v2 has (#193).
+	traceTreeTooLargeHint = "a page of 1000 observations is larger than the response this server reads; " +
+		"execute_read with observations_getMany (traceId, fields, a lower limit, cursor) reads the trace in smaller pages"
+
 	// The hints of the trace tree built from the legacy observations list
 	// (#187). The legacy list pages by page number, has no field selection and
 	// no cursor.
@@ -175,7 +181,7 @@ func (ex executor) selectTraceTreeSource() (traceTreeSource, bool) {
 			operationID: workflows.ObservationsOperationID, family: catalog.V4ReadFamily,
 			read:  workflows.GetTraceTree,
 			more:  func(workflows.TraceTree) string { return traceTreeMoreHint },
-			empty: traceTreeEmptyHint, cut: traceTreeCutHint,
+			empty: traceTreeEmptyHint, cut: traceTreeCutHint, tooLarge: traceTreeTooLargeHint,
 		}, true
 	case ex.profile.On(catalog.LegacyFamily):
 		return traceTreeSource{
@@ -208,7 +214,7 @@ func (ex executor) getTraceTree(ctx context.Context, req *mcp.CallToolRequest, a
 			return errorResult(f)
 		}
 		a.cause = err.Error()
-		fields := failureFields(err)
+		fields := failureFields(err, op)
 		fields.OperationID = truncate(op.ID)
 		if src.tooLarge != "" && errors.Is(err, langfuse.ErrResponseTooLarge) {
 			fields.Hint = src.tooLarge

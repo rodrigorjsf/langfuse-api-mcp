@@ -82,10 +82,10 @@ type statusError struct {
 	retryable  bool
 }
 
-// statusErrorFor returns the tool error for a Langfuse status. A 4xx the
-// mapping table does not name (e.g. 405) is a refused request, reported as
-// langfuse_bad_request.
-func statusErrorFor(status int) statusError {
+// statusErrorFor returns the tool error for a Langfuse status of a call of op.
+// A 4xx the mapping table does not name (e.g. 405) is a refused request,
+// reported as langfuse_bad_request.
+func statusErrorFor(status int, op catalog.Operation) statusError {
 	switch {
 	case status == 401:
 		return statusError{errorUnauthorized, "the key pair was rejected: check LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY, " +
@@ -98,7 +98,7 @@ func statusErrorFor(status int) statusError {
 	case status == 409:
 		return statusError{errorConflict, "the request conflicts with the current state: read the resource again before changing it", false}
 	case status == 413:
-		return statusError{errorResponseTooLarge, tooLargeHint, false}
+		return statusError{errorResponseTooLarge, tooLargeHintFor(op), false}
 	case status == 422:
 		return statusError{errorUnprocessable, "Langfuse could not process the request: read the resource again and check the parameters", false}
 	case status == 429:
@@ -114,10 +114,6 @@ func statusErrorFor(status int) statusError {
 		return statusError{errorBadRequest, "Langfuse refused the request as sent: check the operation and its parameters", false}
 	}
 }
-
-// tooLargeHint tells the agent how to get a smaller answer.
-const tooLargeHint = "narrow the query: request fewer fields, a shorter time window or a lower limit, " +
-	"and page through the rest"
 
 // secondsRoundedUp rounds d up to whole seconds, so that waiting
 // retryAfterSeconds is never too short.
@@ -282,7 +278,7 @@ func langfuseErrorFields(err error, op catalog.Operation, r sanitize.Redactor, p
 		f.Hint = unavailableHint(apiErr.Unavailable, op.Family, profile)
 		return f, true
 	}
-	se := statusErrorFor(apiErr.Status)
+	se := statusErrorFor(apiErr.Status, op)
 	f.Code, f.Hint, f.Retryable = se.code, se.hint, se.retryable
 	f.RetryAfterSeconds = secondsRoundedUp(apiErr.RetryAfter)
 	f.Message = "Langfuse answered HTTP " + strconv.Itoa(apiErr.Status)

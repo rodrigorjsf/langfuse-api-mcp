@@ -270,6 +270,42 @@ func folderNameHintFor(f toolErrorFields) string {
 	return folderNameHint
 }
 
+// notServedHintFor is the hint of a parameter the deployment's version does not
+// serve (#173): static text and the operation's way of paging, it holds no
+// parameter name or value. The rows are filtered by the caller, over every
+// page, because filtering one page would answer short and look complete; an
+// operation that does not page has one result, not rows (#193).
+func notServedHintFor(op catalog.Operation) string {
+	if ways := remediesOf(op).PagingWays(); ways != "" {
+		return notServedLead + "rows yourself over every page (" + ways + ")"
+	}
+	return notServedLead + "result yourself"
+}
+
+// limitHint is the hint of a limit out of range: the cap, the default and the
+// way the operation pages on, which is the parameter it has and no other (#193).
+func limitHint(op catalog.Operation) string {
+	hint := "use a limit from 1 to " + strconv.Itoa(catalog.MaxLimit)
+	if ways := remediesOf(op).PagingWays(); ways != "" {
+		hint += " and page through the rest (" + ways + ")"
+	}
+	return hint + "; without a limit the server asks for " + strconv.Itoa(catalog.DefaultLimit)
+}
+
+// tooLargeNarrowing is the first part of the hint of an answer too large to
+// read.
+const tooLargeNarrowing = "narrow the query: request fewer fields, a shorter time window or a lower limit"
+
+// tooLargeHintFor is the hint of an answer too large to read (a 413, or a body
+// over the bytes this server reads): it says to page through the rest only by
+// the parameter the operation has (#193).
+func tooLargeHintFor(op catalog.Operation) string {
+	if ways := remediesOf(op).PagingWays(); ways != "" {
+		return tooLargeNarrowing + ", and page through the rest (" + ways + ")"
+	}
+	return tooLargeNarrowing
+}
+
 // maxEchoed bounds how much of a caller-supplied name an error repeats.
 const maxEchoed = 64
 
@@ -287,12 +323,9 @@ const (
 	argumentsHint = "call execute_read again with operationId, a Langfuse read operation ID such as trace_list, " +
 		"and optionally parameters, an object of parameter name to value"
 	parametersHint = "fix the parameter named in the message and call again"
-	// notServedHint is the hint of a parameter the deployment's version does
-	// not serve (#173): static text, it holds no parameter name or value. The
-	// rows are filtered by the caller, over every page, because filtering one
-	// page would answer short and look complete.
-	notServedHint = "this deployment's Langfuse version does not serve that parameter: call again without it and " +
-		"filter the rows yourself over every page (page, or cursor from meta.cursor)"
+	// notServedLead opens the hint of a parameter the deployment's version does
+	// not serve (#173); see notServedHintFor.
+	notServedLead = "this deployment's Langfuse version does not serve that parameter: call again without it and filter the "
 	// folderNameHint replaces the hint of a 404 or 400 answering a call with
 	// a Folder name: the name may be wrong, or the %2F may not have reached
 	// Langfuse intact. It says nothing of the dataset runs routes: a live
@@ -381,7 +414,7 @@ func (ex executor) run(ctx context.Context, op catalog.Operation, request catalo
 			}
 		} else {
 			a.cause = err.Error()
-			f = failureFields(err)
+			f = failureFields(err, op)
 		}
 		f.OperationID = truncate(op.ID)
 		if !op.IsRead() {
@@ -396,7 +429,7 @@ func (ex executor) run(ctx context.Context, op catalog.Operation, request catalo
 	payload, err := sanitize.Payload(raw, ex.redact)
 	if err != nil {
 		a.cause = err.Error()
-		return failure(op.ID, err) // unreachable: the client returns valid JSON only
+		return failure(op, err) // unreachable: the client returns valid JSON only
 	}
 	return jsonResult(sanitize.Wrap(op.ID, payload, ex.maxResultBytes, remediesOf(op)), false)
 }
@@ -408,7 +441,8 @@ func remediesOf(op catalog.Operation) sanitize.Remedies {
 	r := sanitize.Remedies{
 		Fields:     op.HasQueryParam("fields"),
 		TimeWindow: op.HasTimeFilter(),
-		Paging:     op.HasQueryParam("page") || op.HasQueryParam("cursor"),
+		Page:       op.HasQueryParam("page"),
+		Cursor:     op.HasQueryParam("cursor"),
 	}
 	if op.IsRead() && op.HasQueryParam("limit") {
 		r.Limit = catalog.MaxLimit
@@ -428,7 +462,7 @@ func metricsQueryHint(op catalog.Operation) string {
 
 // parametersHintFor is the hint for a parameter the catalog refused: a
 // malformed metrics query gets metricsQueryHint; a parameter the deployment's
-// version does not serve gets notServedHint; a page size out of range gets
+// version does not serve gets notServedHintFor; a page size out of range gets
 // how to page instead, anything else the generic parametersHint. Those
 // go on with the operation's valid parameter names and describe_operation, so
 // one more call fixes the parameters.
@@ -439,13 +473,11 @@ func parametersHintFor(err error, op catalog.Operation) string {
 	hint := parametersHint
 	switch {
 	case errors.Is(err, catalog.ErrParameterNotServed):
-		hint = notServedHint
+		hint = notServedHintFor(op)
 	case errors.Is(err, catalog.ErrPageWithFilterScan):
 		hint = pageWithScanHint
 	case errors.Is(err, catalog.ErrLimitOutOfRange):
-		hint = "use a limit from 1 to " + strconv.Itoa(catalog.MaxLimit) +
-			" and page through the rest (page, or cursor from meta.cursor); without a limit the server asks for " +
-			strconv.Itoa(catalog.DefaultLimit)
+		hint = limitHint(op)
 	case errors.Is(err, catalog.ErrRowLimitOutOfRange):
 		hint = "set config.row_limit in the query JSON to an integer from 1 to " +
 			strconv.Itoa(catalog.MaxRowLimit) + ", or leave it out and the server asks for " +

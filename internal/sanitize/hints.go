@@ -16,8 +16,25 @@ type Remedies struct {
 	Limit int
 	// TimeWindow is set when the operation takes a time range.
 	TimeWindow bool
-	// Paging is set when the operation pages through its rows.
-	Paging bool
+	// Page is set when the operation takes the page parameter; Cursor when it
+	// takes the cursor parameter, continued from meta.cursor. The hint names
+	// only the way of paging the operation has (#193).
+	Page, Cursor bool
+}
+
+// PagingWays names the parameters the operation pages by, as a hint writes
+// them in brackets: "page", "cursor from meta.cursor", both, or "" when the
+// operation has neither. No legacy list has a cursor.
+func (r Remedies) PagingWays() string {
+	switch {
+	case r.Page && r.Cursor:
+		return "page, or cursor from meta.cursor"
+	case r.Page:
+		return "page"
+	case r.Cursor:
+		return "cursor from meta.cursor"
+	}
+	return ""
 }
 
 // clause is the remedies as one sentence part, "" when there are none.
@@ -100,8 +117,8 @@ func (n hints) rows(kept, total int, clipped, tooBig bool) string {
 	if n.remedies.Limit > 0 {
 		again = fmt.Sprintf("call again with limit %d", min(max(kept, 1), n.remedies.Limit))
 	}
-	if n.remedies.Paging {
-		page = pagingNote
+	if ways := n.remedies.PagingWays(); ways != "" {
+		page = pagingNote + " (" + ways + ")"
 	}
 	return n.join(head, note, again, n.remedy, page, tooBigIf(tooBig))
 }

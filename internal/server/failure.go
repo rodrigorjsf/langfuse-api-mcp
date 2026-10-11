@@ -6,6 +6,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse"
 )
 
@@ -30,15 +31,15 @@ const caHint = "set LANGFUSE_CA_CERT " +
 // (a transport failure, a refused redirect or an oversized body); a Langfuse
 // error answer goes through langfuseErrorFields instead. err itself never
 // reaches the agent; the caller records it on the audit line (stderr).
-func failure(operationID string, err error) (*mcp.CallToolResult, error) {
-	fields := failureFields(err)
-	fields.OperationID = truncate(operationID)
+func failure(op catalog.Operation, err error) (*mcp.CallToolResult, error) {
+	fields := failureFields(err, op)
+	fields.OperationID = truncate(op.ID)
 	return errorResult(fields)
 }
 
-// failureFields classifies err into the tool error fields, without the
-// operation ID.
-func failureFields(err error) toolErrorFields {
+// failureFields classifies err, the failure of a call of op, into the tool
+// error fields, without the operation ID.
+func failureFields(err error, op catalog.Operation) toolErrorFields {
 	switch {
 	case errors.Is(err, langfuse.ErrRedirectRefused):
 		return toolErrorFields{
@@ -67,7 +68,7 @@ func failureFields(err error) toolErrorFields {
 			Code: errorResponseTooLarge,
 			Message: "the Langfuse response is larger than the " + strconv.Itoa(langfuse.MaxResponseBytes>>20) +
 				" MiB this server reads; it was not returned",
-			Hint: tooLargeHint,
+			Hint: tooLargeHintFor(op),
 		}
 	case errors.Is(err, langfuse.ErrNetwork):
 		return toolErrorFields{

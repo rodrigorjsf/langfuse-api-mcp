@@ -18,6 +18,8 @@ func FuzzMessage(f *testing.F) {
 	f.Add(strings.Repeat("é", 700))
 	f.Add("\xff\xfe broken UTF-8")
 	f.Add("ok\uFE0F\U000E0100ay\u3164")
+	f.Add("failed \x1b[31mred\x1b[0m \x1b]8;;https://x.example\x07link\x1b]8;;\x07 \u009b2J end")
+	f.Add("\x1b]" + strings.Repeat("a", 600) + "\x07 \x1b[" + strings.Repeat("1", 600))
 	f.Fuzz(func(t *testing.T, s string) {
 		got := sanitize.Message(s)
 		if !utf8.ValidString(got) || utf8.RuneCountInString(got) > sanitize.MaxMessageRunes {
