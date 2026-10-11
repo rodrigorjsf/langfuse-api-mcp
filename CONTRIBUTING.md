@@ -26,11 +26,11 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the same five c
 
 What you need installed:
 
-- **Any Go from 1.21 on.** `go.mod` pins the exact toolchain (`toolchain go1.27.1`). An older local Go downloads that toolchain automatically the first time you run a `go` command in this repository (the default `GOTOOLCHAIN=auto`).
+- **Any Go from 1.21 on.** `go.mod` pins the exact toolchain (`toolchain go1.27.2`). An older local Go downloads that toolchain automatically the first time you run a `go` command in this repository (the default `GOTOOLCHAIN=auto`).
 - **golangci-lint v2 built with Go 1.27 or newer.** A binary built with an older Go refuses a `go 1.27` module: it exits with code 3, sometimes without printing anything. Check with `golangci-lint version` ("built with go1.27…"). If yours is older, build it with the module's toolchain:
 
   ```bash
-  GOTOOLCHAIN=go1.27.1 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+  GOTOOLCHAIN=go1.27.2 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
   ```
 
 Dependencies stay current through [Dependabot](.github/dependabot.yml) (Go modules, GitHub Actions and the generator's Python requirements). Dependabot does not bump the `toolchain` line, so a weekly workflow ([`.github/workflows/go-toolchain.yml`](.github/workflows/go-toolchain.yml)) opens a pull request when a newer Go 1.27.x patch release exists.
