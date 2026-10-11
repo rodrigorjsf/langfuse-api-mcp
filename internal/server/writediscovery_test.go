@@ -82,6 +82,44 @@ func TestExecuteReadAndDescribeOperationAnswerAWriteOperationIDWhileWritesAreOff
 	}
 }
 
+// The same on a deployment whose version does not have every write operation:
+// with write mode off, a write operation ID the deployment's catalog does not
+// offer is answered as an ID in no release, like one it offers. Neither the
+// code, the deployment's version, a replacement nor an HTTP method tells them
+// apart. Every write operation of the catalog is walked on each profile.
+func TestAWriteOperationIDTheDeploymentDoesNotOfferIsAnsweredAsAnIDInNoReleaseWhileWritesAreOff(t *testing.T) {
+	t.Parallel()
+	const absent = "zzzz_notAnOperation"
+
+	for _, pin := range []string{"3.80.0", "3.225.11"} {
+		resolved := resolvedFor(t, pinnedDeployments[pin])
+		cs := connectResolvedWith(t, pin)
+		notOffered := map[string]bool{}
+		for _, tool := range []string{"execute_read", "describe_operation"} {
+			want := toolErrorOf(t, callTool(t, cs, tool, map[string]any{"operationId": absent})).Error
+			for _, id := range writeOperationIDs(t) {
+				if _, offered := resolved.Lookup(id); !offered {
+					notOffered[id] = true
+				}
+				got := toolErrorOf(t, callTool(t, cs, tool, map[string]any{"operationId": id})).Error
+
+				if notFoundShape(got, id) != notFoundShape(want, absent) {
+					t.Errorf("%s: %s of %s: error = %+v, want the shape of the answer for an ID in no release, %+v", pin, tool, id, got, want)
+				}
+				for _, word := range []string{"GET", "POST", "PUT", "PATCH", "DELETE", "execute_write", "Langfuse " + pinnedDeployments[pin].Version} {
+					if strings.Contains(got.Message+got.Hint, word) {
+						t.Errorf("%s: %s of %s: %q names %s", pin, tool, id, got.Message+" / "+got.Hint, word)
+					}
+				}
+			}
+		}
+		if pin == "3.80.0" && (!notOffered["annotationQueues_createQueue"] || len(notOffered) < 5) {
+			t.Errorf("%s: the walk covered %d write operations the deployment does not offer (%v), want annotationQueues_createQueue and at least 5",
+				pin, len(notOffered), notOffered)
+		}
+	}
+}
+
 // Nothing reaches Langfuse for a write operation ID in read-only mode.
 func TestExecuteReadOfAWriteOperationIDWhileWritesAreOffSendsNoRequest(t *testing.T) {
 	t.Parallel()
