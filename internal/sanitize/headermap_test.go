@@ -679,12 +679,28 @@ func TestAHeaderMapAtTheDeepestLevelAResponseCanHoldIsRedacted(t *testing.T) {
 	}
 }
 
-// The time to redact grows with the input, not faster: four times the input
-// takes well under sixteen times as long (a quadratic rule would take about
-// sixteen). The best of several runs of each size keeps a busy machine from
-// failing the test.
+// The time to redact grows with the input, not faster. Each round times the
+// same number of bytes twice, one timing right after the other: the small
+// input redacted as many times as it fits in the large one, then the large
+// input redacted once. A rule that reads its input in proportion takes the
+// same time for both; a quadratic rule takes eight times as long for the
+// large input, and the test fails above three.
+//
+// The two timings take about as long as each other, so a loaded machine slows
+// both alike. A short timing against a long one does not have that property:
+// the short one often fits between two interruptions and the long one never
+// does, which is how a loaded runner once read 14 times the time for 4 times
+// the input, on a rule that measures the same cost for each byte from 7 KiB to
+// 2 MiB. The best of each over the rounds is compared, and the rounds stop at
+// the first that shows the proportion.
 func TestRedactionTimeGrowsInProportionToTheInput(t *testing.T) {
 	// Not parallel: the other tests would share the processor with the timing.
+	const (
+		smallCount = 250
+		largeCount = 2000 // eight times the small input
+		rounds     = 8
+		bound      = 3 // times the time of the same bytes in small inputs
+	)
 	inputs := map[string]func(n int) string{
 		"object members": func(n int) string {
 			return `{` + strings.Repeat(`"Authorization":"Basic `+mapToken+`",`, n) + `"z":1}`
@@ -697,21 +713,30 @@ func TestRedactionTimeGrowsInProportionToTheInput(t *testing.T) {
 			return strings.Repeat(`\\\\\\\\\\\\"x authorization `, n)
 		},
 	}
-	best := func(f func()) time.Duration {
-		shortest := time.Duration(1<<63 - 1)
-		for range 3 {
-			start := time.Now()
-			f()
-			shortest = min(shortest, time.Since(start))
-		}
-		return shortest
+	elapsed := func(f func()) time.Duration {
+		start := time.Now()
+		f()
+		return time.Since(start)
 	}
 	for name, build := range inputs {
-		small, large := build(500), build(2000)
-		timeSmall := best(func() { sanitize.Redactor{}.Redact(small) })
-		timeLarge := best(func() { sanitize.Redactor{}.Redact(large) })
-		if timeLarge > 10*timeSmall+time.Millisecond {
-			t.Errorf("%s: %d bytes took %v, %d bytes took %v: more than linear", name, len(small), timeSmall, len(large), timeLarge)
+		small, large := build(smallCount), build(largeCount)
+		timeSmall, timeLarge := time.Duration(1<<63-1), time.Duration(1<<63-1)
+		inProportion := false
+		for range rounds {
+			timeSmall = min(timeSmall, elapsed(func() {
+				for range largeCount / smallCount {
+					sanitize.Redactor{}.Redact(small)
+				}
+			}))
+			timeLarge = min(timeLarge, elapsed(func() { sanitize.Redactor{}.Redact(large) }))
+			if timeLarge <= bound*timeSmall {
+				inProportion = true
+				break
+			}
+		}
+		if !inProportion {
+			t.Errorf("%s: %d inputs of %d bytes took %v, one of %d bytes took %v: more than linear",
+				name, largeCount/smallCount, len(small), timeSmall, len(large), timeLarge)
 		}
 	}
 }
