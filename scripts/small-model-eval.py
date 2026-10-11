@@ -610,12 +610,13 @@ def accepted(call, result, wants, today):
 
 
 def one_line(raw, limit):
-    """raw as one printed line: whitespace controls become one space, other
-    control and format characters (Unicode categories Cc, Cf, Co, Cs, Cn:
-    zero-width and bidi ones included) are removed, since the text is untrusted
-    and goes to a terminal; then cut to limit characters, "..." marking the
-    cut. The cleaning comes first, so removed characters cannot move the cut.
-    "(no text)" when nothing is left."""
+    """raw as one printed line: whitespace of any kind (line breaks and tabs
+    included) becomes one space, a run of it too, and other control and format
+    characters (Unicode categories Cc, Cf, Co, Cs, Cn: zero-width and bidi ones
+    included) are removed, since the text is untrusted and goes to a terminal;
+    then cut to limit characters, "..." marking the cut. The cleaning comes
+    first, so removed characters cannot move the cut. "(no text)" when nothing
+    is left."""
     kept = " ".join("".join(
         " " if c.isspace() else "" if unicodedata.category(c).startswith("C") else c for c in raw).split())
     if not kept:
@@ -648,11 +649,13 @@ def run_intent(server, tools, endpoint, key, args, item, today):
     the model made, how it ended, what the model said, the server's answer).
     What the model said is the text of the model turn that made no tool call,
     or None when the conversation ended otherwise. The answer is the tool
-    result of the last call sent to the server, as the server gave it, or None
-    when none was sent (a forbidden call is not sent and has no answer). An
-    intent with "expect" passes at the first expected call the server accepts;
-    one with "forbid" fails at the first call of that tool, which is not sent
-    to the server, and passes when the conversation ends without one after the
+    result of the last call sent to the server, as the server gave it; None
+    when no call was sent, at the expected call that passes and at a forbidden
+    call (it is not sent and has no answer, even when earlier calls were
+    answered). main() prints it only for an intent that failed. An intent
+    with "expect" passes at the first expected call the server accepts; one
+    with "forbid" fails at the first call of that tool, which is not sent to
+    the server, and passes when the conversation ends without one after the
     server accepted one of its "reads" calls (the payload the intent is about
     reached the model)."""
     messages = [{"role": "user", "content": item["intent"]}]
