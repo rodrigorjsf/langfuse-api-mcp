@@ -16,16 +16,16 @@
 #       execute_write call. Intent 10 keeps its read-only server and empty
 #       fake. The final text (#182): a conversation that ends on a model turn
 #       with no tool call prints that turn's text as a "said:" line, as one
-#       line without control or invisible characters and cut to 500
-#       characters, through main(), the seam an operator reads.
+#       line without control or format (zero-width, bidi) characters and cut
+#       to 500 characters, through main(), the seam an operator reads.
 # WHY:  a model without a clock copied the fixed dates of the metrics query
 #       example, and the matcher ignored timestamps, so intent 11 passed on
 #       the one day those dates happened to be "the last 7 days". These cases
 #       need no model and no network beyond 127.0.0.1; the server is a
 #       stand-in, so no Go toolchain is needed.
 # WHEN: on every push and pull request (.github/workflows/ci.yml, job
-#       "generator"), and by hand after changing the eval's system prompt or
-#       its matchers.
+#       "generator"), and by hand after changing the eval's system prompt,
+#       its matchers or what it prints.
 # HOW:  python3 scripts/test_small_model_eval.py   (Python 3.11+, standard library only)
 
 import contextlib
@@ -411,7 +411,7 @@ class FinalTextTest(unittest.TestCase):
         lines = self.printed([text_reply("b" * 500)])
         self.assertIn("       said: " + "b" * 500, lines)
 
-    def test_control_and_invisible_characters_are_stripped_and_the_text_is_one_line(self):
+    def test_control_and_format_characters_are_stripped_and_the_text_is_one_line(self):
         hostile = "first\r\nsecond\x1b[31m red\x07\x00 \u202eend\u200b\ttab\x85\u2028done"
         lines = self.printed([text_reply(hostile)])
         self.assertIn("       said: first second[31m red end tab done", lines)

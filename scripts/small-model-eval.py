@@ -17,13 +17,12 @@
 #       the model lists the items and makes no execute_write call. It prints
 #       one PASS/FAIL line per intent and the total. When a conversation ends
 #       on a model turn that made no tool call, a "said:" line under the
-#       intent shows that turn's text (one line, control and invisible
+#       intent shows that turn's text (one line, control and format
 #       characters stripped, cut to 500 characters), so a failure such as
 #       qwen3:8b ending intent 11 without a call (#149) can be diagnosed
-#       (#182; scripts/test_small_model_eval.py tests it offline). The system
-#       prompt names the run date (UTC), and the metrics intent checks its
+#       (#182). The system prompt names the run date (UTC), and the metrics intent checks its
 #       query's time window against it (#105); scripts/test_small_model_eval.py
-#       tests that offline.
+#       tests both offline.
 # WHY:  M3 claims that a small model can go from an intent to the right
 #       operation using the discovery tools alone. This run is the evidence. A
 #       failing intent becomes a follow-up issue on M3 or M6 (a description,
@@ -601,9 +600,10 @@ def accepted(call, result, wants, today):
 
 def final_text(reply):
     """The text blocks of a model turn, as printed when a conversation ends:
-    one line, without control, format (zero-width, bidi) or other invisible
-    characters (model output is untrusted and goes to a terminal), cut to
-    FINAL_TEXT_LIMIT characters; "(no text)" when the turn has none."""
+    one line, without control or format characters (Unicode categories Cc,
+    Cf, Co, Cs, Cn: zero-width and bidi ones included; model output is
+    untrusted and goes to a terminal), cut to FINAL_TEXT_LIMIT characters;
+    "(no text)" when the turn has none."""
     raw = " ".join(b.get("text", "") for b in reply["content"] if b.get("type") == "text")
     kept = " ".join("".join(
         " " if c.isspace() else "" if unicodedata.category(c).startswith("C") else c for c in raw).split())
