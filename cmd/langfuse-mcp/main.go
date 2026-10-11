@@ -225,8 +225,9 @@ func logProfile(log *slog.Logger, d langfuse.Detection, operations int) {
 	log.Info("deployment profile", "version", version, "families", families, "undecided", undecided,
 		"unsupported", d.Unsupported, "operations", operations)
 	if !ok {
-		// Fixed text: an operation offers the parameters of the newest known release (#173).
-		log.Info("Langfuse version not detected: serving the newest release's parameters")
+		// Fixed text: an operation offers the parameters (#173) and has the
+		// request body (#202) of the newest known release.
+		log.Info("Langfuse version not detected: serving the newest release's parameters and request bodies")
 	}
 }
 

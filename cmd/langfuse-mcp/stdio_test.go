@@ -205,7 +205,7 @@ func deploymentHandler(healthBody string, unavailable []string, next http.Handle
 }
 
 // servedParametersMessage is the startup log line of an undetected version (#173).
-const servedParametersMessage = "Langfuse version not detected: serving the newest release's parameters"
+const servedParametersMessage = "Langfuse version not detected: serving the newest release's parameters and request bodies"
 
 // profileLogLine returns the startup log line naming the deployment profile.
 func profileLogLine(t *testing.T, stderr []byte) map[string]any {
@@ -344,7 +344,7 @@ func TestExecutableReachesAnOperationOnlyAnOlderReleaseSpecListsWhenTheVersionIs
 	if got := profileLogLine(t, s.stderr.Bytes()); got["version"] != "unknown" {
 		t.Errorf("deployment profile log line = %v, want version unknown", got)
 	}
-	// #173: with no detected version the newest release's parameters are served, and the log says so.
+	// #173, #202: with no detected version the newest release's parameters and request bodies are served, and the log says so.
 	if !slices.ContainsFunc(logLines(t, s.stderr.Bytes()), func(line map[string]any) bool {
 		return line["msg"] == servedParametersMessage
 	}) {
