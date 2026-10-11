@@ -9,7 +9,7 @@
 # WHY:  one `go test -race` process of internal/server once passed 5000 MiB
 #       (reported past 6.5 GB), swapped an 8 GB machine and ended as a timeout
 #       after 15 minutes (#201). The cause was memory the tests kept after
-#       they ended, not the race detector: the peak is now about 1.7 GiB.
+#       they ended, not the race detector: the peak is now about 1.9 GiB.
 #       This is how the next growth is seen, safely: `ulimit -v` and
 #       `prlimit --as` are no guard, because the race detector reserves a very
 #       large address space and would not start.
