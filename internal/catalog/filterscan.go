@@ -23,8 +23,8 @@ type ScannedFilter struct {
 // scannedFilters is the closed list: exactly the two filters the campaign
 // proved on Langfuse 3.80.0 (finding H1), which ignores each and answers the
 // unfiltered list. Adding a pair is a decision of its own, with its row field.
-// An operation description lists only served parameters, so it does not show
-// these filters on a deployment that scans them (#199).
+// An operation description lists only served parameters; it shows these filters
+// apart from them, on a deployment that scans them (ScannedParams, #199).
 var scannedFilters = []ScannedFilter{
 	{OperationID: "scores_get-many", Parameter: "traceId", RowField: "traceId"},
 	{OperationID: "legacy_observationsV1_getMany", Parameter: "level", RowField: "level"},
@@ -32,6 +32,33 @@ var scannedFilters = []ScannedFilter{
 
 // ScannedFilters returns the closed list of filter scan pairs.
 func ScannedFilters() []ScannedFilter { return slices.Clone(scannedFilters) }
+
+// ScannedParams returns the filters of the operation that the server applies
+// itself on this deployment: the pairs of the closed list (ScannedFilters) for
+// this operation whose parameter the deployment's version does not serve, as
+// the catalog holds them (name, location, type, allowed values and bounds). It
+// is empty for every other operation and on a deployment that serves the
+// parameter or whose version was not detected. They are never in Params, so a
+// parameter is in one list at most. The answer depends on the closed list and
+// the version resolved at startup only.
+func (o Operation) ScannedParams() []Param {
+	var out []Param
+	for _, f := range scannedFilters {
+		if p, ok := o.scannedParam(f); ok {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// scannedParam returns the parameter of pair f when the pair belongs to this
+// operation and the deployment's version does not serve the parameter.
+func (o Operation) scannedParam(f ScannedFilter) (Param, bool) {
+	if f.OperationID != o.ID {
+		return Param{}, false
+	}
+	return o.unservedParam(f.Parameter)
+}
 
 // ErrPageWithFilterScan marks a page chosen together with a filter the server
 // applies by reading the list from its first page; it also matches
@@ -91,10 +118,10 @@ func (o Operation) Scan(params map[string]any) (Scan, bool, error) {
 // that the call carries and this deployment does not serve.
 func (o Operation) scannedFilter(params map[string]any) (ScannedFilter, Param, bool) {
 	for _, f := range scannedFilters {
-		if f.OperationID != o.ID || params[f.Parameter] == nil {
+		if params[f.Parameter] == nil {
 			continue
 		}
-		if p, ok := o.unservedParam(f.Parameter); ok {
+		if p, ok := o.scannedParam(f); ok {
 			return f, p, true
 		}
 	}

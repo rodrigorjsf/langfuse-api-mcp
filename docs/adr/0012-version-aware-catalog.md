@@ -82,14 +82,14 @@ Users on old and on new deployments must both get every operation their deployme
 
 ## Amendment: a version range per parameter, and a filter scan for two of them (2026-10-10, M8 grilling)
 
-Served parameters shipped in M8 (#173); the filter scan shipped in #183.
+Served parameters shipped in M8 (#173); the filter scan shipped in #183; `describe_operation` shows the filters the server scans apart from the served parameters (#199).
 
 The end-to-end campaign on Langfuse 3.80.0 ([record](../research/raw/2026-10-10-e2e-langfuse-3.80.0.md), finding H1) showed that the union catalog offers a parameter on a deployment whose version does not declare it: `traceId` on `scores_get-many`, `level` on `legacy_observationsV1_getMany` and `fields` on `trace_get`. Langfuse 3.80.0 ignores each of them and answers the unfiltered list with no error, so the agent gets a plausible, wrong result. The cause is the generator: for each operation it keeps the parameters of the last release spec that contains the operation.
 
 Decision:
 
 - The generator records, for every path and query parameter, the release that introduced it and, when it left the spec, the release that removed it, the same way it already does per operation.
-- At startup the catalog resolves each operation's **served parameters** for the detected version. `describe_operation` lists only those. A call that carries a parameter the version does not serve is refused with `invalid_argument` before any request; the message names the parameter, the release that serves it and the deployment's version, so that it cannot be mistaken for a misspelled name, and the hint says to call without it and filter the rows over every page.
+- At startup the catalog resolves each operation's **served parameters** for the detected version. `describe_operation` lists only those in `parameters` (the two filters the server applies itself on such a deployment are shown apart from them, in `scannedFilters`, #199). A call that carries a parameter the version does not serve is refused with `invalid_argument` before any request; the message names the parameter, the release that serves it and the deployment's version, so that it cannot be mistaken for a misspelled name, and the hint says to call without it and filter the rows over every page.
 - When the version could not be detected, the newest release's parameters are served, as today, and the startup log says so.
 - A change of a parameter's type or enum between releases is not tracked.
 

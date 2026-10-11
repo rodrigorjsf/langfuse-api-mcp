@@ -474,8 +474,9 @@ func jsonFilterHint() string { return "send filter as " + catalog.JSONFilterEnco
 // jsonFilterHint (#195); a parameter the deployment's
 // version does not serve gets notServedHintFor; a page size out of range gets
 // how to page instead, anything else the generic parametersHint. Those
-// go on with the operation's valid parameter names and describe_operation, so
-// one more call fixes the parameters.
+// go on with the operation's valid parameter names, a clause naming the filter
+// the server applies itself on this deployment when the operation has one
+// (#199), and describe_operation, so one more call fixes the parameters.
 func parametersHintFor(err error, op catalog.Operation) string {
 	if errors.Is(err, catalog.ErrMetricsQuery) {
 		return metricsQueryHint(op)
@@ -503,6 +504,11 @@ func parametersHintFor(err error, op catalog.Operation) string {
 	valid := "it takes no parameter"
 	if len(names) > 0 {
 		valid = "its parameters are " + strings.Join(names, ", ")
+	}
+	// A filter the server applies itself on this deployment is not in that list:
+	// say so, so a refusal does not leave the agent without it (#199).
+	for _, p := range op.ScannedParams() {
+		valid += "; " + scannedFilterClause(p.Name)
 	}
 	return hint + "; " + valid + "; " + toolDescribeOperation + " with operationId " + op.ID +
 		" returns their location, type, allowed values and bounds"

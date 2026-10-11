@@ -24,6 +24,30 @@ const (
 		"first page, and says in meta.filterScan whether it read every row"
 )
 
+// scannedFiltersIntro is the line of its own that opens the list of scanned
+// filters in the text of an operation description (#199). Static text.
+const scannedFiltersIntro = "Filters the server applies itself on this deployment:\n"
+
+// scannedFilterNote is the note of every scanned filter in an operation
+// description (#199): static text compiled into the binary, the same for every
+// entry, with the scan's page limit. It holds no catalog text, no text of the
+// call and no payload.
+func scannedFilterNote() string {
+	return "Send it in parameters of " + toolExecuteRead + " as any parameter. This deployment's Langfuse version " +
+		"does not serve it, so the server reads the list itself, at most " + strconv.Itoa(workflows.MaxScanPages) +
+		" pages, and returns only the rows that match; meta.filterScan says whether it read every row. " +
+		"page is not accepted together with it."
+}
+
+// scannedFilterClause is the clause that follows the parameter list in the hint
+// of a refused call to an operation with a filter the server applies itself
+// (#199): static text and the filter's catalog name, never a name or a value of
+// the call.
+func scannedFilterClause(name string) string {
+	return "the server also applies the filter " + name + " itself on this deployment: send it in parameters of " +
+		toolExecuteRead + " as any parameter, never together with page"
+}
+
 // scanIncompleteHint is the hint of a scan that stopped at its page limit.
 func scanIncompleteHint() string {
 	return "the server applied the filter itself and stopped at its limit of " + strconv.Itoa(workflows.MaxScanPages) +
