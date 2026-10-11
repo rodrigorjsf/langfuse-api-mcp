@@ -106,16 +106,16 @@ func (in Include) dropUnrequested(fields map[string]json.RawMessage) {
 // key is matched by the name and the value the agent would read.
 func dropNullKeys(fields map[string]json.RawMessage) {
 	for key, value := range fields {
-		if string(value) == "null" && !builtFromKey(key) {
+		if string(value) == "null" && !keptWhenNull(key) {
 			delete(fields, key)
 		}
 	}
 }
 
-// builtFromKey reports whether key is one of the three the trace tree is built
-// from: id and parentObservationId give the nesting, startTime the order.
-func builtFromKey(key string) bool {
-	return key == "id" || key == "parentObservationId" || key == "startTime"
+// keptWhenNull reports whether dropNullKeys keeps the key although it holds
+// null: the three the trace tree is built from.
+func keptWhenNull(key string) bool {
+	return key == keyID || key == keyParentObservationID || key == keyStartTime
 }
 
 // decodeLegacyPage decodes one cleaned page of the legacy observations list:

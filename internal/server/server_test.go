@@ -120,6 +120,26 @@ func startCatalog(t testing.TB, cat catalog.Catalog, client *langfuse.Client, lo
 	return cs
 }
 
+// connectClientTo connects one more MCP client, with the given options (nil for
+// a plain one), to a server that is already built, so that tests can compare
+// what several clients of one server get.
+func connectClientTo(t testing.TB, srv *mcp.Server, opts *mcp.ClientOptions) *mcp.ClientSession {
+	t.Helper()
+	ctx := context.Background()
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	ss, err := srv.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { _ = ss.Close() }) // closing an already-closed session is harmless
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, opts).Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = cs.Close() })
+	return cs
+}
+
 func TestTheToolSetWithEveryFamilyOnIsTheDiscoveryToolsExecuteReadAndGetTraceTree(t *testing.T) {
 	t.Parallel()
 	fake := httptest.NewServer(nil)

@@ -172,6 +172,16 @@ type traceMeta struct {
 	Cursor       string `json:"cursor,omitempty"`
 }
 
+// The top-level keys of a row that the trace tree is built from: id and
+// parentObservationId give the nesting, startTime the order. They are read by
+// decodeObservations and are the keys the legacy path keeps when they are null
+// (keptWhenNull).
+const (
+	keyID                  = "id"
+	keyParentObservationID = "parentObservationId"
+	keyStartTime           = "startTime"
+)
+
 // observation is one row of either observations list: its fields as Langfuse
 // sent them, plus what ordering needs.
 type observation struct {
@@ -217,9 +227,9 @@ func decodeObservations(data []json.RawMessage) ([]observation, error) {
 		if err := dec.Decode(&o.fields); err != nil || o.fields == nil {
 			return nil, errUnexpectedPage
 		}
-		o.id = stringField(o.fields["id"])
-		o.parent = stringField(o.fields["parentObservationId"])
-		o.start, o.hasStart = timeField(o.fields["startTime"])
+		o.id = stringField(o.fields[keyID])
+		o.parent = stringField(o.fields[keyParentObservationID])
+		o.start, o.hasStart = timeField(o.fields[keyStartTime])
 		rows = append(rows, o)
 	}
 	return rows, nil

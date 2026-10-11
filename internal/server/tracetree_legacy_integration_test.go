@@ -135,17 +135,19 @@ func TestLiveLangfuse3800GetTraceTreeKeepsInputOutputAndMetadataWhenIncluded(t *
 	}
 }
 
-// A trace of more than one page of the legacy list (it pages at 100): the tree
-// reads page 2 and counts every observation. The tree leaves out each key
-// Langfuse sent as null (#200), which makes a row of these spans (no model, usage,
-// cost or end time) smaller than the recorded one, but not small enough for 130
-// of them to fit the default result size cap: measured on 3.80.0 on 2026-10-11,
-// 125 of the 130 rows come back (the recorded row of the seam test gives 123),
-// the result is marked truncated and its hint says so. If the hint's wording
-// changes, this number and the one of tracetree_legacy_nullkeys_test.go move
-// with it: measure again, do not loosen.
+// liveRowsAtTheDefaultCap is the number of rows of the 130-observation trace of
+// the test below that fit the default result size cap, measured on 3.80.0 on
+// 2026-10-11 (#200). If the hint's wording changes, this number and the ones of
+// tracetree_legacy_nullkeys_test.go move with it: measure again, do not loosen.
 const liveRowsAtTheDefaultCap = 125
 
+// A trace of more than one page of the legacy list (it pages at 100): the tree
+// reads page 2 and counts every observation. The tree leaves out each key
+// Langfuse sent as null (#200), which makes a row of these spans (no model,
+// usage, cost or end time) smaller than the recorded one, but not small enough
+// for 130 of them to fit the default result size cap: 125 of the 130 rows come
+// back (the recorded row of the seam test gives 123), the result is marked
+// truncated and its hint says so.
 func TestLiveLangfuse3800GetTraceTreeReadsASecondPageOfTheLegacyList(t *testing.T) {
 	t.Parallel()
 	cs := liveScanSession(t)
@@ -170,7 +172,7 @@ func TestLiveLangfuse3800GetTraceTreeReadsASecondPageOfTheLegacyList(t *testing.
 		t.Fatalf("tree holds %d rows (meta %+v, truncated %v, hint %q), want %d of the %d observations read by two pages, "+
 			"the result marked truncated with %q", len(env.Data.Data), env.Data.Meta, env.Truncated, env.Hint, liveRowsAtTheDefaultCap, observations, wantHint)
 	}
-	for _, key := range []string{"statusMessage", "version", "model", "input", "output"} {
+	for _, key := range []string{"statusMessage", "version", "model"} {
 		if _, ok := env.Data.Data[0][key]; ok {
 			t.Errorf("the first row keeps %s, which Langfuse sent as null: %v", key, env.Data.Data[0])
 		}

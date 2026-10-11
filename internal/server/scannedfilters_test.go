@@ -1,7 +1,6 @@
 package server_test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -547,23 +546,7 @@ func TestTwoClientsOfOneServerGetTheSameDescriptionWithTheSameScannedFilters(t *
 	profile := langfuse.DeploymentProfile{Version: "3.80.0", Families: []catalog.Family{catalog.LegacyFamily}}
 	srv := server.New(cat.Resolve(catalog.Profile{Version: profile.Version, Families: profile.Families}),
 		langfuse.New(testOptions(t, fake.URL)), slog.New(slog.DiscardHandler), server.Secrets{Keys: testKeys()}, profile)
-	clientOf := func() *mcp.ClientSession {
-		t.Helper()
-		ctx := context.Background()
-		serverTransport, clientTransport := mcp.NewInMemoryTransports()
-		ss, err := srv.Connect(ctx, serverTransport, nil)
-		if err != nil {
-			t.Fatalf("server connect: %v", err)
-		}
-		t.Cleanup(func() { _ = ss.Close() })
-		cs, err := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, nil).Connect(ctx, clientTransport, nil)
-		if err != nil {
-			t.Fatalf("client connect: %v", err)
-		}
-		t.Cleanup(func() { _ = cs.Close() })
-		return cs
-	}
-	first, second := clientOf(), clientOf()
+	first, second := connectClientTo(t, srv, nil), connectClientTo(t, srv, nil)
 
 	a, b, again := describeOn(t, first, "scores_get-many"), describeOn(t, second, "scores_get-many"), describeOn(t, first, "scores_get-many")
 

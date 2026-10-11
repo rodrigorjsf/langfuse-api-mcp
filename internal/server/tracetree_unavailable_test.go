@@ -320,27 +320,11 @@ func TestTheToolSetOfADeploymentWhereNeitherFamilyAnswersIsTheSameForEveryClient
 	p := noTraceReadsProfile
 	srv := server.New(resolvedFor(t, p), nil, slog.New(slog.DiscardHandler), server.Secrets{Keys: testKeys()},
 		langfuse.DeploymentProfile(p))
-	connectClientTo := func(opts *mcp.ClientOptions) *mcp.ClientSession {
-		t.Helper()
-		ctx := context.Background()
-		serverTransport, clientTransport := mcp.NewInMemoryTransports()
-		ss, err := srv.Connect(ctx, serverTransport, nil)
-		if err != nil {
-			t.Fatalf("server connect: %v", err)
-		}
-		t.Cleanup(func() { _ = ss.Close() }) // closing an already-closed session is harmless
-		cs, err := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, opts).Connect(ctx, clientTransport, nil)
-		if err != nil {
-			t.Fatalf("client connect: %v", err)
-		}
-		t.Cleanup(func() { _ = cs.Close() })
-		return cs
-	}
 	eliciting, _ := answering("accept")
-	plain := listedTools(t, connectClientTo(nil))
+	plain := listedTools(t, connectClientTo(t, srv, nil))
 
 	for name, opts := range map[string]*mcp.ClientOptions{"form elicitation": eliciting, "manual multi round-trip": manual()} {
-		if got := listedTools(t, connectClientTo(opts)); got != plain {
+		if got := listedTools(t, connectClientTo(t, srv, opts)); got != plain {
 			t.Errorf("the tool set of a client with %s differs from that of a plain client:\n%s\n%s", name, got, plain)
 		}
 	}
