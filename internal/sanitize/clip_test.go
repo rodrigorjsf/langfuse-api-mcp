@@ -332,7 +332,7 @@ func TestHintsNameOnlyTheRemediesTheOperationHas(t *testing.T) {
 		not      []string
 	}{
 		"none": {not: []string{"fields", "limit", "time window", "page"}},
-		"fields": {remedies: sanitize.Remedies{Fields: "core and io"}, want: []string{"fields"},
+		"fields": {remedies: sanitize.Remedies{FieldGroups: "core and io"}, want: []string{"fields"},
 			not: []string{"limit", "time window", "page"}},
 		"limit and page": {remedies: sanitize.Remedies{Limit: 100, Page: true}, want: []string{"limit"},
 			wantRows: []string{"page through the rest (page)"}, not: []string{"fields", "time window", "cursor"}},
@@ -380,16 +380,16 @@ func TestTheHintsNameTheFieldGroupsOfTheOperationInTheWordsThatAskForFewerOfThem
 		remedies sanitize.Remedies
 		want     string
 	}{
-		"fields alone": {sanitize.Remedies{Fields: groups},
+		"fields alone": {sanitize.Remedies{FieldGroups: groups},
 			"narrow the query: fewer field groups in fields (core, io, scores, observations and metrics)"},
-		"fields and limit": {sanitize.Remedies{Fields: groups, Limit: 100},
+		"fields and limit": {sanitize.Remedies{FieldGroups: groups, Limit: 100},
 			"narrow the query: fewer field groups in fields (core, io, scores, observations and metrics) or a lower limit"},
-		"fields and a time window": {sanitize.Remedies{Fields: groups, TimeWindow: true},
+		"fields and a time window": {sanitize.Remedies{FieldGroups: groups, TimeWindow: true},
 			"narrow the query: fewer field groups in fields (core, io, scores, observations and metrics) or a shorter time window"},
-		"all three": {sanitize.Remedies{Fields: groups, Limit: 100, TimeWindow: true},
+		"all three": {sanitize.Remedies{FieldGroups: groups, Limit: 100, TimeWindow: true},
 			"narrow the query: fewer field groups in fields (core, io, scores, observations and metrics), a lower limit or a shorter time window"},
 		"no fields": {sanitize.Remedies{Limit: 100, TimeWindow: true}, "narrow the query: a lower limit or a shorter time window"},
-		"one other group": {sanitize.Remedies{Fields: "score and trace"},
+		"one other group": {sanitize.Remedies{FieldGroups: "score and trace"},
 			"narrow the query: fewer field groups in fields (score and trace)"},
 	}
 	for name, tc := range tests {
@@ -409,7 +409,7 @@ func TestTheHintsNameTheFieldGroupsOfTheOperationInTheWordsThatAskForFewerOfThem
 func TestFieldsWayNamesTheGroupsAndIsEmptyForAnOperationWithoutFields(t *testing.T) {
 	t.Parallel()
 
-	if got, want := (sanitize.Remedies{Fields: "details, subject and annotation"}).FieldsWay(),
+	if got, want := (sanitize.Remedies{FieldGroups: "details, subject and annotation"}).FieldsWay(),
 		"fewer field groups in fields (details, subject and annotation)"; got != want {
 		t.Errorf("FieldsWay = %q, want %q", got, want)
 	}
@@ -440,7 +440,7 @@ func TestPagingWaysNameOnlyTheParametersTheOperationHas(t *testing.T) {
 		"page":    {sanitize.Remedies{Page: true}, "page", "page through the rest (page)"},
 		"cursor":  {sanitize.Remedies{Cursor: true}, "cursor from meta.cursor", "page through the rest (cursor from meta.cursor)"},
 		"both":    {sanitize.Remedies{Page: true, Cursor: true}, "page, or cursor from meta.cursor", "page through the rest (page, or cursor from meta.cursor)"},
-		"neither": {sanitize.Remedies{Limit: 100, Fields: "core and io", TimeWindow: true}, "", ""},
+		"neither": {sanitize.Remedies{Limit: 100, FieldGroups: "core and io", TimeWindow: true}, "", ""},
 	}
 	for name, tc := range tests {
 		if got := tc.remedies.PagingWays(); got != tc.ways {
@@ -492,7 +492,7 @@ func TestTheMarkerAndTheHintAreStaticWhateverThePayloadSays(t *testing.T) {
 	t.Parallel()
 	hintOf := func(injected string) (string, string) {
 		payload := payloadOf(t, map[string]any{"input": injected + strings.Repeat("x", 40000)})
-		env := sanitize.Wrap("trace_get", payload, 16384, sanitize.Remedies{Fields: "core and io"})
+		env := sanitize.Wrap("trace_get", payload, 16384, sanitize.Remedies{FieldGroups: "core and io"})
 		got, _ := objectOf(t, env)["input"].(string)
 		return env.Hint, got[len(got)-len(clipped):]
 	}

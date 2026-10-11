@@ -228,6 +228,15 @@ func (o Operation) HasQueryParam(name string) bool {
 	return slices.ContainsFunc(o.Params, func(p Param) bool { return p.In == "query" && p.Name == name })
 }
 
+// WithoutQueryParam returns the operation as if the deployment did not serve the
+// query parameter called name, for a tool that wraps the operation but takes no
+// such argument (the hints of its failures must not recommend it). The
+// operation itself is unchanged.
+func (o Operation) WithoutQueryParam(name string) Operation {
+	o.Params = slices.DeleteFunc(slices.Clone(o.Params), func(p Param) bool { return p.In == "query" && p.Name == name })
+	return o
+}
+
 // HasTimeFilter reports whether the operation takes a query parameter that
 // bounds time (the spec gives it the format date-time), which narrows what a
 // list returns.

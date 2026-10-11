@@ -235,3 +235,24 @@ func guidedParameters(cat catalog.Catalog) []string {
 	slices.Sort(got)
 	return got
 }
+
+// A view of an operation without one query parameter serves nothing of it: the
+// hints of a tool that wraps the operation but takes no such argument are built
+// from it (#194). The operation it was made from is unchanged.
+func TestAnOperationWithoutAQueryParameterServesNoneOfItAndKeepsTheOthers(t *testing.T) {
+	t.Parallel()
+	op, ok := mustLoad(t).Lookup("trace_list")
+	if !ok {
+		t.Fatal("trace_list is not in the catalog")
+	}
+
+	view := op.WithoutQueryParam("fields")
+
+	if view.HasQueryParam("fields") || view.FieldGroups() != "" || !view.HasQueryParam("limit") || !view.HasQueryParam("page") {
+		t.Errorf("view serves fields %v (groups %q), limit %v, page %v; want no fields and the others kept",
+			view.HasQueryParam("fields"), view.FieldGroups(), view.HasQueryParam("limit"), view.HasQueryParam("page"))
+	}
+	if !op.HasQueryParam("fields") || op.FieldGroups() == "" {
+		t.Error("the operation the view was made from lost its fields parameter")
+	}
+}

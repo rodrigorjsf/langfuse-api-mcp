@@ -47,9 +47,11 @@ var fieldsGuides = map[string]fieldsGuide{
 	// trace_get (3.166.0) has the same text in the release specs.
 	"trace_list": traceFieldsGuide("rows", "row"),
 	"trace_get":  traceFieldsGuide("the trace", "trace"),
-	// Observations v2 (3.141.0): core is always included, and a field of a
-	// group that was not asked for is absent, not null (docs/research/langfuse.md,
-	// section 1.5). trace_context came with 3.175.0.
+	// Observations v2 (3.141.0): core is always included, and basic holds name,
+	// level and statusMessage, so core alone has no name (docs/research/langfuse.md,
+	// section 1.5). The text does not say that a field of a group not asked for is
+	// absent: a few (modelId, the prices) are present as null. trace_context came
+	// with 3.175.0.
 	"observations_getMany": {
 		lead: "Comma-separated field groups to return",
 		groups: []fieldGroup{
@@ -64,8 +66,8 @@ var fieldsGuides = map[string]fieldsGuide{
 			{name: "metrics"},
 			{name: "trace_context", since: "3.175.0"},
 		},
-		tail: "; for example core,basic,usage. Without fields core and basic are returned. A field of a group that was " +
-			"not asked for is absent from the row, not null: with core alone a row has no name.",
+		tail: "; for example core,basic,usage. Without fields core and basic are returned. Ask for every group that holds " +
+			"a field you need: with core alone a row has no name.",
 	},
 	// Scores v2 (3.144.0): sessionId joined the trace properties in 3.156.0,
 	// which the guidance leaves to "such as". The 400 is in the spec of every

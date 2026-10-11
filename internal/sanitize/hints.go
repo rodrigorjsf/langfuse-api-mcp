@@ -9,10 +9,10 @@ import (
 // the truncation hint names only these, so that it never sends the agent to a
 // parameter the operation lacks.
 type Remedies struct {
-	// Fields names the field groups of the operation's fields parameter ("core,
-	// io and metrics"); "" when the operation does not take it. The hints name
-	// the groups, from the same compiled source as the guidance (#194).
-	Fields string
+	// FieldGroups names the field groups of the operation's fields parameter, as
+	// text ("core, io and metrics"); "" when the operation does not take it. The
+	// hints name the groups, from the same compiled source as the guidance (#194).
+	FieldGroups string
 	// Limit is the largest page size the operation accepts; 0 when it takes
 	// none.
 	Limit int
@@ -54,10 +54,10 @@ func (r Remedies) PagingWays() string {
 // it, so that none sends the agent to a parameter the operation lacks and none
 // names groups the guidance does not (#194).
 func (r Remedies) FieldsWay() string {
-	if r.Fields == "" {
+	if r.FieldGroups == "" {
 		return ""
 	}
-	return "fewer field groups in fields (" + r.Fields + ")"
+	return "fewer field groups in fields (" + r.FieldGroups + ")"
 }
 
 // JoinWays writes the ways to narrow a query as one alternative: "a", "a or b",

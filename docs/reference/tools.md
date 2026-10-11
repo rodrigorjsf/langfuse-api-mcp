@@ -80,7 +80,7 @@ Seven operations take a `fields` parameter that selects which groups of fields a
 |---|---|---|---|---|
 | `trace_list` | 3.73.0 | `core` (always), `io` (input, output, metadata), `scores`, `observations`, `metrics` | every group | a group left out comes back empty: `scores` and `observations` as empty lists, `metrics` as `-1` for `totalCost` and `latency` |
 | `trace_get` | 3.166.0 | the same | every group | the same |
-| `observations_getMany` | 3.141.0 | `core` (always), `basic`, `time`, `io`, `metadata`, `model`, `usage`, `prompt`, `metrics`; `trace_context` from 3.175.0 | `core` and `basic` | a field of a group that was not asked for is absent, not null; `core` alone has no `name` |
+| `observations_getMany` | 3.141.0 | `core` (always), `basic`, `time`, `io`, `metadata`, `model`, `usage`, `prompt`, `metrics`; `trace_context` from 3.175.0 | `core` and `basic` | ask for every group that holds a field you need: a row with `core` alone has no `name` |
 | `scores_get-many` | 3.144.0 | `score`, `trace` | both | a call that filters by `userId` or `traceTags` must keep `trace`, or Langfuse answers 400 |
 | `scoresV3_getManyV3` | 3.179.0 | `details`, `subject`, `annotation`, added to the core fields that are always returned | the core fields only | an unknown group is answered 400; `core` is not a value to send |
 | `experiments_list` | 3.206.0 | `core`, `metadata`, `scores` | `core` | |

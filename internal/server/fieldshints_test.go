@@ -32,6 +32,13 @@ const (
 	itemsGroups        = "core, dataset, io, metadata, itemMetadata, experimentMetadata and scores"
 )
 
+// fieldGroupsInHints is the groups each operation with fields names in a hint.
+var fieldGroupsInHints = map[string]string{
+	"trace_list": traceGroups, "trace_get": traceGroups, "observations_getMany": observationsGroups,
+	"scores_get-many": scoresGroups, "scoresV3_getManyV3": scoresV3Groups,
+	"experiments_list": experimentsGroups, "experiments_listItems": itemsGroups,
+}
+
 // paramsFor are the parameters a call of the operation needs to be valid.
 func paramsFor(operationID string) map[string]any {
 	switch operationID {
@@ -258,8 +265,8 @@ func TestNoHintRecommendsFieldsForAnOperationThatDoesNotServeThemOnTheDeployment
 					t.Errorf("%s: the %s hint of %s names fields: %v, the operation serves them: %v (%q)",
 						name, what, op.ID, got, serves, hint)
 				}
-				if serves && !strings.Contains(hint, "("+op.FieldGroups()+")") {
-					t.Errorf("%s: the %s hint of %s does not name the groups %q: %q", name, what, op.ID, op.FieldGroups(), hint)
+				if want := fieldGroupsInHints[op.ID]; serves && !strings.Contains(hint, "("+want+")") {
+					t.Errorf("%s: the %s hint of %s does not name the groups %q: %q", name, what, op.ID, want, hint)
 				}
 			}
 		}

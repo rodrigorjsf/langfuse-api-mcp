@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"slices"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -209,7 +208,10 @@ func (ex executor) getTraceTree(ctx context.Context, req *mcp.CallToolRequest, a
 	tree, err := src.read(ctx, ex.client, ex.redact, in.traceID, in.include)
 	a.requests, a.status, a.bytes = tree.Requests, tree.Status, tree.Bytes
 	if err != nil {
-		op := withoutFieldsParam(ex.catalogOperation(src))
+		// The tool takes no fields argument, so no hint of its failures may recommend
+		// fields, whatever the operation it reads serves (#194). The other words of
+		// those hints are #203's.
+		op := ex.catalogOperation(src).WithoutQueryParam("fields")
 		if f, ok := langfuseErrorFields(err, op, ex.redact, ex.profile); ok {
 			a.status = f.HTTPStatus
 			return errorResult(f)
@@ -251,17 +253,6 @@ func (ex executor) traceTreeUnavailable() toolErrorFields {
 		Hint:        unavailableHintWith(use, ex.profile),
 		OperationID: workflows.ObservationsOperationID,
 	}
-}
-
-// withoutFieldsParam returns op as the hints of a failed trace tree see it: the
-// tool takes no fields argument, so no hint of its failures may recommend
-// fields, whatever the operation it reads serves (#194). The other words of
-// those hints are #203's.
-func withoutFieldsParam(op catalog.Operation) catalog.Operation {
-	op.Params = slices.DeleteFunc(slices.Clone(op.Params), func(p catalog.Param) bool {
-		return p.In == "query" && p.Name == "fields"
-	})
-	return op
 }
 
 // catalogOperation returns the catalog operation the trace tree of src reads,

@@ -442,10 +442,10 @@ func (ex executor) run(ctx context.Context, op catalog.Operation, request catalo
 // deployment that does not serve fields is never told to use it).
 func remediesOf(op catalog.Operation) sanitize.Remedies {
 	r := sanitize.Remedies{
-		Fields:     op.FieldGroups(),
-		TimeWindow: op.HasTimeFilter(),
-		Page:       op.HasQueryParam("page"),
-		Cursor:     op.HasQueryParam("cursor"),
+		FieldGroups: op.FieldGroups(),
+		TimeWindow:  op.HasTimeFilter(),
+		Page:        op.HasQueryParam("page"),
+		Cursor:      op.HasQueryParam("cursor"),
 	}
 	if op.IsRead() && op.HasQueryParam("limit") {
 		r.Limit = catalog.MaxLimit
