@@ -27,17 +27,80 @@ const minTokenLength = 16
 // valid JSON.
 const valueChar = "[!#-&(-\\[\\]-_a-~]"
 
-// headerPattern matches a credential sent in a header: the text from the start
-// of "Authorization: <scheme> " or "Bearer " up to a token of minTokenLength
-// characters or more. The first group is what stays, the scheme word with it;
-// the token that follows is what Redact replaces. The keywords ignore case;
-// the token does not, because folding a character class would admit
-// look-alike letters such as the Kelvin sign. It sees one string at a time, so
-// the value of a JSON header map under an Authorization key is taken only when
-// it starts with Bearer (#196).
+// scheme is the word before the token of a credential: a letter, then letters,
+// digits and _ . + -.
+const scheme = "[A-Za-z][A-Za-z0-9_.+-]*"
+
+// quote is a quote of a quoted name or value, written as itself or as a JSON
+// escape (one or more backslashes before it): the JSON text of a header map
+// that was itself put in a JSON string has its quotes escaped, once or more.
+// The single quote is that of a Python dictionary printed as text.
+const quote = `\\*["']`
+
+// quotedName is the name rule (isAuthorizationName) as it reads between
+// quotes: "authorization", or any text that ends in it after a character that
+// is not an ASCII letter or digit, blanks allowed around it. The text cannot
+// hold a quote or a backslash, which end it.
+const quotedName = `[ \t]*(?:[^"'\\]*[^A-Za-z0-9"'\\])?(?i:authorization)[ \t]*`
+
+// headerPattern matches a credential sent in a header, in three forms, up to a
+// token of minTokenLength characters or more. The first group is what stays,
+// the scheme word with it; the token that follows is what Redact replaces:
+//   - the plain form (#180), "Authorization: <scheme> ", the word at the start
+//     of the text or after a character that is not an ASCII letter or digit;
+//   - "Bearer ", the word at the start of a word;
+//   - the quoted form (#196), a quoted name that counts, a colon and a quoted
+//     value "<scheme> <token>", the value alone or the first item of a list:
+//     the JSON text of a header map, escaped or not, or its Python form.
+//
+// The keywords ignore case; the token does not, because folding a character
+// class would admit look-alike letters such as the Kelvin sign. The pattern
+// sees one string at a time: the value of a JSON header map that is an object
+// of a payload is the business of redactHeaderValue.
 var headerPattern = regexp.MustCompile(
-	`(\b(?i:authorization)[ \t]*:[ \t]*[A-Za-z][A-Za-z0-9_.+-]*[ \t]+|\b(?i:bearer)[ \t]+)` +
+	`((?:^|[^A-Za-z0-9])(?i:authorization)[ \t]*:[ \t]*` + scheme + `[ \t]+` +
+		`|\b(?i:bearer)[ \t]+` +
+		`|` + quote + quotedName + quote + `[ \t]*:[ \t]*(?:\[[ \t]*)?` + quote + `[ \t]*` + scheme + `[ \t]+)` +
 		valueChar + `{` + strconv.Itoa(minTokenLength) + `,}`)
+
+// headerValuePattern matches the value of a member of a header map: blanks, a
+// scheme, blanks and a token of minTokenLength characters or more (#196). The
+// first group is what stays.
+var headerValuePattern = regexp.MustCompile(
+	`^([ \t]*` + scheme + `[ \t]+)` + valueChar + `{` + strconv.Itoa(minTokenLength) + `,}`)
+
+// authorizationWord is the word the name rule looks for, in lower case.
+const authorizationWord = "authorization"
+
+// isAuthorizationName is the name rule (#196): whether name, with invisible
+// and control characters stripped, surrounding blanks dropped and case
+// ignored, is "authorization" or ends in it after a character that is not an
+// ASCII letter or digit: Authorization, Proxy-Authorization,
+// http.request.header.authorization, HTTP_AUTHORIZATION. A name that only
+// holds the word (authorizationMode, reauthorization) does not count. The
+// rule is compiled in: no payload or argument changes it. EqualFold is safe
+// here: the word has no k or s, the only letters with a non-ASCII look-alike
+// under Unicode folding.
+func isAuthorizationName(name string) bool {
+	name = strings.Trim(Text(name), " \t\r\n")
+	start := len(name) - len(authorizationWord)
+	if start < 0 || !strings.EqualFold(name[start:], authorizationWord) {
+		return false
+	}
+	return start == 0 || !isASCIIAlnum(name[start-1])
+}
+
+// isASCIIAlnum reports whether c is an ASCII letter or digit.
+func isASCIIAlnum(c byte) bool {
+	return c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+}
+
+// redactHeaderValue returns s, the value of a header map under an
+// Authorization name, with the token of "<scheme> <token>" replaced by
+// Redacted; a value of another shape comes back as it was.
+func redactHeaderValue(s string) string {
+	return headerValuePattern.ReplaceAllString(s, "${1}"+Redacted)
+}
 
 // Redactor replaces secrets in text shown to the agent or written to a log.
 // The zero Redactor still redacts every Langfuse API key.
@@ -55,7 +118,9 @@ func NewRedactor(secrets ...string) Redactor {
 }
 
 // Redact returns s with every secret of r, every Langfuse API key and the
-// token of every Authorization or Bearer header replaced by Redacted. A secret
+// token of every Authorization or Bearer header replaced by Redacted: a header
+// written "Authorization: <scheme> <token>", "Bearer <token>", or as the
+// quoted name and value of a header map (headerPattern). A secret
 // split by an invisible or control character is found without it, and the
 // characters Text drops are dropped from the result then; a text with no
 // secret comes back as it was.

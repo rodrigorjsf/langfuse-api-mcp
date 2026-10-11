@@ -47,6 +47,14 @@ func plantedCredentials() map[string]plantedCredential {
 			redacted: "Bearer [REDACTED]"},
 		"an Authorization header of another scheme": {text: "authorization: Basic " + otherBearerToken, token: otherBearerToken,
 			redacted: "authorization: Basic [REDACTED]"},
+		// The header map forms of #196. The map with double quotes needs
+		// escaping wherever it is echoed in a message: it has its own tests.
+		"a header map written as a Python dictionary": {text: "{'Authorization': 'Basic " + otherBearerToken + "'}",
+			token: otherBearerToken, redacted: "{'Authorization': 'Basic [REDACTED]'}"},
+		"a header map with a list value": {text: "{'Proxy-Authorization': ['Digest " + otherBearerToken + "']}",
+			token: otherBearerToken, redacted: "{'Proxy-Authorization': ['Digest [REDACTED]']}"},
+		"a server-side header name": {text: "HTTP_AUTHORIZATION: Negotiate " + otherBearerToken,
+			token: otherBearerToken, redacted: "HTTP_AUTHORIZATION: Negotiate [REDACTED]"},
 	}
 }
 
@@ -400,43 +408,51 @@ func TestTheAuditLineNamesAnOperationIDHoldingAHeaderRedactedWithItsSchemeKept(t
 
 func TestTheHintOfEveryRefusalAndFailureHoldsNoCredentialTheCallCarried(t *testing.T) {
 	t.Parallel()
-	const header = otherBearerHeader
-	tests := map[string]struct {
-		status int
-		body   string
-		args   map[string]any
-	}{
-		"an unknown operation ID": {args: map[string]any{"operationId": header}},
-		"an unknown parameter":    {args: map[string]any{"operationId": "trace_list", "parameters": map[string]any{header: "x"}}},
-		"a Folder name not found": {status: http.StatusNotFound, body: `{"message":"` + header + `"}`,
-			args: map[string]any{"operationId": "prompts_get", "parameters": map[string]any{"promptName": "a/" + header[:10]}}},
-		"a bad request":                     {status: http.StatusBadRequest, body: `{"message":"` + header + `"}`, args: traceList},
-		"a server failure":                  {status: http.StatusInternalServerError, body: `{"message":"` + header + `"}`, args: traceList},
-		"a rate limit":                      {status: http.StatusTooManyRequests, body: `{"message":"` + header + `"}`, args: traceList},
-		"a result over the result size cap": {status: http.StatusOK, body: bearerPayload(t, strings.Repeat(header+" ", 9000)), args: traceList},
-		"a one-row result": {status: http.StatusOK, body: bearerPayload(t, header),
-			args: map[string]any{"operationId": "trace_list", "parameters": map[string]any{"limit": 1}}},
-	}
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			fake := idleLangfuse(t)
-			if tc.body != "" {
-				fake, _ = fakeLangfuse(t, cmp.Or(tc.status, http.StatusOK), tc.body)
-			}
-			cs, logs := connectLogged(t, fake, server.WithMaxResultBytes(16384))
+	// The header map forms of #196 are among the planted credentials: the
+	// JSON text of a map, written as a quoted name and value.
+	for form, header := range map[string]string{
+		"an Authorization header": otherBearerHeader,
+		"a JSON header map":       `{"Authorization": "Basic ` + otherBearerToken + `"}`,
+		"a Python header map":     `{'Authorization': 'Basic ` + otherBearerToken + `'}`,
+	} {
+		message := jsonOf(t, map[string]string{"message": header})
+		tests := map[string]struct {
+			status int
+			body   string
+			args   map[string]any
+		}{
+			"an unknown operation ID": {args: map[string]any{"operationId": header}},
+			"an unknown parameter":    {args: map[string]any{"operationId": "trace_list", "parameters": map[string]any{header: "x"}}},
+			"a Folder name not found": {status: http.StatusNotFound, body: message,
+				args: map[string]any{"operationId": "prompts_get", "parameters": map[string]any{"promptName": "a/" + header[:10]}}},
+			"a bad request":                     {status: http.StatusBadRequest, body: message, args: traceList},
+			"a server failure":                  {status: http.StatusInternalServerError, body: message, args: traceList},
+			"a rate limit":                      {status: http.StatusTooManyRequests, body: message, args: traceList},
+			"a result over the result size cap": {status: http.StatusOK, body: bearerPayload(t, strings.Repeat(header+" ", 9000)), args: traceList},
+			"a one-row result": {status: http.StatusOK, body: bearerPayload(t, header),
+				args: map[string]any{"operationId": "trace_list", "parameters": map[string]any{"limit": 1}}},
+		}
+		for name, tc := range tests {
+			t.Run(form+" "+name, func(t *testing.T) {
+				t.Parallel()
+				fake := idleLangfuse(t)
+				if tc.body != "" {
+					fake, _ = fakeLangfuse(t, cmp.Or(tc.status, http.StatusOK), tc.body)
+				}
+				cs, logs := connectLogged(t, fake, server.WithMaxResultBytes(16384))
 
-			res := callExecuteRead(t, cs, tc.args)
+				res := callExecuteRead(t, cs, tc.args)
 
-			assertNoToken(t, res, logs, otherBearerToken)
-			var env clippedEnvelope
-			if err := json.Unmarshal([]byte(resultText(t, res)), &env); err != nil {
-				t.Fatalf("result is not JSON: %v", err)
-			}
-			if leak, ok := bearerPartOf(otherBearerToken, env.Hint); ok {
-				t.Errorf("the hint carries %q of the token: %s", leak, env.Hint)
-			}
-		})
+				assertNoToken(t, res, logs, otherBearerToken)
+				var env clippedEnvelope
+				if err := json.Unmarshal([]byte(resultText(t, res)), &env); err != nil {
+					t.Fatalf("result is not JSON: %v", err)
+				}
+				if leak, ok := bearerPartOf(otherBearerToken, env.Hint); ok {
+					t.Errorf("the hint carries %q of the token: %s", leak, env.Hint)
+				}
+			})
+		}
 	}
 }
 

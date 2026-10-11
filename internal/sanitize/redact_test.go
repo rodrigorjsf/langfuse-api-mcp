@@ -226,6 +226,11 @@ func FuzzRedact(f *testing.F) {
 	f.Add("Authorization: Bearer\nabcdefghijklmnopqrstuvwxyz")
 	f.Add("{\"k\":\"x\u009b\",\"s\":\"sk-lf-abc\u009b1m\\n\"}") // a raw single-character CSI beside a quote
 	f.Add("sk-lf-abc\x1b[31mdef Bearer \x1b]8;;u\x07abcdefghijklmnopqrstuvwxyz")
+	f.Add(`{"headers": {"Authorization": "Basic dXNlcjpwYXNzd29yZDEyMzQ1Njc4"}}`)
+	f.Add(`{\"Authorization\": [\"Basic dXNlcjpwYXNzd29yZDEyMzQ1Njc4\"], \"n\": 1}`)
+	f.Add(`{'Proxy-Authorization': 'Digest dXNlcjpwYXNzd29yZDEyMzQ1Njc4'}`)
+	f.Add("HTTP_AUTHORIZATION: Basic dXNlcjpwYXNzd29yZDEyMzQ1Njc4 \"x authorization\": \"Token abcdefghijklmnop\"")
+	f.Add(`{"Authorization": "Basic [REDACTED]abcdefghijklmnop", "x": ["Authorization": 'Bearer abcdefghijklmnopq']}`)
 	r := sanitize.NewRedactor("hunter2-hunter2")
 	f.Fuzz(func(t *testing.T, s string) {
 		once := r.Redact(s)
@@ -241,13 +246,20 @@ func FuzzRedact(f *testing.F) {
 // BenchmarkRedact is the evidence for the fast paths of Redact (#180): the
 // scan for the two keywords and the plain-text test of Text. On the machine
 // the numbers were taken on (i7-10700K, go1.27.1), 64 KiB of ASCII JSON took
-// 0.13 ms; before the two fast paths it took 3.7 ms (the pattern run on every
+// 0.14 ms; before the two fast paths it took 3.7 ms (the pattern run on every
 // text, the cleaning scan by rune on every text). 64 KiB with non-ASCII
-// letters takes 0.93 ms, the cost of cleaning it by rune.
+// letters takes 1.0 ms, the cost of cleaning it by rune. Text that names a
+// header, so that the pattern runs over all of it, took 3.0 ms before the
+// quoted form and the name rule of #196 and takes 8.6 ms now (a header map:
+// 2.7 ms before, 8.2 ms now); the text with no header name is unchanged.
 func BenchmarkRedact(b *testing.B) {
 	for name, input := range map[string]string{
 		"ASCII":     `{"name":"checkout-flow","input":"the user asked about authorisation of a bearish, ok","n":12345},`,
 		"non-ASCII": `{"name":"checkout-flow","input":"o usuário perguntou sobre autorização de um portador, ok","n":12345},`,
+		// Text that names the header and holds no credential: the keyword scan
+		// passes, so the pattern runs over every byte of it (#196).
+		"mentions the header": `{"name":"checkout-flow","input":"the Authorization header is required, send Basic or Bearer auth","n":12345},`,
+		"a header map":        `{"name":"checkout-flow","headers":{"Authorization":"Basic dXNlcjpwYXNzd29yZDEyMzQ1Njc4"},"n":12345},`,
 	} {
 		text := strings.Repeat(input, 64<<10/len(input)+1)
 		b.Run(name, func(b *testing.B) {
