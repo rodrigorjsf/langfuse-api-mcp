@@ -58,26 +58,28 @@ func walkForBans(v any, at string) []string {
 	return found
 }
 
+// The walk covers every stored body of every in-scope write operation, those
+// of older releases too (#202): a deployment of that release is checked against
+// them.
 func TestNoInScopeWriteBodySchemaForbidsAnUnknownKey(t *testing.T) {
 	t.Parallel()
 	bodies := 0
-	for _, op := range mustLoad(t).Operations() {
-		if op.Body == nil {
-			continue
-		}
-		bodies++
-		var schema any
-		if err := json.Unmarshal(op.Body.Schema, &schema); err != nil {
-			t.Fatalf("%s body schema: %v", op.ID, err)
-		}
-		for _, at := range unknownKeyBans(schema) {
-			t.Errorf("operation %s forbids unknown body keys at %q: a misspelled key is now refused there, "+
-				"so update the known limit in docs/reference/tools.md and docs/reference/security-model.md, "+
-				"then this test", op.ID, at)
+	for key, stored := range mustLoad(t).StoredBodies() {
+		for i, body := range stored {
+			bodies++
+			var schema any
+			if err := json.Unmarshal(body.Schema, &schema); err != nil {
+				t.Fatalf("%s body %d schema: %v", key, i, err)
+			}
+			for _, at := range unknownKeyBans(schema) {
+				t.Errorf("operation %s forbids unknown body keys at %q (body %d of %d): a misspelled key is now refused there, "+
+					"so update the known limit in docs/reference/tools.md and docs/reference/security-model.md, "+
+					"then this test", key, at, i+1, len(stored))
+			}
 		}
 	}
-	if bodies < 20 {
-		t.Fatalf("the walk saw %d write bodies, want the whole catalog's (at least 20)", bodies)
+	if bodies < 76 {
+		t.Fatalf("the walk saw %d stored write bodies, want the whole catalog's history (at least 76)", bodies)
 	}
 }
 

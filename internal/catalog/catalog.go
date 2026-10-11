@@ -64,6 +64,9 @@ var excluded = []string{
 type Catalog struct {
 	union union
 	byID  map[string]Operation
+	// bodyErr is why the body of an operation byID offers does not compile,
+	// nil when every one does (BodyError).
+	bodyErr error
 }
 
 // Operation is one method+path pair of the Langfuse public API.
@@ -103,7 +106,9 @@ type Operation struct {
 	// Family is the operation family the deployment's migration mode gates
 	// the operation by (ADR-0012 §2); empty when no mode gates it.
 	Family Family
-	// Body is the operation's JSON request body; nil when it takes none.
+	// Body is the operation's JSON request body for the deployment's version
+	// (Resolve, #202); nil when that version takes none. Before the catalog is
+	// resolved for a deployment it is the newest release's.
 	Body *RequestBody
 	// prefers is the ID of the operation the union catalog's summary names as
 	// the one to prefer over this one ("legacy: prefer X when it is
@@ -114,7 +119,7 @@ type Operation struct {
 }
 
 // RequestBody is the JSON request body of a write operation, from the release
-// spec the operation was taken from (#81). CheckBody, the body gate of
+// spec of the deployment's version (#81, #202). CheckBody, the body gate of
 // execute_write, checks a body against it.
 type RequestBody struct {
 	// Required reports whether the operation needs a body.
@@ -123,8 +128,8 @@ type RequestBody struct {
 	// generator converts the release spec's OpenAPI 3.0 dialect (#111). It is
 	// third-party text, so every string in it is cleaned of hidden characters.
 	Schema json.RawMessage
-	// compiled is Schema compiled once, when the catalog loads (#112);
-	// CheckBody validates a body against it. Shared read-only.
+	// compiled is Schema compiled once (#112); CheckBody validates a body
+	// against it. Nil when Schema does not compile (BodyError). Shared read-only.
 	compiled *jsonschema.Resolved
 }
 
@@ -223,12 +228,12 @@ func load(spec []byte) (Catalog, error) {
 				Introduced  string   `json:"x-introduced"`
 				Removed     string   `json:"x-removed"`
 				Family      Family   `json:"x-family"`
-				RequestBody *struct {
-					Required bool `json:"required"`
-					Content  map[string]struct {
-						Schema json.RawMessage `json:"schema"`
-					} `json:"content"`
-				} `json:"requestBody"`
+				// RequestBody is the one body of a plain OpenAPI spec;
+				// RequestBodies are the union catalog's: every distinct body
+				// the release specs gave the operation, with its releases (#202).
+				RequestBody    *bodyDocument  `json:"requestBody"`
+				RequestBodies  []bodyDocument `json:"x-request-bodies"`
+				NewestBodyOnly bool           `json:"x-newest-body-only"`
 			}
 			if err := json.Unmarshal(raw, &op); err != nil {
 				return Catalog{}, fmt.Errorf("embedded union catalog: %s %s: %w", m, path, err)
@@ -246,20 +251,9 @@ func load(spec []byte) (Catalog, error) {
 				ID: op.OperationID, Method: m, Path: path, Params: op.Parameters,
 				Introduced: op.Introduced, Removed: op.Removed, Family: op.Family,
 			}
-			if op.RequestBody != nil {
-				content := op.RequestBody.Content["application/json"]
-				if len(op.RequestBody.Content) != 1 || len(content.Schema) == 0 {
-					return Catalog{}, fmt.Errorf("embedded union catalog: %s: request body is not a single JSON schema", o.ID)
-				}
-				schema, err := cleanSchema(content.Schema)
-				if err != nil {
-					return Catalog{}, fmt.Errorf("embedded union catalog: %s request body: %w", o.ID, err)
-				}
-				compiled, err := compileSchema(schema)
-				if err != nil {
-					return Catalog{}, fmt.Errorf("embedded union catalog: %s request body: %w", o.ID, err)
-				}
-				o.Body = &RequestBody{Required: op.RequestBody.Required, Schema: schema, compiled: compiled}
+			bodies, err := storeBodies(o.ID, op.RequestBody, op.RequestBodies, op.NewestBodyOnly)
+			if err != nil {
+				return Catalog{}, fmt.Errorf("embedded union catalog: %w", err)
 			}
 			r, err := rangeOf(o)
 			if err != nil {
@@ -288,10 +282,16 @@ func load(spec []byte) (Catalog, error) {
 					o.Params[i].Schema.Minimum = new(float64(1))
 				}
 			}
-			u.ops = append(u.ops, rangedOperation{Operation: o, span: r, paramSpans: paramSpans})
+			u.ops = append(u.ops, rangedOperation{Operation: o, span: r, paramSpans: paramSpans, bodies: bodies})
 		}
 	}
-	return Catalog{union: u}.Resolve(Profile{Families: AllFamilies()}), nil
+	// A version not detected resolves the newest body of every operation: a
+	// schema that does not compile stops the load.
+	c := Catalog{union: u}.Resolve(Profile{Families: AllFamilies()})
+	if err := c.BodyError(); err != nil {
+		return Catalog{}, fmt.Errorf("embedded union catalog: %w", err)
+	}
+	return c, nil
 }
 
 // maxIndexLineRunes bounds an operation's line in the operation index.

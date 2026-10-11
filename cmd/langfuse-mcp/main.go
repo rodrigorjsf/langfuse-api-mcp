@@ -160,6 +160,12 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 	detection := detectProfile(log, client)
 	profile := detection.Profile
 	resolved := cat.Resolve(catalogProfile(profile))
+	// The request body of each operation is the one of the detected version: a
+	// schema that does not compile stops startup, so no body is checked against
+	// nothing (#202).
+	if err := resolved.BodyError(); err != nil {
+		return app{}, err
+	}
 	logProfile(log, detection, len(resolved.Operations()))
 	reported := reportedVersion(version, moduleVersion())
 	// The cap is the operator's: config validated its range; no tool argument reaches it.

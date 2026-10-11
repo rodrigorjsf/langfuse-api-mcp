@@ -50,6 +50,10 @@ type Profile struct {
 // known one, whose spec lists the parameters no later release removed. The
 // operation's other parameters stay known to Request, which refuses them
 // naming the release that serves them.
+//
+// Each kept operation has the request body of the same version (#202): the
+// stored body whose releases hold it, none when that release took no body. The
+// bodies the version does not choose are neither compiled nor offered.
 func (c Catalog) Resolve(p Profile) Catalog {
 	u := c.union
 	at, known := parseVersion(p.Version)
@@ -80,8 +84,13 @@ func (c Catalog) Resolve(p Profile) Catalog {
 		byID[op.ID] = op
 	}
 	out := Catalog{union: u, byID: make(map[string]Operation, len(byID))}
+	bodyErrs := map[string]error{}
 	for id, op := range byID {
 		o := op.withServedParams(paramVersion, deployment)
+		var err error
+		if o.Body, err = op.bodyAt(paramVersion); err != nil {
+			bodyErrs[id] = err
+		}
 		if _, offered := byID[o.prefers]; o.prefers != "" && !offered {
 			// The line must not send the agent to an operation this catalog
 			// does not offer.
@@ -89,6 +98,7 @@ func (c Catalog) Resolve(p Profile) Catalog {
 		}
 		out.byID[id] = o
 	}
+	out.bodyErr = joinBodyErrors(bodyErrs)
 	return out
 }
 
@@ -145,12 +155,15 @@ type union struct {
 	newest version
 }
 
-// rangedOperation is an operation and its parsed version range, and the ranges
-// of its parameters, in the order of Operation.Params.
+// rangedOperation is an operation and its parsed version range, the ranges of
+// its parameters, in the order of Operation.Params, and its request bodies.
 type rangedOperation struct {
 	Operation
 	span       span
 	paramSpans []span
+	// bodies are the operation's distinct request bodies, none when it takes
+	// none in any release (#202). Operation.Body is nil until Resolve.
+	bodies []*storedBody
 }
 
 // withServedParams returns the operation with the parameters version v serves in

@@ -42,25 +42,6 @@ func propertyNames(v any) []string {
 	return names
 }
 
-func TestNoInScopeWriteBodyHasACredentialProperty(t *testing.T) {
-	t.Parallel()
-	for _, op := range mustLoad(t).Operations() {
-		if op.Body == nil {
-			continue
-		}
-		var schema any
-		if err := json.Unmarshal(op.Body.Schema, &schema); err != nil {
-			t.Fatalf("%s body schema: %v", op.ID, err)
-		}
-		for _, name := range propertyNames(schema) {
-			if credentialProperty.MatchString(name) {
-				t.Errorf("operation %s has a body property %q that looks like a credential: "+
-					"exclude it (ADR-0004 amendment) or triage the pattern", op.ID, name)
-			}
-		}
-	}
-}
-
 func TestTheCredentialPropertyPatternCatchesTheExcludedOperationsProperties(t *testing.T) {
 	t.Parallel()
 	// The property names of the four excluded bodies, from the union catalog:

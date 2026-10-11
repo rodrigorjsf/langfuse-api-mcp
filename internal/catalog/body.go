@@ -82,6 +82,10 @@ func (o Operation) CheckBody(body json.RawMessage) (json.RawMessage, error) {
 	if out[0] != '{' && expectsObject(o.Body.Schema) {
 		return nil, invalidBodyf("want a JSON object, as the schema of operation %s asks", o.ID)
 	}
+	if o.Body.compiled == nil {
+		// BodyError told startup; a body is never checked against nothing.
+		return nil, invalidBodyf("the body schema of operation %s does not compile, so no body can be checked against it", o.ID)
+	}
 	if err := o.Body.validate(out); err != nil {
 		return nil, err
 	}
