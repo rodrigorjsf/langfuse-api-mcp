@@ -256,9 +256,8 @@ func TestWhichBodyAnOperationHasIsDecidedByTheVersionDetectedAtStartupOnly(t *te
 }
 
 // Dangerous parameters: no argument selects a body. Neither tool takes one for
-// a version, release or schema, and two clients of one server get the same
-// description.
-func TestNoArgumentSelectsABodyAndTwoClientsOfOneServerGetTheSameSchema(t *testing.T) {
+// a version, release or schema.
+func TestNoArgumentSelectsABody(t *testing.T) {
 	t.Parallel()
 	for _, name := range []string{"version", "release", "langfuseVersion", "schemaVersion", "profile", "bodyVersion", "full"} {
 		for _, tool := range []string{"describe_operation", "execute_write"} {
@@ -279,7 +278,12 @@ func TestNoArgumentSelectsABodyAndTwoClientsOfOneServerGetTheSameSchema(t *testi
 			})
 		}
 	}
+}
 
+// Two clients of one server get the same description: the body is the server's,
+// not the client's.
+func TestTwoClientsOfOneServerGetTheSameBodySchema(t *testing.T) {
+	t.Parallel()
 	families := catalog.AllFamilies()
 	srv := server.New(sharedCatalog(t).Resolve(catalog.Profile{Version: "3.30.0", Families: families}), nil,
 		slog.New(slog.DiscardHandler), server.Secrets{Keys: testKeys()},
@@ -301,6 +305,9 @@ func TestNoArgumentSelectsABodyAndTwoClientsOfOneServerGetTheSameSchema(t *testi
 func TestAPropertyOfAnotherReleaseIsTreatedAsTheResolvedSchemaSaysWithNoHintNamingTheOtherRelease(t *testing.T) {
 	t.Parallel()
 	const mistyped = `{"name":"x","value":1,"traceId":"t","sessionId":5}`
+	// The hint of a refused body: static text that names the operation and the caps, no release.
+	const wantHint = "send body as the JSON object operation scores_create takes, at most 262144 bytes and 32 levels of nesting, " +
+		"that fits its schema; describe_operation with operationId scores_create returns the body schema"
 	t.Run("sent as an unknown key where the schema lacks the property", func(t *testing.T) {
 		t.Parallel()
 		fake, seen := writeLangfuse(t, http.StatusOK, `{"id":"new-1"}`)
@@ -326,6 +333,9 @@ func TestAPropertyOfAnotherReleaseIsTreatedAsTheResolvedSchemaSaysWithNoHintNami
 		if got.Code != "invalid_argument" || !strings.HasSuffix(got.Message, `at /sessionId: fails schema keyword "type"`) {
 			t.Errorf("error = %+v, want invalid_argument at /sessionId, keyword type", got)
 		}
+		if got.Hint != wantHint {
+			t.Errorf("hint = %q, want %q", got.Hint, wantHint)
+		}
 		writtenNothing(t, seen)
 	})
 	t.Run("the refusal at an older version names no other release and no key of the caller", func(t *testing.T) {
@@ -337,8 +347,6 @@ func TestAPropertyOfAnotherReleaseIsTreatedAsTheResolvedSchemaSaysWithNoHintNami
 			map[string]any{"operationId": "scores_create", "body": asJSON(t, `{"name":"x","value":1,"`+planted+`":"v","sessionId":"s"}`)})
 
 		got := toolErrorOf(t, res).Error
-		wantHint := "send body as the JSON object operation scores_create takes, at most 262144 bytes and 32 levels of nesting, " +
-			"that fits its schema; describe_operation with operationId scores_create returns the body schema"
 		if got.Hint != wantHint {
 			t.Errorf("hint = %q, want %q", got.Hint, wantHint)
 		}
@@ -396,12 +404,13 @@ func TestTheSizeDepthObjectAndAbsentBodyChecksComeBeforeTheSchemaUnderEveryResol
 // the same under each resolved body.
 func TestABodyWithHostileValuesGetsTheSameAnswerUnderEveryResolvedBody(t *testing.T) {
 	t.Parallel()
-	for name, tc := range map[string]struct{ body, refusedAt string }{
-		"a URL":               {`{"name":"x","value":1,"traceId":"t","comment":"https://evil.example/?a=b"}`, ""},
-		"a traversal string":  {`{"name":"x","value":1,"traceId":"../../etc/passwd","comment":"..\\..\\x"}`, ""},
-		"control characters":  {`{"name":"x\u0007\u202e","value":1,"traceId":"t\u0000"}`, ""},
-		"a wrong type":        {`{"name":"x","value":{"IGNORE":"PREVIOUS"},"traceId":"t"}`, "/value"},
-		"a wrong type for id": {`{"name":"x","value":1,"traceId":["IGNORE-PREVIOUS"]}`, "/traceId"},
+	for name, tc := range map[string]struct{ body, refusedAt, refusedWith string }{
+		"a URL":               {`{"name":"x","value":1,"traceId":"t","comment":"https://evil.example/?a=b"}`, "", ""},
+		"a traversal string":  {`{"name":"x","value":1,"traceId":"../../etc/passwd","comment":"..\\..\\x"}`, "", ""},
+		"control characters":  {`{"name":"x\u0007\u202e","value":1,"traceId":"t\u0000"}`, "", ""},
+		"a wrong type":        {`{"name":"x","value":{"IGNORE":"PREVIOUS"},"traceId":"t"}`, "/value", ""},
+		"a wrong type for id": {`{"name":"x","value":1,"traceId":["IGNORE-PREVIOUS"]}`, "/traceId", ""},
+		"an oversized value":  {`{"name":"x","value":1,"traceId":"t","comment":"` + strings.Repeat("a", 256<<10) + `"}`, "", "exceeds 262144 bytes once compacted"},
 	} {
 		for _, version := range []string{"3.30.0", "3.54.1", "4.46.0", ""} {
 			t.Run(name+" at "+version, func(t *testing.T) {
@@ -411,7 +420,7 @@ func TestABodyWithHostileValuesGetsTheSameAnswerUnderEveryResolvedBody(t *testin
 				res := callExecuteWrite(t, writesAtLangfuse(t, fake, version),
 					map[string]any{"operationId": "scores_create", "body": asJSON(t, tc.body)})
 
-				if tc.refusedAt == "" {
+				if tc.refusedAt == "" && tc.refusedWith == "" {
 					if res.IsError {
 						t.Fatalf("execute_write refused %s at %q: %s", tc.body, version, resultText(t, res))
 					}
@@ -421,8 +430,12 @@ func TestABodyWithHostileValuesGetsTheSameAnswerUnderEveryResolvedBody(t *testin
 					return
 				}
 				got := toolErrorOf(t, res).Error
-				if got.Code != "invalid_argument" || !strings.Contains(got.Message, "at "+tc.refusedAt+": fails schema keyword") {
-					t.Errorf("error = %+v, want invalid_argument at %s", got, tc.refusedAt)
+				want := tc.refusedWith
+				if want == "" {
+					want = "at " + tc.refusedAt + ": fails schema keyword"
+				}
+				if got.Code != "invalid_argument" || !strings.Contains(got.Message, want) {
+					t.Errorf("error = %+v, want invalid_argument with %q", got, want)
 				}
 				if text := resultText(t, res); strings.Contains(text, "IGNORE") {
 					t.Errorf("tool error echoes the value: %.300s", text)
@@ -505,6 +518,11 @@ func confirmAt(t *testing.T, fake *httptest.Server, version string, client *mcp.
 	return connectConfirm(t, fake, confirmSetup{client: client, catalog: &resolved})
 }
 
+// catalogStoredBodies is the number of distinct bodies the embedded catalog stores
+// for the write operations the server offers (v3.0.0 to v4.50.0); a later release
+// can only add to it.
+const catalogStoredBodies = 76
+
 // storedBodyVersions reads the embedded union catalog as written and returns,
 // for each write operation the server offers, the release each of its stored
 // bodies is introduced in: the version a deployment must have for that body to
@@ -536,6 +554,9 @@ func storedBodyVersions(t *testing.T) map[string][]string {
 				continue
 			}
 			for _, b := range op.Bodies {
+				if len(b.Spans) == 0 {
+					t.Fatalf("%s: a stored body has no span, which the generator always writes for an operation the server offers", op.OperationID)
+				}
 				out[op.OperationID] = append(out[op.OperationID], b.Spans[0].Introduced)
 			}
 		}
@@ -558,8 +579,8 @@ func TestEveryStoredBodyOfEveryWriteOperationFitsTheSmallestCapWithItsBodySchema
 			bodies++
 		}
 	}
-	if bodies < 76 {
-		t.Fatalf("the catalog file stores %d bodies of offered operations, want the whole history (76)", bodies)
+	if bodies < catalogStoredBodies {
+		t.Fatalf("the catalog file stores %d bodies of offered operations, want the whole history (%d)", bodies, catalogStoredBodies)
 	}
 	for version, ids := range atVersion {
 		cs := writesAt(t, nil, version, server.WithMaxResultBytes(smallestCap))

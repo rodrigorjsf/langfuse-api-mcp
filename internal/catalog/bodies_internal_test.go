@@ -9,6 +9,11 @@ import (
 	"testing"
 )
 
+// storedBodyFloor is the number of distinct bodies the embedded catalog stores for the
+// operations the server offers (v3.0.0 to v4.50.0): 76 for 35 operations; the 14 others
+// it holds, the ADR-0004 exclusions, keep one body each and are not loaded.
+const storedBodyFloor = 76
+
 // #202, the catalog's own reading of the request bodies of a union catalog: the
 // literal specs below are the shapes the generator writes (x-request-bodies,
 // x-spans), one operation x_create whose body changes at 3.5.0 and again at 4.0.0.
@@ -325,7 +330,7 @@ func TestNoStoredBodyOfTheEmbeddedCatalogHoldsAHiddenCharacter(t *testing.T) {
 			walk(fmt.Sprintf("%s body %d", op.ID, i), schema)
 		}
 	}
-	if bodies < 76 || texts < 1000 {
+	if bodies < storedBodyFloor || texts < 1000 {
 		t.Fatalf("walked %d bodies and %d strings, want the whole history", bodies, texts)
 	}
 }
@@ -355,7 +360,7 @@ func TestEveryStoredBodyIsTheOneTheReleaseThatIntroducedItResolves(t *testing.T)
 			}
 		}
 	}
-	if checked < 76 {
+	if checked < storedBodyFloor {
 		t.Fatalf("checked %d spans, want the whole history", checked)
 	}
 }

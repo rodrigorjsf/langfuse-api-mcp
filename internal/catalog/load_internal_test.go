@@ -241,11 +241,8 @@ func TestEveryStoredBodySchemaOfTheUnionCatalogCompilesAsJSONSchema202012(t *tes
 			}
 		}
 	}
-	// The union catalog (v3.0.0 to v4.50.0) stores 76 distinct bodies of the 35
-	// operations that take one and that the server offers; the 14 others it
-	// takes (the ADR-0004 exclusions) keep one body each and are not loaded.
-	if bodies < 76 {
-		t.Fatalf("checked %d stored bodies, want the whole catalog's history (76)", bodies)
+	if bodies < storedBodyFloor {
+		t.Fatalf("checked %d stored bodies, want the whole catalog's history (%d)", bodies, storedBodyFloor)
 	}
 }
 

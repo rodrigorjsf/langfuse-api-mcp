@@ -94,11 +94,11 @@ func storeBodies(id string, plain *bodyDocument, history []bodyDocument, newestO
 	}
 	stored := make([]*storedBody, 0, len(history))
 	for _, d := range history {
-		b, err := d.store(id)
+		b, err := d.toStoredBody(id)
 		if err != nil {
 			return nil, err
 		}
-		if i := slices.IndexFunc(stored, b.overlaps); i >= 0 {
+		if slices.ContainsFunc(stored, b.overlaps) {
 			return nil, fmt.Errorf("%s: two request bodies hold for the same release", id)
 		}
 		stored = append(stored, b)
@@ -106,8 +106,8 @@ func storeBodies(id string, plain *bodyDocument, history []bodyDocument, newestO
 	return stored, nil
 }
 
-// store reads the body d of operation id.
-func (d bodyDocument) store(id string) (*storedBody, error) {
+// toStoredBody reads the body d of operation id.
+func (d bodyDocument) toStoredBody(id string) (*storedBody, error) {
 	content := d.Content["application/json"]
 	if len(d.Content) != 1 || len(content.Schema) == 0 {
 		return nil, fmt.Errorf("%s: request body is not a single JSON schema", id)

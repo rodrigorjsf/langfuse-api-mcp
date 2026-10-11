@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"slices"
 	"testing"
+
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 )
 
 // Spec #172, ticket #188: an unknown key in a write body is refused only where
@@ -78,8 +80,8 @@ func TestNoInScopeWriteBodySchemaForbidsAnUnknownKey(t *testing.T) {
 			}
 		}
 	}
-	if bodies < 76 {
-		t.Fatalf("the walk saw %d stored write bodies, want the whole catalog's history (at least 76)", bodies)
+	if bodies < catalog.StoredBodyFloor {
+		t.Fatalf("the walk saw %d stored write bodies, want the whole catalog's history (at least %d)", bodies, catalog.StoredBodyFloor)
 	}
 }
 

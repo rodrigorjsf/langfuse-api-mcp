@@ -129,7 +129,8 @@ type RequestBody struct {
 	// third-party text, so every string in it is cleaned of hidden characters.
 	Schema json.RawMessage
 	// compiled is Schema compiled once (#112); CheckBody validates a body
-	// against it. Nil when Schema does not compile (BodyError). Shared read-only.
+	// against it. Nil when Schema does not compile (BodyError). Shared by every
+	// resolution; it is compiled once, behind a sync.Once of the stored body.
 	compiled *jsonschema.Resolved
 }
 
