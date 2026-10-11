@@ -461,6 +461,20 @@ class RequestBodyHistoryTest(unittest.TestCase):
         self.assertEqual(schema_of(only), obj("a", "b"))
         self.assertNotIn("x-spans", only)
 
+    def test_the_newest_body_of_an_operation_the_server_never_offers_is_the_one_that_came_back(self):
+        a, b = obj("a"), obj("a", "b")
+        catalog = union_of([("v3.0.0", post("ingestion_batch", (a, True))), ("v3.1.0", post("ingestion_batch", (b, True))),
+                            ("v3.2.0", post("ingestion_batch", (a, True)))])
+        (only,) = catalog["paths"]["/api/public/x"]["post"]["x-request-bodies"]
+        self.assertEqual(schema_of(only), a)
+
+    def test_the_newest_body_of_an_operation_the_server_never_offers_that_lost_its_body_is_its_last_one(self):
+        a, b = obj("a"), obj("a", "b")
+        catalog = union_of([("v3.0.0", post("ingestion_batch", (a, True))), ("v3.1.0", post("ingestion_batch", (b, True))),
+                            ("v3.2.0", post("ingestion_batch", (a, True))), ("v3.3.0", post("ingestion_batch"))])
+        (only,) = catalog["paths"]["/api/public/x"]["post"]["x-request-bodies"]
+        self.assertEqual(schema_of(only), a)
+
     def test_an_operation_the_server_offers_is_not_marked_newest_only(self):
         op = union_of([("v3.0.0", post(body=(obj("a"), True)))])["paths"]["/api/public/x"]["post"]
         self.assertNotIn("x-newest-body-only", op)

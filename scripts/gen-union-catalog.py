@@ -420,7 +420,9 @@ def parameters(h, order, introduced, notes):
 
 def request_bodies(h, order, introduced, converted):
     """The operation's distinct request bodies across every release (#202),
-    oldest first, each the body_2020_12 of its newest release's text plus
+    in the order they first appear (a body that comes back keeps its first
+    place, so the last one is not always the newest), each the body_2020_12 of
+    its newest release's text plus
     x-spans: the runs of consecutive releases it holds for, from the release
     that introduced it up to, not including, the release that changed it.
 
@@ -488,7 +490,9 @@ def merge(releases):
         op["x-introduced"] = text(introduced)
         bodies = request_bodies(h, order, op["x-introduced"], converted)
         if op["operationId"] in NEWEST_BODY_ONLY and bodies:
-            bodies = [{k: v for k, v in bodies[-1].items() if k != "x-spans"}]
+            # Not bodies[-1]: a body that came back keeps its first place in the list.
+            kept = max(bodies, key=lambda b: version("v" + b["x-spans"][-1]["x-introduced"]))
+            bodies = [{k: v for k, v in kept.items() if k != "x-spans"}]
             op["x-newest-body-only"] = True
         if bodies:
             op["x-request-bodies"] = bodies
