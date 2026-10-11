@@ -76,13 +76,22 @@ func TestCommentsCreateBodyGuidanceNamesOnlyWhatTheCatalogAndTheBodySchemaHave(t
 func TestScoresCreateBodyGuidanceNamesOnlyTheTargetPropertiesTheBodySchemaHas(t *testing.T) {
 	t.Parallel()
 	const tail = ". A body with none of the targets, or with more than one, is refused by Langfuse with HTTP 400."
+	const oneTarget = ". A body without it is refused by Langfuse with HTTP 400."
 	for name, tc := range map[string]struct {
 		properties []string
 		want       string
 	}{
 		"trace and observation only": {
 			properties: []string{"name", "traceId", "observationId"},
-			want:       "A score needs exactly one target: a traceId; an observationId goes only with a traceId" + tail,
+			want:       "A score needs a target: a traceId, with an optional observationId" + oneTarget,
+		},
+		"trace only": {
+			properties: []string{"name", "traceId"},
+			want:       "A score needs a target: a traceId" + oneTarget,
+		},
+		"session only, observationId without traceId": {
+			properties: []string{"name", "sessionId", "observationId"},
+			want:       "A score needs a target: a sessionId" + oneTarget,
 		},
 		"trace and session": {
 			properties: []string{"name", "traceId", "sessionId", "observationId"},

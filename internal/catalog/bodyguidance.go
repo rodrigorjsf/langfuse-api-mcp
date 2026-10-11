@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 )
 
@@ -22,14 +23,16 @@ const (
 	projectsGetOperationID    = "projects_get"
 )
 
-// scoresTargetRuleSince is the first Langfuse release whose scores_create
-// takes the target properties the guidance names (traceId, sessionId and
-// datasetRunId) and refuses a body without exactly one of them: the release
-// specs have sessionId from 3.53.0 and datasetRunId from 3.55.0, and the
-// release source holds the rule from 3.55.0 (docs/research/langfuse.md). The
-// union catalog keeps the newest release's body schema for every deployment,
-// so the schema alone cannot say that an older deployment lacks them.
-const scoresTargetRuleSince = "3.55.0"
+// scoreTargets are the target properties of a score body, each with the first
+// Langfuse release whose spec has it, "" for every release
+// (docs/research/langfuse.md, section 1.14): traceId is there from the start,
+// and required up to 3.52.0; sessionId from 3.53.0; datasetRunId from 3.55.0. The union catalog keeps the newest
+// release's body schema for every deployment (#202), so the schema alone cannot
+// say that an older deployment lacks a property: the guidance names a target
+// only when the body schema has it and the deployment's version has it too.
+var scoreTargets = []struct{ property, since string }{
+	{"traceId", ""}, {"sessionId", "3.53.0"}, {"datasetRunId", "3.55.0"},
+}
 
 // BodyGuidance returns static guidance on how to fill the body of op, an
 // operation of this catalog, or "" when it has none. It holds no caller input
@@ -63,25 +66,29 @@ func (c Catalog) commentsCreateGuidance(op Operation) string {
 	return text + "."
 }
 
-// scoresCreateGuidance says that a score needs exactly one target and names the
-// target properties the body schema has: a traceId (with an optional
-// observationId), a sessionId or a datasetRunId. Langfuse answers 400 to a body
-// with none or with more than one, and to an observationId without a traceId.
+// scoresCreateGuidance says that a score needs a target and names the target
+// properties the body schema and the deployment's version have: a traceId (with
+// an optional observationId), a sessionId or a datasetRunId. Langfuse answers
+// 400 to a body with none, and, from 3.53.0, with more than one, and to an
+// observationId without a traceId.
 func scoresCreateGuidance(op Operation) string {
-	if !op.deploymentAtLeast(scoresTargetRuleSince) {
-		return ""
-	}
 	var targets []string
-	for _, name := range []string{"traceId", "sessionId", "datasetRunId"} {
-		if op.Body.hasProperty(name) {
-			targets = append(targets, "a "+name)
+	for _, t := range scoreTargets {
+		if op.Body.hasProperty(t.property) && (t.since == "" || op.deploymentAtLeast(t.since)) {
+			targets = append(targets, "a "+t.property)
 		}
 	}
-	if len(targets) == 0 {
+	withTrace := op.Body.hasProperty("observationId") && slices.Contains(targets, "a traceId")
+	switch {
+	case len(targets) == 0:
 		return ""
+	case len(targets) == 1 && withTrace:
+		return "A score needs a target: a traceId, with an optional observationId. A body without it is refused by Langfuse with HTTP 400."
+	case len(targets) == 1:
+		return "A score needs a target: " + targets[0] + ". A body without it is refused by Langfuse with HTTP 400."
 	}
 	text := "A score needs exactly one target: " + joinOr(targets)
-	if op.Body.hasProperty("observationId") && op.Body.hasProperty("traceId") {
+	if withTrace {
 		text += "; an observationId goes only with a traceId"
 	}
 	return text + ". A body with none of the targets, or with more than one, is refused by Langfuse with HTTP 400."

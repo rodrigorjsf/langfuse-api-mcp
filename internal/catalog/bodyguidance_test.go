@@ -24,6 +24,13 @@ const (
 	scoresCreateGuidance = "A score needs exactly one target: a traceId, a sessionId or a datasetRunId; an observationId " +
 		"goes only with a traceId. A body with none of the targets, or with more than one, is refused by Langfuse " +
 		"with HTTP 400."
+	// scoresCreateGuidanceTraceOrSession is the text where the release has no datasetRunId (3.53.0 to 3.54.x),
+	// scoresCreateGuidanceTraceOnly where it has no sessionId either (before 3.53.0, traceId required).
+	scoresCreateGuidanceTraceOrSession = "A score needs exactly one target: a traceId or a sessionId; an observationId " +
+		"goes only with a traceId. A body with none of the targets, or with more than one, is refused by Langfuse " +
+		"with HTTP 400."
+	scoresCreateGuidanceTraceOnly = "A score needs a target: a traceId, with an optional observationId. " +
+		"A body without it is refused by Langfuse with HTTP 400."
 )
 
 // resolved returns the catalog resolved for a deployment of the given version
@@ -54,14 +61,16 @@ func TestCommentsCreateBodyGuidanceSaysProjectIdIsTheProjectOfTheKeysAndProjects
 	}
 }
 
-// scores_create needs one target. The rule and the properties it names exist
-// from 3.55.0 (docs/research/langfuse.md): an older deployment gets no
-// guidance rather than a text that is false there.
+// scores_create needs a target. The target properties exist from different
+// releases (docs/research/langfuse.md, section 1.14): the text names the ones
+// the deployment's version has, so it is never false there.
 func TestScoresCreateBodyGuidanceNamesTheTargetPropertiesOfTheDeploymentsVersion(t *testing.T) {
 	t.Parallel()
 
 	for version, want := range map[string]string{
-		"3.54.1": "", "3.55.0": scoresCreateGuidance, "3.80.0": scoresCreateGuidance,
+		"2.0.0": scoresCreateGuidanceTraceOnly, "3.0.0": scoresCreateGuidanceTraceOnly, "3.52.0": scoresCreateGuidanceTraceOnly,
+		"3.53.0": scoresCreateGuidanceTraceOrSession, "3.54.1": scoresCreateGuidanceTraceOrSession,
+		"3.55.0": scoresCreateGuidance, "3.80.0": scoresCreateGuidance,
 		"4.46.0": scoresCreateGuidance, "99.0.0": scoresCreateGuidance, "": scoresCreateGuidance,
 	} {
 		if got := bodyGuidanceOf(t, resolved(t, version), "scores_create"); got != want {
@@ -72,15 +81,11 @@ func TestScoresCreateBodyGuidanceNamesTheTargetPropertiesOfTheDeploymentsVersion
 
 // No other operation gains body guidance, on any deployment: the list is
 // closed, so adding one means editing this test (spec #172, ticket #192).
-// scores_create has none before 3.55.0.
 func TestOnlyCommentsCreateAndScoresCreateCarryBodyGuidance(t *testing.T) {
 	t.Parallel()
-	both := []string{"comments_create", "scores_create"}
+	want := []string{"comments_create", "scores_create"}
 
-	for version, want := range map[string][]string{
-		"3.0.0": {"comments_create"}, "3.54.1": {"comments_create"}, "3.55.0": both, "3.57.0": both, "3.72.0": both,
-		"3.80.0": both, "3.225.11": both, "4.46.0": both, "": both,
-	} {
+	for _, version := range []string{"3.0.0", "3.52.0", "3.54.1", "3.55.0", "3.57.0", "3.72.0", "3.80.0", "3.225.11", "4.46.0", ""} {
 		cat := resolved(t, version)
 		var got []string
 		for _, op := range cat.Operations() {
@@ -94,17 +99,31 @@ func TestOnlyCommentsCreateAndScoresCreateCarryBodyGuidance(t *testing.T) {
 	}
 }
 
-// Whatever the catalog holds, an operation without a body has none, and the
-// guidance is one line of printable text with no hidden character.
-func TestEveryBodyGuidanceIsOneLineOfVisibleText(t *testing.T) {
+// An operation without a body has no body guidance.
+func TestAnOperationWithoutABodyHasNoBodyGuidance(t *testing.T) {
 	t.Parallel()
 	cat := resolved(t, "")
 
 	for _, op := range cat.Operations() {
-		g := cat.BodyGuidance(op)
-		if g != "" && op.Body == nil {
+		if g := cat.BodyGuidance(op); op.Body == nil && g != "" {
 			t.Errorf("%s takes no body and has guidance %q", op.ID, g)
 		}
+	}
+}
+
+// Guidance is one line of printable text with no control, invisible or bidi
+// character.
+func TestEveryBodyGuidanceIsOneLineOfVisibleText(t *testing.T) {
+	t.Parallel()
+	cat := resolved(t, "")
+	checked := 0
+
+	for _, op := range cat.Operations() {
+		g := cat.BodyGuidance(op)
+		if g == "" {
+			continue
+		}
+		checked++
 		if strings.TrimSpace(g) != g {
 			t.Errorf("%s guidance has leading or trailing space", op.ID)
 		}
@@ -114,30 +133,48 @@ func TestEveryBodyGuidanceIsOneLineOfVisibleText(t *testing.T) {
 			}
 		}
 	}
+	if checked != 2 {
+		t.Errorf("checked the guidance of %d operations, want 2", checked)
+	}
 }
 
-// Each property the two texts name is a property of the operation's body
-// schema, and each operation they name is in the catalog.
+// Each property or operation the guidance text names exists: a property in the
+// body schema of the operation, an operation in the catalog. A catalog
+// regeneration that drops one fails here.
 func TestTheBodyGuidanceNamesOnlyPropertiesOfTheBodySchemaAndOperationsOfTheCatalog(t *testing.T) {
 	t.Parallel()
 	cat := resolved(t, "")
-	for id, named := range map[string][]string{
-		"comments_create": {"projectId"},
-		"scores_create":   {"traceId", "sessionId", "datasetRunId", "observationId"},
-	} {
-		op, _ := cat.Lookup(id)
+	candidates := []string{"projectId", "traceId", "sessionId", "datasetRunId", "observationId"}
+
+	for _, id := range []string{"comments_create", "scores_create"} {
+		op, ok := cat.Lookup(id)
+		if !ok {
+			t.Fatalf("operation %s is not in the catalog", id)
+		}
 		var schema any
 		if err := json.Unmarshal(op.Body.Schema, &schema); err != nil {
 			t.Fatalf("body schema of %s: %v", id, err)
 		}
 		properties := propertyNames(schema)
-		for _, name := range named {
+		guidance := cat.BodyGuidance(op)
+
+		named := 0
+		for _, name := range candidates {
+			if !strings.Contains(guidance, name) {
+				continue
+			}
+			named++
 			if !slices.Contains(properties, name) {
 				t.Errorf("the guidance of %s names %s, which its body schema does not have (%v)", id, name, properties)
 			}
 		}
-	}
-	if _, ok := cat.Lookup("projects_get"); !ok {
-		t.Error("the guidance of comments_create names projects_get, which the catalog does not offer")
+		if named == 0 {
+			t.Errorf("the guidance of %s names none of %v: %q", id, candidates, guidance)
+		}
+		if strings.Contains(guidance, "projects_get") {
+			if _, offered := cat.Lookup("projects_get"); !offered {
+				t.Errorf("the guidance of %s names projects_get, which the catalog does not offer", id)
+			}
+		}
 	}
 }

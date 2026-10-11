@@ -323,13 +323,11 @@ func (ex executor) executeRead(ctx context.Context, req *mcp.CallToolRequest, a 
 	if err != nil {
 		return toolError(errorInvalidArgument, err.Error(), argumentsHint, in.OperationID)
 	}
-	op, ok := ex.catalog.Lookup(in.OperationID)
-	if ok && !op.IsRead() && !ex.writeMode {
-		// While writes are off a write operation is an operation that is not
-		// there, as describe_operation says (#192): any other answer would tell
-		// the agent that the write surface exists.
-		ok = false
-	}
+	op, found := ex.catalog.Lookup(in.OperationID)
+	// While writes are off a write operation is an operation that is not there,
+	// as describe_operation says (#192): any other answer would tell the agent
+	// that the write surface exists.
+	ok := found && (op.IsRead() || ex.writeMode)
 	if !ok && catalog.IsExcluded(in.OperationID) {
 		return toolError(errorOperationNotFound, "operation "+in.OperationID+" is not exposed by this server: "+
 			"trace ingestion and organization admin changes are out of its scope",

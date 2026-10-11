@@ -518,8 +518,8 @@ const describeOperationDescription = "Returns the operation description of one L
 	"what it does, the tool that runs it, and every path and query parameter with its location, type, " +
 	"whether it is required, its allowed values, its bounds and its default. In write mode it also says " +
 	"whether the operation is destructive (DELETE, PUT, PATCH) and returns its JSON request body schema, " +
-	"which execute_write checks every body against; for comments_create and scores_create it also gives " +
-	"guidance on how to fill the body. A body schema that does not fit the result size cap is " +
+	"which execute_write checks every body against; for some operations it also gives guidance on how " +
+	"to fill the body. A body schema that does not fit the result size cap is " +
 	"returned without its description and title annotations, or left out, and the result says truncated.\n\n" +
 	"Reads the server's built-in catalog only: it does not call Langfuse and does not run the operation. " +
 	"search_operations lists the operation IDs; execute_read runs a read operation."
@@ -567,8 +567,8 @@ func operationDescriptionSchema() map[string]any {
 				"properties": map[string]any{
 					"required": map[string]any{"type": "boolean", "description": "Whether the operation needs a body."},
 					"guidance": map[string]any{"type": "string", "description": "How to fill the body: static text written by " +
-						"this server, not from the Langfuse spec; present only where the spec's schema does not say it, " +
-						"e.g. where a comment's projectId comes from or that a score needs a target."},
+						"this server, not from the Langfuse spec; present only where the spec's schema leaves a requirement " +
+						"of the body unsaid."},
 					"schema": map[string]any{"type": "object", "description": "JSON Schema 2020-12 of the body, " +
 						"which execute_write checks every body against. " + bodySchemaNote + " Absent only when " +
 						"truncated is true and the schema does not fit the result size cap."},

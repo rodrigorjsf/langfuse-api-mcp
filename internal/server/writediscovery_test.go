@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -199,22 +200,16 @@ func hasLineEndingWith(text, prefix, suffix string) bool {
 }
 
 // The method and the destructive value of every write line of the index are
-// the ones describe_operation returns for that operation; a read line has
-// neither and keeps the text it had.
-func TestEveryWriteLineOfTheOperationIndexAgreesWithDescribeOperationAndAReadLineGainsNothing(t *testing.T) {
+// the ones describe_operation returns for that operation, and destructive is
+// true exactly for DELETE, PUT and PATCH, as the ticket defines it.
+func TestEveryWriteLineOfTheOperationIndexAgreesWithDescribeOperation(t *testing.T) {
 	t.Parallel()
-	entries, text := writeModeIndex(t, "")
+	entries, _ := writeModeIndex(t, "")
 	cs := connectOffline(t, server.WithWriteMode(), server.WithMaxResultBytes(hugeCap))
 	writes := 0
 
 	for _, e := range entries {
-		if e.Tool == "execute_read" {
-			if e.Method != "" || e.Destructive != nil {
-				t.Errorf("read operation %s has method %q and destructive %v in the index", e.OperationID, e.Method, e.Destructive)
-			}
-			if !hasLineEndingWith(text, "- "+e.OperationID+" — ", " (execute_read)") {
-				t.Errorf("read operation %s: its text line does not end in (execute_read)", e.OperationID)
-			}
+		if e.Tool != "execute_write" {
 			continue
 		}
 		writes++
@@ -223,9 +218,36 @@ func TestEveryWriteLineOfTheOperationIndexAgreesWithDescribeOperationAndAReadLin
 			t.Errorf("%s: index says %s destructive %v, describe_operation says %v destructive %v", e.OperationID,
 				e.Method, e.Destructive, d.structured["method"], d.structured["destructive"])
 		}
+		if want := slices.Contains([]string{"DELETE", "PUT", "PATCH"}, e.Method); e.Destructive == nil || *e.Destructive != want {
+			t.Errorf("%s: method %s with destructive %v, want %v", e.OperationID, e.Method, e.Destructive, want)
+		}
 	}
 	if writes < 40 {
 		t.Errorf("the index lists %d write operations, want the check to cover at least 40", writes)
+	}
+}
+
+// A read line of the index has no method and no destructive flag, and keeps
+// the text it had in write mode.
+func TestAReadLineOfTheOperationIndexGainsNothing(t *testing.T) {
+	t.Parallel()
+	entries, text := writeModeIndex(t, "")
+	reads := 0
+
+	for _, e := range entries {
+		if e.Tool != "execute_read" {
+			continue
+		}
+		reads++
+		if e.Method != "" || e.Destructive != nil {
+			t.Errorf("read operation %s has method %q and destructive %v in the index", e.OperationID, e.Method, e.Destructive)
+		}
+		if !hasLineEndingWith(text, "- "+e.OperationID+" — ", " (execute_read)") {
+			t.Errorf("read operation %s: its text line does not end in (execute_read)", e.OperationID)
+		}
+	}
+	if reads < 40 {
+		t.Errorf("the index lists %d read operations, want the check to cover at least 40", reads)
 	}
 }
 
@@ -320,18 +342,34 @@ func TestDescribeOperationOfScoresCreateSaysAScoreNeedsOneTargetAndNamesThem(t *
 	}
 }
 
-// A deployment older than the release that has the target properties is told
-// nothing about them; the guidance on comments_create stays.
-func TestDescribeOperationOfScoresCreateOnADeploymentBeforeTheTargetPropertiesHasNoBodyGuidance(t *testing.T) {
+// A deployment older than the release that has a target property is not told
+// about it: on 3.54.1 there is no datasetRunId yet, and before 3.53.0 no sessionId.
+func TestDescribeOperationOfScoresCreateNamesOnlyTheTargetPropertiesOfTheDeploymentsVersion(t *testing.T) {
+	t.Parallel()
+	const (
+		beforeDatasetRunID = "A score needs exactly one target: a traceId or a sessionId; an observationId goes only with " +
+			"a traceId. A body with none of the targets, or with more than one, is refused by Langfuse with HTTP 400."
+		beforeSessionID = "A score needs a target: a traceId, with an optional observationId. " +
+			"A body without it is refused by Langfuse with HTTP 400."
+	)
+
+	for version, want := range map[string]string{"3.54.1": beforeDatasetRunID, "3.52.0": beforeSessionID} {
+		got := writeDescription(t, version, "scores_create")
+
+		if g := got.body()["guidance"]; g != want {
+			t.Errorf("scores_create on %s: guidance = %v, want %q", version, g, want)
+		}
+	}
+}
+
+// The guidance on comments_create does not depend on the release that has the
+// score targets.
+func TestDescribeOperationOfCommentsCreateOnAnOldDeploymentKeepsItsBodyGuidance(t *testing.T) {
 	t.Parallel()
 
-	scores := writeDescription(t, "3.54.1", "scores_create")
-	comments := writeDescription(t, "3.54.1", "comments_create")
+	got := writeDescription(t, "3.54.1", "comments_create")
 
-	if g, present := scores.body()["guidance"]; present || strings.Contains(scores.text, "Body guidance") {
-		t.Errorf("scores_create on 3.54.1 has guidance %v, want none", g)
-	}
-	if g := comments.body()["guidance"]; g != commentsCreateGuidance {
+	if g := got.body()["guidance"]; g != commentsCreateGuidance {
 		t.Errorf("comments_create on 3.54.1: guidance = %v, want %q", g, commentsCreateGuidance)
 	}
 }
@@ -417,10 +455,11 @@ func TestTheGuidedOperationDescriptionsFitTheSmallestCapWhole(t *testing.T) {
 }
 
 // The write-mode operation index at the smallest cap is cut at an entry
-// boundary and still within the cap; every write entry it keeps says its
-// method and destructive value in the text and in the structured content.
+// boundary and still within the cap; every write line it keeps ends in the
+// method and destructive words, and the structured entries carry the same pair.
 func TestTheWriteModeOperationIndexAtTheSmallestCapKeepsTheMethodAndDestructiveOfItsEntries(t *testing.T) {
 	t.Parallel()
+	writeLine := regexp.MustCompile(`(?m)^- \S+ — .* \(execute_write, (POST|PUT|PATCH|DELETE), (destructive|not destructive)\)$`)
 
 	got := discoveryAnswer(t, smallestCap, "search_operations", map[string]any{})
 
@@ -428,31 +467,22 @@ func TestTheWriteModeOperationIndexAtTheSmallestCapKeepsTheMethodAndDestructiveO
 		t.Fatalf("truncated = %v, %d/%d bytes, want a truncated index within %d", got.structured["truncated"],
 			got.textBytes, got.structuredBytes, smallestCap)
 	}
-	writes := 0
+	structuredWrites := 0
 	for _, g := range got.structured["groups"].([]any) {
 		for _, o := range g.(map[string]any)["operations"].([]any) {
 			e := o.(map[string]any)
 			if e["tool"] != "execute_write" {
 				continue
 			}
-			writes++
-			destructive, ok := e["destructive"].(bool)
-			if !ok || e["method"] == nil {
+			structuredWrites++
+			if _, ok := e["destructive"].(bool); !ok || e["method"] == nil {
 				t.Errorf("%v: kept without its method or destructive value: %v", e["operationId"], e)
-				continue
-			}
-			word := "not destructive"
-			if destructive {
-				word = "destructive"
-			}
-			suffix := " (execute_write, " + e["method"].(string) + ", " + word + ")"
-			if !hasLineEndingWith(got.text, "- "+e["operationId"].(string)+" — ", suffix) {
-				t.Errorf("%v: no text line ends with %q", e["operationId"], suffix)
 			}
 		}
 	}
-	if writes == 0 {
-		t.Error("the cut index keeps no write operation, want the check to cover some")
+	if textWrites := len(writeLine.FindAllString(got.text, -1)); structuredWrites == 0 || textWrites != structuredWrites {
+		t.Errorf("the cut index keeps %d write entries in the structured content and %d write lines in the text, "+
+			"want the same number, not 0", structuredWrites, textWrites)
 	}
 }
 
@@ -544,9 +574,8 @@ func TestAHostileOperationIDAroundAWriteOperationNameIsAnsweredAsOneAroundAnUnkn
 	}
 }
 
-// An excluded operation keeps the answer it had in read-only mode, and the
-// read-only tool set holds no execute_write; write mode registers it.
-func TestAnExcludedOperationKeepsItsAnswerAndExecuteWriteStaysUnregisteredWhileWritesAreOff(t *testing.T) {
+// An excluded operation keeps the answer it had in read-only mode.
+func TestAnExcludedOperationKeepsItsAnswerWhileWritesAreOff(t *testing.T) {
 	t.Parallel()
 	cs := connectOffline(t)
 
@@ -559,6 +588,12 @@ func TestAnExcludedOperationKeepsItsAnswerAndExecuteWriteStaysUnregisteredWhileW
 			}
 		}
 	}
+}
+
+// The read-only tool set holds no execute_write; write mode registers it.
+func TestExecuteWriteStaysUnregisteredWhileWritesAreOff(t *testing.T) {
+	t.Parallel()
+
 	for write, want := range map[bool]bool{false: false, true: true} {
 		var opts []server.Option
 		if write {
@@ -571,6 +606,24 @@ func TestAnExcludedOperationKeepsItsAnswerAndExecuteWriteStaysUnregisteredWhileW
 		has := slices.ContainsFunc(tools.Tools, func(tool *mcp.Tool) bool { return tool.Name == "execute_write" })
 		if has != want {
 			t.Errorf("write mode %v: execute_write registered = %v, want %v", write, has, want)
+		}
+	}
+}
+
+// The tool list is the same text in both modes, so with writes off it must not
+// name a write operation: an operation ID in a tool description or schema would
+// tell the agent that the write operation exists, which every answer hides.
+func TestTheToolListWhileWritesAreOffNamesNoWriteOperation(t *testing.T) {
+	t.Parallel()
+	tools, err := connectOffline(t).ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("list tools: %v", err)
+	}
+	listed := mustJSON(t, tools.Tools)
+
+	for _, id := range writeOperationIDs(t) {
+		if regexp.MustCompile(`\b` + regexp.QuoteMeta(id) + `\b`).MatchString(listed) {
+			t.Errorf("the read-only tool list names the write operation %s", id)
 		}
 	}
 }
