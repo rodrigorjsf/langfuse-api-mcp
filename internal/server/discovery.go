@@ -586,7 +586,7 @@ func operationDescriptionSchema() map[string]any {
 				"items": map[string]any{
 					"type":       "object",
 					"required":   []any{"name", "in", "required"},
-					"properties": parameterProperties(),
+					"properties": paramProperties(),
 				},
 			},
 			"scannedFilters": map[string]any{
@@ -605,10 +605,10 @@ func operationDescriptionSchema() map[string]any {
 	}
 }
 
-// parameterFactProperties are the output schema properties of what an operation
+// paramFactProperties are the output schema properties of what an operation
 // description says of a parameter's value: an entry of parameters and an entry
 // of scannedFilters share them.
-func parameterFactProperties() map[string]any {
+func paramFactProperties() map[string]any {
 	return map[string]any{
 		"name":      map[string]any{"type": "string"},
 		"in":        map[string]any{"type": "string", "enum": []any{"path", "query"}},
@@ -622,9 +622,9 @@ func parameterFactProperties() map[string]any {
 	}
 }
 
-// parameterProperties are the output schema properties of an entry of parameters.
-func parameterProperties() map[string]any {
-	props := parameterFactProperties()
+// paramProperties are the output schema properties of an entry of parameters.
+func paramProperties() map[string]any {
+	props := paramFactProperties()
 	props["required"] = map[string]any{"type": "boolean"}
 	props["repeated"] = map[string]any{"type": "boolean", "description": "A list of values sends the parameter once per value."}
 	props["default"] = map[string]any{}
@@ -637,7 +637,7 @@ func parameterProperties() map[string]any {
 // scannedFilterProperties are the output schema properties of an entry of
 // scannedFilters: the facts of a parameter and the note.
 func scannedFilterProperties() map[string]any {
-	props := parameterFactProperties()
+	props := paramFactProperties()
 	props["note"] = map[string]any{"type": "string", "description": "Static text written by this server, not from " +
 		"the Langfuse spec: how the filter is sent, that the server reads the list itself up to a page limit and returns " +
 		"the matching rows, where the answer says whether it read every row, and that page is not accepted with it."}
@@ -685,7 +685,7 @@ const bodySchemaNote = "Its descriptions and titles are third-party text from th
 
 // paramFacts is what an operation description says of a parameter's value, as
 // the catalog holds it: an entry of parameters and an entry of scannedFilters
-// share it (parameterFactProperties is its output schema).
+// share it (paramFactProperties is its output schema).
 type paramFacts struct {
 	Name      string   `json:"name"`
 	In        string   `json:"in"`
@@ -766,6 +766,8 @@ func describe(op catalog.Operation, writeMode bool, bodyGuidance string) operati
 		pd.Guidance = op.ParamGuidance(p)
 		out.Parameters = append(out.Parameters, pd)
 	}
+	// An entry carries the facts of a parameter and the note: no required flag,
+	// default or guidance, which only a served parameter has (#199).
 	for _, p := range op.ScannedParams() {
 		out.ScannedFilters = append(out.ScannedFilters,
 			scannedFilterDescription{paramFacts: describeParam(p).paramFacts, Note: scannedFilterNote()})

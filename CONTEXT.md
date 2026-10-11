@@ -11,7 +11,7 @@ _Avoid_: registry, tool list
 **Operation index**: the compact listing `search_operations` returns — one line per catalog operation (its ID and the first line of its description; for a legacy operation, what it does and its replacement; in write mode, for a write operation, its HTTP method and whether it is destructive), grouped by tag, optionally filtered by a query.
 _Avoid_: API list, endpoint list
 
-**Operation description**: what `describe_operation` returns for one operation — every served parameter with its location, type, required flag, enum, bounds and default, and, apart from them, the filters the server applies itself on this deployment.
+**Operation description**: what `describe_operation` returns for one operation — every served parameter with its location, type, required flag, enum, bounds and default, and, apart from them, the filters the server applies itself on this deployment (its scanned filters).
 _Avoid_: operation docs, spec (for this per-operation view)
 
 **Read operation**: an operation using HTTP GET; executable only through `execute_read`.
@@ -59,7 +59,7 @@ _Avoid_: v1 API, old API
 **Unavailable operation**: an operation of the catalog that the connected deployment does not serve (its version lacks the route, or its write mode turns the operation's family off); a call to it returns the tool error `operation_unavailable`, never Langfuse's body. `get_trace_tree` answers the same way on a deployment that answers neither the v4 read family nor the legacy family.
 _Avoid_: missing endpoint, not found (that is a missing resource)
 
-**Served parameter**: a parameter of an operation that the connected deployment's Langfuse version declares; an operation description lists only its served parameters, and a call carrying any other parameter of that operation is refused before any request, naming the version that serves it, except a filter the server applies itself (a filter scan).
+**Served parameter**: a parameter of an operation that the connected deployment's Langfuse version declares; an operation description lists its served parameters in `parameters` (a filter the server applies itself is listed apart, never among them), and a call carrying any other parameter of that operation is refused before any request, naming the version that serves it, except a filter the server applies itself (a filter scan).
 _Avoid_: supported parameter, valid parameter
 
 **Filter scan**: the server's answer to a list call whose filter the connected deployment does not serve, for the few filters it is defined for: the server reads the list without the filter, keeps the rows that match, and says whether it read every row or stopped at its page limit. An operation description shows such a filter apart from the served parameters, as a filter the server applies itself.
