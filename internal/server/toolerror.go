@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -81,10 +82,10 @@ type statusError struct {
 	retryable  bool
 }
 
-// statusErrorFor returns the tool error for a Langfuse status. A 4xx the
-// mapping table does not name (e.g. 405) is a refused request, reported as
-// langfuse_bad_request.
-func statusErrorFor(status int) statusError {
+// statusErrorFor returns the tool error for a Langfuse status of a call of op.
+// A 4xx the mapping table does not name (e.g. 405) is a refused request,
+// reported as langfuse_bad_request.
+func statusErrorFor(status int, op catalog.Operation) statusError {
 	switch {
 	case status == 401:
 		return statusError{errorUnauthorized, "the key pair was rejected: check LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY, " +
@@ -97,7 +98,7 @@ func statusErrorFor(status int) statusError {
 	case status == 409:
 		return statusError{errorConflict, "the request conflicts with the current state: read the resource again before changing it", false}
 	case status == 413:
-		return statusError{errorResponseTooLarge, tooLargeHint, false}
+		return statusError{errorResponseTooLarge, tooLargeHintFor(op), false}
 	case status == 422:
 		return statusError{errorUnprocessable, "Langfuse could not process the request: read the resource again and check the parameters", false}
 	case status == 429:
@@ -113,10 +114,6 @@ func statusErrorFor(status int) statusError {
 		return statusError{errorBadRequest, "Langfuse refused the request as sent: check the operation and its parameters", false}
 	}
 }
-
-// tooLargeHint tells the agent how to get a smaller answer.
-const tooLargeHint = "narrow the query: request fewer fields, a shorter time window or a lower limit, " +
-	"and page through the rest"
 
 // secondsRoundedUp rounds d up to whole seconds, so that waiting
 // retryAfterSeconds is never too short.
@@ -171,15 +168,68 @@ func routeMissingFlavour(family catalog.Family, profile langfuse.DeploymentProfi
 	}
 }
 
+// notOffered returns the tool error of a call naming an operation of the
+// union catalog that the deployment's resolved catalog does not offer (ADR-0002
+// amendment of 2026-10-10), and the operation's HTTP method. Every tool that
+// takes an operation ID answers it, whatever kind of operation the tool runs
+// (spec #172). ok is false when id is not such an operation, or is a write
+// operation while write mode is off: that stays operation_not_found, so the
+// write surface is not revealed. The message and the hint hold the operation
+// ID and the replacements from the catalog, and the deployment profile; never
+// the caller's text.
+func notOffered(cat catalog.Catalog, id string, writeMode bool, profile langfuse.DeploymentProfile,
+) (f toolErrorFields, method string, ok bool) {
+	u, found := cat.Unavailable(id)
+	if !found || (u.Method != http.MethodGet && !writeMode) {
+		return toolErrorFields{}, "", false
+	}
+	return toolErrorFields{
+		Code:        errorUnavailableOperation,
+		Message:     notServedMessage("operation "+u.ID, profile),
+		Hint:        notOfferedHint(u, profile),
+		OperationID: u.ID,
+	}, u.Method, true
+}
+
+// notOfferedHint is the hint of an operation the deployment's catalog does not
+// offer: where the replacements are, then the deployment profile.
+func notOfferedHint(u catalog.Unavailable, profile langfuse.DeploymentProfile) string {
+	use := "this deployment offers no operation to use instead"
+	if len(u.Replacements) > 0 {
+		use = "operations to use on this deployment instead: " + strings.Join(u.Replacements, ", ")
+	}
+	return unavailableHintWith(use, profile)
+}
+
+// notServedMessage is the message of an operation_unavailable answer about
+// subject, an operation or a tool of the server's own: it names the
+// deployment's version and nothing of the call.
+func notServedMessage(subject string, profile langfuse.DeploymentProfile) string {
+	return subject + " is not served by the connected Langfuse deployment (" + deploymentVersion(profile) + ")"
+}
+
+// unavailableHintWith is the hint of an operation_unavailable answer built
+// from the catalog: use says what to run instead, then where the served
+// operations are listed, then the deployment profile.
+func unavailableHintWith(use string, profile langfuse.DeploymentProfile) string {
+	return use + "; " + searchServedOperations + "; " + profileSummary(profile)
+}
+
+// deploymentVersion names the detected Langfuse version, or says it is unknown.
+// The version is untrusted: it appears only when it is a plain
+// major.minor.patch version.
+func deploymentVersion(profile langfuse.DeploymentProfile) string {
+	if v, ok := profile.KnownVersion(); ok {
+		return "Langfuse " + v
+	}
+	return "Langfuse version unknown"
+}
+
 // profileSummary names the detected Langfuse version and the families on and
 // off. The version is untrusted: it appears only when it is a plain
 // major.minor.patch version. Family names come from the fixed list, never
 // from the profile's own strings.
 func profileSummary(profile langfuse.DeploymentProfile) string {
-	version := "Langfuse version unknown"
-	if v, ok := profile.KnownVersion(); ok {
-		version = "Langfuse " + v
-	}
 	var on, off []string
 	for _, f := range catalog.AllFamilies() {
 		if profile.On(f) {
@@ -188,7 +238,7 @@ func profileSummary(profile langfuse.DeploymentProfile) string {
 			off = append(off, string(f))
 		}
 	}
-	return "deployment: " + version + "; families on: " + listOrNone(on) + "; families off: " + listOrNone(off)
+	return "deployment: " + deploymentVersion(profile) + "; families on: " + listOrNone(on) + "; families off: " + listOrNone(off)
 }
 
 // listOrNone joins names with ", ", or returns "none" when there are none.
@@ -214,7 +264,7 @@ func langfuseErrorFields(err error, op catalog.Operation, r sanitize.Redactor, p
 		f.Hint = unavailableHint(apiErr.Unavailable, op.Family, profile)
 		return f, true
 	}
-	se := statusErrorFor(apiErr.Status)
+	se := statusErrorFor(apiErr.Status, op)
 	f.Code, f.Hint, f.Retryable = se.code, se.hint, se.retryable
 	f.RetryAfterSeconds = secondsRoundedUp(apiErr.RetryAfter)
 	f.Message = "Langfuse answered HTTP " + strconv.Itoa(apiErr.Status)

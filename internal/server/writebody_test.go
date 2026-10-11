@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/sanitize"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/server"
 )
@@ -63,6 +62,45 @@ func TestExecuteWriteSendsABodyThatFitsACombinatorAndNullableSchemaUnchanged(t *
 			got := writtenOne(t, seen).body
 			if !reflect.DeepEqual(asJSON(t, got), asJSON(t, tc.body)) {
 				t.Fatalf("Langfuse received body\n %s\nwant the same JSON as\n %s", got, tc.body)
+			}
+		})
+	}
+}
+
+// Known limit (#188): an unknown key in a write body is refused only where the
+// operation's schema forbids it, and no in-scope schema does
+// (TestNoInScopeWriteBodySchemaForbidsAnUnknownKey), so a misspelled optional
+// key is not an error here: it reaches Langfuse with the rest of the body, which
+// may drop it without a word. The end-to-end campaign on 3.80.0 saw both.
+func TestExecuteWriteSendsAnUnknownBodyKeyWhereTheOperationSchemaAllowsOne(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct{ operationID, body string }{
+		"a misspelled key at the top of a score": {
+			operationID: "scores_create",
+			body:        `{"name":"quality","traceId":"trace-1","value":0.9,"coment":"from the agent","bogusTop":"x"}`,
+		},
+		"an unknown key inside a message of a chat prompt": {
+			operationID: "prompts_create",
+			body: `{"type":"chat","name":"support-bot",
+				"prompt":[{"role":"system","content":"You help.","type":"chatmessage","zzz":1}]}`,
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			fake, seen := writeLangfuse(t, http.StatusOK, `{"id":"new-1"}`)
+			var body map[string]any
+			if err := json.Unmarshal([]byte(tc.body), &body); err != nil {
+				t.Fatalf("bad JSON literal: %v", err)
+			}
+
+			res := callExecuteWrite(t, connectWrites(t, fake), map[string]any{"operationId": tc.operationID, "body": body})
+
+			if res.IsError {
+				t.Fatalf("execute_write refused a body whose only fault is an unknown key: %s", resultText(t, res))
+			}
+			if got := writtenOne(t, seen).body; !reflect.DeepEqual(asJSON(t, got), asJSON(t, tc.body)) {
+				t.Fatalf("Langfuse received body\n %s\nwant the same JSON, unknown key included, as\n %s", got, tc.body)
 			}
 		})
 	}
@@ -189,10 +227,7 @@ func describeWrite(t *testing.T, operationID string) (structured map[string]any,
 // the one execute_write checks against, and whether it is destructive.
 func TestDescribeOperationInWriteModeReturnsTheBodySchemaAndTheDestructiveFlag(t *testing.T) {
 	t.Parallel()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 	scores, _ := cat.Lookup("scores_create")
 
 	got, text := describeWrite(t, "scores_create")

@@ -40,9 +40,32 @@ func Decode(raw json.RawMessage) (any, error) {
 	return v, err
 }
 
-// clean returns v with every string cleaned by Text and redacted by r.
+// clean returns v with every string cleaned by Text and redacted by r. The
+// text r gets is already clean, so it skips the cleaning Redact does.
 func clean(v any, r Redactor) any {
-	return walk(v, func(s string) string { return r.Redact(Text(s)) })
+	return walk(v, func(s string) string { return r.redact(Text(s)) })
+}
+
+// redactHeaderMember returns value, the value of the member key of a payload's
+// object, with the token of a header credential replaced by Redacted when key
+// is an Authorization name: a string of the form "<scheme> <token>", or each
+// such string item of a list (#196). A value of another type, an item that is
+// not a string and the key itself stay as they are.
+func redactHeaderMember(key string, value any) any {
+	if !isAuthorizationName(key) {
+		return value
+	}
+	switch v := value.(type) {
+	case string:
+		return redactHeaderValue(v)
+	case []any:
+		for i, item := range v {
+			if s, ok := item.(string); ok {
+				v[i] = redactHeaderValue(s)
+			}
+		}
+	}
+	return value
 }
 
 // Line drops every control, invisible and bidirectional formatting character
@@ -58,13 +81,15 @@ func Line(s string) string {
 }
 
 // LineValue returns v, a decoded JSON value, with every string, keys
-// included, passed through Line. Keys that read the same once cleaned keep
-// one value by Payload's rule: the key that was already clean, else the first
-// in byte order.
+// included, passed through Line, and the token of a header credential under an
+// Authorization name replaced by Redacted, as Payload does (#196). Keys that
+// read the same once cleaned keep one value by Payload's rule: the key that was
+// already clean, else the first in byte order.
 func LineValue(v any) any { return walk(v, Line) }
 
 // walk returns v, a decoded JSON value, with every string, keys included,
-// passed through f.
+// passed through f; then the value of each object member is replaced by
+// redactHeaderMember(key, value), key being the cleaned key (#196).
 func walk(v any, f func(string) string) any {
 	switch v := v.(type) {
 	case string:
@@ -83,7 +108,7 @@ func walk(v any, f func(string) string) any {
 			if _, taken := out[key]; taken && key != k {
 				continue
 			}
-			out[key] = walk(v[k], f)
+			out[key] = redactHeaderMember(key, walk(v[k], f))
 		}
 		return out
 	}
@@ -92,14 +117,33 @@ func walk(v any, f func(string) string) any {
 
 // Text drops the characters of s that hide or reorder text: invisible and
 // bidirectional formatting characters (hidden) and control characters other
-// than tab, line feed and carriage return.
+// than tab, line feed and carriage return. A terminal control sequence (a
+// colour, a cursor movement, an OSC 8 hyperlink: see withoutEscapeSequences)
+// goes whole, not with its escape character alone; text that only looks like
+// the rest of one, with no escape character before it, stays.
 func Text(s string) string {
+	if plain(s) {
+		return s
+	}
 	return strings.Map(func(r rune) rune {
 		if hidden(r) || (unicode.IsControl(r) && r != '\t' && r != '\n' && r != '\r') {
 			return -1
 		}
 		return r
-	}, strings.ToValidUTF8(s, "�"))
+	}, withoutEscapeSequences(strings.ToValidUTF8(s, "�")))
+}
+
+// plain reports whether s is ASCII with no control character other than tab,
+// line feed and carriage return: text that Text leaves as it is, found by a
+// byte scan that costs far less than Text's scan by rune on ASCII text
+// (BenchmarkRedact; Redact cleans every text it is given).
+func plain(s string) bool {
+	for i := range len(s) {
+		if c := s[i]; c >= 0x7f || (c < ' ' && c != '\t' && c != '\n' && c != '\r') {
+			return false
+		}
+	}
+	return true
 }
 
 // hidden reports whether r is an invisible or bidirectional formatting

@@ -90,6 +90,8 @@ Sources: `[sourced]` local spec (script over every GET: `cursor` vs `page` param
 `/faq/all/deprecated-api-migration#dataset-runs`; `/docs/metrics/features/metrics-api#v2`.
 Observations v2 is **always sorted by `startTime` descending**. It has no `orderBy`. `[sourced]` public-api page.
 
+**Page numbers start at 1.** `[verified]` the end-to-end campaign of 2026-10-10 against 3.80.0 ([finding M7](raw/2026-10-10-e2e-langfuse-3.80.0.md)): `page` 0 and -1 come back as a Langfuse 400, as does a `date-time` parameter that is not a timestamp. The server refuses both before any request (#179): the catalog gives every `page` the minimum 1, and a `date-time` parameter must be an RFC 3339 timestamp.
+
 **Observations v2 cursor format (#93).** `meta.cursor` is base64 of a JSON keyset position: the sort key of the last row served, never an offset and never the page size. Two forms are documented; the first was also observed live:
 
 - `{"lastStartTimeTo":"2026-09-24T01:53:32.683Z","lastTraceId":"a15f…1457","lastId":"dbd1a6c259d1b876"}`: decoded from a live cursor, self-hosted 4.46.0 `events_only`, `GET /v2/observations?limit=2&fields=core`, 2026-09-27. `[verified]` The cookbook `/guides/cookbook/example_data_migration` shows the same form. `[sourced]`
@@ -103,15 +105,21 @@ Consequences:
 
 ### 1.5 Field projection (`fields`)
 
-| Endpoint | Groups | Default | Notes |
-|---|---|---|---|
-| `GET /v2/observations` | `core` (always), `basic`, `time`, `io`, `metadata`, `model`, `usage`, `prompt`, `metrics`, `trace_context` | `core,basic` | A field from a group you did not request is **absent**, not null. `modelId`, `inputPrice`, `outputPrice` and `totalPrice` are always present but null unless you request `model`. The three prices are **strings**. I/O comes back as raw strings. `parseIoAsJson=true` returns 400. `expandMetadata=<keys>` lifts the 200-character metadata truncation. |
-| `GET /v3/scores` | core (always), `details`, `subject`, `annotation` | core | An unknown group returns 400. `subject` = `{kind: trace\|observation\|session\|experiment, id, traceId?}`. |
-| `GET /experiments` | `core`, `metadata`, `scores` | `core` | spec |
-| `GET /experiment-items` | `core`, `dataset`, `io`, `metadata`, `itemMetadata`, `experimentMetadata`, `scores` | `core,dataset` | spec |
-| `GET /traces` (deprecated) | has `fields` | — | spec |
+Seven operations of the union catalog take `fields` (`x-introduced` of the parameter in parentheses). The text of the parameter is not kept in the catalog, so the values were read in the OpenAPI spec of **every release from v3.73.0 to v4.56.0** (296 tags, `web/public/generated/api/openapi.yml` at each tag, 2026-10-11): the description of `fields` changes only at the releases named in the table, and the newest release of the union catalog (4.50.0) and 4.56.0 read alike. Checked against the API reference (`langfuse-docs` MCP, `searchLangfuseDocs`, 2026-10-11): the same texts. `[sourced]`
 
-Sources: `[sourced]` `/docs/api-and-data-platform/features/public-api#field-groups`, `#scores-field-groups`; the local spec's parameter descriptions.
+| Endpoint | Groups | Without `fields` | Notes |
+|---|---|---|---|
+| `GET /v2/observations` (3.141.0) | `core` (always: id, traceId, startTime, endTime, projectId, parentObservationId, type), `basic`, `time`, `io`, `metadata`, `model`, `usage`, `prompt`, `metrics`; `trace_context` (tags, release, traceName) **from 3.175.0** | `core,basic` | A field from a group you did not request is **absent**, not null. `modelId`, `inputPrice`, `outputPrice` and `totalPrice` are always present but null unless you request `model`. The three prices are **strings**. I/O comes back as raw strings. `parseIoAsJson=true` returns 400. `expandMetadata=<keys>` lifts the 200-character metadata truncation. An unknown value is silently ignored (§1.6, §1.7). |
+| `GET /traces/{traceId}` (deprecated; 3.166.0) | `core` (always), `io` (input, output, metadata), `scores`, `observations`, `metrics` | every group | The text of `trace_list`. A group left out comes back empty: `scores` and `observations` as empty lists, `metrics` as `-1` for `totalCost` and `latency`. Langfuse 3.80.0 declares no `fields` here and ignores it (§1.10). `[sourced]` release specs |
+| `GET /traces` (deprecated; 3.73.0) | `core` (always), `io` (input, output, metadata), `scores`, `observations`, `metrics` | every group | The sentence about empty arrays and `-1` is in the spec from 3.110.0; `fields=core` returned 537 bytes against 144,257 for the same `trace_list` page on 3.80.0 (campaign 2026-10-10). The server's static guidance on `describe_operation trace_list` (#178) names these values. `[sourced]` API reference `GET /api/public/traces` |
+| `GET /v2/scores` (deprecated; 3.144.0) | `score` (the core score fields), `trace` (trace properties: userId, tags, environment; **sessionId from 3.156.0**) | both | When the call filters by a trace property (`userId` or `traceTags`), `trace` must be in `fields`, otherwise Langfuse answers **400** (said in the spec from 3.144.0, in every release since). `[sourced]` release specs, not run live |
+| `GET /v3/scores` (3.179.0) | `details` (comment, configId, metadata), `subject` (kind: trace, observation, session or experiment; id; traceId for an observation-level score), `annotation` (authorUserId, queueId), **in addition to** the core fields that are always returned (id, projectId, name, value, dataType, source, timestamp, environment, createdAt, updatedAt) | the core fields only | An unknown name returns **400**. **`core` is not a value**: from 3.182.0 the spec lists only the three groups ("in addition to the always-returned core fields"). The specs of 3.180.0 and 3.181.0 still listed `core` among the allowed names ("Allowed: core, details, subject, annotation. Defaults to core") and no spec has listed it since; whether `fields=core` is answered 400 on a current release was not run live, so the server's guidance does not suggest it. The documented floor of the route is 3.179.0 (`DOCUMENTED_FLOORS` of the generator), but no spec before 3.180.0 contains it. `[sourced]` release specs |
+| `GET /experiments` (3.206.0) | `core`, `metadata`, `scores` | `core` | The spec says nothing more about what a group adds, or whether `core` stays when other groups are asked. `[sourced]` release specs |
+| `GET /experiment-items` (3.206.0) | `core`, `dataset`, `io`, `metadata`, `itemMetadata`, `experimentMetadata`, `scores` | `core,dataset` | As above. `[sourced]` release specs |
+
+The server describes the values of every one of these in `describe_operation` and in the truncation hints (#178, #194). It checks nothing: Langfuse ignores an unknown group on most of them and answers 400 on `GET /v3/scores`.
+
+Sources: `[sourced]` `/docs/api-and-data-platform/features/public-api#field-groups`, `#scores-field-groups`; the release specs; the API reference (`langfuse-docs` MCP).
 
 ### 1.6 Filtering and date ranges
 
@@ -266,6 +274,271 @@ Per-family floors stay in `langfuse-api-versions.md`.
   `DELETE /projects/{projectId}/memberships`, `DELETE /v2/prompts/{promptName}`, `PATCH /score-configs/{configId}`.
 - **Every operation of the 4.46.0 spec is routed on 4.46.0 `dual`** (124 of 124, `langfuse-api-versions.md` §1), so
   the 4.x `dual` profile resolves to all 111 non-excluded operations.
+
+### 1.10 Served parameters: a version range per parameter (generator, 2026-10-10) `[verified]`
+
+Source: `scripts/gen-union-catalog.py` (#173) over the release specs from v3.0.0 to v4.50.0. Each path and query parameter
+of an operation carries the release that introduced it (`x-introduced`) and, when it left the spec while the operation
+stayed, the release that removed it (`x-removed`). Before this, an operation kept the parameters of the last spec that
+listed it, so a parameter a later release added was offered on an older deployment that ignores it (end-to-end campaign
+finding H1, `raw/2026-10-10-e2e-langfuse-3.80.0.md`).
+
+- **The three parameters of H1.** A 3.80.0 spec declares none of them; Langfuse 3.80.0 ignores each and answers the
+  unfiltered data with no error.
+
+  | Operation | Parameter | Introduced |
+  |---|---|---|
+  | `scores_get-many` (`GET /api/public/v2/scores`) | `traceId` | 3.133.0 |
+  | `legacy_observationsV1_getMany` (`GET /api/public/observations`) | `level` | 3.82.0 |
+  | `trace_get` (`GET /api/public/traces/{traceId}`) | `fields` | 3.166.0 |
+
+  `scores_get-many` also gained `datasetRunId` (3.133.0), `sessionId` (3.112.0), `fields` (3.144.0), `observationId`
+  and `filter` (3.153.0); 23 parameters of 12 operations were introduced after their operation.
+- **No parameter has left a spec while its operation stayed** (v3.0.0 to v4.50.0): no `x-removed` on any parameter. The
+  generator and the catalog still support it, proven on minimal specs.
+- **A spec error is dropped.** Releases 3.57.1 to 3.78.x list the response schema of `datasetRunItems_list` as a
+  required query parameter named `response`. The generator drops a parameter whose schema is an object, since a URL
+  carries none; kept, it would be a required parameter of the operation on those deployments.
+- **A change of a parameter's type or enum between releases is not tracked**: the definition of the newest release that
+  lists the parameter applies.
+
+- **What the filter scan relies on** (#183, live on Langfuse 3.80.0, 2026-10-10). Both list routes answer
+  `{"data": [...], "meta": {"page", "limit", "totalItems", "totalPages"}}`; an empty list has `totalItems` 0 and
+  `totalPages` 0. A score of `GET /api/public/v2/scores` carries `traceId`, an observation of
+  `GET /api/public/observations` carries `level` (`ERROR` for an observation ingested with that level). Both ignore
+  the filter they do not declare, so the unfiltered list comes back. `TestLiveLangfuse3800AFilterScanOfScoresByTraceReturnsOnlyThatTracesScores`
+  and `TestLiveLangfuse3800AFilterScanOfLegacyObservationsByLevelReturnsOnlyThatLevel` seed rows through the ingestion
+  batch and read them back through the scan.
+
+### 1.11 Dataset runs routes with a Folder name (live test, 2026-10-10) `[verified]`
+
+Source: `TestLiveLangfuseServesTheRunsOfADatasetReadByItsFolderName` and
+`TestLiveLangfuseAnswersOperationUnavailableOnTheDatasetRunsRoutesWhereTheLegacyFamilyIsOff`
+(`internal/server/foldername_integration_test.go`, #181), run on each pinned deployment. The test creates a dataset
+named `it-folder-<id>/runs-dataset`, one item and one run item of the run `it-run-<id>` straight through Langfuse, then
+reads the runs through `execute_read` (`datasets_getRuns`, `datasets_getRun`, the Folder name sent as `%2F`) and
+sends `DELETE` straight to the route `datasets_deleteRun` and `datasets_getRun` share (the operation itself is not run
+through `execute_write` here: that cycle is live-tested on 4.46.0 only). It replaces the statement, kept in the
+Folder-name hint and two docs since #33, that these routes fail for Folder names in Langfuse itself
+(langfuse/langfuse#13933; a Langfuse maintainer answered there on 2026-07-15 that the OSS route supports the encoded
+name, and the issue was still open on 2026-10-10). The report rested on one reporter, not on a deployment.
+
+| Deployment | `datasets_getRuns` | `datasets_getRun` | `DELETE` of the run |
+|---|---|---|---|
+| 3.80.0 | 200, the one run of that dataset | 200, run and its run item | 200 |
+| 3.225.11 | 200, the one run of that dataset | 200, run; its run item after about 6 s | 200 |
+| 4.46.0 `events_only` | 404, the legacy family is off | 404 | 404 |
+| 4.46.0 `dual` | 200, the one run of that dataset | 200, run; its run item after about 8 s | 200 |
+
+- **"Belongs to that dataset"** means the run's `datasetId` is the ID Langfuse returned when it created the dataset and
+  its `datasetName` is the Folder name; `datasets_getRun` also lists the run item of the item created.
+- **4.46.0 `events_only` is no Folder-name failure.** The three routes are legacy-family routes. Langfuse answers 404
+  to all three for a dataset that exists, and the executor reports `operation_unavailable` (the test asserts the code
+  and the HTTP status 404). The live test session runs under an unknown profile (every family on), so the request does
+  reach Langfuse; a shipped server that detected the profile would refuse before any request, because the resolved
+  catalog of `events_only` offers neither read operation (ADR-0012; `internal/catalog/resolve_test.go`, "4.x
+  events_only").
+- **Run items are listed late on 3.225.11 and 4.46.0 `dual`.** A run item created with `POST /dataset-run-items` is
+  listed by `GET /datasets/{name}/runs/{run}` only after a delay: the `datasets_getRun` subtest took 6.1 s on 3.225.11
+  and 8.1 s on `dual`, 0.01 s on 3.80.0. The run itself is listed at once (`datasets_getRuns` took 0.02 s or less on
+  every deployment that serves it). The test polls for the run item for up to 90 s. The delay was not compared with a
+  dataset without folders, so it is not claimed to be Folder-name related.
+- **A run item needs no trace.** `POST /dataset-run-items` accepted a `traceId` that no trace carries, on every
+  deployment, so the test seeds none.
+
+### 1.12 The legacy observations list as the source of a trace tree (live on 3.80.0, 2026-10-11) `[verified]`
+
+Source: `TestLiveLangfuse3800GetTraceTree*` (`internal/server/tracetree_legacy_integration_test.go`, #187), and direct
+`GET /api/public/observations` calls to the pinned self-hosted 3.80.0 after it ingested the seeded traces; the
+operation is `legacy_observationsV1_getMany`. API reference `GET /api/public/observations` (`langfuse-docs` MCP,
+2026-10-11) for the shape `[sourced]`.
+
+- **`traceId` filter.** The union catalog serves `traceId` on this operation from 3.0.0 (`x-introduced`), and 3.80.0
+  honours it: a call with `traceId` returned only that trace's rows (4 of the project's 8 observations). The campaign
+  of 2026-10-10 saw the same (`raw/2026-10-10-e2e-langfuse-3.80.0.md`, H1). `level` is not served there (§1.10).
+- **Page size cap.** `limit` above 100 is a 400: `limit=101` answered `{"message":"Invalid request data","error":[{"origin":"number","code":"too_big","maximum":100,"inclusive":true,"path":["limit"],…}]}`.
+  The documentation table gives the same, v1 maximum 100 against 1,000 for v2 `[sourced]`.
+- **`meta`.** `{"page", "limit", "totalItems", "totalPages"}`, accurate: a trace of 130 observations gave
+  `totalItems` 130 and `totalPages` 2 on pages 1 and 2 (100 rows, then 30). A trace that does not exist is a 200 with
+  `data: []` and `totalItems` 0, `totalPages` 0 (also on page 999), not a 404. There is no cursor.
+- **Order.** Newest first (`startTime` descending): the first row of page 1 was the last observation started, the
+  last row of page 2 the first. The trace tree sorts the rows itself, so it does not depend on this.
+- **Row fields.** An observation row carries, besides `id`, `traceId`, `parentObservationId`, `type`, `name`,
+  `level`, `statusMessage`, `startTime`, `endTime`, `version`, `environment`, `projectId`, `createdAt` and `updatedAt`:
+  `input`, `output`, `metadata`, `model`, `modelId`, `modelParameters`, `promptId`, `promptName`, `promptVersion`,
+  `completionStartTime`, `timeToFirstToken`, `latency`, `usage`, `usageDetails`, `costDetails`, `unit`,
+  `promptTokens`, `completionTokens`, `totalTokens`, `inputPrice`, `outputPrice`, `totalPrice`,
+  `calculatedInputCost`, `calculatedOutputCost` and `calculatedTotalCost`; 39 keys, null where Langfuse has no value.
+  There is no field selection: `input`, `output` and `metadata` come with every row. **Without them a row is about
+  870 bytes** as Langfuse sends it, so with every key kept about 75 rows fit the default 64 KiB result size cap before
+  rows are left out at a row boundary (a 130-observation trace read through `get_trace_tree` on 3.80.0 counted 130 in
+  `meta.observations` and returned 76 rows, #187).
+- **Which keys are `null` (#200).** One row of a span with no model, usage or cost was recorded from the pinned 3.80.0
+  (2026-10-11; `internal/server/testdata/legacy-observation-3.80.0.json`, 865 bytes, keys as test placeholders). 18 of
+  its 39 keys are `null`: `parentObservationId`, `statusMessage`, `version`, `input`, `output`, `modelParameters`,
+  `completionStartTime`, `promptId`, `model`, `promptName`, `promptVersion`, `timeToFirstToken`, `modelId`,
+  `inputPrice`, `outputPrice`, `totalPrice`, `calculatedInputCost` and `calculatedOutputCost`. A count of `0` is not
+  `null`: `promptTokens`, `completionTokens`, `totalTokens` and `calculatedTotalCost` are `0`, `metadata`,
+  `usageDetails` and `costDetails` are `{}`, `usage` is `{"unit":"TOKENS","input":0,"output":0,"total":0}`, and
+  `latency` is `1000` for the 1-second span. `get_trace_tree` leaves out the top-level keys that are `null`, keeping
+  `id`, `parentObservationId` and `startTime` (ADR-0002 amendment of 2026-10-11): the recorded row is **527 bytes** in
+  the result (key order sorted, `depth` added, `input`, `output` and `metadata` removed), so **124 such observations
+  fit the default cap whole**; of 130 the tree returns 123 rows, against 78 before the rule. The live
+  130-observation trace of `TestLiveLangfuse3800GetTraceTreeReadsASecondPageOfTheLegacyList` (spans with a start time
+  and no end time, so `endTime` and `latency` are `null` too) returns **125 of 130** rows, against 76. So 130
+  observations do not fit the default cap either way; the result is marked truncated, `meta.observations` says 130
+  and the hint says how many rows were kept.
+- **Latency unit.** An observation of 1 s (`startTime` and `endTime` one second apart) has `latency` **1000** in this
+  list, and one of 2 s has 2000: **milliseconds**. The API reference documents the v2 `latency` filter and field in
+  seconds `[sourced]`, and §6 row 12 says the legacy observation schema also uses seconds; on 3.80.0 the observation
+  rows disagree with that. The trace's own `latency` (`GET /api/public/traces/{traceId}`) is in seconds (128 for a
+  trace whose observations were started over about two minutes), as the campaign recorded ("trace `latency` is in seconds and observation
+  `latency` in milliseconds"). The trace tree does not convert: a row is what the deployment's Langfuse returns, and
+  the tool description names both units.
+
+### 1.13 Behaviours of Langfuse the server relays unchanged, seen on 3.80.0 and checked (2026-10-11) `[sourced]`
+
+Source: the "Low" findings of the end-to-end campaign on a self-hosted 3.80.0 (`raw/2026-10-10-e2e-langfuse-3.80.0.md`,
+#188). The server relays each of them as Langfuse sends it: correcting one would mean inventing data. Before they were
+written down here each was checked against the OpenAPI spec of the `v3.80.0` tag (`web/public/generated/api/openapi.yml`;
+the `v4.50.0` spec for what changed since), the Langfuse docs (`langfuse-docs` MCP, 2026-10-11) and, where those are
+silent, the Langfuse source at the `v3.80.0` tag (paths below are in `langfuse/langfuse`). None was run again against a
+live Langfuse: the observations are the campaign's. **Confirmed** means the spec, docs or source agree with what the
+campaign saw. **Contradicted** means the spec or the docs say otherwise: the row then gives what the source and any
+live measure show, and the behaviour stays recorded as seen on 3.80.0, not as a documented guarantee.
+
+| Seen on 3.80.0 | What the check found | Verdict |
+|---|---|---|
+| `meta.totalItems` over-counts after a record is written twice with the same ID (2 for 1 row) | Spec: `utilsMetaResponse.totalItems` is the "number of total items given the current filters/selection (if any)"; duplicates are not mentioned. Source, `GET /api/public/traces` (`web/src/pages/api/public/traces/index.ts`): the count is `SELECT count() … FROM traces` (`getTracesCountForPublicApi`, `web/src/features/public-api/server/traces.ts`) with no deduplication, while `generateTracesForPublicApi` deduplicates the rows it lists (`FROM traces t FINAL`, or `LIMIT 1 BY t.id, t.project_id` when a skip-index filter is used, or an aggregating table on its newer execution path). The campaign does not name the list it saw this on; only the traces list was read | Confirmed for the traces list: the count includes row versions that the list collapses into one. The other lists were not checked |
+| `trace_delete` of a trace that does not exist answers 200 `Trace deleted successfully` | Spec: the response is `{message}`; the spec lists a 404 for every operation and says nothing about a missing trace. Source (`web/src/pages/api/public/traces/[traceId].ts`): the `DELETE` handler writes an audit entry, adds a job to the trace delete queue and returns that message; it never looks the trace up. Docs (`/docs/administration/data-deletion`): trace deletion is asynchronous and "there is no deletion confirmation or notification; to verify that your data got deleted, query it again" | Confirmed. The message means a job was queued, for a trace that exists and for one that does not; a deleted trace can stay readable for a while |
+| A 403 for an organization-scoped operation says `Invalid API key` | Spec: the 403 response is declared with no description or schema. Docs: no docs page states the text. Source: every organization-scoped route of 3.80.0 (projects, organizations, memberships, API keys, SCIM) answers 403 `Invalid API key. Organization-scoped API key required for this operation.`; the projects route of `v3.225.11` and the source on `main` (found through the `langfuse-docs` search) have the same text. The campaign record quotes the first sentence only. §1.7 recorded, on 4.46.0, the second sentence alone, from a route it does not name; that was not compared | Confirmed, with the full text. The key is valid but project-scoped: the first sentence misleads, the second names the cause |
+| `prompts_list` returns both `meta` and `pagination` | Spec: `PromptMetaListResponse` declares `data` and `meta` only (3.80.0 and 4.50.0). Source (`web/src/features/prompts/server/actions/getPromptsMeta.ts`): the action returns `meta` and an identical `pagination` object (`page`, `limit`, `totalPages`, `totalItems`), kept "for backwards compatibility as we initially released the /v2/prompts endpoint with this structure which did not match the api spec" (langfuse/langfuse#2068) | Confirmed, and on purpose; `pagination` is undeclared in the spec. Both objects hold the same four numbers |
+| A trace's `latency` is in seconds and an observation's `latency` in milliseconds | Trace: the spec says "Latency of trace in seconds" (`TraceWithDetails.latency`), the traces list divides `latency_milliseconds` by 1000, and §1.12 measured seconds on a trace. Observation: the spec says "The latency in seconds" (`ObservationsView.latency`), but `GET /api/public/observations` builds it in `convertObservation` (`packages/shared/src/server/repositories/observations_converters.ts`) as `endTime − startTime` in milliseconds, and §1.12 measured 1000 for an observation of one second | Trace unit: confirmed. Observation unit: **contradicted** by the spec, which says seconds; the source and §1.12 say milliseconds. For the legacy list on 3.80.0 read the spec's unit as wrong. Other releases of the legacy list were not checked |
+| `comments_get` returns no `meta`, and its `objectType` has no enum | Spec: `GetCommentsResponse` requires `data` and `meta` (`utilsMetaResponse`), in 3.80.0 and in 4.50.0; `objectType` is a plain string whose description lists `trace, observation, session, prompt`. Source (`web/src/pages/api/public/comments/index.ts`): the `GET` handler returns `{ data: comments }`, and its response schema (`GetCommentsV1Response`, strict) allows `data` only, so there is no pagination metadata on 3.80.0; the query schema validates `objectType` against the enum `CommentObjectType` (`TRACE`, `OBSERVATION`, `SESSION`, `PROMPT`, upper case; `packages/shared/prisma/schema.prisma`) | `meta` absent: **contradicted** by the spec, which requires it; confirmed by the source. Page until a page comes back empty. `objectType` without an enum: confirmed in the spec; the route takes only the upper-case names (read in the source, not run), although the spec's description lists them in lower case. Later releases (4.50.0 sends the list through `listCommentsForApi`) were not checked |
+
+The server's side of these is documented in the [tools reference](../reference/tools.md): `meta.totalItems` and the two
+latency units under "Calling an operation", the rest under "Known limits".
+
+---
+
+### 1.14 What the body of `comments_create` and `scores_create` needs (release specs and sources, 2026-10-11) `[verified]`
+
+Source: the "Low" findings of the end-to-end campaign on a self-hosted 3.80.0 (`raw/2026-10-10-e2e-langfuse-3.80.0.md`,
+split out of #188 into #192): an agent learned from a Langfuse 400 where the `projectId` of a comment comes from and
+that a score needs a target. The server now says both in `describe_operation` (write mode), as static guidance. The facts
+below were checked before the text was coded: the OpenAPI specs at the tags `v3.0.0`, `v3.30.0`, `v3.35.0`, `v3.40.0`,
+`v3.45.0`, `v3.50.0`, `v3.51.0`, `v3.51.1`, `v3.52.0`, `v3.53.0`, `v3.54.0`, `v3.54.1`, `v3.55.0`, `v3.60.0`, `v3.80.0`,
+`v3.100.0`, `v3.112.0` and `v3.133.0` (`web/public/generated/api/openapi.yml` of `langfuse/langfuse`), the source at the
+tags named in the rows (paths are in `langfuse/langfuse`), the Langfuse docs (`langfuse-docs` MCP) and the union catalog
+(4.50.0). None was run again against a live Langfuse: the 400s are the campaign's.
+
+| Fact | Evidence | What the server does with it |
+|---|---|---|
+| `projectId` of `CreateCommentRequest` is required, and the spec describes it only as "The id of the project to attach the comment to." | Spec: `required` is `projectId`, `objectType`, `objectId`, `content` at every tag above from `v3.0.0` to `v3.133.0` and in the union catalog | The body schema already says it is required; the guidance says what to send |
+| A comment is stored under the project of the API key, whatever `projectId` the body holds | Source at `v3.80.0` (`web/src/pages/api/public/comments/index.ts`): the `POST` handler creates the comment with `data: { ...body, id: v4(), projectId: auth.scope.projectId }`. Source at `v3.225.11`, `v4.46.0` and `main` (`web/src/features/comments/server/publicCommentService.ts`, `createCommentForApi`): the comment is created with `projectId: auditScope.projectId`, the key's project, and the body's `projectId` is overwritten before the reference object is validated. The source of the tags between `v3.0.0` and `v3.79.x` was not read | The guidance says `projectId` is the ID of the project the server's keys belong to |
+| `projects_get` (`GET /api/public/projects`) returns the project of the API key, with its `id` | Spec summary "Get Project associated with API key" (`v3.80.0`; the union catalog adds "(requires project-scoped API key)"); response `Projects` = `{ data: [Project] }`, `Project` = `{ id, name, metadata, retentionDays }` (`v3.80.0`). `projects_get` is in every release since `v3.0.0` | The guidance names `projects_get` as the operation that returns that project, and its `id` as the value, only when the resolved catalog offers `projects_get` |
+| `CreateScoreRequest` requires a `traceId` and has no `sessionId` or `datasetRunId` up to `v3.52.0` | Spec: `required` is `traceId`, `name`, `value` and the properties lack both at `v3.0.0`, `v3.30.0`, `v3.35.0`, `v3.40.0`, `v3.45.0`, `v3.50.0`, `v3.51.0`, `v3.51.1` and `v3.52.0` | Before 3.53.0 the guidance names `traceId` (with an optional `observationId`) as the target |
+| `sessionId` joins `CreateScoreRequest` in `v3.53.0` (`required` becomes `name`, `value`) and `datasetRunId` in `v3.55.0` | Spec at `v3.52.0` (neither), `v3.53.0` and `v3.54.0`/`v3.54.1` (`sessionId` only), `v3.55.0` (both) | From 3.53.0 the guidance names `sessionId` too, from 3.55.0 `datasetRunId` too |
+| A score needs exactly one target, and `observationId` needs `traceId` | Source `packages/shared/src/utils/scores.ts`. `v3.53.0` and `v3.54.1`: valid only with a `traceId` and no `sessionId`, or a `sessionId` and neither `traceId` nor `observationId`; message "Either provide traceId (with optional observationId) or sessionId, but not both. ObservationId requires traceId." `v3.55.0`, `v3.80.0`, `v3.112.0`, `v3.225.11`, `v4.46.0`, `v4.50.0` and `main`: the same with a `datasetRunId` as a third target; message "Provide exactly one of the following: traceId (with optional observationId), sessionId or datasetRunId. ObservationId requires traceId." Docs `/docs/evaluation/evaluation-methods/scores-via-sdk`: a trace or observation score needs `traceId` (an observation score gives both IDs), a session score gives only `sessionId`. Langfuse answers 400 (the campaign on 3.80.0; langfuse/langfuse#9323 shows the same message on a self-hosted 3.112.0) | The guidance says a score needs exactly one target (a single target before 3.53.0, where `traceId` is required), names the target properties the body schema and the deployment's version have (`traceId`, `sessionId`, `datasetRunId`; `observationId` with `traceId`), and says a body with none, or more than one, is refused with HTTP 400 |
+
+The unknown that remained here (#192) was that the body schema of every write operation was the newest release's, not the
+deployment's, so `describe_operation` returned and `execute_write` checked a schema with `sessionId` and `datasetRunId` and no
+required `traceId` for a deployment before 3.55.0. It is closed by #202, below.
+
+#### Request bodies change between releases (generator over v3.0.0 to v4.50.0, 2026-10-11) `[verified]`
+
+Source: `scripts/gen-union-catalog.py` (#202) over the OpenAPI spec of the 403 release tags from v3.0.0 to v4.50.0 (118 distinct
+specs, the set the committed catalog was built from), `$ref`s inlined from each spec and converted to JSON Schema 2020-12.
+Compared by `required` flag and schema, the `description` and `title` annotations apart. Read from the specs; none was run
+against a live deployment.
+
+- **Of the 35 write operations the server offers, 15 have more than one distinct body: 76 bodies in all** (the 17 operations
+  the server excludes keep one each). `scores_create` has 11, `models_create` 5 (7 spans), `prompts_create` 4 (6 spans),
+  `datasets_create` 3, `comments_create` 2, `scoreConfigs_create` 2, `evaluators_create` and `evaluators_update` 2 each, and the
+  three `unstable/` operations that left the spec in 4.31.0 up to 6.
+- **`scores_create`** (`POST /api/public/scores`, `score_create` in the oldest specs): `traceId`, `name` and `value` are required
+  up to 3.52.0; `environment` joins in 3.35.0, `metadata` in 3.49.0; **3.53.0** adds `sessionId` and requires only `name` and
+  `value`; **3.55.0** adds `datasetRunId`; `queueId` in 3.118.0; `source` in 3.171.0. Spans: 3.0.0, 3.35.0, 3.49.0, 3.53.0,
+  3.55.0, 3.118.0, 3.131.0, 3.143.0, 3.165.0, 3.171.0 and 3.188.0 each start a body.
+- **`models_create`** (`POST /api/public/models`): `unit` is required in the body of 3.0.0 to 3.7.x, **optional and nullable
+  (`"unit": null`) from 3.8.0 to 4.18.x**, required again from 4.19.0. The `PUT /models/{id}` body (4.19.0 on) requires it.
+  `pricingTiers` joins in 3.135.0.
+- **The release specs are not monotonic for bodies either.** The spec of v3.28.2 has the 3.0.0 bodies of `models_create` and
+  `prompts_create` (it also lacks one operation, §1.9): the generator stores each such body once, with both spans.
+  `comments_create` gains `objectStartTime` in 4.33.0.
+- **Changes below the top level**: `prompts_create` (inside its `oneOf`), `scoreConfigs_create` (from 3.165.0),
+  `annotationQueues_createQueueItem` (from 3.121.0), `datasets_create` (4.45.2), `evaluators_update` (a message
+  `role` constant becomes an enum in 4.27.0), `unstable_dashboardWidgets_update` (the `view` enum gains `scores-boolean` in
+  3.224.0).
+- **No older body has a property named like a credential** (`secret`, `password`, `accessKey`), so no exclusion follows. The
+  excluded operations that take one have 43 bodies; the generator keeps only the newest of each.
+- **The bodies of the first releases use the OpenAPI 3.0 `example` keyword** (`POST /ingestion` and `POST /scores` in 280
+  releases each, three `unstable/` operations in 23): the generator converts it to `examples: [value]`.
+- **Size.** The embedded catalog was 504,215 bytes and is 955,700 with the history (2,072,165 if the excluded operations kept
+  theirs too). The ADR-0012 amendment of #202 has the decision.
+
+The server now resolves one body per write operation for the detected version, the body of the newest release that is not newer
+than the deployment (the newest when no version was detected), and the `scores_create` guidance above names a target property
+only when that body has it.
+
+### 1.15 The shape of `filter` per operation (release specs 4.42.0 and 4.46.0, API reference, 2026-10-11) `[verified]`
+
+Source: ticket #195 (a JSON escape of a hidden character inside a `filter` reached Langfuse unchecked, found while
+the text checks of #179 were built). The server now decodes, checks and re-encodes a `filter` that
+is a JSON text, so which `filter` parameters are JSON had to be known per operation, not guessed from the name. Checked
+against the `description` of the parameter in the release specs `v4.42.0` and `v4.46.0`
+(`web/public/generated/api/openapi.yml` of `langfuse/langfuse`; the union catalog keeps no parameter description) and the
+API reference (`langfuse-docs` MCP, `api.reference.langfuse.com`). None was run against a live Langfuse.
+
+| Operation | `filter` served from (union catalog) | What the 4.46.0 release spec says | The server reads it as |
+|---|---|---|---|
+| `trace_list` | 3.116.1 | "JSON string containing an array of filter conditions" | a JSON filter |
+| `legacy_observationsV1_getMany` | 3.120.0 | the same | a JSON filter |
+| `observations_getMany` | 3.141.0 | the same | a JSON filter |
+| `scores_get-many` | 3.153.0 | "A JSON stringified array of filter objects" | a JSON filter |
+| `experiments_list`, `experiments_listItems` | 3.206.0 | "JSON string containing an array of structured filter conditions" | a JSON filter |
+| `prompts_list` | 4.42.0 | "JSON string containing an array of filter conditions, combined with AND" (finding below) | a JSON filter |
+| `scim_listUsers` | 3.50.0 | "Filter expression (e.g. userName eq "value")": a SCIM filter | an ordinary query parameter value |
+
+The `prompts_list` finding. The release specs from `v4.42.0` (identical text at `v4.46.0`) give `GET /api/public/v2/prompts` a
+`filter` parameter: a JSON string of filter conditions combined with AND, which "takes precedence over name, version, label,
+tag, fromUpdatedAt, and toUpdatedAt", where "an empty array applies no filters". A condition needs `type`, `column`,
+`operator` and `value`; the types and columns the spec lists are `string` and `stringOptions` on `id`, `name` and `type`,
+`number` on `version`, `datetime` on `createdAt` and `updatedAt`, `arrayOptions` on `labels` and `tags`, and
+`stringObject` on `config` (with a `key`). The spec adds that a backslash escapes `%` and `_` in the search operators and
+that the backslash is JSON-escaped in the filter value: the server reads that as an escaped backslash, ordinary text, and
+sends it as it was written. The current API reference lists no `filter` for the operation (`name`, `label`, `tag`, `page`,
+`limit`, `fromUpdatedAt` and `toUpdatedAt` only), so the reference lags the release spec (section 6, row 14). The earlier
+reading that its meaning was unverified (#141) is settled: it is a JSON filter, and a plain word such as `billing` is no
+valid value for it. The static guidance of `describe_operation` on `filter` (it is not the tag filter, send `tag`) is
+unchanged.
+
+What the server does with a JSON filter: a string holding the JSON text of one list, at most 16384 bytes and 10 levels
+deep, with no control or invisible character in the raw text or in any decoded string or key; the decoded list is sent
+written again as compact JSON (order of conditions and list items kept, numbers as written, object keys sorted, a
+duplicated key once with its last value). The grammar (types, columns, operators, required keys) stays Langfuse's.
+
+### 1.16 Two `date-time` query parameters that bound no time window (release specs 4.33.0 and 4.46.0, API reference, 2026-10-11) `[verified]`
+
+Source: ticket #204 (the hints of #203 told an agent to use "a shorter time window" for an operation whose only
+`date-time` parameter is none). Fourteen operations of the union catalog have a query parameter with the format
+`date-time`. Twelve take a `from...`/`to...` pair that bounds the time range of a list: `fromStartTime`/`toStartTime`
+(`legacy_observationsV1_getMany`, `observations_getMany`, `experiments_list`, `experiments_listItems`),
+`fromTimestamp`/`toTimestamp` (`trace_list`, `sessions_list`, `scores_get-many`, `scoresV3_getManyV3`, `score_get`,
+`metrics_daily`) and `fromUpdatedAt`/`toUpdatedAt` (`prompts_list`, `unstable_skills_list`). The other two bound no window:
+
+| Operation | Parameter (served from) | What Langfuse says | What it means for a hint |
+|---|---|---|---|
+| `legacy_observationsV1_get` | `startTime` (4.33.0) | "The start time of the observation (ISO 8601 with offset, e.g. 2024-01-01T00:00:00Z). Optional performance hint - when provided, Langfuse narrows the lookup to make the request substantially faster. It only affects speed - an incorrect or omitted value never changes the result." Read from the `description` of the parameter in the release specs `v4.33.0` and `v4.46.0` (`web/public/generated/api/openapi.yml` of `langfuse/langfuse`; the union catalog keeps no parameter description). The API reference page of the operation (`api.reference.langfuse.com`) lists only `observationId`. | One observation is read by its ID: there is no list, no `limit`, no `fields` and no paging, and `startTime` never makes the answer smaller. The operation has no way of narrowing. |
+| `datasetItems_list` | `version` (3.153.0) | API reference: "ISO 8601 timestamp (RFC 3339, Section 5.6) in UTC (e.g., "2026-01-21T14:35:42Z"). If provided, returns state of dataset at this timestamp. If not provided, returns the latest version. Requires datasetName to be specified." | A point in time: an earlier timestamp is another state of the dataset, not a smaller page. The ways of narrowing the operation has are `limit` and `page`. |
+
+The server keeps two closed lists in `internal/catalog` (`timeWindowParams`, the six parameter names above, and
+`notTimeWindows`, the two `(operationId, parameter)` pairs of the table); a test fails, naming the operation and the
+parameter, when a `date-time` query parameter of the union catalog is on neither or on both, so the next release's
+snapshot or lookup parameter is classified by a person. An operation has a time window when the deployment's version
+serves at least one parameter of the first list. The value check of a `date-time` parameter (RFC 3339, before any request)
+covers all fourteen operations, a window or not.
+
 ---
 
 ## 2. Deprecations
@@ -437,6 +710,13 @@ mistakes them for "the last 7 days" of a run, #105):
 - `traceName` stays a backwards-compatible column of the `observations` view in v2, usable in `filters` and
   `dimensions`.
 
+The legacy v1 query (`GET /api/public/metrics`, `legacy_metricsV1_metrics`) has the same top-level keys as v2 and the
+`traces` view besides `observations` and the three `scores-*` views; its documented example, the number of traces per
+name (`{"view":"traces","metrics":[{"measure":"count","aggregation":"count"}],"dimensions":[{"field":"name"}],…}`),
+is the server's static guidance on `describe_operation legacy_metricsV1_metrics` (#178), with fixed January 2025 dates.
+Its documented `orderBy` sample is `{"field":"name","direction":"asc"}`. `[sourced]` API reference
+`GET /api/public/metrics` and `/docs/metrics/features/metrics-api` (`langfuse-docs` MCP, 2026-10-10).
+
 `[sourced]` checked on 2026-09-27 with the `langfuse-docs` MCP: API reference `GET /api/public/v2/metrics` (`query`
 parameter structure); `/docs/metrics/features/metrics-api#v2`; `/guides/cookbook/example_metrics_api_v2` (daily
 `timeDimension`); `/faq/all/deprecated-api-migration#metrics` (`traceName` as a filter column).
@@ -557,5 +837,6 @@ server should close with explicit `ca-file`/`proxy` config. `[sourced — unveri
 | 9 | The spec still exposes `parseIoAsJson`, and even flags "Deprecated" inside the v2 observations description. The docs say `true` returns 400. | spec |
 | 10 | Freshness is "about 10 minutes" in the spec and "up to 15 minutes" in the docs. | §1.1 |
 | 11 | The spec contains `unstable/dashboards*` and `unstable/dashboard-widgets*`, which are unversioned and unstable. MCP exposes them. | spec |
-| 12 | **Latency units differ by endpoint.** Metrics v2 measures `latency`, `streamingLatency` and `timeToFirstToken` in **ms**. Observations v2 filters and fields (and the legacy trace and observation schemas) use **seconds**. This is not a docs error, but any tool that bridges the two endpoints must convert. | spec `/v2/metrics` description vs the `/v2/observations` `filter` description and the `latency` schema descriptions |
+| 12 | **Latency units differ by endpoint.** Metrics v2 measures `latency`, `streamingLatency` and `timeToFirstToken` in **ms**. Observations v2 filters and fields (and the legacy trace schema) use **seconds**; the legacy observations list returns an observation's `latency` in **ms** on 3.80.0 (§1.12). This is not a docs error, but any tool that bridges the two endpoints must convert. | spec `/v2/metrics` description vs the `/v2/observations` `filter` description and the `latency` schema descriptions |
 | 13 | `ObservationsV2Meta` declares no own properties. It inherits `utilsCursorMetaResponse` through `allOf`, so a code generator must resolve the `allOf` to see `cursor`. | `components.schemas.ObservationsV2Meta` |
+| 14 | `GET /api/public/v2/prompts` has a `filter` query parameter in the release specs from 4.42.0 (a JSON string of filter conditions combined with AND) that the current API reference does not list. | Release specs `v4.42.0` and `v4.46.0` against the reference page of `prompts_list` (`langfuse-docs` MCP, 2026-10-11); §1.15 |

@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -84,7 +85,7 @@ type truncatedEnvelope struct {
 }
 
 // readTruncated calls operationID against a fake Langfuse answering body and
-// returns the envelope, after checking the result fits 100 KiB.
+// returns the envelope, after checking the result fits the default 64 KiB cap.
 func readTruncated(t *testing.T, operationID, body string) truncatedEnvelope {
 	t.Helper()
 	fake, _ := fakeLangfuse(t, http.StatusOK, body)
@@ -96,15 +97,15 @@ func readTruncated(t *testing.T, operationID, body string) truncatedEnvelope {
 	if res.IsError {
 		t.Fatalf("execute_read returned a tool error: %s", text[:min(200, len(text))])
 	}
-	if len(text) > 100<<10 {
-		t.Fatalf("result is %d bytes, want at most 102400", len(text))
+	if len(text) > 64<<10 {
+		t.Fatalf("result is %d bytes, want at most 65536", len(text))
 	}
 	var env truncatedEnvelope
 	if err := json.Unmarshal([]byte(text), &env); err != nil {
 		t.Fatalf("truncated result is not the envelope: %v", err)
 	}
-	if !env.Truncated || !strings.Contains(env.Hint, "limit") || env.Label == "" {
-		t.Fatalf("envelope = {truncated: %v, hint: %q, label: %q}, want truncated with a hint to narrow the query",
+	if !env.Truncated || env.Hint == "" || env.Label == "" {
+		t.Fatalf("envelope = {truncated: %v, hint: %q, label: %q}, want truncated with a hint",
 			env.Truncated, env.Hint, env.Label)
 	}
 	return env
@@ -129,24 +130,47 @@ func TestAListResultAboveTheMaximumReturnedBytesKeepsTheFirstRowsAndThePaginatio
 		t.Fatalf("truncated list is not the Langfuse page shape: %v", err)
 	}
 	if len(page.Data) == 0 || len(page.Data) >= 5001 || page.Data[0].ID != "obs-1" || page.Meta.Cursor != "next" ||
-		!strings.Contains(env.Hint, strconv.Itoa(len(page.Data))+" of 5001") {
+		!strings.Contains(env.Hint, strconv.Itoa(len(page.Data))+" of 5001") || !strings.Contains(env.Hint, "call again with limit 100;") {
 		t.Fatalf("kept %d rows (first %+v), cursor %q, hint %q; want the first rows, fewer than 5001, "+
-			"meta.cursor next and a hint naming how many of 5001 rows are shown",
+			"meta.cursor next and a hint naming how many of 5001 rows are shown and the largest limit, 100",
 			len(page.Data), page.Data[:min(1, len(page.Data))], page.Meta.Cursor, env.Hint)
 	}
 }
 
-func TestAResultAboveTheMaximumReturnedBytesThatIsNotAListIsCutWithAMarker(t *testing.T) {
+func TestAResultAboveTheMaximumReturnedBytesThatIsNotAListHasItsLargeValueClippedAndStaysAnObject(t *testing.T) {
 	t.Parallel()
 	body := `{"id":"t-1","input":"` + strings.Repeat(`<p>\"long\" & é</p>`, 20000) + `"}`
 
 	env := readTruncated(t, "trace_get", body)
 
+	var data struct {
+		ID    string `json:"id"`
+		Input string `json:"input"`
+	}
+	if err := json.Unmarshal(env.Data, &data); err != nil {
+		t.Fatalf("clipped data is not the payload's object: %v", err)
+	}
+	if data.ID != "t-1" || !strings.HasPrefix(data.Input, `<p>"long" & é</p><p>"long"`) || !strings.HasSuffix(data.Input, "… [clipped]") ||
+		!strings.Contains(env.Hint, "cannot be read whole through this server") {
+		t.Fatalf("data = {id: %q, input: %.40q…%q}, hint %q; want the object kept, the input clipped with its start and the marker, "+
+			"and a hint that the value is larger than the cap", data.ID, data.Input, data.Input[max(0, len(data.Input)-20):], env.Hint)
+	}
+}
+
+func TestAnObjectWithNoListOfManyShortValuesAboveTheMaximumReturnedBytesIsCutToTextWithAMarker(t *testing.T) {
+	t.Parallel()
+	pairs := make([]string, 0, 6000)
+	for i := range 6000 {
+		pairs = append(pairs, fmt.Sprintf(`"key-%05d":"value"`, i))
+	}
+
+	env := readTruncated(t, "trace_get", `{`+strings.Join(pairs, ",")+`}`)
+
 	var data string
 	if err := json.Unmarshal(env.Data, &data); err != nil {
 		t.Fatalf("truncated data is not the payload as text: %v", err)
 	}
-	if !strings.HasPrefix(data, `{"id":"t-1","input":"<p>`) || !strings.HasSuffix(data, "… [truncated]") {
+	if !strings.HasPrefix(data, `{"key-00000":"value"`) || !strings.HasSuffix(data, "… [truncated]") {
 		t.Fatalf("data = %q…%q, want the payload's start ending with the truncation marker",
 			data[:min(40, len(data))], data[max(0, len(data)-20):])
 	}

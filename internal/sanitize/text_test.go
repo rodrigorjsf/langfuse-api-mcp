@@ -18,6 +18,8 @@ func FuzzMessage(f *testing.F) {
 	f.Add(strings.Repeat("é", 700))
 	f.Add("\xff\xfe broken UTF-8")
 	f.Add("ok\uFE0F\U000E0100ay\u3164")
+	f.Add("failed \x1b[31mred\x1b[0m \x1b]8;;https://x.example\x07link\x1b]8;;\x07 \u009b2J end")
+	f.Add("\x1b]" + strings.Repeat("a", 600) + "\x07 \x1b[" + strings.Repeat("1", 600))
 	f.Fuzz(func(t *testing.T, s string) {
 		got := sanitize.Message(s)
 		if !utf8.ValidString(got) || utf8.RuneCountInString(got) > sanitize.MaxMessageRunes {
@@ -39,5 +41,14 @@ func TestMessageDropsVariationSelectorsAndInvisibleFillers(t *testing.T) {
 	got := sanitize.Message("ok️\U000E0100\U000E01EFayㅤᅟﾠ͏")
 	if got != "okay" {
 		t.Fatalf("Message = %q, want %q", got, "okay")
+	}
+}
+
+// Text leaves plain ASCII alone and still drops what hides or reorders text,
+// the delete character among it (#180: the plain-text fast path stops at it).
+func TestTextKeepsTabsAndLineBreaksAndDropsTheDeleteCharacter(t *testing.T) {
+	t.Parallel()
+	if got := sanitize.Text("a\tb\nc\rd\x7fe\x00f\x1bg"); got != "a\tb\nc\rdefg" {
+		t.Fatalf("Text = %q, want %q", got, "a\tb\nc\rdefg")
 	}
 }

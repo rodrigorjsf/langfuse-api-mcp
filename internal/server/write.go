@@ -114,9 +114,16 @@ func (ex executor) executeWrite(ctx context.Context, req *mcp.CallToolRequest, a
 		return toolError(errorInvalidArgument, err.Error(), writeArgumentsHint, in.OperationID)
 	}
 	op, ok := ex.catalog.Lookup(in.OperationID)
+	if !ok {
+		if f, method, unavailable := notOffered(ex.catalog, in.OperationID, ex.writeMode, ex.profile); unavailable {
+			a.method = method
+			return errorResult(f)
+		}
+	}
 	if !ok || op.IsRead() {
 		// Excluded, unknown and read operations look the same: none of them
-		// can be run by execute_write.
+		// can be run by execute_write. (An operation the deployment does not
+		// offer, read or write, was answered operation_unavailable above.)
 		return toolError(errorOperationNotFound, "no write operation "+strconv.Quote(truncate(in.OperationID))+
 			" can be run by this server", writeNotFoundHint, in.OperationID)
 	}
@@ -156,14 +163,21 @@ func bodyHint(op catalog.Operation) string {
 var bodyCaps = strconv.Itoa(catalog.MaxBodyBytes) + " bytes and " + strconv.Itoa(catalog.MaxBodyDepth) +
 	" levels of nesting"
 
-// notRetriedHint is the hint of a failed write: a failure that may have
+// notRetriedHint is the hint of a failed write of op: a failure that may have
 // reached Langfuse says the write was not retried, and a 5xx loses the read
-// hint's claim that the server retried.
-func notRetriedHint(f toolErrorFields) string {
+// hint's claim that the server retried. A write that timed out or was canceled
+// gets the ways of narrowing op has after the note, and nothing after it when it
+// has none (#203).
+func notRetriedHint(f toolErrorFields, op catalog.Operation) string {
 	switch {
 	case f.Code == errorLangfuseUnavailable:
 		return "Langfuse is temporarily unavailable; " + notRetriedNote
-	case f.Retryable || f.Code == errorTimeout || f.Code == errorCanceled || f.Code == errorInternal:
+	case f.gotNoAnswerInTime():
+		if advice := slowAdvice(op, f.Code == errorCanceled); advice != "" {
+			return notRetriedNote + "; " + advice
+		}
+		return notRetriedNote
+	case f.Retryable || f.Code == errorInternal:
 		return notRetriedNote + "; " + f.Hint
 	}
 	return f.Hint

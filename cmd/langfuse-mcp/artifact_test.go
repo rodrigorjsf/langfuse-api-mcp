@@ -59,8 +59,8 @@ func TestExecutableBuiltWithoutAVersionReportsTheDevelopmentVersion(t *testing.T
 
 // buildExecutable builds this package's executable with version injected at
 // build time, the way the release build does (-X main.version), and returns
-// its launch command.
-func buildExecutable(t *testing.T, version string) []string {
+// its launch command. buildArgs are further arguments of go build.
+func buildExecutable(t *testing.T, version string, buildArgs ...string) []string {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -69,7 +69,8 @@ func buildExecutable(t *testing.T, version string) []string {
 		bin += ".exe"
 	}
 	// go test puts its own toolchain first on PATH.
-	build := exec.CommandContext(ctx, "go", "build", "-trimpath", "-ldflags=-X main.version="+version, "-o", bin, ".") //nolint:gosec // G204: the go tool, a literal version and a temp path, not external input
+	args := append([]string{"build", "-trimpath", "-ldflags=-X main.version=" + version, "-o", bin}, buildArgs...)
+	build := exec.CommandContext(ctx, "go", append(args, ".")...) //nolint:gosec // G204: the go tool, a literal version, a temp path and the callers' build flags, not external input
 	build.Env = append(build.Environ(), "CGO_ENABLED=0")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build the executable: %v\n%s", err, out)

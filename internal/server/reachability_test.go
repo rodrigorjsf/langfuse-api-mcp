@@ -163,10 +163,7 @@ func pinnedSession(t *testing.T, pin catalog.Profile, rawURL string) (*mcp.Clien
 // resolvedFor returns the real catalog resolved for the deployment profile p.
 func resolvedFor(t *testing.T, p catalog.Profile) catalog.Catalog {
 	t.Helper()
-	cat, err := catalog.Load()
-	if err != nil {
-		t.Fatalf("load catalog: %v", err)
-	}
+	cat := sharedCatalog(t)
 	return cat.Resolve(p)
 }
 

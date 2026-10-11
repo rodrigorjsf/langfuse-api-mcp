@@ -142,6 +142,7 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 	log.Info("rate limit", "perMinute", cfg.RateLimit, "source", cfg.RateLimitSource)
 	logProxy(log, cfg.Proxy)
 	logWriteMode(log, cfg.AllowWrites)
+	logResultCap(log, cfg.ResultCap)
 	// The key pair leaves config.Secret straight into a langfuse.KeyPair,
 	// which redacts itself as config.Secret does.
 	keys := langfuse.NewKeyPair(cfg.Connection.PublicKey.Reveal(), cfg.Connection.SecretKey.Reveal())
@@ -159,9 +160,16 @@ func startWith(log *slog.Logger, environ []string, ambient []trust.Source) (app,
 	detection := detectProfile(log, client)
 	profile := detection.Profile
 	resolved := cat.Resolve(catalogProfile(profile))
+	// The request body of each operation is the one of the detected version: a
+	// schema that does not compile stops startup, so no body is checked against
+	// nothing (#202).
+	if err := resolved.BodyError(); err != nil {
+		return app{}, err
+	}
 	logProfile(log, detection, len(resolved.Operations()))
 	reported := reportedVersion(version, moduleVersion())
-	opts := []server.Option{server.WithVersion(reported)}
+	// The cap is the operator's: config validated its range; no tool argument reaches it.
+	opts := []server.Option{server.WithVersion(reported), server.WithMaxResultBytes(cfg.ResultCap.Bytes)}
 	if cfg.AllowWrites.On {
 		opts = append(opts, server.WithWriteMode())
 	}
@@ -196,7 +204,8 @@ func detectProfile(log *slog.Logger, client *langfuse.Client) langfuse.Detection
 // without a deciding answer, whether the version is unsupported, and the number
 // of operations the resolved catalog offers. An unsupported version lists no
 // family: the catalog ignores them. The version is untrusted Langfuse text:
-// only a plain version is logged.
+// only a plain version is logged. A version that was not detected is logged
+// as such, with the parameters then served.
 func logProfile(log *slog.Logger, d langfuse.Detection, operations int) {
 	p := d.Profile
 	version, ok := p.KnownVersion()
@@ -215,6 +224,11 @@ func logProfile(log *slog.Logger, d langfuse.Detection, operations int) {
 	families, undecided := familyNames(on), familyNames(kept)
 	log.Info("deployment profile", "version", version, "families", families, "undecided", undecided,
 		"unsupported", d.Unsupported, "operations", operations)
+	if !ok {
+		// Fixed text: an operation offers the parameters (#173) and has the
+		// request body (#202) of the newest known release.
+		log.Info("Langfuse version not detected: serving the newest release's parameters and request bodies")
+	}
 }
 
 // familyNames returns the families' names in order, never nil, so an empty
@@ -245,6 +259,16 @@ func logWriteMode(log *slog.Logger, w config.WriteMode) {
 		source = "default"
 	}
 	log.Info("write mode", "on", w.On, "source", source)
+}
+
+// logResultCap logs the effective result size cap and where it was set; an
+// unset LANGFUSE_MCP_MAX_RESULT_BYTES is the default.
+func logResultCap(log *slog.Logger, c config.ResultCap) {
+	source := string(c.Origin)
+	if source == "" {
+		source = "default"
+	}
+	log.Info("result size cap", "bytes", c.Bytes, "source", source)
 }
 
 // envMap turns "KEY=value" entries into a map; the last entry for a key wins.

@@ -4,8 +4,7 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse"
 )
 
@@ -18,27 +17,79 @@ const (
 	errorCanceled                = "canceled"
 )
 
-// narrowHint tells the agent how to make a slow read cheaper.
-const narrowHint = "narrow the query before calling again: a shorter time window, fewer fields or a lower limit"
+// The hints of a call that got no answer in time. A canceled call has the hint
+// of a timeout behind a lead-in, since the client usually cancels a slow call.
+const (
+	canceledLead  = "if the call was canceled because it was slow, "
+	slowNoWayHint = "no parameter of this operation makes the call cheaper: tell the user instead of calling again"
+)
+
+// gotNoAnswerInTime reports whether f is the failure of a call that was sent and
+// got no answer in time: a timeout of Langfuse or a canceled call. A call held by
+// the server's own rate limit or concurrency cap is a retryable timeout that was
+// never sent, and is not one.
+func (f toolErrorFields) gotNoAnswerInTime() bool {
+	return f.Code == errorCanceled || (f.Code == errorTimeout && !f.Retryable)
+}
+
+// slowHint is the hint text of a timeout, or of a canceled call behind its
+// lead-in when canceled.
+func slowHint(text string, canceled bool) string {
+	if canceled {
+		return canceledLead + text
+	}
+	return text
+}
+
+// slowAdvice tells the agent how to make a slow call cheaper: the ways of
+// narrowing op has, in the words of the truncation hint (#203), or "" when it
+// has none.
+func slowAdvice(op catalog.Operation, canceled bool) string {
+	ways := remediesOf(op).NarrowWays()
+	if ways == "" {
+		return ""
+	}
+	return slowHint("narrow the query before calling again: "+ways, canceled)
+}
+
+// slowHintFor is the hint of a read of op that timed out, or was canceled when
+// canceled. An operation with no way of narrowing is told so, and is not invited
+// to call again: the error is not retryable (#203).
+func slowHintFor(op catalog.Operation, canceled bool) string {
+	if advice := slowAdvice(op, canceled); advice != "" {
+		return advice
+	}
+	return slowHint(slowNoWayHint, canceled)
+}
 
 // caHint tells the user how to trust the CA of the Langfuse server.
 const caHint = "set LANGFUSE_CA_CERT " +
 	"(a PEM file) or LANGFUSE_CA_CERTS_PATH (a directory of PEM files) to the CA that signed it, " +
 	"then check the 'CA sources loaded' line of the server's startup log"
 
-// failure is the tool error for a Langfuse request that got no usable answer
-// (a transport failure, a refused redirect or an oversized body); a Langfuse
-// error answer goes through langfuseErrorFields instead. err itself never
-// reaches the agent; the caller records it on the audit line (stderr).
-func failure(operationID string, err error) (*mcp.CallToolResult, error) {
-	fields := failureFields(err)
-	fields.OperationID = truncate(operationID)
-	return errorResult(fields)
+// failureOf is the tool error of a call of op that failed with err, with the
+// operation ID, and records the failure in the audit line: the HTTP status of
+// a Langfuse error answer, or the cause of a call that got none. answered
+// says that Langfuse answered. The one translation every executor path
+// shares (the generic executor, the filter scan, the trace tree). err itself
+// never reaches the agent: only the audit line (stderr) holds it.
+func (ex executor) failureOf(op catalog.Operation, err error, a *audit) (f toolErrorFields, answered bool) {
+	f, answered = langfuseErrorFields(err, op, ex.redact, ex.profile)
+	if answered {
+		a.status = f.HTTPStatus
+	} else {
+		a.cause = err.Error()
+		f = failureFields(op, err)
+	}
+	f.OperationID = truncate(op.ID)
+	return f, answered
 }
 
-// failureFields classifies err into the tool error fields, without the
-// operation ID.
-func failureFields(err error) toolErrorFields {
+// failureFields classifies err, the failure of a call of op that got no usable
+// answer (a transport failure, a refused redirect or an oversized body), into
+// the tool error fields, without the operation ID. Only failureOf calls it; a
+// Langfuse error answer goes through langfuseErrorFields instead.
+func failureFields(op catalog.Operation, err error) toolErrorFields {
 	switch {
 	case errors.Is(err, langfuse.ErrRedirectRefused):
 		return toolErrorFields{
@@ -67,7 +118,7 @@ func failureFields(err error) toolErrorFields {
 			Code: errorResponseTooLarge,
 			Message: "the Langfuse response is larger than the " + strconv.Itoa(langfuse.MaxResponseBytes>>20) +
 				" MiB this server reads; it was not returned",
-			Hint: tooLargeHint,
+			Hint: tooLargeHintFor(op),
 		}
 	case errors.Is(err, langfuse.ErrNetwork):
 		return toolErrorFields{
@@ -90,13 +141,13 @@ func failureFields(err error) toolErrorFields {
 		return toolErrorFields{
 			Code:    errorTimeout,
 			Message: "Langfuse did not answer before the request deadline",
-			Hint:    narrowHint,
+			Hint:    slowHintFor(op, false),
 		}
 	case errors.Is(err, langfuse.ErrCanceled):
 		return toolErrorFields{
 			Code:    errorCanceled,
 			Message: "the request was canceled before Langfuse answered",
-			Hint:    "if the call was canceled because it was slow, " + narrowHint,
+			Hint:    slowHintFor(op, true),
 		}
 	default:
 		return toolErrorFields{

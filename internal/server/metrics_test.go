@@ -156,9 +156,10 @@ func TestAMetricsQueryThatIsNotAWellFormedQueryObjectIsRefusedWithoutEchoingIt(t
 	}
 }
 
-func TestInstructionsHiddenCharactersAndMarkupInAMetricsFilterReachLangfuseAsInertData(t *testing.T) {
+func TestInstructionsAndMarkupInAMetricsFilterReachLangfuseAsInertData(t *testing.T) {
 	t.Parallel()
-	value, _ := json.Marshal(injected)
+	text := strings.ReplaceAll(injected, "\u202e", "") // a hidden character is refused, see below
+	value, _ := json.Marshal(text)
 	query := strings.TrimSuffix(metricsQuery, "}") +
 		`,"filters":[{"column":"name","operator":"=","type":"string","value":` + string(value) + `}]}`
 
@@ -166,8 +167,8 @@ func TestInstructionsHiddenCharactersAndMarkupInAMetricsFilterReachLangfuseAsIne
 
 	filters, _ := sent["filters"].([]any)
 	filter, _ := filters[0].(map[string]any)
-	if filter["value"] != injected {
-		t.Fatalf("Langfuse received filter value %q, want the caller's value unchanged %q", filter["value"], injected)
+	if filter["value"] != text {
+		t.Fatalf("Langfuse received filter value %q, want the caller's value unchanged %q", filter["value"], text)
 	}
 }
 
@@ -241,21 +242,6 @@ func TestTheMetricsQueryExampleOfTheGuidancePassesTheServersValidator(t *testing
 	}
 }
 
-func TestOnlyMetricsMetricsCarriesTheQueryGuidance(t *testing.T) {
-	t.Parallel()
-	cs := connectOffline(t)
-
-	for _, operationID := range []string{"legacy_metricsV1_metrics", "trace_list"} {
-		res := callTool(t, cs, "describe_operation", map[string]any{"operationId": operationID})
-		if res.IsError {
-			t.Fatalf("describe_operation %s returned a tool error: %s", operationID, resultText(t, res))
-		}
-		if s := mustJSON(t, res.StructuredContent); strings.Contains(s, `"guidance"`) {
-			t.Errorf("describe_operation %s carries guidance: %s", operationID, s)
-		}
-	}
-}
-
 func TestAMalformedMetricsQueryIsRefusedWithAHintNamingTheKeysAndDescribeOperation(t *testing.T) {
 	t.Parallel()
 	// injected plus a zero-width space and a control character.
@@ -313,20 +299,22 @@ func TestTheRefusalHintAndTheGuidanceNameTheKeysTheValidatorAccepts(t *testing.T
 	if len(keys) != len(values) {
 		t.Fatalf("the key list names %d keys, this test gives values for %d", len(keys), len(values))
 	}
-	for _, key := range keys {
-		value, ok := values[key]
-		if !ok {
-			t.Fatalf("the key list names %q, which this test has no value for", key)
-		}
-		t.Run(key, func(t *testing.T) {
-			t.Parallel()
-
-			sent := sentQuery(t, "metrics_metrics", `{"`+key+`":`+value+`}`)
-
-			if _, ok := sent[key]; !ok {
-				t.Fatalf("Langfuse received %v, want key %s", sent, key)
+	for _, operationID := range []string{"metrics_metrics", "legacy_metricsV1_metrics"} {
+		for _, key := range keys {
+			value, ok := values[key]
+			if !ok {
+				t.Fatalf("the key list names %q, which this test has no value for", key)
 			}
-		})
+			t.Run(operationID+" "+key, func(t *testing.T) {
+				t.Parallel()
+
+				sent := sentQuery(t, operationID, `{"`+key+`":`+value+`}`)
+
+				if _, ok := sent[key]; !ok {
+					t.Fatalf("Langfuse received %v, want key %s", sent, key)
+				}
+			})
+		}
 	}
 }
 

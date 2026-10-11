@@ -3,8 +3,11 @@ package server_test
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // Seam: describe_operation steers an agent listing prompts by tag to the tag
@@ -17,11 +20,17 @@ const (
 	promptsFilterGuidance = "Not the tag filter: to list the prompts that carry a tag, send the tag name in tag instead."
 )
 
-// describedParams calls describe_operation for operationID and returns its
-// text and the guidance of each parameter by name.
+// describedParams calls describe_operation for operationID on a server whose
+// deployment is unknown (the newest parameters) and returns its text and the
+// guidance of each parameter by name.
 func describedParams(t *testing.T, operationID string) (string, map[string]string) {
 	t.Helper()
-	cs := connectOffline(t)
+	return describedParamsOn(t, connectOffline(t), operationID)
+}
+
+// describedParamsOn is describedParams over a connected session.
+func describedParamsOn(t *testing.T, cs *mcp.ClientSession, operationID string) (string, map[string]string) {
+	t.Helper()
 	tool := toolNamed(t, cs, "describe_operation")
 
 	res := callTool(t, cs, "describe_operation", map[string]any{"operationId": operationID})
@@ -137,13 +146,16 @@ func TestAPromptsListCallWithFilterIsStillSent(t *testing.T) {
 	cs := connect(t, fake)
 
 	res := callExecuteRead(t, cs, map[string]any{
-		"operationId": "prompts_list", "parameters": map[string]any{"filter": "billing"},
+		"operationId": "prompts_list", "parameters": map[string]any{
+			"filter": `[{"type":"string","column":"name","operator":"=","value":"billing"}]`,
+		},
 	})
 
 	if res.IsError {
 		t.Fatalf("execute_read returned a tool error: %s", resultText(t, res))
 	}
-	if got := receivedOne(t, seen); got.query.Get("filter") != "billing" {
-		t.Fatalf("Langfuse received query %v, want filter=billing", got.query)
+	want := []any{map[string]any{"type": "string", "column": "name", "operator": "=", "value": "billing"}}
+	if got := decodedFilter(t, receivedOne(t, seen)); !reflect.DeepEqual(got, want) {
+		t.Fatalf("Langfuse received filter %v, want %v", got, want)
 	}
 }

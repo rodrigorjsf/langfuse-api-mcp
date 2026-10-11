@@ -5,13 +5,13 @@
 **Operation**: one method+path pair of the Langfuse public API, identified by its OpenAPI `operationId`.
 _Avoid_: endpoint (when you mean a single method), route, action
 
-**Catalog**: the set of in-scope operations the server can execute for the connected deployment: the bundled union of Langfuse release specs, minus the exclusion list, filtered by the deployment profile.
+**Catalog**: the set of in-scope operations the server can execute for the connected deployment: the bundled union of Langfuse release specs, minus the exclusion list, filtered by the deployment profile; each write operation has the request body of the deployment's Langfuse version.
 _Avoid_: registry, tool list
 
-**Operation index**: the compact listing `search_operations` returns — one line per catalog operation (its ID and the first line of its description; for a legacy operation, what it does and its replacement), grouped by tag, optionally filtered by a query.
+**Operation index**: the compact listing `search_operations` returns — one line per catalog operation (its ID and the first line of its description; for a legacy operation, what it does and its replacement; in write mode, for a write operation, its HTTP method and whether it is destructive), grouped by tag, optionally filtered by a query.
 _Avoid_: API list, endpoint list
 
-**Operation description**: what `describe_operation` returns for one operation — every parameter with its location, type, required flag, enum, bounds and default.
+**Operation description**: what `describe_operation` returns for one operation — every served parameter with its location, type, required flag, enum, bounds and default, and, apart from them, the filters the server applies itself on this deployment (its scanned filters).
 _Avoid_: operation docs, spec (for this per-operation view)
 
 **Read operation**: an operation using HTTP GET; executable only through `execute_read`.
@@ -37,10 +37,10 @@ _Avoid_: exception, failure response
 
 ## Langfuse connection
 
-**Result size cap**: the most bytes one tool result carries, set by the operator; a result over it has values clipped and, if that is not enough, rows left out, and says so. (Configurable: Planned.)
+**Result size cap**: the most bytes one tool result carries, set by the operator; a result over it has values clipped and, if that is not enough, rows left out, and says so; a discovery result is reduced by its shape instead (a body schema loses its descriptions and titles, an operation index its last entries), never cut at a byte. Set with `LANGFUSE_MCP_MAX_RESULT_BYTES`, never by a tool argument; the default is 64 KiB.
 _Avoid_: output limit, max tokens
 
-**Clipped value**: a string value inside a tool result that was shortened, with a marker, so that the result fits the size cap while every row and every other value stays whole. (Planned.)
+**Clipped value**: a string value inside a tool result that was shortened, with a marker, so that the result fits the size cap while every row and every other value stays whole.
 _Avoid_: truncated row (a whole row left out of a list), cut payload
 
 **Host**: the base URL of a Langfuse deployment (`LANGFUSE_BASE_URL`, alias `LANGFUSE_HOST`); the API lives under `<host>/api/public`.
@@ -56,14 +56,17 @@ _Avoid_: region preset
 **Legacy operation**: a deprecated operation, part of the legacy family; exposed only when the connected deployment still answers it.
 _Avoid_: v1 API, old API
 
-**Unavailable operation**: an operation of the catalog that the connected deployment does not serve (its version lacks the route, or its write mode turns the operation's family off); a call to it returns the tool error `operation_unavailable`, never Langfuse's body.
+**Unavailable operation**: an operation of the catalog that the connected deployment does not serve (its version lacks the route, or its write mode turns the operation's family off); a call to it returns the tool error `operation_unavailable`, never Langfuse's body. `get_trace_tree` answers the same way on a deployment that answers neither the v4 read family nor the legacy family.
 _Avoid_: missing endpoint, not found (that is a missing resource)
 
-**Served parameter**: a parameter of an operation that the connected deployment's Langfuse version declares; an operation description lists only its served parameters, and a call carrying any other parameter of that operation is refused before any request, naming the version that serves it. (Planned.)
+**Served parameter**: a parameter of an operation that the connected deployment's Langfuse version declares; an operation description lists its served parameters in `parameters` (a filter the server applies itself is listed apart, never among them), and a call carrying any other parameter of that operation is refused before any request, naming the version that serves it, except a filter the server applies itself (a filter scan).
 _Avoid_: supported parameter, valid parameter
 
-**Filter scan**: the server's answer to a list call whose filter the connected deployment does not serve, for the few filters it is defined for: the server reads the list without the filter, keeps the rows that match, and says whether it read every row or stopped at its page limit. (Planned.)
+**Filter scan**: the server's answer to a list call whose filter the connected deployment does not serve, for the few filters it is defined for: the server reads the list without the filter, keeps the rows that match, and says whether it read every row or stopped at its page limit. An operation description shows such a filter apart from the served parameters, as a filter the server applies itself.
 _Avoid_: client-side filtering, emulated filter
+
+**Time window**: a query parameter the catalog names as one (the `from...`/`to...` pairs, such as `fromTimestamp` and `toTimestamp`) that bounds the time range of what a list returns; the hints of a result too large or a slow call recommend "a shorter time window" only for an operation whose deployment serves one. A parameter with the format `date-time` is not a time window for that reason: the `startTime` of `legacy_observationsV1_get` (a hint that only makes the lookup faster) and the `version` of `datasetItems_list` (the state of the dataset at that point in time) bound none, and both are listed as such.
+_Avoid_: date filter, time filter
 
 **Deployment profile**: the detected Langfuse version plus the families that answered at startup; it decides which operations are in the catalog for the process lifetime.
 
@@ -93,7 +96,7 @@ _Avoid_: truststore (Java/Python term), CA bundle (when you mean the whole pool)
 
 **Observation**: a timed step inside a trace — span, generation, event and newer typed variants; forms a tree via `parentObservationId`.
 
-**Trace tree**: the observations of one trace in depth-first pre-order, each with its depth, the parent before its children; what `get_trace_tree` returns.
+**Trace tree**: the observations of one trace in depth-first pre-order, each with its depth, the parent before its children; what `get_trace_tree` returns on a deployment that answers the v4 read APIs or only the legacy ones.
 
 **Payload query**: an observation query that requests the `io` or `metadata` field groups — the application's own content, not timing or cost data.
 _Avoid_: heavy query, io query

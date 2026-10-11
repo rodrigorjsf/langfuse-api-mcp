@@ -133,9 +133,9 @@ func TestSearchOperationsWithoutQueryListsEveryReadOperationGroupedByTag(t *test
 
 	assertMatchesOutputSchema(t, tool, res)
 	idx := operationIndexOf(t, res)
-	// The union catalog has 68 GET operations and no excluded one among them.
-	if idx.Count != 68 || len(idx.listed()) != 68 {
-		t.Fatalf("index lists %d operations (count %d), want the 68 read operations", len(idx.listed()), idx.Count)
+	// The union catalog has 69 GET operations and no excluded one among them.
+	if idx.Count != 69 || len(idx.listed()) != 69 {
+		t.Fatalf("index lists %d operations (count %d), want the 69 read operations", len(idx.listed()), idx.Count)
 	}
 	// The tags holding a v4-family operation come first (ADR-0012 §5).
 	if idx.Groups[0].Tag != "Metrics" || idx.Groups[0].Operations[0].OperationID != "metrics_metrics" ||
@@ -257,7 +257,7 @@ func TestSearchOperationsInWriteModeListsWriteOperationsNamingTheToolThatRunsThe
 	}
 	text := resultText(t, res)
 	for _, want := range []string{
-		"- prompts_create — Create a new version for the prompt with the given `name` (execute_write)\n",
+		"- prompts_create — Create a new version for the prompt with the given `name` (execute_write, POST, not destructive)\n",
 		"- prompts_get — Get a prompt (execute_read)\n",
 	} {
 		if !strings.Contains(text, want) {
@@ -586,8 +586,9 @@ func TestSearchOperationsForAnOperationIDStartingWithTraceReturnsNoHint(t *testi
 }
 
 // #100: the hint names only trace reads the deployment offers. A 3.x deployment
-// serves the legacy family only: no get_trace_tree, observations_getMany or
-// metrics_metrics, so none is named.
+// serves the legacy family only: observations_getMany and metrics_metrics are
+// not offered, so neither is named (get_trace_tree is: it reads the legacy list
+// there, #187).
 func TestSearchOperationsNamesNoTraceReadTheDeploymentDoesNotOffer(t *testing.T) {
 	t.Parallel()
 	cs := connectResolved(t, "3.225.11")
@@ -595,7 +596,7 @@ func TestSearchOperationsNamesNoTraceReadTheDeploymentDoesNotOffer(t *testing.T)
 	res := callTool(t, cs, "search_operations", map[string]any{"query": "traces zqxj-nothing-matches"})
 
 	text := resultText(t, res)
-	for _, route := range []string{"metrics_metrics", "observations_getMany", "get_trace_tree"} {
+	for _, route := range []string{"metrics_metrics", "observations_getMany"} {
 		if strings.Contains(text, route) || strings.Contains(hintOf(t, res), route) {
 			t.Errorf("result names %s, which deployment 3.225.11 does not offer:\n%s", route, text)
 		}

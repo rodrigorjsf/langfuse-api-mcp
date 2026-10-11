@@ -44,6 +44,16 @@ type Profile struct {
 //     knows nothing older; its families are ignored.
 //
 // When several kept operations share an ID, the one introduced last wins.
+//
+// Each kept operation offers only its served parameters (#173): those whose
+// range holds the version, taken as above; an unknown version is the newest
+// known one, whose spec lists the parameters no later release removed. The
+// operation's other parameters stay known to Request, which refuses them
+// naming the release that serves them.
+//
+// Each kept operation has the request body of the same version (#202): the
+// stored body whose releases hold it, none when that release took no body. The
+// bodies the version does not choose are neither compiled nor offered.
 func (c Catalog) Resolve(p Profile) Catalog {
 	u := c.union
 	at, known := parseVersion(p.Version)
@@ -53,6 +63,12 @@ func (c Catalog) Resolve(p Profile) Catalog {
 	}
 	if known && at.less(floor) {
 		at, byFamily = floor, false
+	}
+	paramVersion, deployment := at, ""
+	if known {
+		deployment = p.Version
+	} else {
+		paramVersion = u.newest
 	}
 	byID := map[string]rangedOperation{}
 	for _, op := range u.ops {
@@ -68,10 +84,67 @@ func (c Catalog) Resolve(p Profile) Catalog {
 		byID[op.ID] = op
 	}
 	out := Catalog{union: u, byID: make(map[string]Operation, len(byID))}
+	bodyErrs := map[string]error{}
 	for id, op := range byID {
-		out.byID[id] = op.Operation
+		o := op.withServedParams(paramVersion, deployment)
+		var err error
+		if o.Body, err = op.bodyAt(paramVersion); err != nil {
+			bodyErrs[id] = err
+		}
+		if _, offered := byID[o.prefers]; o.prefers != "" && !offered {
+			// The line must not send the agent to an operation this catalog
+			// does not offer.
+			o.DescriptionLine = o.plainLine
+		}
+		out.byID[id] = o
 	}
+	out.bodyErr = joinBodyErrors(bodyErrs)
 	return out
+}
+
+// Unavailable is an operation the union catalog knows and a resolved catalog
+// does not offer: its version range or its family is off on the deployment.
+type Unavailable struct {
+	// ID is the operation ID, from the union catalog, never the caller's text.
+	ID string
+	// Method is the HTTP method, upper case.
+	Method string
+	// Replacements are the IDs of the operations this catalog offers that do
+	// the same job, in ID order: the one the operation's summary says to
+	// prefer, and the operations whose summary says to prefer this one, of the
+	// same method. Empty when none does.
+	Replacements []string
+}
+
+// Unavailable reports whether id is an operation of the union catalog that c,
+// resolved for a deployment profile, does not offer. An ID in no release, or
+// one the catalog never exposes (ADR-0004), is not.
+func (c Catalog) Unavailable(id string) (Unavailable, bool) {
+	if _, offered := c.byID[id]; offered {
+		return Unavailable{}, false
+	}
+	var found *rangedOperation
+	for i := range c.union.ops {
+		op := &c.union.ops[i]
+		if op.ID == id && (found == nil || found.span.introduced.less(op.span.introduced)) {
+			found = op
+		}
+	}
+	if found == nil {
+		return Unavailable{}, false
+	}
+	u := Unavailable{ID: id, Method: found.Method}
+	if _, ok := c.byID[found.prefers]; ok {
+		u.Replacements = append(u.Replacements, found.prefers)
+	}
+	for other, op := range c.byID {
+		if op.prefers == id && op.Method == found.Method {
+			u.Replacements = append(u.Replacements, other)
+		}
+	}
+	slices.Sort(u.Replacements)
+	u.Replacements = slices.Compact(u.Replacements)
+	return u, true
 }
 
 // union is the whole union catalog: every in-scope operation of every known
@@ -82,10 +155,32 @@ type union struct {
 	newest version
 }
 
-// rangedOperation is an operation and its parsed version range.
+// rangedOperation is an operation and its parsed version range, the ranges of
+// its parameters, in the order of Operation.Params, and its request bodies.
 type rangedOperation struct {
 	Operation
-	span span
+	span       span
+	paramSpans []span
+	// bodies are the operation's distinct request bodies, none when it takes
+	// none in any release (#202). Operation.Body is nil until Resolve.
+	bodies []*storedBody
+}
+
+// withServedParams returns the operation with the parameters version v serves in
+// Params and the others in unserved; deployment is the deployment's plain
+// version, "" when it was not detected.
+func (o rangedOperation) withServedParams(v version, deployment string) Operation {
+	out := o.Operation
+	out.deployment = deployment
+	out.Params, out.unserved = nil, nil
+	for i, p := range o.Params {
+		if o.paramSpans[i].serves(v) {
+			out.Params = append(out.Params, p)
+		} else {
+			out.unserved = append(out.unserved, p)
+		}
+	}
+	return out
 }
 
 // span is a version range: from introduced (zero: no lower bound) up to, not
@@ -96,14 +191,31 @@ func (s span) contains(v version) bool {
 	return !v.less(s.introduced) && (s.removed.isZero() || v.less(s.removed))
 }
 
+// serves reports whether a parameter with range s is served at version v.
+// The zero version, which no release has, is the newest known one that is
+// unknown: it serves the parameters no release removed.
+func (s span) serves(v version) bool {
+	if v.isZero() {
+		return s.removed.isZero()
+	}
+	return s.contains(v)
+}
+
 // rangeOf parses an operation's version range.
-func rangeOf(o Operation) (span, error) {
-	introduced, err := optionalVersion(o.Introduced)
+func rangeOf(o Operation) (span, error) { return parseSpan(o.Introduced, o.Removed) }
+
+// parameterRange parses a parameter's version range.
+func parameterRange(p Param) (span, error) { return parseSpan(p.Introduced, p.Removed) }
+
+// parseSpan parses the introduced and removed versions of a union catalog
+// entry; "" is no bound.
+func parseSpan(introduced, removed string) (span, error) {
+	from, err := optionalVersion(introduced)
 	if err != nil {
 		return span{}, err
 	}
-	removed, err := optionalVersion(o.Removed)
-	return span{introduced: introduced, removed: removed}, err
+	to, err := optionalVersion(removed)
+	return span{introduced: from, removed: to}, err
 }
 
 // optionalVersion parses a version of the union catalog; "" is the zero

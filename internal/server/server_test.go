@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -90,11 +91,27 @@ func startServer(t testing.TB, client *langfuse.Client, log *slog.Logger, secret
 	profile langfuse.DeploymentProfile, opts ...server.Option,
 ) *mcp.ClientSession {
 	t.Helper()
-	cat, err := catalog.Load()
+	return startCatalog(t, sharedCatalog(t), client, log, secrets, profile, opts...)
+}
+
+// loadedCatalog loads the real catalog once for the whole package.
+var loadedCatalog = sync.OnceValues(catalog.Load)
+
+// sharedCatalog returns the real catalog, loaded once per run.
+//
+// A catalog is built once and shared read-only (.claude/rules/go.md), and
+// loading one compiles the JSON Schema of every write operation: about 11 MiB
+// allocated and 35 ms without the race detector, 20 MiB and 440 ms with it,
+// for the 1989 loads one run of this package used to make (#201). No test may
+// write to what it returns or to a slice or map inside it; a test that needs a
+// catalog of its own builds one with catalog.Load.
+func sharedCatalog(t testing.TB) catalog.Catalog {
+	t.Helper()
+	cat, err := loadedCatalog()
 	if err != nil {
 		t.Fatalf("load catalog: %v", err)
 	}
-	return startCatalog(t, cat, client, log, secrets, profile, opts...)
+	return cat
 }
 
 // startCatalog starts the server over the given catalog, as startServer does
@@ -103,20 +120,43 @@ func startCatalog(t testing.TB, cat catalog.Catalog, client *langfuse.Client, lo
 	profile langfuse.DeploymentProfile, opts ...server.Option,
 ) *mcp.ClientSession {
 	t.Helper()
-	srv := server.New(cat, client, log, secrets, profile, opts...)
+	return connectClientTo(t, server.New(cat, client, log, secrets, profile, opts...), nil)
+}
 
+// closeAtEnd closes c when the test ends and then forgets it.
+//
+// The testing package keeps a parallel test that has ended, with the closures
+// it registered through t.Cleanup, until the whole run ends: runCleanup
+// shortens the list without clearing it. A cleanup that still held the session
+// would keep the server, its catalog and everything they reference for the
+// rest of the run, and under the race detector that is what made one process of
+// this package grow past 5000 MiB (#201). Closing an already-closed session is
+// harmless.
+func closeAtEnd(t testing.TB, c io.Closer) {
+	t.Helper()
+	t.Cleanup(func() {
+		_ = c.Close()
+		c = nil
+	})
+}
+
+// connectClientTo connects one more MCP client, with the given options (nil for
+// a plain one), to a server that is already built, so that tests can compare
+// what several clients of one server get.
+func connectClientTo(t testing.TB, srv *mcp.Server, opts *mcp.ClientOptions) *mcp.ClientSession {
+	t.Helper()
 	ctx := context.Background()
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	ss, err := srv.Connect(ctx, serverTransport, nil)
 	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
-	t.Cleanup(func() { _ = ss.Close() }) // closing an already-closed session is harmless
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, nil).Connect(ctx, clientTransport, nil)
+	closeAtEnd(t, ss)
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, opts).Connect(ctx, clientTransport, nil)
 	if err != nil {
 		t.Fatalf("client connect: %v", err)
 	}
-	t.Cleanup(func() { _ = cs.Close() })
+	closeAtEnd(t, cs)
 	return cs
 }
 

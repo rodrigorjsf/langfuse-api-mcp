@@ -77,7 +77,13 @@ func TestAnIndexLineIsTheSummaryCleanedOfHiddenCharactersLinksBoldAndExcess(t *t
 			if tc.summary != "" {
 				op["x-summary"] = tc.summary
 			}
-			spec, err := json.Marshal(map[string]any{"paths": map[string]any{"/api/public/x": map[string]any{"get": op}}})
+			// The operations the summaries name as preferred are offered, so the
+			// lines keep the mention.
+			offered := func(id string) map[string]any { return map[string]any{"get": map[string]any{"operationId": id}} }
+			spec, err := json.Marshal(map[string]any{"paths": map[string]any{
+				"/api/public/x": map[string]any{"get": op},
+				"/api/public/y": offered("y_get"), "/api/public/z": offered("observations_getMany"),
+			}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -186,7 +192,8 @@ func TestABodyTheCatalogCannotReadWholeFailsTheLoad(t *testing.T) {
 }
 
 // #81: the embedded union catalog stays under its size budget of 1 MiB (it
-// was about 0.46 MiB when request bodies were added). A regeneration
+// was about 0.46 MiB when request bodies were added, 0.91 MiB with the body of
+// every release, #202: the size is in the ADR-0012 amendment). A regeneration
 // that crosses it must be looked at, not merged as is: per-operation
 // components (#81, option 2) would then be cheaper than inlined schemas.
 func TestTheEmbeddedUnionCatalogStaysUnderItsSizeBudget(t *testing.T) {
@@ -197,13 +204,15 @@ func TestTheEmbeddedUnionCatalogStaysUnderItsSizeBudget(t *testing.T) {
 	}
 }
 
-// #111: every write body schema of the embedded union catalog, the operations
-// of older releases included, is a JSON Schema 2020-12 document that
-// jsonschema-go compiles, with no keyword it does not know (the OpenAPI 3.0
-// dialect's nullable would compile silently and never be enforced). The
-// generator converts the dialect; a regeneration that brings a schema it
-// cannot convert fails here, naming the operation.
-func TestEveryWriteBodySchemaOfTheUnionCatalogCompilesAsJSONSchema202012(t *testing.T) {
+// #111, #202: every body schema the embedded union catalog stores, those of
+// older releases included, not only the one a resolution chooses, is a JSON
+// Schema 2020-12 document that jsonschema-go compiles, with no keyword it does
+// not know (the OpenAPI 3.0 dialect's nullable would compile silently and never
+// be enforced). The generator converts the dialect; a regeneration that brings a
+// schema it cannot convert fails here, naming the operation. This is the one
+// place that compiles them all: loading compiles only the bodies a resolution
+// chooses (#201).
+func TestEveryStoredBodySchemaOfTheUnionCatalogCompilesAsJSONSchema202012(t *testing.T) {
 	t.Parallel()
 	cat, err := Load()
 	if err != nil {
@@ -215,28 +224,25 @@ func TestEveryWriteBodySchemaOfTheUnionCatalogCompilesAsJSONSchema202012(t *test
 	})
 	bodies := 0
 	for _, op := range ops {
-		if op.Body == nil {
-			continue
-		}
-		bodies++
-		var schema jsonschema.Schema
-		if err := json.Unmarshal(op.Body.Schema, &schema); err != nil {
-			t.Fatalf("%s %s: body schema does not parse as JSON Schema: %v", op.ID, op.Path, err)
-		}
-		if _, err := schema.Resolve(nil); err != nil {
-			t.Fatalf("%s %s: body schema does not compile: %v", op.ID, op.Path, err)
-		}
-		if at, keys := unknownKeywords(&schema, "#"); len(keys) > 0 {
-			t.Fatalf("%s %s: body schema keeps keywords JSON Schema 2020-12 does not know at %s: %v", op.ID, op.Path, at, keys)
+		for i, b := range op.bodies {
+			bodies++
+			var schema jsonschema.Schema
+			if err := json.Unmarshal(b.schema, &schema); err != nil {
+				t.Fatalf("%s %s body %d: schema does not parse as JSON Schema: %v", op.ID, op.Path, i, err)
+			}
+			if _, err := schema.Resolve(nil); err != nil {
+				t.Fatalf("%s %s body %d: schema does not compile: %v", op.ID, op.Path, i, err)
+			}
+			if _, err := b.compile(); err != nil {
+				t.Fatalf("%s %s body %d: stored body does not compile: %v", op.ID, op.Path, i, err)
+			}
+			if at, keys := unknownKeywords(&schema, "#"); len(keys) > 0 {
+				t.Fatalf("%s %s body %d: schema keeps keywords JSON Schema 2020-12 does not know at %s: %v", op.ID, op.Path, i, at, keys)
+			}
 		}
 	}
-	// The union catalog (v3.0.0 to v4.46.0) has 49 operations with a body, 10
-	// of them excluded: 39 are checked. The four ADR-0004 amendment exclusions
-	// (#110: media_getUploadUrl, media_patch, llmConnections_upsert,
-	// blobStorageIntegrations_upsertBlobStorageIntegration) each take a body,
-	// leaving 35: the floor, so either branch merging first keeps this green.
-	if bodies < 35 {
-		t.Fatalf("checked %d body schemas, want the whole catalog's", bodies)
+	if bodies < storedBodyFloor {
+		t.Fatalf("checked %d stored bodies, want the whole catalog's history (%d)", bodies, storedBodyFloor)
 	}
 }
 

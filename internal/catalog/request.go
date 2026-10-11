@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -28,6 +30,13 @@ type Request struct {
 // parameters do not fit the operation. The message names the parameter and
 // the reason.
 var ErrInvalidParameter = errors.New("invalid parameter")
+
+// ErrParameterNotServed marks a parameter that is one of the operation's but
+// that the deployment's Langfuse version does not declare (#173); it also
+// matches ErrInvalidParameter. The message names the parameter, the operation,
+// the deployment's version and the release that serves the parameter, taken
+// from the catalog, never from the caller.
+var ErrParameterNotServed = errors.New("parameter not served by the deployment's version")
 
 // ErrLimitOutOfRange marks a limit outside 1..MaxLimit on a list operation;
 // it also matches ErrInvalidParameter.
@@ -63,10 +72,16 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 	}
 	slices.Sort(names)
 	for _, name := range names {
-		if !o.hasParam(name) {
-			return Request{}, invalidf("parameter %s: unknown parameter for operation %s; its parameters are: %s",
-				strconv.Quote(truncate(name)), o.ID, o.paramNames())
+		if o.hasParam(name) {
+			continue
 		}
+		if p, ok := o.unservedParam(name); ok {
+			return Request{}, sentinelError{ErrParameterNotServed, invalidf(
+				"parameter %s: operation %s does not serve it on this deployment (%s); Langfuse serves it %s",
+				strconv.Quote(p.Name), o.ID, o.deploymentText(), servedRange(p))}
+		}
+		return Request{}, invalidf("parameter %s: unknown parameter for operation %s; its parameters are: %s",
+			strconv.Quote(truncate(name)), o.ID, o.paramNames())
 	}
 
 	req := Request{Method: o.Method, Path: o.Path, Query: url.Values{}}
@@ -87,11 +102,15 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 		}
 		values, err := p.values(v)
 		if err != nil {
-			if o.isMetricsQuery(p) {
+			switch {
+			case o.isMetricsQuery(p):
 				// A metrics query that is not a string (an object, a list, a
 				// number) gets the metrics query refusal, whose hint says how
 				// the query is sent as a string (#106).
 				return Request{}, queryInvalidf("parameter %s: %s", p.Name, err.Error())
+			case o.isJSONFilter(p):
+				// The same for a JSON filter (#195).
+				return Request{}, filterInvalidf("parameter %s: %s", p.Name, err.Error())
 			}
 			return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
 		}
@@ -104,12 +123,24 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 		if err := p.inBounds(v, values); err != nil {
 			return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
 		}
-		if o.isMetricsQuery(p) {
+		switch {
+		case o.isMetricsQuery(p):
+			// metricsQuery checks the text of the strings it decodes.
 			q, err := metricsQuery(values[0])
 			if err != nil {
 				return Request{}, err
 			}
 			values = []string{q}
+		case o.isJSONFilter(p):
+			text, err := jsonFilter(p.Name, values[0])
+			if err != nil {
+				return Request{}, err
+			}
+			values = []string{text}
+		case p.In == "query":
+			if err := p.checkText(values); err != nil {
+				return Request{}, invalidf("parameter %s: %s", p.Name, err.Error())
+			}
 		}
 		if p.In == "path" {
 			if err := safePathValue(values[0], o.takesFolderName(p)); err != nil {
@@ -129,8 +160,10 @@ func (o Operation) Request(params map[string]any) (Request, error) {
 // safePathValue refuses a path parameter value that could change which
 // resource is requested or where the request goes, even before it is
 // percent-encoded: an empty value, a "\\", a "/" (unless the parameter takes
-// a Folder name), a "." or ".." segment, a control character, or a leading
-// http/https scheme. The messages name the rule, never the value.
+// a Folder name), a "." or ".." segment, a control or invisible character, or
+// a leading http/https scheme. A hidden character is refused, never removed:
+// removing it would look up an ID the caller did not send (#179). The
+// messages name the rule, never the value.
 //
 // A Folder name may hold "/" between non-empty segments, which rules out a
 // leading or trailing "/" and "//" (so also "scheme://host"); url.PathEscape
@@ -149,8 +182,8 @@ func safePathValue(v string, folderName bool) error {
 		return errors.New(`must not contain "/": a path parameter is a single ID or name`)
 	case strings.HasPrefix(lower, "http:") || strings.HasPrefix(lower, "https:"):
 		return errors.New("must not be a URL: pass the ID or name only")
-	case strings.ContainsFunc(v, func(r rune) bool { return r < 0x20 || r == 0x7f }):
-		return errors.New("must not contain control characters")
+	case strings.ContainsFunc(v, hidden):
+		return errors.New(hiddenTextRule)
 	}
 	for segment := range strings.SplitSeq(v, "/") {
 		switch segment {
@@ -189,12 +222,72 @@ func (o Operation) isListLimit(p Param) bool {
 	return o.IsRead() && p.In == "query" && p.Name == "limit"
 }
 
+// isPageNumber reports whether p is the page number of a list operation: the
+// "page" query parameter. Pages start at 1.
+func isPageNumber(p Param) bool {
+	return p.In == "query" && p.Name == "page"
+}
+
 func invalidf(format string, args ...any) error {
 	return fmt.Errorf("%w: "+format, append([]any{ErrInvalidParameter}, args...)...)
 }
 
+// HasQueryParam reports whether the operation takes the query parameter called
+// name on this deployment (a served parameter, #173).
+func (o Operation) HasQueryParam(name string) bool {
+	return slices.ContainsFunc(o.Params, func(p Param) bool { return p.In == "query" && p.Name == name })
+}
+
+// WithoutQueryParam returns the operation as if the deployment did not serve the
+// query parameter called name, for a tool that wraps the operation but takes no
+// such argument (the hints of its failures must not recommend it). The
+// operation itself is unchanged.
+func (o Operation) WithoutQueryParam(name string) Operation {
+	o.Params = slices.DeleteFunc(slices.Clone(o.Params), func(p Param) bool { return p.In == "query" && p.Name == name })
+	return o
+}
+
+// HasTimeWindow reports whether the operation takes, on this deployment, a
+// query parameter that bounds the time range of what it returns (timeWindowParams,
+// #204): the pairs from... and to... that narrow a list. A date-time parameter
+// that bounds no window, the startTime lookup hint of legacy_observationsV1_get
+// or the version snapshot of datasetItems_list, does not count (notTimeWindows).
+func (o Operation) HasTimeWindow() bool {
+	return slices.ContainsFunc(o.Params, func(p Param) bool { return p.In == "query" && timeWindowParams[p.Name] })
+}
+
 func (o Operation) hasParam(name string) bool {
 	return slices.ContainsFunc(o.Params, func(p Param) bool { return p.Name == name })
+}
+
+// unservedParam returns the operation's parameter called name that the
+// deployment's version does not declare.
+func (o Operation) unservedParam(name string) (Param, bool) {
+	i := slices.IndexFunc(o.unserved, func(p Param) bool { return p.Name == name })
+	if i < 0 {
+		return Param{}, false
+	}
+	return o.unserved[i], true
+}
+
+// deploymentText names the deployment's Langfuse version for a refusal.
+func (o Operation) deploymentText() string {
+	if o.deployment == "" {
+		return "Langfuse version not detected, so the newest release's parameters are served"
+	}
+	return "Langfuse " + o.deployment
+}
+
+// servedRange says in which releases Langfuse serves p: "from 3.133.0",
+// "up to before 3.100.0" or both.
+func servedRange(p Param) string {
+	switch {
+	case p.Removed == "":
+		return "from " + p.Introduced
+	case p.Introduced == "" || p.Introduced == SupportedFloor:
+		return "up to before " + p.Removed
+	}
+	return "from " + p.Introduced + " up to before " + p.Removed
 }
 
 // paramNames lists the operation's parameter names, or "none".
@@ -286,6 +379,65 @@ func (s Schema) scalar(v any) (string, error) {
 		return "", fmt.Errorf("want one of %s", strings.Join(s.Enum, ", "))
 	}
 	return out, nil
+}
+
+// checkText checks the text of the rendered values of a query parameter
+// (#179): none may hold a control or invisible character, and where the schema
+// says date-time each must be an RFC 3339 timestamp. The message names the
+// rule or the format, never the value; a repeated parameter's message names
+// the item.
+func (p Param) checkText(values []string) error {
+	s := p.Schema
+	if s.Type == "array" {
+		s = Schema{}
+		if p.Schema.Items != nil {
+			s = *p.Schema.Items
+		}
+	}
+	for i, value := range values {
+		err := s.checkText(value)
+		if err == nil {
+			continue
+		}
+		if p.Schema.Type == "array" {
+			return fmt.Errorf("item %d: %w", i, err)
+		}
+		return err
+	}
+	return nil
+}
+
+// hiddenTextRule is the refusal of a value that holds a control or invisible
+// character (see holdsHiddenText). It names the rule, never the value.
+const hiddenTextRule = "must not contain control or invisible characters"
+
+// holdsHiddenText reports whether s holds a control character or a character
+// that hides or reorders text (see hidden). With keepWhitespace, tab, line feed
+// and carriage return are not counted.
+func holdsHiddenText(s string, keepWhitespace bool) bool {
+	if keepWhitespace {
+		return strings.ContainsFunc(s, hiddenOutsideWhitespace)
+	}
+	return strings.ContainsFunc(s, hidden)
+}
+
+// rfc3339 is the shape of an RFC 3339 timestamp (section 5.6: date, "T", time
+// with seconds, an optional fraction and a "Z" or numeric offset). time.Parse
+// accepts looser forms (a one-digit hour, a comma before the fraction), so the
+// shape is checked first and time.Parse then checks the ranges.
+var rfc3339 = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$`)
+
+// checkText is Param.checkText for one rendered value.
+func (s Schema) checkText(v string) error {
+	if holdsHiddenText(v, false) {
+		return errors.New(hiddenTextRule)
+	}
+	if s.Format == "date-time" {
+		if _, err := time.Parse(time.RFC3339, v); err != nil || !rfc3339.MatchString(v) {
+			return errors.New("want a date-time in RFC 3339 format, such as 2026-10-10T12:00:00Z")
+		}
+	}
+	return nil
 }
 
 // inBounds checks the parameter's rendered values against the bounds its

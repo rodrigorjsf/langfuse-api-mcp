@@ -1,8 +1,5 @@
 package catalog
 
-// folderParam names one path parameter of one operation.
-type folderParam struct{ operationID, param string }
-
 // folderCapable is the allow-list of path parameters that take a Folder name:
 // a prompt or dataset name whose "/"-separated segments place it inside
 // folders. Only these accept "/", always sent percent-encoded as %2F so the
@@ -13,7 +10,7 @@ type folderParam struct{ operationID, param string }
 // folder (it was promptName, on .../version/{version}, before 3.18.0);
 // prompts_delete takes the same prompt name on the prompts_get route; a
 // dataset name with slashes is URL encoded as any path parameter.
-var folderCapable = map[folderParam]bool{
+var folderCapable = map[operationParam]bool{
 	{"prompts_get", "promptName"}:          true,
 	{"datasets_get", "datasetName"}:        true,
 	{"datasets_getRuns", "datasetName"}:    true,
@@ -27,5 +24,5 @@ var folderCapable = map[folderParam]bool{
 // takesFolderName reports whether p is a path parameter of o that accepts a
 // Folder name.
 func (o Operation) takesFolderName(p Param) bool {
-	return p.In == "path" && folderCapable[folderParam{o.ID, p.Name}]
+	return p.In == "path" && folderCapable[operationParam{o.ID, p.Name}]
 }

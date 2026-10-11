@@ -15,10 +15,11 @@ const truncatedMarker = "… [truncated]"
 // to show the agent inside a tool error: control characters become spaces,
 // invisible and bidirectional formatting characters (zero-width, bidi
 // overrides, tag characters U+E0000–E007F) are dropped, invalid UTF-8 is
-// replaced, and the result is cut to MaxMessageRunes with a marker.
+// replaced, and the result is cut to MaxMessageRunes with a marker. A terminal
+// control sequence goes whole, as in Text.
 func Message(s string) string {
 	clean := make([]rune, 0, min(len(s), 4*MaxMessageRunes))
-	for _, r := range strings.ToValidUTF8(s, "�") {
+	for _, r := range withoutEscapeSequences(strings.ToValidUTF8(s, "�")) {
 		switch {
 		case unicode.IsControl(r):
 			clean = append(clean, ' ')

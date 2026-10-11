@@ -3,14 +3,22 @@ package catalog_test
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 )
 
+// loadedCatalog loads the embedded catalog once for the whole package: a
+// catalog is built once and shared read-only (.claude/rules/go.md), and a
+// resolution compiles the body schemas it chooses once per catalog (#202), so a
+// catalog of its own per test would compile them again for every test. No test
+// may write to what mustLoad returns or to a slice or map inside it.
+var loadedCatalog = sync.OnceValues(catalog.Load)
+
 func mustLoad(t testing.TB) catalog.Catalog {
 	t.Helper()
-	cat, err := catalog.Load()
+	cat, err := loadedCatalog()
 	if err != nil {
 		t.Fatalf("load catalog: %v", err)
 	}
@@ -55,11 +63,11 @@ func TestCatalogKeepsEveryOperationOfTheUnionThatIsNotExcluded(t *testing.T) {
 	t.Parallel()
 	cat := mustLoad(t)
 
-	// The union catalog (v3.0.0 to v4.46.0) has 137 operations, 17 of them
+	// The union catalog (v3.0.0 to v4.50.0) has 138 operations, 17 of them
 	// excluded (ADR-0004 and its M4 amendment); promptVersion_update names two of them (its path changed in
 	// 3.18.0), and the newer one wins.
-	if got := len(cat.Operations()); got != 119 {
-		t.Fatalf("catalog has %d operations, want 119", got)
+	if got := len(cat.Operations()); got != 120 {
+		t.Fatalf("catalog has %d operations, want 120", got)
 	}
 	for id, want := range map[string]string{ //nolint:gosec // G101: operation IDs, not credentials
 		"trace_list":                           "GET /api/public/traces",

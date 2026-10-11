@@ -64,6 +64,9 @@ var excluded = []string{
 type Catalog struct {
 	union union
 	byID  map[string]Operation
+	// bodyErr is why the body of an operation byID offers does not compile,
+	// nil when every one does (BodyError).
+	bodyErr error
 }
 
 // Operation is one method+path pair of the Langfuse public API.
@@ -82,8 +85,17 @@ type Operation struct {
 	// the operation to prefer), else the first line of its OpenAPI
 	// description. The spec is third-party text, so indexLine cleans it.
 	DescriptionLine string
-	// Params are the operation's path and query parameters.
+	// Params are the operation's served parameters: the path and query
+	// parameters the deployment's version declares (Resolve, #173). Before
+	// the catalog is resolved for a deployment it is those of the newest known
+	// release.
 	Params []Param
+	// unserved are the operation's parameters the deployment's version does not
+	// declare, with their ranges: Request refuses them naming the release that
+	// serves them. Empty until Resolve.
+	unserved []Param
+	// deployment is the deployment's plain version, "" when not detected.
+	deployment string
 	// Introduced is the first Langfuse version whose spec lists the operation
 	// (SupportedFloor when it predates the union catalog), or the earlier floor the
 	// docs state; empty when unknown.
@@ -94,12 +106,20 @@ type Operation struct {
 	// Family is the operation family the deployment's migration mode gates
 	// the operation by (ADR-0012 §2); empty when no mode gates it.
 	Family Family
-	// Body is the operation's JSON request body; nil when it takes none.
+	// Body is the operation's JSON request body for the deployment's version
+	// (Resolve, #202); nil when that version takes none. Before the catalog is
+	// resolved for a deployment it is the newest release's.
 	Body *RequestBody
+	// prefers is the ID of the operation the union catalog's summary names as
+	// the one to prefer over this one ("legacy: prefer X when it is
+	// available"); "" when it names none. plainLine is the operation's line
+	// without that mention, which Resolve uses where the catalog does not
+	// offer prefers.
+	prefers, plainLine string
 }
 
 // RequestBody is the JSON request body of a write operation, from the release
-// spec the operation was taken from (#81). CheckBody, the body gate of
+// spec of the deployment's version (#81, #202). CheckBody, the body gate of
 // execute_write, checks a body against it.
 type RequestBody struct {
 	// Required reports whether the operation needs a body.
@@ -108,10 +128,16 @@ type RequestBody struct {
 	// generator converts the release spec's OpenAPI 3.0 dialect (#111). It is
 	// third-party text, so every string in it is cleaned of hidden characters.
 	Schema json.RawMessage
-	// compiled is Schema compiled once, when the catalog loads (#112);
-	// CheckBody validates a body against it. Shared read-only.
+	// compiled is Schema compiled once (#112); CheckBody validates a body
+	// against it. Nil when Schema does not compile (BodyError). Shared by every
+	// resolution; it is compiled once, behind a sync.Once of the stored body.
 	compiled *jsonschema.Resolved
 }
+
+// operationParam names one parameter of one operation. It is the key of the
+// closed lists that say something of a parameter by name: folderCapable,
+// staticGuidance, jsonFilters, plainFilters and notTimeWindows.
+type operationParam struct{ operationID, param string }
 
 // Param is one path or query parameter of an operation.
 type Param struct {
@@ -121,6 +147,14 @@ type Param struct {
 	Required bool
 	// Schema is the type the parameter's value must have.
 	Schema Schema
+	// Introduced is the first Langfuse version whose spec lists the parameter
+	// (the operation's own when it was there from the start); empty when the
+	// catalog gives no range.
+	Introduced string `json:"x-introduced"`
+	// Removed is the first Langfuse version whose spec no longer lists the
+	// parameter while it lists the operation; empty while the newest known
+	// spec lists it.
+	Removed string `json:"x-removed"`
 }
 
 // Schema is the part of a parameter's OpenAPI schema the catalog validates
@@ -143,7 +177,8 @@ type Schema struct {
 	Format string `json:"format"`
 	// Minimum and Maximum bound a number; MinLength and MaxLength bound a
 	// string's length. Nil when the spec gives no bound, except for the page
-	// size of a list operation, which the catalog bounds itself (MaxLimit).
+	// size of a list operation, which the catalog bounds itself (MaxLimit),
+	// and the page number, whose minimum 1 the catalog gives (#179).
 	Minimum   *float64 `json:"minimum"`
 	Maximum   *float64 `json:"maximum"`
 	MinLength *int     `json:"minLength"`
@@ -199,12 +234,12 @@ func load(spec []byte) (Catalog, error) {
 				Introduced  string   `json:"x-introduced"`
 				Removed     string   `json:"x-removed"`
 				Family      Family   `json:"x-family"`
-				RequestBody *struct {
-					Required bool `json:"required"`
-					Content  map[string]struct {
-						Schema json.RawMessage `json:"schema"`
-					} `json:"content"`
-				} `json:"requestBody"`
+				// RequestBody is the one body of a plain OpenAPI spec;
+				// RequestBodies are the union catalog's: every distinct body
+				// the release specs gave the operation, with its releases (#202).
+				RequestBody    *bodyDocument  `json:"requestBody"`
+				RequestBodies  []bodyDocument `json:"x-request-bodies"`
+				NewestBodyOnly bool           `json:"x-newest-body-only"`
 			}
 			if err := json.Unmarshal(raw, &op); err != nil {
 				return Catalog{}, fmt.Errorf("embedded union catalog: %s %s: %w", m, path, err)
@@ -222,40 +257,47 @@ func load(spec []byte) (Catalog, error) {
 				ID: op.OperationID, Method: m, Path: path, Params: op.Parameters,
 				Introduced: op.Introduced, Removed: op.Removed, Family: op.Family,
 			}
-			if op.RequestBody != nil {
-				content := op.RequestBody.Content["application/json"]
-				if len(op.RequestBody.Content) != 1 || len(content.Schema) == 0 {
-					return Catalog{}, fmt.Errorf("embedded union catalog: %s: request body is not a single JSON schema", o.ID)
-				}
-				schema, err := cleanSchema(content.Schema)
-				if err != nil {
-					return Catalog{}, fmt.Errorf("embedded union catalog: %s request body: %w", o.ID, err)
-				}
-				compiled, err := compileSchema(schema)
-				if err != nil {
-					return Catalog{}, fmt.Errorf("embedded union catalog: %s request body: %w", o.ID, err)
-				}
-				o.Body = &RequestBody{Required: op.RequestBody.Required, Schema: schema, compiled: compiled}
+			bodies, err := storeBodies(o.ID, op.RequestBody, op.RequestBodies, op.NewestBodyOnly)
+			if err != nil {
+				return Catalog{}, fmt.Errorf("embedded union catalog: %w", err)
 			}
 			r, err := rangeOf(o)
 			if err != nil {
 				return Catalog{}, fmt.Errorf("embedded union catalog: %s: %w", o.ID, err)
 			}
+			paramSpans := make([]span, len(o.Params))
+			for i, p := range o.Params {
+				if paramSpans[i], err = parameterRange(p); err != nil {
+					return Catalog{}, fmt.Errorf("embedded union catalog: %s parameter %s: %w", o.ID, p.Name, err)
+				}
+			}
 			if len(op.Tags) > 0 {
 				o.Tag = visible(op.Tags[0])
 			}
 			o.DescriptionLine = indexLine(op.Summary, op.Description)
+			o.prefers, o.plainLine = splitPreferred(op.Summary, op.Description, o.DescriptionLine)
 			for i, p := range o.Params {
-				if o.isListLimit(p) {
+				switch {
+				case o.isListLimit(p):
 					// The catalog bounds the page size itself (Request).
 					o.Params[i].Schema.Minimum, o.Params[i].Schema.Maximum = new(float64(1)), new(float64(MaxLimit))
 					o.Params[i].Schema.Default = DefaultLimit
+				case isPageNumber(p):
+					// Pages start at 1: Langfuse answers 400 below it, so the
+					// server refuses it before any request (#179).
+					o.Params[i].Schema.Minimum = new(float64(1))
 				}
 			}
-			u.ops = append(u.ops, rangedOperation{Operation: o, span: r})
+			u.ops = append(u.ops, rangedOperation{Operation: o, span: r, paramSpans: paramSpans, bodies: bodies})
 		}
 	}
-	return Catalog{union: u}.Resolve(Profile{Families: AllFamilies()}), nil
+	// A version not detected resolves the newest body of every operation: a
+	// schema that does not compile stops the load.
+	c := Catalog{union: u}.Resolve(Profile{Families: AllFamilies()})
+	if err := c.BodyError(); err != nil {
+		return Catalog{}, fmt.Errorf("embedded union catalog: %w", err)
+	}
+	return c, nil
 }
 
 // maxIndexLineRunes bounds an operation's line in the operation index.
@@ -284,6 +326,23 @@ func indexLine(summary, description string) string {
 		line = string(r[:maxIndexLineRunes-1]) + "…"
 	}
 	return line
+}
+
+// preferredSuffix matches the mention a deprecated operation's summary ends
+// with: the operation to prefer (scripts/gen-union-catalog.py, summarize). Only
+// an operation ID matches; a path the notice wrote is not one.
+var preferredSuffix = regexp.MustCompile(` \(legacy: prefer ([A-Za-z0-9_-]+) when it is available\)$`)
+
+// splitPreferred returns the operation a summary names as the one to prefer
+// and the operation's index line without that mention (" (legacy)" instead);
+// both are "" and line when the summary names none.
+func splitPreferred(summary, description, line string) (prefers, plainLine string) {
+	clean := visible(summary)
+	m := preferredSuffix.FindStringSubmatchIndex(clean)
+	if m == nil {
+		return "", line
+	}
+	return clean[m[2]:m[3]], indexLine(clean[:m[0]]+" (legacy)", description)
 }
 
 // cleanSchema returns the JSON schema raw with every string in it cleaned of
@@ -374,7 +433,9 @@ func resolve(s *Schema, components map[string]Schema) error {
 // characters, the Unicode format category Cf (zero-width characters, bidi
 // overrides and isolates, the byte order mark) and the tag block
 // U+E0000–E007F. Invalid UTF-8 is dropped too. It mirrors sanitize.Text,
-// which catalog may not import (ADR-0009).
+// which catalog may not import (ADR-0009), except that it does not remove a
+// terminal escape sequence whole (#193): its text is the embedded OpenAPI spec,
+// not Langfuse data read at run time.
 func visible(s string) string {
 	return strings.Map(func(r rune) rune {
 		if hidden(r) {
@@ -388,11 +449,17 @@ func visible(s string) string {
 // return are kept, as sanitize.Text keeps them in a payload.
 func visibleText(s string) string {
 	return strings.Map(func(r rune) rune {
-		if hidden(r) && r != '\t' && r != '\n' && r != '\r' {
+		if hiddenOutsideWhitespace(r) {
 			return -1
 		}
 		return r
 	}, strings.ToValidUTF8(s, ""))
+}
+
+// hiddenOutsideWhitespace is hidden without tab, line feed and carriage
+// return, which are visible text where a value may span lines.
+func hiddenOutsideWhitespace(r rune) bool {
+	return hidden(r) && r != '\t' && r != '\n' && r != '\r'
 }
 
 // hidden reports whether r hides or reorders text (see visible).

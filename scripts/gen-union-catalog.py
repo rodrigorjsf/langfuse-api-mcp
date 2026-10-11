@@ -4,11 +4,25 @@
 #       every Langfuse release tag from v3.0.0 onward, and writes it to
 #       internal/catalog/spec/langfuse-union-catalog.json, which the server embeds.
 #       Each operation (method + path) keeps its definition from the last spec
-#       that contained it: its path and query parameters and its JSON request
-#       body, with $refs inlined from that same spec (#81) and converted from
-#       the OpenAPI 3.0 schema dialect to JSON Schema 2020-12 (#111:
-#       nullable, boolean exclusive bounds), so the server can compile it
-#       with jsonschema-go. It also carries
+#       that contained it, except for the request body and the parameters. Its
+#       JSON request bodies are every distinct body any release spec gave it
+#       (x-request-bodies, #202): each with its $refs inlined from the spec of
+#       the release it was taken from (#81), converted from the OpenAPI 3.0
+#       schema dialect to JSON Schema 2020-12 (#111: nullable, boolean
+#       exclusive bounds, example), so the server can compile it with
+#       jsonschema-go, and the releases it holds for (x-spans: a run of
+#       consecutive releases from x-introduced up to, not including,
+#       x-removed; a body that comes back after another is stored once, with
+#       both spans). Two bodies that differ only in the description and title
+#       annotations are one body, with the newest text. The server picks the
+#       body of the deployment's version, so an older deployment is checked
+#       against the body its own release spec has. An operation the server
+#       never offers (NEWEST_BODY_ONLY, ADR-0004) keeps its newest body only,
+#       without spans: its history is size the server cannot use. Its path and query parameters are the union over
+#       every release, each with the release that introduced it (x-introduced)
+#       and, when it left the spec while the operation stayed, the release that
+#       removed it (x-removed, #173), so that the server can offer the
+#       parameters a deployment's version serves. It also carries
 #       its version range (x-introduced, plus x-removed when it left the spec)
 #       and its operation family (x-family: legacy, v4 read or experiments)
 #       where a write mode gates it. An operation whose description opens
@@ -152,7 +166,8 @@ def operations(spec):
     request body of a write operation, which execute_write's body gate (M4)
     checks against (#81). Both are resolved against this spec's own components,
     so an operation keeps the schemas of the release it was taken from. Header
-    parameters and responses are dropped: nothing uses them.
+    parameters, responses and a parameter whose schema is an object (is_object)
+    are dropped: nothing uses them.
     """
     out = {}
     for path, item in (spec.get("paths") or {}).items():
@@ -164,7 +179,7 @@ def operations(spec):
             params = {}
             for p in deref(shared, spec) + deref(op.get("parameters") or [], spec):
                 params[(p.get("name"), p.get("in"))] = p  # operation-level wins
-            kept = [p for p in params.values() if p.get("in") in ("path", "query")]
+            kept = [p for p in params.values() if p.get("in") in ("path", "query") and not is_object(p)]
             for p in kept:
                 p.pop("description", None)
                 if isinstance(p.get("schema"), dict):
@@ -180,6 +195,17 @@ def operations(spec):
             if "requestBody" in op:
                 out[key]["requestBody"] = request_body(key, op["requestBody"], spec)
     return out
+
+
+def is_object(p):
+    """Whether parameter p is an object, which no URL parameter of the API is.
+
+    Releases 3.57.1 to 3.78.x list the response schema of datasetRunItems_list
+    as a required query parameter named "response": a spec error. Kept, it
+    would be a required parameter of the operation on those deployments (#173).
+    """
+    schema = p.get("schema")
+    return isinstance(schema, dict) and (schema.get("type") == "object" or "properties" in schema)
 
 
 def request_body(key, body, spec):
@@ -199,14 +225,62 @@ def request_body(key, body, spec):
 
 def body_2020_12(key, body):
     """body, a request body of operations(), with its schema in JSON Schema
-    2020-12 (to_2020_12). build converts only the body the catalog keeps: an
-    older spec's body of the same operation is discarded unconverted, so a
-    keyword only a replaced release used never stops generation."""
+    2020-12 (to_2020_12). merge converts the body of every release (#202), so a
+    keyword with no conversion in any release's body stops generation: no body
+    is dropped, cut or left unconverted to make generation pass."""
     try:
         schema = to_2020_12(body["content"]["application/json"]["schema"])
     except ValueError as e:
         sys.exit(f"{key}: request body schema: {e}")
     return {**body, "content": {"application/json": {"schema": schema}}}
+
+
+# The operations the server never offers on any deployment (ADR-0004 and its M4
+# amendment): they keep their newest body only. This is the list `excluded` in
+# internal/catalog/catalog.go; TestEveryOperationTheServerOffersKeepsItsBodyHistory
+# fails when an operation the server offers is marked x-newest-body-only.
+NEWEST_BODY_ONLY = (
+    "ingestion_batch", "opentelemetry_exportTraces", "projects_create", "projects_update", "projects_delete",
+    "projects_createApiKey", "projects_deleteApiKey", "organizations_updateOrganizationMembership",
+    "organizations_deleteOrganizationMembership", "organizations_updateProjectMembership",
+    "organizations_deleteProjectMembership", "scim_createUser", "scim_deleteUser", "media_getUploadUrl",
+    "media_patch", "llmConnections_upsert", "blobStorageIntegrations_upsertBlobStorageIntegration",
+)
+
+# The keywords of JSON Schema 2020-12 whose value is a schema, a list of schemas
+# or an object of named schemas: the places an annotation is looked for. Every
+# other keyword's value is data (const, enum, default, examples) or an
+# extension, and so is a property name. Mirrors dropAnnotations in
+# internal/catalog/annotations.go, the rule the discovery cap (#190) uses.
+ANNOTATION_SCHEMAS = ("additionalItems", "additionalProperties", "contains", "contentSchema", "else", "if", "items",
+                      "not", "propertyNames", "then", "unevaluatedItems", "unevaluatedProperties")
+ANNOTATION_LISTS = ("allOf", "anyOf", "oneOf", "prefixItems")
+ANNOTATION_MAPS = ("$defs", "definitions", "dependentSchemas", "patternProperties", "properties")
+
+
+def without_annotations(schema):
+    """schema without the description and title annotations of itself and of
+    every subschema: what two bodies are compared by (#202). A property named
+    description or title is a property, not an annotation, and nothing inside
+    const, enum, default or examples is touched."""
+    if not isinstance(schema, dict):
+        return schema  # a boolean schema
+    out = {k: v for k, v in schema.items() if k not in ANNOTATIONS}
+    for k, v in out.items():
+        if k in ANNOTATION_SCHEMAS:
+            out[k] = without_annotations(v)
+        elif k in ANNOTATION_LISTS and isinstance(v, list):
+            out[k] = [without_annotations(x) for x in v]
+        elif k in ANNOTATION_MAPS and isinstance(v, dict):
+            out[k] = {name: without_annotations(x) for name, x in v.items()}
+    return out
+
+
+def body_signature(body):
+    """What makes a converted body, body_2020_12's result, the same as another:
+    its required flag and its schema, annotations apart."""
+    return json.dumps({"required": body["required"],
+                       "schema": without_annotations(body["content"]["application/json"]["schema"])}, sort_keys=True)
 
 
 # Keywords whose value is a map of property name to schema, a schema, or a list
@@ -217,10 +291,11 @@ SCHEMA_VALUES = ("items", "additionalProperties", "not")
 SCHEMA_LISTS = ("allOf", "anyOf", "oneOf")
 ANNOTATIONS = ("title", "description")
 # The OpenAPI 3.0 Schema Object keywords JSON Schema 2020-12 does not have,
-# other than nullable and the boolean exclusive bounds, which to_2020_12
-# converts. No release spec's body schema holds one (v3.0.0 to v4.46.0); one
-# that appears stops generation, so its conversion is a decision, not a guess.
-UNCONVERTED = ("discriminator", "example", "xml", "externalDocs")
+# other than nullable, the boolean exclusive bounds and example, which
+# to_2020_12 converts. No release spec's body schema holds one (v3.0.0 to
+# v4.50.0); one that appears stops generation, so its conversion is a decision,
+# not a guess.
+UNCONVERTED = ("discriminator", "xml", "externalDocs")
 
 
 def to_2020_12(schema):
@@ -232,7 +307,10 @@ def to_2020_12(schema):
     kept outside; one that constrains nothing already accepts null and only
     loses the keyword.
     A boolean exclusiveMinimum/exclusiveMaximum becomes the numeric form: true
-    moves the minimum/maximum into it, false is dropped. A schema the
+    moves the minimum/maximum into it, false is dropped. example, which JSON
+    Schema 2020-12 does not have, becomes examples, a list of that one value
+    (#202: the ingestion and score bodies of the first releases hold it); it
+    changes no body's validity. A schema the
     conversion cannot express, or one holding an UNCONVERTED keyword, raises
     ValueError.
     """
@@ -240,6 +318,11 @@ def to_2020_12(schema):
     for k, v in schema.items():
         if k in UNCONVERTED:
             raise ValueError(f"OpenAPI 3.0 keyword {k} has no conversion; add one to to_2020_12")
+        if k == "example":
+            if "examples" in schema:
+                raise ValueError("example next to examples has no conversion; add one to to_2020_12")
+            out["examples"] = [v]
+            continue
         if k in SCHEMA_MAPS:
             v = {name: to_2020_12(s) for name, s in v.items()}
         elif k in SCHEMA_VALUES and isinstance(v, dict):
@@ -283,16 +366,112 @@ def documented_floor(key):
 
 
 def build(repo):
-    tags = release_tags(repo)
-    cache, history = {}, {}
-    for tag, blob in tags:
+    cache = {}
+    releases = []
+    for tag, blob in release_tags(repo):
         if blob not in cache:
             cache[blob] = operations(load_spec(repo, blob))
-        for key, op in cache[blob].items():
-            h = history.setdefault(key, {"present": []})
+        releases.append((tag, cache[blob]))
+    return merge(releases)
+
+
+def param_key(p):
+    return (p.get("name"), p.get("in"))
+
+
+def note_parameters(history, tag, ops):
+    """Add the parameters of release tag's operations to their histories: for
+    every path and query parameter, the releases that list it and its
+    definition from the last of them (#173)."""
+    for key, op in ops.items():
+        seen = history[key].setdefault("params", {})
+        for p in op["parameters"]:
+            h = seen.setdefault(param_key(p), {"present": [], "order": len(seen)})
             h["present"].append(tag)
+            h["param"] = p  # the last spec that lists it wins
+
+
+def parameters(h, order, introduced, notes):
+    """The operation's parameters across every release (#173): those of the
+    newest spec that lists the operation first, in its order, then the ones
+    only older releases had, by first appearance. Each carries x-introduced,
+    the release that introduced it, and x-removed, the release that removed it
+    while the operation stayed; a parameter that lived as long as the
+    operation takes the operation's range, so the documented floors of an
+    operation also reach its parameters. A release in between that lacks a
+    parameter is ignored, as for operations; it is added to notes."""
+    first, last = h["present"][0], h["present"][-1]
+    listed = [param_key(p) for p in h["op"]["parameters"]]
+    rest = sorted((k for k in h["params"] if k not in listed), key=lambda k: h["params"][k]["order"])
+    out = []
+    for k in listed + rest:
+        ph = h["params"][k]
+        pfirst, plast = ph["present"][0], ph["present"][-1]
+        lacking = order.index(plast) - order.index(pfirst) + 1 - len(ph["present"])
+        if lacking:
+            notes.append(f"parameter {k[0]} ({k[1]}) of {h['key']} absent from {lacking} tags between {pfirst} and {plast}")
+        p = dict(ph["param"])
+        p["x-introduced"] = introduced if pfirst == first else text(version(pfirst))
+        if plast != last:
+            p["x-removed"] = text(version(order[order.index(plast) + 1]))
+        out.append(p)
+    return out
+
+
+def request_bodies(h, order, introduced, converted):
+    """The operation's distinct request bodies across every release (#202),
+    in the order they first appear (a body that comes back keeps its first
+    place, so the last one is not always the newest), each the body_2020_12 of
+    its newest release's text plus
+    x-spans: the runs of consecutive releases it holds for, from the release
+    that introduced it up to, not including, the release that changed it.
+
+    Releases are compared in the order they list the operation; one that lacks
+    it is ignored, as for operations and parameters (the gap belongs to the run
+    around it). A release that lists the operation without a body ends the body
+    before it. The first span of an operation starts at the operation's own
+    x-introduced, so a documented earlier floor also reaches its body. The last
+    body stays open-ended even when the operation left the spec: the
+    operation's x-removed bounds it. converted caches the conversion of each
+    release's body, since releases share their spec's operations."""
+    runs = []  # [signature or None, first release, body of the run's newest release]
+    for tag, raw in h["bodies"]:
+        if raw is None:
+            sig, body = None, None
+        else:
+            if id(raw) not in converted:
+                converted[id(raw)] = body_2020_12(h["key"], raw)
+            body = converted[id(raw)]
+            sig = body_signature(body)
+        if runs and runs[-1][0] == sig:
+            runs[-1][2] = body  # the newest text of the run
+        else:
+            runs.append([sig, tag, body])
+    distinct = {}
+    for i, (sig, first, body) in enumerate(runs):
+        if sig is None:
+            continue
+        span = {"x-introduced": introduced if i == 0 else text(version(first))}
+        if i + 1 < len(runs):
+            span["x-removed"] = text(version(runs[i + 1][1]))
+        entry = distinct.setdefault(sig, {"spans": []})
+        entry["body"] = body  # a later run holds the newer text
+        entry["spans"].append(span)
+    return [{**e["body"], "x-spans": e["spans"]} for e in distinct.values()]
+
+
+def merge(releases):
+    """The union catalog of releases, [(tag, operations(spec))] oldest first."""
+    history = {}
+    for tag, ops in releases:
+        for key, op in ops.items():
+            h = history.setdefault(key, {"present": [], "key": key, "bodies": []})
+            h["present"].append(tag)
+            h["bodies"].append((tag, op.get("requestBody")))
             h["op"] = op  # the last spec that contains it wins
-    order = [t for t, _ in tags]
+        note_parameters(history, tag, ops)
+    converted = {}
+    order = [t for t, _ in releases]
     newest = order[-1]
     paths, gaps = {}, []
     for key, h in history.items():
@@ -301,8 +480,7 @@ def build(repo):
         if len(span) != len(h["present"]):
             gaps.append(f"{key} absent from {len(span) - len(h['present'])} tags between {first} and {last}")
         op = dict(h["op"])
-        if "requestBody" in op:
-            op["requestBody"] = body_2020_12(key, op["requestBody"])
+        op.pop("requestBody", None)
         if not op["operationId"]:
             sys.exit(f"{key} has no operationId in {last}")
         introduced = version(first)
@@ -310,6 +488,15 @@ def build(repo):
         if floor and floor < introduced:
             introduced = floor
         op["x-introduced"] = text(introduced)
+        bodies = request_bodies(h, order, op["x-introduced"], converted)
+        if op["operationId"] in NEWEST_BODY_ONLY and bodies:
+            # Not bodies[-1]: a body that came back keeps its first place in the list.
+            kept = max(bodies, key=lambda b: version("v" + b["x-spans"][-1]["x-introduced"]))
+            bodies = [{k: v for k, v in kept.items() if k != "x-spans"}]
+            op["x-newest-body-only"] = True
+        if bodies:
+            op["x-request-bodies"] = bodies
+        op["parameters"] = parameters(h, order, op["x-introduced"], gaps)
         if last != newest:
             op["x-removed"] = text(version(order[order.index(last) + 1]))
         fam = family(key, op, "x-removed" in op)
@@ -327,7 +514,7 @@ def build(repo):
         "x-oldest-version": text(version(order[0])),
         "x-newest-version": text(version(newest)),
         "x-releases": len(order),
-        "x-distinct-specs": len(cache),
+        "x-distinct-specs": len({id(ops) for _, ops in releases}),
         "paths": paths,
     }
 

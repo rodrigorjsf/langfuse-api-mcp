@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -203,6 +204,9 @@ func deploymentHandler(healthBody string, unavailable []string, next http.Handle
 	}
 }
 
+// servedParametersMessage is the startup log line of an undetected version (#173).
+const servedParametersMessage = "Langfuse version not detected: serving the newest release's parameters and request bodies"
+
 // profileLogLine returns the startup log line naming the deployment profile.
 func profileLogLine(t *testing.T, stderr []byte) map[string]any {
 	t.Helper()
@@ -267,6 +271,9 @@ func TestExecutableServesTheDiscoveryToolsExecuteReadAndGetTraceTreeOverStdio(t 
 	// 107: the 4.x dual fixture of the catalog's deployment-profile test.
 	if got["version"] != "4.46.0" || string(families) != `["legacy","v4 read","experiments"]` || got["operations"] != float64(107) {
 		t.Errorf("deployment profile log line = %v, want version 4.46.0, every family, 107 operations", got)
+	}
+	if slices.ContainsFunc(logLines(t, s.stderr.Bytes()), func(line map[string]any) bool { return line["msg"] == servedParametersMessage }) {
+		t.Errorf("startup logs %q although the version was detected:\n%s", servedParametersMessage, s.stderr)
 	}
 }
 
@@ -337,6 +344,12 @@ func TestExecutableReachesAnOperationOnlyAnOlderReleaseSpecListsWhenTheVersionIs
 	if got := profileLogLine(t, s.stderr.Bytes()); got["version"] != "unknown" {
 		t.Errorf("deployment profile log line = %v, want version unknown", got)
 	}
+	// #173, #202: with no detected version the newest release's parameters and request bodies are served, and the log says so.
+	if !slices.ContainsFunc(logLines(t, s.stderr.Bytes()), func(line map[string]any) bool {
+		return line["msg"] == servedParametersMessage
+	}) {
+		t.Errorf("no startup log line %q:\n%s", servedParametersMessage, s.stderr)
+	}
 	if strings.Contains(s.stderr.String(), "ignore previous") {
 		t.Errorf("stderr echoes the version health reported:\n%s", s.stderr)
 	}
@@ -369,8 +382,8 @@ func TestExecutableOffersOnlyTheOperationsOfTheDetectedDeploymentProfile(t *test
 		t.Errorf("search_operations lists a legacy operation the deployment does not serve: %s", listed)
 	}
 	toolErr, _ := call.StructuredContent["error"].(map[string]any)
-	if code, _ := toolErr["code"].(string); !call.IsError || code != "operation_not_found" {
-		t.Errorf("execute_read trace_get = %+v, want operation_not_found", call)
+	if code, _ := toolErr["code"].(string); !call.IsError || code != "operation_unavailable" {
+		t.Errorf("execute_read trace_get = %+v, want operation_unavailable", call)
 	}
 	select {
 	case got := <-gotRequest:
@@ -382,6 +395,136 @@ func TestExecutableOffersOnlyTheOperationsOfTheDetectedDeploymentProfile(t *test
 	// 93: the 4.x events_only fixture of the catalog's deployment-profile test.
 	if got["version"] != "4.46.0" || string(families) != `["v4 read","experiments"]` || got["operations"] != float64(93) {
 		t.Errorf("deployment profile log line = %v, want version 4.46.0, families [v4 read experiments], 93 operations", got)
+	}
+}
+
+// ADR-0002 amendment of 2026-10-10, spec #172 stories 26 and 27: on a Langfuse
+// whose v4 read and legacy sentinels both answer 404 (neither family), the wired
+// server still lists get_trace_tree, and a call answers operation_unavailable
+// without a request. (On a 3.80.0 that serves the legacy family it reads the
+// trace tree: TestExecutableOnADeploymentWithOnlyTheLegacyFamilyReadsTheTraceTreeFromTheLegacyList.)
+func TestExecutableOnADeploymentWhereNeitherFamilyAnswersListsGetTraceTreeAndAnswersOperationUnavailable(t *testing.T) {
+	t.Parallel()
+	// Every request after startup is recorded, whatever route it names, the
+	// route the trace tree reads included: detection ends before initialize.
+	var (
+		mu       sync.Mutex
+		started  bool
+		received []string
+	)
+	detection := deploymentHandler(`{"status":"OK","version":"3.80.0"}`,
+		[]string{"/api/public/v2/observations", "/api/public/experiments", "/api/public/traces"}, func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, `{}`) // a failed write fails the call below
+		})
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		if started {
+			received = append(received, r.Method+" "+r.URL.RequestURI())
+		}
+		mu.Unlock()
+		detection(w, r)
+	}))
+	t.Cleanup(fake.Close)
+	s := startStdio(t, "LANGFUSE_BASE_URL="+fake.URL)
+	s.initialize()
+	mu.Lock()
+	started = true
+	mu.Unlock()
+
+	var list struct {
+		Tools []struct {
+			Name string `json:"name"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(s.send("tools/list", map[string]any{}, true), &list); err != nil {
+		t.Fatalf("decode tools/list: %v", err)
+	}
+	var call toolCall
+	if err := json.Unmarshal(s.send("tools/call", map[string]any{
+		"name": "get_trace_tree", "arguments": map[string]any{"traceId": "trace-1"},
+	}, true), &call); err != nil {
+		t.Fatalf("decode tools/call: %v", err)
+	}
+	s.stop()
+
+	names := make([]string, 0, len(list.Tools))
+	for _, tool := range list.Tools {
+		names = append(names, tool.Name)
+	}
+	if !slices.Contains(names, "get_trace_tree") {
+		t.Errorf("tools = %v, want get_trace_tree listed on a deployment where neither family answers", names)
+	}
+	toolErr, _ := call.StructuredContent["error"].(map[string]any)
+	if code, _ := toolErr["code"].(string); !call.IsError || code != "operation_unavailable" {
+		t.Errorf("get_trace_tree = %+v, want operation_unavailable", call)
+	}
+	if hint, _ := toolErr["hint"].(string); !strings.Contains(hint, "offers no operation that reads one trace") || !strings.Contains(hint, "Langfuse 3.80.0") {
+		t.Errorf("hint = %q, want it to say no operation reads one trace and name Langfuse 3.80.0", hint)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(received) != 0 {
+		t.Errorf("Langfuse received %q after startup, want no request", received)
+	}
+}
+
+// ADR-0002 amendment of 2026-10-10 (#187): on a Langfuse 3.80.0 whose v4 read
+// sentinel answers 404 and whose legacy sentinel answers, the wired server
+// builds the trace tree from the legacy observations list: one request per
+// page, at the page size of the legacy list, the trace ID only as a query
+// parameter, input and output removed.
+func TestExecutableOnADeploymentWithOnlyTheLegacyFamilyReadsTheTraceTreeFromTheLegacyList(t *testing.T) {
+	t.Parallel()
+	var (
+		mu       sync.Mutex
+		started  bool
+		received []string
+	)
+	detection := deploymentHandler(`{"status":"OK","version":"3.80.0"}`,
+		[]string{"/api/public/v2/observations", "/api/public/experiments"}, func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, `{"data":[`+
+				`{"id":"b","parentObservationId":"a","startTime":"2026-09-25T10:00:01.000Z","name":"child","input":"SECRET-INPUT"},`+
+				`{"id":"a","parentObservationId":null,"startTime":"2026-09-25T10:00:00.000Z","name":"root","output":"SECRET-OUTPUT"}`+
+				`],"meta":{"page":1,"limit":100,"totalItems":2,"totalPages":1}}`) // a failed write fails the call below
+		})
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		if started {
+			received = append(received, r.Method+" "+r.URL.RequestURI())
+		}
+		mu.Unlock()
+		detection(w, r)
+	}))
+	t.Cleanup(fake.Close)
+	s := startStdio(t, "LANGFUSE_BASE_URL="+fake.URL)
+	s.initialize()
+	mu.Lock()
+	started = true
+	mu.Unlock()
+
+	var call toolCall
+	if err := json.Unmarshal(s.send("tools/call", map[string]any{
+		"name": "get_trace_tree", "arguments": map[string]any{"traceId": "trace-1"},
+	}, true), &call); err != nil {
+		t.Fatalf("decode tools/call: %v", err)
+	}
+	s.stop()
+
+	if call.IsError {
+		t.Fatalf("get_trace_tree = %+v, want the trace tree", call)
+	}
+	text := ""
+	for _, c := range call.Content {
+		text += c.Text
+	}
+	if !strings.Contains(text, `"operationId":"legacy_observationsV1_getMany"`) || !strings.Contains(text, `"name":"root"`) ||
+		strings.Contains(text, "SECRET-INPUT") || strings.Contains(text, "SECRET-OUTPUT") {
+		t.Errorf("get_trace_tree = %s, want the tree of the legacy list without input and output", text)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if want := []string{"GET /api/public/observations?limit=100&page=1&traceId=trace-1"}; !slices.Equal(received, want) {
+		t.Errorf("Langfuse received %q after startup, want %q", received, want)
 	}
 }
 

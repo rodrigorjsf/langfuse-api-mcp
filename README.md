@@ -55,11 +55,11 @@ The Langfuse API has about 100 in-scope operations. One tool per operation would
 
 | Tool | What it does | Available |
 |---|---|---|
-| `search_operations` | Lists the Langfuse operations your deployment serves, optionally filtered by keywords | always |
-| `describe_operation` | Returns one operation's parameters (and, in write mode, its body schema and whether it is destructive) | always |
-| `execute_read` | Runs a **read** operation (HTTP GET) by its ID and returns the Langfuse JSON inside an untrusted-data envelope | always |
+| `search_operations` | Lists the Langfuse operations your deployment serves, optionally filtered by keywords (in write mode, each write operation with its HTTP method and whether it is destructive) | always |
+| `describe_operation` | Returns the parameters of one operation that your deployment's Langfuse version serves (and, apart from them, a filter the server applies itself when your version lacks it; and, in write mode, its body schema (the one of your deployment's Langfuse version), whether it is destructive and, for `comments_create` and `scores_create`, how to fill the body) | always |
+| `execute_read` | Runs a **read** operation (HTTP GET) by its ID and returns the Langfuse JSON inside an untrusted-data envelope. On an older Langfuse that ignores the `traceId` of `scores_get-many` or the `level` of `legacy_observationsV1_getMany`, the server applies that filter itself and says whether it read the whole list | always |
 | `execute_write` | Runs a **write** operation by its ID; a destructive one (DELETE, PUT, PATCH) only after you confirm that exact call | only in [write mode](#security-model) |
-| `get_trace_tree` | Returns every observation of one trace as a tree in one call | when the deployment answers the v4 read APIs (Cloud, self-hosted v4) |
+| `get_trace_tree` | Returns every observation of one trace as a tree in one call. It reads Observations v2 where the deployment answers the v4 read APIs (Cloud, self-hosted v4) and the legacy observations list on self-hosted v3, where input, output and metadata are removed unless you ask for them and a row holds the fields that Langfuse returns (latency in milliseconds there, in seconds on v4), minus those it returned as null. Where neither API answers it says `operation_unavailable` | always listed; runs where the deployment answers either API |
 
 A typical session: `search_operations` finds the operation, `describe_operation` shows its parameters, `execute_read` runs it:
 
@@ -353,6 +353,12 @@ Trusted roots = **your operating system's certificate store + every CA from the 
 | `LANGFUSE_MCP_RATE_LIMIT` | `30` on a Langfuse Cloud host, `1000` on any other host | whole number, 1 to 60000 | The most Langfuse requests the server sends per minute, retries included. **On a paid Cloud plan, raise it** to your plan's limit. |
 | `LANGFUSE_MCP_MAX_CONCURRENCY` | `4` | whole number, 1 to 64 | The most Langfuse requests in flight at once. |
 
+### Result size cap
+
+| Variable | Default | Allowed values | Meaning |
+|---|---|---|---|
+| `LANGFUSE_MCP_MAX_RESULT_BYTES` | `65536` (64 KiB) | whole number, 16384 to 1048576 | The most bytes one tool result carries, counted for each of its two copies (the JSON as text and as structured content); a result over it has its largest text values shortened (each ends in `… [clipped]`) so every row stays, then, only if that is not enough, rows left out, and says `truncated`; the discovery tools' results (`describe_operation`, `search_operations`) are kept within it too, a body schema losing its descriptions and an operation index its last entries instead. Your MCP host may have its own, lower limit for showing a result: Claude Code did not show a result of about 100 KB inline, so raise the cap only if your host shows what you set. |
+
 ### Behavior
 
 | Variable | Default | Meaning |
@@ -364,7 +370,7 @@ The server detects the Langfuse version and the operations it serves at startup,
 
 ### Config file (non-secret settings)
 
-To set the CA, host, proxy, limits or write mode once for every client, put them in a config file at your OS's standard config location:
+To set the CA, host, proxy, limits, result size cap or write mode once for every client, put them in a config file at your OS's standard config location:
 
 | OS | Path |
 |---|---|
@@ -435,7 +441,7 @@ Every failure reaches the agent as a structured error with a stable `code` (e.g.
 | Tool error `langfuse_unauthorized` (HTTP 401) | Wrong key pair, or keys from another region | Check `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY`, and that `LANGFUSE_BASE_URL` is the host of the keys' region: keys only work in their own region |
 | Tool error `langfuse_rate_limited` (HTTP 429) | Langfuse's rate limit was hit | A read was already retried once if Langfuse named a `Retry-After` wait that fit the 60 s request deadline. Wait `retryAfterSeconds` before calling again (`0`: Langfuse named no wait, back off). Metrics operations have a small daily budget on some plans. The server's own limit ([Request limits](#request-limits)) defaults to 30 requests a minute on a Langfuse Cloud host |
 | Tool error `timeout` with `retryable: true` | The call waited for the server's own request limits past its deadline; it was not sent to Langfuse | Make fewer calls at once, or raise `LANGFUSE_MCP_RATE_LIMIT`/`LANGFUSE_MCP_MAX_CONCURRENCY` if your Langfuse plan allows it |
-| Tool error `timeout` with `retryable: false` | Langfuse did not answer within the 60 s request deadline | Narrow the query: a shorter time window, fewer fields or a lower `limit` |
+| Tool error `timeout` with `retryable: false` | Langfuse did not answer within the 60 s request deadline | Narrow the query by what the operation takes: fewer field groups in `fields`, a lower `limit` or a shorter time window (the hint names only those the operation has). An operation with none of them, such as `trace_get` on Langfuse 3.80.0 or `legacy_observationsV1_get`, cannot be made cheaper through this server: the hint says to tell the user |
 | The agent says it cannot change data; `execute_write` is not in its tool list | Write mode is off (the default): `execute_write` is not registered, and the discovery tools hide write operations | Set `LANGFUSE_MCP_ALLOW_WRITES=true` (environment or config file) and restart the server: the tool set is fixed at startup |
 | A delete or update fails with `confirmation_unavailable` | The client cannot show a form (no MCP form elicitation), so the server cannot ask you to confirm the destructive call; nothing was sent | Use a client that supports form elicitation. No setting skips the confirmation |
 

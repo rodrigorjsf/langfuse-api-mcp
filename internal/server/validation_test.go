@@ -182,25 +182,6 @@ func TestExecuteReadPercentEncodesPathParameterValues(t *testing.T) {
 	}
 }
 
-func TestExecuteReadRefusesAWriteOperationSayingItRunsReadOperationsOnly(t *testing.T) {
-	t.Parallel()
-	fake, seen := fakeLangfuse(t, http.StatusOK, `{}`)
-	cs := connect(t, fake)
-
-	got := toolErrorOf(t, callExecuteRead(t, cs, map[string]any{
-		"operationId": "prompts_create", "parameters": map[string]any{},
-	})).Error
-
-	if got.Code != "invalid_argument" || got.OperationID != "prompts_create" ||
-		!strings.Contains(got.Message, "read (GET) operations only") {
-		t.Errorf("error = %+v, want invalid_argument saying execute_read runs read (GET) operations only", got)
-	}
-	if got.Hint == "" || strings.Contains(got.Hint, "execute_write") || strings.Contains(got.Hint, "ALLOW_WRITES") {
-		t.Errorf("hint %q, want one that names no write tool or setting: write mode is off", got.Hint)
-	}
-	assertNoRequest(t, seen)
-}
-
 func TestExecuteReadAnswersAnUnknownOrExcludedOperationWithOperationNotFound(t *testing.T) {
 	t.Parallel()
 	for name, id := range map[string]string{
