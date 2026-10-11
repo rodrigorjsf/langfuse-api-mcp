@@ -13,6 +13,10 @@ WHY:  the end-to-end campaign grades the MCP server against known data; the
       test material, so it must never land in a real project.
 WHEN: once per stack, right after `scripts/langfuse-selfhosted.sh up`. It
       refuses a non-loopback base URL unless --allow-non-loopback is given.
+      Proven on 3.80.0 and 4.46.0 dual. On 4.46.0 the readback waits for the
+      dataset run items, which Langfuse writes after it answers, and accepts a
+      dataset item that Langfuse stored without its control characters (it
+      says so in a "note:" line).
       Re-seeding a used stack needs `down` then `up`: a second run is safe
       (fixed ids, upserts, existence checks) but resolves a new "now", so the
       timestamps of the records move and the key is rewritten to match.
@@ -575,9 +579,24 @@ def wait_traces(c, traces, timeout, log):
         time.sleep(5)
 
 
+def without_controls(v):
+    """v with the C0 control characters (tab, line feed and carriage return kept) and DEL removed from every string."""
+    if isinstance(v, str):
+        return "".join(ch for ch in v if ch in "\t\n\r" or (ord(ch) >= 0x20 and ord(ch) != 0x7F))
+    if isinstance(v, dict):
+        return {k: without_controls(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [without_controls(x) for x in v]
+    return v
+
+
 def check_rest(c, seed, ds_ids, project_id):
-    """Existence and shape of prompts, datasets, items, runs, comments, configs."""
-    missing, bad = [], []
+    """Existence and shape of prompts, datasets, items, runs, comments, configs.
+
+    Returns (missing, bad, notes): a note is a difference Langfuse itself makes
+    on write, which is not a failed load.
+    """
+    missing, bad, notes = [], [], []
     for p in seed["prompts"]:
         fl = final_prompt_labels(p["versions"])
         for i, v in enumerate(p["versions"], start=1):
@@ -604,7 +623,12 @@ def check_rest(c, seed, ds_ids, project_id):
             if gi is None:
                 missing.append(f"dataset item {it['id']}")
             elif gi.get("expectedOutput") != it["expectedOutput"] or gi.get("input") != it["input"]:
-                bad.append(f"dataset item {it['id']} input/expectedOutput differ")
+                # Langfuse 4.46.0 drops control characters from a dataset item on
+                # write (3.80.0 keeps them): the item is loaded, only poorer.
+                if gi.get("expectedOutput") == without_controls(it["expectedOutput"]) and gi.get("input") == without_controls(it["input"]):
+                    notes.append(f"dataset item {it['id']}: Langfuse stored it without its control characters")
+                else:
+                    bad.append(f"dataset item {it['id']} input/expectedOutput differ")
         if len(items) != len(d["items"]):
             bad.append(f"dataset {d['name']} item count: got {len(items)} want {len(d['items'])}")
         runs = {r["name"]: r for r in c.paged(f"/api/public/datasets/{q(d['name'])}/runs")}
@@ -633,7 +657,18 @@ def check_rest(c, seed, ds_ids, project_id):
     for cfg in seed["scoreConfigs"]:
         if cfg["name"] not in names:
             missing.append(f"score config {cfg['name']}")
-    return missing, bad
+    return missing, bad, notes
+
+
+def wait_rest(c, seed, ds_ids, project_id, timeout, log):
+    """check_rest until it converges: Langfuse 4.46.0 writes dataset run items after it answers the request."""
+    t0 = time.time()
+    while True:
+        missing, bad, notes = check_rest(c, seed, ds_ids, project_id)
+        if (not missing and not bad) or time.time() - t0 > timeout:
+            return missing, bad, notes
+        log(f"  waiting for datasets and comments: {len(missing)} missing, {len(bad)} mismatches ...")
+        time.sleep(5)
 
 
 # ----------------------------------------------------------------- self-test
@@ -678,6 +713,7 @@ def self_test():
         (k["prompts"][0]["versions"][0]["labelsFinal"], []), (k["prompts"][0]["versions"][1]["labelsFinal"], ["latest", "production", "staging"]),
         (k["datasets"][0]["runs"][0]["runItemCount"], 1),
         (iso(1), "1970-01-01T00:00:00.001Z"), (expand({"a": {"$repeat": {"unit": "ab", "times": 3}}}), {"a": "ababab"}),
+        (without_controls({"a": ["x\u0001\u0007\b\u001b[31m\u007f\n\ty\u200b"]}), {"a": ["x[31m\n\ty\u200b"]}),
     ]
     bad = [(i, g, w) for i, (g, w) in enumerate(want) if g != w]
     for i, g, w in bad:
@@ -751,7 +787,7 @@ def main():
             raise Fail(f"readback did not converge: {len(miss)} missing, {len(bad)} mismatches")
         ds_ids = load_datasets(c, seed, log)
         load_comments(c, seed, project_id, log)
-        miss, bad = check_rest(c, seed, ds_ids, project_id)
+        miss, bad, notes = wait_rest(c, seed, ds_ids, project_id, a.timeout, log)
         if miss or bad:
             for m in miss[:15]:
                 print("  MISSING", m, file=sys.stderr)
@@ -774,6 +810,8 @@ def main():
     log(f"  prompts       {len(seed['prompts'])} ({sum(len(p['versions']) for p in seed['prompts'])} versions)")
     log(f"  datasets      {len(seed['datasets'])} ({sum(len(d['items']) for d in seed['datasets'])} items, {sum(len(d['runs']) for d in seed['datasets'])} runs, {sum(len(r['items']) for d in seed['datasets'] for r in d['runs'])} run items)")
     log(f"  comments      {len(seed['comments'])}")
+    for n in notes:
+        log(f"  note: {n}")
     if total != len(traces):
         print(f"WARNING: the project holds {total} traces, the seed {len(traces)}: the stack was not fresh", file=sys.stderr)
         return 1
