@@ -19,7 +19,8 @@ import (
 // names the field groups of the operation, from the same compiled source as the
 // guidance, and no hint recommends fields for an operation that does not serve
 // them on the connected deployment. The words about a lower limit and a time
-// window are #203's: here they stay as they are.
+// window are the subject of narrowinghints_test.go (#203); here they follow the
+// ways the operation has.
 
 // The groups of each operation as its hints name them, as literals (the
 // release specs, docs/research/langfuse.md section 1.5).
@@ -112,7 +113,7 @@ func TestTheHintOfAResponseTooLargeNamesTheFieldGroupsOnlyOfAnOperationThatServe
 	t.Parallel()
 	dual := catalog.AllFamilies()
 	legacy := []catalog.Family{catalog.LegacyFamily}
-	const window = ", a shorter time window or a lower limit"
+	const window = ", a lower limit or a shorter time window"
 	tests := map[string]struct {
 		operationID, version string
 		families             []catalog.Family
@@ -121,15 +122,14 @@ func TestTheHintOfAResponseTooLargeNamesTheFieldGroupsOnlyOfAnOperationThatServe
 		"trace_list": {"trace_list", "3.80.0", legacy,
 			"narrow the query: fewer field groups in fields (" + traceGroups + ")" + window + ", and page through the rest " + viaPage},
 		"trace_get where fields is served": {"trace_get", "3.166.0", legacy,
-			"narrow the query: fewer field groups in fields (" + traceGroups + ")" + window},
-		"trace_get on 3.80.0, which does not serve fields": {"trace_get", "3.80.0", legacy,
-			"narrow the query: a shorter time window or a lower limit"},
+			"narrow the query: fewer field groups in fields (" + traceGroups + ")"},
+		"trace_get on 3.80.0, which does not serve fields": {"trace_get", "3.80.0", legacy, tooLargeNoWay},
 		"observations_getMany": {"observations_getMany", "4.46.0", dual,
 			"narrow the query: fewer field groups in fields (" + observationsGroups + ")" + window + ", and page through the rest " + viaCursor},
 		"scores_get-many": {"scores_get-many", "3.144.0", legacy,
 			"narrow the query: fewer field groups in fields (" + scoresGroups + ")" + window + ", and page through the rest " + viaPage},
 		"scores_get-many before fields": {"scores_get-many", "3.143.0", legacy,
-			"narrow the query: a shorter time window or a lower limit, and page through the rest " + viaPage},
+			"narrow the query: a lower limit or a shorter time window, and page through the rest " + viaPage},
 		"scoresV3_getManyV3": {"scoresV3_getManyV3", "4.46.0", dual,
 			"narrow the query: fewer field groups in fields (" + scoresV3Groups + ")" + window + ", and page through the rest " + viaCursor},
 		"experiments_list": {"experiments_list", "4.46.0", dual,
@@ -137,7 +137,7 @@ func TestTheHintOfAResponseTooLargeNamesTheFieldGroupsOnlyOfAnOperationThatServe
 		"experiments_listItems": {"experiments_listItems", "4.46.0", dual,
 			"narrow the query: fewer field groups in fields (" + itemsGroups + ")" + window + ", and page through the rest " + viaCursor},
 		"an operation without fields": {"datasets_list", "4.46.0", dual,
-			"narrow the query: a shorter time window or a lower limit, and page through the rest " + viaPage},
+			"narrow the query: a lower limit, and page through the rest " + viaPage},
 	}
 	for name, tc := range tests {
 		for source, answered := range map[string]answer{
@@ -171,17 +171,16 @@ func TestTheHintOfATimeoutNamesTheFieldGroupsOnlyOfAnOperationThatServesThem(t *
 		want                 string
 	}{
 		"trace_list": {"trace_list", "4.46.0", dual,
-			"narrow the query before calling again: a shorter time window, fewer field groups in fields (" + traceGroups + ") or a lower limit"},
+			"narrow the query before calling again: fewer field groups in fields (" + traceGroups + "), a lower limit or a shorter time window"},
 		"trace_get where fields is served": {"trace_get", "3.166.0", legacy,
-			"narrow the query before calling again: a shorter time window, fewer field groups in fields (" + traceGroups + ") or a lower limit"},
-		"trace_get on 3.80.0, which does not serve fields": {"trace_get", "3.80.0", legacy,
-			"narrow the query before calling again: a shorter time window or a lower limit"},
+			"narrow the query before calling again: fewer field groups in fields (" + traceGroups + ")"},
+		"trace_get on 3.80.0, which does not serve fields": {"trace_get", "3.80.0", legacy, slowNoWay},
 		"observations_getMany": {"observations_getMany", "4.46.0", dual,
-			"narrow the query before calling again: a shorter time window, fewer field groups in fields (" + observationsGroups + ") or a lower limit"},
+			"narrow the query before calling again: fewer field groups in fields (" + observationsGroups + "), a lower limit or a shorter time window"},
 		"scoresV3_getManyV3": {"scoresV3_getManyV3", "4.46.0", dual,
-			"narrow the query before calling again: a shorter time window, fewer field groups in fields (" + scoresV3Groups + ") or a lower limit"},
+			"narrow the query before calling again: fewer field groups in fields (" + scoresV3Groups + "), a lower limit or a shorter time window"},
 		"an operation without fields": {"datasets_list", "4.46.0", dual,
-			"narrow the query before calling again: a shorter time window or a lower limit"},
+			"narrow the query before calling again: a lower limit"},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -212,10 +211,9 @@ func TestTheHintOfACanceledCallNamesTheFieldGroupsOnlyOfAnOperationThatServesThe
 		want string
 	}{
 		"trace_list": {traceList,
-			"if the call was canceled because it was slow, narrow the query before calling again: a shorter time window, " +
-				"fewer field groups in fields (" + traceGroups + ") or a lower limit"},
-		"trace_get on 3.80.0": {traceGet,
-			"if the call was canceled because it was slow, narrow the query before calling again: a shorter time window or a lower limit"},
+			"if the call was canceled because it was slow, narrow the query before calling again: " +
+				"fewer field groups in fields (" + traceGroups + "), a lower limit or a shorter time window"},
+		"trace_get on 3.80.0": {traceGet, canceledNoWay},
 	} {
 		code, hint := server.FailureOf(tc.op, langfuse.ErrCanceled)
 
@@ -302,8 +300,8 @@ func TestTheHintsOfAFailedTraceTreeNeverRecommendFields(t *testing.T) {
 
 			got := toolErrorOf(t, callTool(t, cs, "get_trace_tree", map[string]any{"traceId": "t-1"})).Error
 
-			if got.Code != "timeout" || strings.Contains(got.Hint, "fields") {
-				t.Fatalf("error = %+v, want a timeout whose hint does not recommend fields", got)
+			if got.Code != "timeout" || (strings.Contains(got.Hint, "fields") && !strings.Contains(got.Hint, "execute_read")) {
+				t.Fatalf("error = %+v, want a timeout whose hint does not recommend fields as an argument of the tool", got)
 			}
 		})
 	}

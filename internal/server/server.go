@@ -292,21 +292,27 @@ func limitHint(op catalog.Operation) string {
 	return hint + "; without a limit the server asks for " + strconv.Itoa(catalog.DefaultLimit)
 }
 
-// tooLargeNarrowing is the first part of the hint of an answer too large to
-// read. It names the field groups of op when the deployment serves fields on it
-// (#194), and a time window and a limit for every operation (#203).
-func tooLargeNarrowing(op catalog.Operation) string {
-	return "narrow the query: " + sanitize.JoinWays(remediesOf(op).FieldsWay(), "a shorter time window", "a lower limit")
-}
+// tooLargeNoWayHint is the hint of an answer too large to read when the
+// operation has no parameter that makes it smaller (a single-resource read such
+// as trace_get on 3.80.0): it names no way, because there is none, and does not
+// send the agent to call again (#203).
+const tooLargeNoWayHint = "no parameter of this operation makes the answer smaller: tell the user instead of calling again"
 
 // tooLargeHintFor is the hint of an answer too large to read (a 413, or a body
-// over the bytes this server reads): it says to page through the rest only by
-// the parameter the operation has (#193).
+// over the bytes this server reads): the ways of narrowing the operation has,
+// the words of the truncation hint (#203), and to page through the rest only by
+// the parameter the operation has (#193). An operation with neither gets
+// tooLargeNoWayHint.
 func tooLargeHintFor(op catalog.Operation) string {
-	if note := remediesOf(op).PagingNote(); note != "" {
-		return tooLargeNarrowing(op) + ", and " + note
+	remedies := remediesOf(op)
+	clause := remedies.NarrowClause()
+	if clause == "" {
+		return tooLargeNoWayHint
 	}
-	return tooLargeNarrowing(op)
+	if note := remedies.PagingNote(); note != "" {
+		return clause + ", and " + note
+	}
+	return clause
 }
 
 // maxEchoed bounds how much of a caller-supplied name an error repeats.
@@ -421,7 +427,7 @@ func (ex executor) run(ctx context.Context, op catalog.Operation, request catalo
 		}
 		f.OperationID = truncate(op.ID)
 		if !op.IsRead() {
-			f.Hint = notRetriedHint(f)
+			f.Hint = notRetriedHint(f, op)
 		}
 		return errorResult(f)
 	}
@@ -438,14 +444,16 @@ func (ex executor) run(ctx context.Context, op catalog.Operation, request catalo
 }
 
 // remediesOf returns the ways to ask op for a smaller result, from the
-// parameters the deployment serves: the truncation hint names only these (a
-// deployment that does not serve fields is never told to use it).
+// parameters the deployment serves: the truncation hint, the hint of a response
+// too large and the hint of a slow call name only these (a deployment that does
+// not serve fields is never told to use it, #203).
 func remediesOf(op catalog.Operation) sanitize.Remedies {
 	r := sanitize.Remedies{
-		FieldGroups: op.FieldGroups(),
-		TimeWindow:  op.HasTimeFilter(),
-		Page:        op.HasQueryParam("page"),
-		Cursor:      op.HasQueryParam("cursor"),
+		FieldGroups:  op.FieldGroups(),
+		TimeWindow:   op.HasTimeFilter(),
+		MetricsQuery: op.HasMetricsQuery(),
+		Page:         op.HasQueryParam("page"),
+		Cursor:       op.HasQueryParam("cursor"),
 	}
 	if op.IsRead() && op.HasQueryParam("limit") {
 		r.Limit = catalog.MaxLimit

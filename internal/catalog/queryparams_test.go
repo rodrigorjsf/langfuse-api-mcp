@@ -42,3 +42,35 @@ func TestAnOperationReportsTheQueryParametersAndTimeFiltersItServes(t *testing.T
 		t.Errorf("trace_get reports its path parameter traceId as a query parameter")
 	}
 }
+
+// Seam S3 (spec #172, ticket #203): the two metrics operations narrow an answer
+// through the JSON query they take, not through a limit or a time parameter of
+// their own, and no other operation does.
+func TestOnlyTheMetricsOperationsReportAMetricsQuery(t *testing.T) {
+	t.Parallel()
+	cat := mustLoad(t)
+	legacy := []catalog.Family{catalog.LegacyFamily}
+	for _, tc := range []struct {
+		name        string
+		profile     catalog.Profile
+		operationID string
+		want        bool
+	}{
+		{"metrics_metrics", catalog.Profile{Version: "4.46.0", Families: catalog.AllFamilies()}, "metrics_metrics", true},
+		{"legacy_metricsV1_metrics", catalog.Profile{Version: "3.80.0", Families: legacy}, "legacy_metricsV1_metrics", true},
+		{"datasets_list has a limit instead", catalog.Profile{Version: "3.80.0", Families: legacy}, "datasets_list", false},
+		{"trace_list", catalog.Profile{Version: "3.80.0", Families: legacy}, "trace_list", false},
+		{"trace_get", catalog.Profile{Version: "3.80.0", Families: legacy}, "trace_get", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			op, ok := cat.Resolve(tc.profile).Lookup(tc.operationID)
+			if !ok {
+				t.Fatalf("%s missing", tc.operationID)
+			}
+			if got := op.HasMetricsQuery(); got != tc.want {
+				t.Fatalf("HasMetricsQuery = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

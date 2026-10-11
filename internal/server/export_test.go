@@ -1,9 +1,14 @@
 package server
 
 import (
+	"encoding/json"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse"
+	"github.com/rodrigorjsf/langfuse-api-mcp/internal/sanitize"
 )
 
 // WithClock replaces the clock that dates confirmation states, so a test can
@@ -19,7 +24,7 @@ func TooLargeHint(op catalog.Operation) string  { return tooLargeHintFor(op) }
 
 // NarrowHint is the hint of a slow call of op, built from an operation the
 // test chooses (#194).
-func NarrowHint(op catalog.Operation) string { return narrowHintFor(op) }
+func NarrowHint(op catalog.Operation) string { return slowHintFor(op, false) }
 
 // FailureOf returns the code and the hint of the tool error for a Langfuse
 // request of op that failed with err, for a failure the client of a test cannot
@@ -27,4 +32,42 @@ func NarrowHint(op catalog.Operation) string { return narrowHintFor(op) }
 func FailureOf(op catalog.Operation, err error) (code, hint string) {
 	f := failureFields(op, err)
 	return f.Code, f.Hint
+}
+
+// TruncationHint is the hint of a page of op that lost rows to the smallest
+// result size cap: the reference the hints of a response too large and of a slow
+// call must agree with (#203). It is built from an operation the test chooses,
+// so a walk can take it from every operation of a deployment profile.
+func TruncationHint(op catalog.Operation) string {
+	rows := make([]map[string]string, 400)
+	for i := range rows {
+		rows[i] = map[string]string{"id": strconv.Itoa(i), "input": strings.Repeat("a", 100)}
+	}
+	payload, err := json.Marshal(map[string]any{"data": rows, "meta": map[string]any{}})
+	if err != nil {
+		panic(err) // rows of strings always marshal
+	}
+	return sanitize.Wrap(op.ID, payload, 16384, remediesOf(op)).Hint
+}
+
+// TraceTreeFailureOf returns the code and the hint of the tool error for a read
+// of the trace tree on a deployment with profile, over cat, that failed with
+// err, for a failure the client of a test cannot read, such as a canceled call.
+func TraceTreeFailureOf(cat catalog.Catalog, profile langfuse.DeploymentProfile, err error) (code, hint string) {
+	ex := executor{catalog: cat, profile: profile}
+	src, _ := ex.selectTraceTreeSource()
+	f := ex.traceTreeFailure(src, err, &audit{})
+	return f.Code, f.Hint
+}
+
+// ScanOperation is op as the filter scan reads it, which the hints of a failed
+// scan are built from (#203).
+func ScanOperation(op catalog.Operation) catalog.Operation { return scanReads(op) }
+
+// WriteFailureOf returns the code and the hint of the tool error for a write of
+// op that failed with err before Langfuse answered, for a failure the client of
+// a test cannot read, such as a canceled call: the hint execute_write gives.
+func WriteFailureOf(op catalog.Operation, err error) (code, hint string) {
+	f := failureFields(op, err)
+	return f.Code, notRetriedHint(f, op)
 }

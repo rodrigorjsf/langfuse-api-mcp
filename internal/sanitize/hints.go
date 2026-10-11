@@ -18,6 +18,11 @@ type Remedies struct {
 	Limit int
 	// TimeWindow is set when the operation takes a time range.
 	TimeWindow bool
+	// MetricsQuery is set for an operation whose query parameter is the JSON of a
+	// metrics query: it holds the time range, the filters and config.row_limit,
+	// so the operation has ways to narrow although it has no limit or time
+	// parameter of its own.
+	MetricsQuery bool
 	// Page is set when the operation takes the page parameter; Cursor when it
 	// takes the cursor parameter, continued from meta.cursor. The hint names
 	// only the way of paging the operation has (#193).
@@ -78,16 +83,38 @@ func JoinWays(ways ...string) string {
 	return strings.Join(kept[:len(kept)-1], ", ") + " or " + kept[len(kept)-1]
 }
 
-// clause is the remedies as one sentence part, "" when there are none.
-func (r Remedies) clause() string {
-	var limit, window string
+// The words of the ways to narrow a query. Every hint that recommends one
+// takes it from here (NarrowWays), so that none names a way the others lack.
+const (
+	limitWay        = "a lower limit"
+	timeWindowWay   = "a shorter time window"
+	metricsQueryWay = "a shorter time range, more filters or a lower config.row_limit in the query JSON"
+)
+
+// NarrowWays names the ways the operation has to ask for less, as one
+// alternative: fewer field groups, a lower limit, a shorter time window, and for
+// a metrics query its own words. It is "" when the operation has none; paging
+// is not a way (PagingNote). The truncation hint, the hint of a response too
+// large and the hint of a call that got no answer in time all use it, so they
+// cannot drift apart (#203).
+func (r Remedies) NarrowWays() string {
+	var limit, window, metrics string
 	if r.Limit > 0 {
-		limit = "a lower limit"
+		limit = limitWay
 	}
 	if r.TimeWindow {
-		window = "a shorter time window"
+		window = timeWindowWay
 	}
-	if ways := JoinWays(r.FieldsWay(), limit, window); ways != "" {
+	if r.MetricsQuery {
+		metrics = metricsQueryWay
+	}
+	return JoinWays(r.FieldsWay(), limit, window, metrics)
+}
+
+// NarrowClause is the ways of NarrowWays as one sentence part, "narrow the
+// query: ...", or "" when the operation has none.
+func (r Remedies) NarrowClause() string {
+	if ways := r.NarrowWays(); ways != "" {
 		return "narrow the query: " + ways
 	}
 	return ""
@@ -119,7 +146,7 @@ type hints struct {
 }
 
 // hintsFor returns the hints of an operation with remedies r.
-func hintsFor(r Remedies) hints { return hints{remedies: r, remedy: r.clause()} }
+func hintsFor(r Remedies) hints { return hints{remedies: r, remedy: r.NarrowClause()} }
 
 // join makes the hint of parts, before the result hint.
 func (n hints) join(parts ...string) string {

@@ -56,9 +56,18 @@ func scanIncompleteHint() string {
 		"and call again"
 }
 
+// scanReads is op as the filter scan reads it: from page 1 at the page size
+// maximum, whatever limit or page the call names, so neither a lower limit nor
+// paging asks for less, and the hints of its truncation and of its failures name
+// neither (#183, #203).
+func scanReads(op catalog.Operation) catalog.Operation {
+	return op.WithoutQueryParam("limit").WithoutQueryParam("page").WithoutQueryParam("cursor")
+}
+
 // filterScan answers the call of op with a filter scan. A failed page ends it
 // with the tool error of that failure.
-func (ex executor) filterScan(ctx context.Context, op catalog.Operation, scan catalog.Scan, a *audit) (*mcp.CallToolResult, error) {
+func (ex executor) filterScan(ctx context.Context, called catalog.Operation, scan catalog.Scan, a *audit) (*mcp.CallToolResult, error) {
+	op := scanReads(called)
 	res, err := workflows.FilterScan(ctx, ex.client, ex.redact, workflows.FilterScanInput{
 		Path: scan.Request.Path, Query: scan.Request.Query,
 		Parameter: scan.Parameter, RowField: scan.RowField, Value: scan.Value,
@@ -79,9 +88,5 @@ func (ex executor) filterScan(ctx context.Context, op catalog.Operation, scan ca
 	if !res.Complete {
 		note = scanIncompleteHint()
 	}
-	// The scan reads from page 1 at the page size maximum: neither a lower limit
-	// nor paging asks for less.
-	remedies := remediesOf(op)
-	remedies.Limit, remedies.Page, remedies.Cursor = 0, false, false
-	return jsonResult(sanitize.WrapNoted(op.ID, res.Payload, ex.maxResultBytes, remedies, note), false)
+	return jsonResult(sanitize.WrapNoted(op.ID, res.Payload, ex.maxResultBytes, remediesOf(op), note), false)
 }

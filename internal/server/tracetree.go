@@ -123,8 +123,16 @@ const (
 	// traceTreeTooLargeHint answers a page over the response read cap: the tool
 	// takes no limit, field or cursor, so the way to read the trace is
 	// execute_read with the paging Observations v2 has (#193).
-	traceTreeTooLargeHint = "a page of 1000 observations is larger than the response this server reads; " +
-		"execute_read with observations_getMany (traceId, fields, a lower limit, cursor) reads the trace in smaller pages"
+	traceTreeTooLargeHint = "a page of 1000 observations is larger than the response this server reads; " + traceTreeReadsByPages
+
+	// traceTreeSlowHint answers a page that got no answer in time: the tool
+	// takes no limit, field or time window, so it cannot read less, and the way to
+	// read the trace in smaller pages is the same execute_read call (#203).
+	traceTreeSlowHint = "get_trace_tree has no argument that reads less: " + traceTreeReadsByPages
+
+	// traceTreeReadsByPages is where the trace is read in smaller pages when it is
+	// read from Observations v2.
+	traceTreeReadsByPages = "execute_read with observations_getMany (traceId, fields, a lower limit, cursor) reads the trace in smaller pages"
 
 	// The hints of the trace tree built from the legacy observations list
 	// (#187). The legacy list pages by page number, has no field selection and
@@ -137,8 +145,14 @@ const (
 	// traceTreeLegacyTooLargeHint answers a page over the response read cap:
 	// the legacy list has no field selection and the tool no time window, so
 	// the way to read the trace is a lower page size through execute_read.
-	traceTreeLegacyTooLargeHint = "a page of 100 observations is larger than the response this server reads; " +
-		"execute_read with legacy_observationsV1_getMany (traceId, a limit below 100, page) reads the trace in smaller pages"
+	traceTreeLegacyTooLargeHint = "a page of 100 observations is larger than the response this server reads; " + traceTreeLegacyReadsByPages
+
+	// traceTreeLegacySlowHint is traceTreeSlowHint for the legacy list.
+	traceTreeLegacySlowHint = "get_trace_tree has no argument that reads less: " + traceTreeLegacyReadsByPages
+
+	// traceTreeLegacyReadsByPages is where the trace is read in smaller pages
+	// when it is read from the legacy list.
+	traceTreeLegacyReadsByPages = "execute_read with legacy_observationsV1_getMany (traceId, a limit below 100, page) reads the trace in smaller pages"
 )
 
 // traceTreeLegacyMoreHint answers a trace longer than the pages read from the
@@ -166,9 +180,12 @@ type traceTreeSource struct {
 	empty string
 	// cut is the remedy of a tree cut to the result size cap.
 	cut string
-	// tooLarge is the hint of a page over the response read cap; "" keeps the
-	// generic one.
+	// tooLarge is the hint of a page over the response read cap, or answered 413;
+	// "" keeps the generic one.
 	tooLarge string
+	// slow is the hint of a page that got no answer in time; a canceled call has
+	// it behind the lead-in of canceledLead.
+	slow string
 }
 
 // selectTraceTreeSource returns where this deployment's trace tree is read from:
@@ -183,7 +200,7 @@ func (ex executor) selectTraceTreeSource() (traceTreeSource, bool) {
 			operationID: workflows.ObservationsOperationID, family: catalog.V4ReadFamily,
 			read:  workflows.GetTraceTree,
 			more:  func(workflows.TraceTree) string { return traceTreeMoreHint },
-			empty: traceTreeEmptyHint, cut: traceTreeCutHint, tooLarge: traceTreeTooLargeHint,
+			empty: traceTreeEmptyHint, cut: traceTreeCutHint, tooLarge: traceTreeTooLargeHint, slow: traceTreeSlowHint,
 		}, true
 	case ex.profile.On(catalog.LegacyFamily):
 		return traceTreeSource{
@@ -191,6 +208,7 @@ func (ex executor) selectTraceTreeSource() (traceTreeSource, bool) {
 			read:  workflows.GetLegacyTraceTree,
 			more:  func(t workflows.TraceTree) string { return traceTreeLegacyMoreHint(t.NextPage) },
 			empty: traceTreeLegacyEmptyHint, cut: traceTreeLegacyCutHint, tooLarge: traceTreeLegacyTooLargeHint,
+			slow: traceTreeLegacySlowHint,
 		}, true
 	}
 	return traceTreeSource{operationID: workflows.ObservationsOperationID, family: catalog.V4ReadFamily}, false
@@ -210,21 +228,7 @@ func (ex executor) getTraceTree(ctx context.Context, req *mcp.CallToolRequest, a
 	tree, err := src.read(ctx, ex.client, ex.redact, in.traceID, in.include)
 	a.requests, a.status, a.bytes = tree.Requests, tree.Status, tree.Bytes
 	if err != nil {
-		// The tool takes no fields argument, so no hint of its failures may recommend
-		// fields, whatever the operation it reads serves (#194). The other words of
-		// those hints are #203's.
-		op := ex.catalogOperation(src).WithoutQueryParam("fields")
-		if f, ok := langfuseErrorFields(err, op, ex.redact, ex.profile); ok {
-			a.status = f.HTTPStatus
-			return errorResult(f)
-		}
-		a.cause = err.Error()
-		fields := failureFields(op, err)
-		fields.OperationID = truncate(op.ID)
-		if src.tooLarge != "" && errors.Is(err, langfuse.ErrResponseTooLarge) {
-			fields.Hint = src.tooLarge
-		}
-		return errorResult(fields)
+		return errorResult(ex.traceTreeFailure(src, err, a))
 	}
 	var hints []string
 	if tree.More {
@@ -235,6 +239,33 @@ func (ex executor) getTraceTree(ctx context.Context, req *mcp.CallToolRequest, a
 	}
 	env := sanitize.WrapWith(src.operationID, tree.Payload, ex.maxResultBytes, strings.Join(hints, "; "), src.cut)
 	return jsonResult(env, false)
+}
+
+// traceTreeFailure is the tool error of a read of the trace tree that failed
+// with err. The tool takes no limit, no fields and no time window, so the
+// operation it reads is seen without fields (#194), and a response too large, a
+// timeout and a canceled call get the hint of the source the tree is read from,
+// which sends the agent to execute_read with that operation (#193, #203). Every
+// other failure keeps the hint of its kind.
+func (ex executor) traceTreeFailure(src traceTreeSource, err error, a *audit) toolErrorFields {
+	op := ex.catalogOperation(src).WithoutQueryParam("fields")
+	f, ok := langfuseErrorFields(err, op, ex.redact, ex.profile)
+	if ok {
+		a.status = f.HTTPStatus
+	} else {
+		a.cause = err.Error()
+		f = failureFields(op, err)
+	}
+	f.OperationID = truncate(op.ID)
+	switch {
+	case f.Code == errorResponseTooLarge && src.tooLarge != "":
+		f.Hint = src.tooLarge
+	case f.Code == errorTimeout && !f.Retryable:
+		f.Hint = src.slow
+	case f.Code == errorCanceled:
+		f.Hint = canceledLead + src.slow
+	}
+	return f
 }
 
 // traceTreeUnavailable is the tool error of a call on a deployment where

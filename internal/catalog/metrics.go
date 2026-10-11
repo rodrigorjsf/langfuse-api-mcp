@@ -48,6 +48,13 @@ func (o Operation) isMetricsQuery(p Param) bool {
 	return metricsOperations[o.ID] && p.In == "query" && p.Name == "query"
 }
 
+// HasMetricsQuery reports whether the operation takes the JSON query of a
+// metrics query: its time range, filters and config.row_limit narrow the answer
+// although the operation has no limit or time parameter of its own.
+func (o Operation) HasMetricsQuery() bool {
+	return slices.ContainsFunc(o.Params, o.isMetricsQuery)
+}
+
 // A JSON text the server decodes before it sends it on, a metrics query or a
 // JSON filter (#195), is bounded before it is decoded: at most maxJSONTextBytes
 // long (the first query-JSON size cap; the M3 workflow payload-query guard, #42,

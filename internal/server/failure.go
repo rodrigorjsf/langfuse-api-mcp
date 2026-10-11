@@ -8,7 +8,6 @@ import (
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/catalog"
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/langfuse"
-	"github.com/rodrigorjsf/langfuse-api-mcp/internal/sanitize"
 )
 
 // Tool error codes for requests that never got a Langfuse answer (ADR-0008).
@@ -20,12 +19,39 @@ const (
 	errorCanceled                = "canceled"
 )
 
-// narrowHintFor tells the agent how to make a slow read cheaper. It names the
-// field groups of op when the deployment serves fields on it (#194), and a time
-// window and a limit for every operation (#203).
-func narrowHintFor(op catalog.Operation) string {
-	return "narrow the query before calling again: " +
-		sanitize.JoinWays("a shorter time window", remediesOf(op).FieldsWay(), "a lower limit")
+// The hints of a call that got no answer in time. A canceled call has the hint
+// of a timeout behind a lead-in, since the client usually cancels a slow call.
+const (
+	canceledLead  = "if the call was canceled because it was slow, "
+	slowNoWayHint = "no parameter of this operation makes the call cheaper: tell the user instead of calling again"
+)
+
+// slowAdvice tells the agent how to make a slow read cheaper: the ways of
+// narrowing op has, in the words of the truncation hint (#203), or "" when it
+// has none.
+func slowAdvice(op catalog.Operation, canceled bool) string {
+	ways := remediesOf(op).NarrowWays()
+	if ways == "" {
+		return ""
+	}
+	advice := "narrow the query before calling again: " + ways
+	if canceled {
+		return canceledLead + advice
+	}
+	return advice
+}
+
+// slowHintFor is the hint of a read of op that timed out, or was canceled when
+// canceled. An operation with no way of narrowing is told so, and is not invited
+// to call again: the error is not retryable (#203).
+func slowHintFor(op catalog.Operation, canceled bool) string {
+	if advice := slowAdvice(op, canceled); advice != "" {
+		return advice
+	}
+	if canceled {
+		return canceledLead + slowNoWayHint
+	}
+	return slowNoWayHint
 }
 
 // caHint tells the user how to trust the CA of the Langfuse server.
@@ -97,13 +123,13 @@ func failureFields(op catalog.Operation, err error) toolErrorFields {
 		return toolErrorFields{
 			Code:    errorTimeout,
 			Message: "Langfuse did not answer before the request deadline",
-			Hint:    narrowHintFor(op),
+			Hint:    slowHintFor(op, false),
 		}
 	case errors.Is(err, langfuse.ErrCanceled):
 		return toolErrorFields{
 			Code:    errorCanceled,
 			Message: "the request was canceled before Langfuse answered",
-			Hint:    "if the call was canceled because it was slow, " + narrowHintFor(op),
+			Hint:    slowHintFor(op, true),
 		}
 	default:
 		return toolErrorFields{

@@ -126,18 +126,16 @@ func TestTheHintOfAParameterTheVersionDoesNotServeNamesOnlyTheWayOfPagingTheOper
 
 // The hint of an answer too large to read (Langfuse's 413, or a body over the
 // bytes this server reads) says to page through the rest only where the
-// operation pages. The words about fields, time window and limit are not part
-// of this rule.
+// operation pages. The ways of narrowing it names are the rule of #203.
 func TestTheHintOfAResponseTooLargeNamesOnlyTheWayOfPagingTheOperationHas(t *testing.T) {
 	t.Parallel()
 	dual := catalog.AllFamilies()
 	legacy := []catalog.Family{catalog.LegacyFamily}
 	// The words about fields name the groups of the operation (#194); the words
-	// about the time window and the limit are #203's and unchanged.
+	// about the limit and the time window are the truncation hint's (#203).
 	const (
-		narrow         = "narrow the query: fewer field groups in fields (" + traceGroups + "), a shorter time window or a lower limit"
-		narrowObserved = "narrow the query: fewer field groups in fields (" + observationsGroups + "), a shorter time window or a lower limit"
-		narrowNoFields = "narrow the query: a shorter time window or a lower limit"
+		narrow         = "narrow the query: fewer field groups in fields (" + traceGroups + "), a lower limit or a shorter time window"
+		narrowObserved = "narrow the query: fewer field groups in fields (" + observationsGroups + "), a lower limit or a shorter time window"
 	)
 	tests := map[string]struct {
 		version  string
@@ -150,7 +148,7 @@ func TestTheHintOfAResponseTooLargeNamesOnlyTheWayOfPagingTheOperationHas(t *tes
 		"page only, on a v4 deployment": {"4.46.0", dual, map[string]any{"operationId": "trace_list"},
 			narrow + ", and page through the rest " + viaPage},
 		"neither, on 3.80.0, which does not serve fields": {"3.80.0", legacy,
-			map[string]any{"operationId": "trace_get", "parameters": map[string]any{"traceId": "t-1"}}, narrowNoFields},
+			map[string]any{"operationId": "trace_get", "parameters": map[string]any{"traceId": "t-1"}}, tooLargeNoWay},
 		"cursor only, on a v4 deployment": {"4.46.0", dual, map[string]any{"operationId": "observations_getMany"},
 			narrowObserved + ", and page through the rest " + viaCursor},
 	}
@@ -218,9 +216,9 @@ func TestTheHintsOfAnOperationWithBothWaysOfPagingNameBothAndOfOneWithNeitherNam
 		"not served, neither": {server.NotServedHint(neither),
 			"this deployment's Langfuse version does not serve that parameter: call again without it and filter the result yourself"},
 		"too large, both": {server.TooLargeHint(both),
-			"narrow the query: a shorter time window or a lower limit, and page through the rest " + viaBoth},
+			"narrow the query: a lower limit, and page through the rest " + viaBoth},
 		"too large, neither": {server.TooLargeHint(neither),
-			"narrow the query: a shorter time window or a lower limit"},
+			"narrow the query: a lower limit"},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s: hint = %q, want %q", name, tc.got, tc.want)
