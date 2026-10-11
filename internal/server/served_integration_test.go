@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -181,5 +182,27 @@ func TestLiveLangfuse3800AFilterScanOfLegacyObservationsByLevelReturnsOnlyThatLe
 	scan := page.Meta.FilterScan
 	if scan.AppliedBy != "server" || scan.Parameter != "level" || scan.RowField != "level" || !scan.Complete || scan.RowsMatched != 1 {
 		t.Errorf("filter scan summary = %+v, want applied by the server on level, complete, 1 row matched", scan)
+	}
+}
+
+// A parameter that 3.80.0 does not declare and that the server does not scan is
+// refused before any request, naming the release that serves it (#173): sessionId
+// of scores_get-many is served from 3.112.0.
+func TestLiveLangfuse3800RefusesAParameterItDoesNotServeThatTheServerDoesNotScan(t *testing.T) {
+	t.Parallel()
+	cs := liveScanSession(t)
+
+	res := callExecuteRead(t, cs, map[string]any{
+		"operationId": "scores_get-many", "parameters": map[string]any{"sessionId": "it-missing"},
+	})
+
+	got := toolErrorOf(t, res).Error
+	if got.Code != "invalid_argument" {
+		t.Fatalf("tool error = %+v, want invalid_argument", got)
+	}
+	for _, want := range []string{`"sessionId"`, "scores_get-many", "Langfuse 3.80.0", "from 3.112.0"} {
+		if !strings.Contains(got.Message, want) {
+			t.Errorf("message %q does not contain %q", got.Message, want)
+		}
 	}
 }

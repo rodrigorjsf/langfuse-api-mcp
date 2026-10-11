@@ -18,9 +18,9 @@ import (
 func TestTheFilterScanListHoldsExactlyTheTwoPairsEachWithItsRowField(t *testing.T) {
 	t.Parallel()
 
-	got := catalog.FilterScans()
+	got := catalog.ScannedFilters()
 
-	want := []catalog.FilterScan{
+	want := []catalog.ScannedFilter{
 		{OperationID: "scores_get-many", Parameter: "traceId", RowField: "traceId"},
 		{OperationID: "legacy_observationsV1_getMany", Parameter: "level", RowField: "level"},
 	}
@@ -41,7 +41,7 @@ func TestEveryFilterScanPairNamesAStringQueryParameterOfAnOperationOfTheCatalog(
 	t.Parallel()
 	cat := mustLoad(t)
 
-	for _, f := range catalog.FilterScans() {
+	for _, f := range catalog.ScannedFilters() {
 		op, ok := cat.Lookup(f.OperationID)
 		if !ok || !op.IsRead() {
 			t.Errorf("%s is not a read operation of the catalog", f.OperationID)

@@ -28,7 +28,7 @@ const (
 func scanIncompleteHint() string {
 	return "the server applied the filter itself and stopped at its limit of " + strconv.Itoa(workflows.MaxScanPages) +
 		" pages: the rows it did not read could match too, so this answer may be missing rows " +
-		"(meta.filterScan says how many rows it read of how many exist); narrow the query so that fewer rows exist, " +
+		"(meta.filterScan says how many rows it read, and of how many exist when Langfuse counts them); narrow the query so that fewer rows exist, " +
 		"and call again"
 }
 
@@ -36,7 +36,7 @@ func scanIncompleteHint() string {
 // with the tool error of that failure.
 func (ex executor) filterScan(ctx context.Context, op catalog.Operation, scan catalog.Scan, a *audit) (*mcp.CallToolResult, error) {
 	res, err := workflows.FilterScan(ctx, ex.client, ex.redact, workflows.FilterScanInput{
-		Path: scan.Request.Path, Query: scan.Request.Query, PageSize: scan.PageSize,
+		Path: scan.Request.Path, Query: scan.Request.Query,
 		Parameter: scan.Parameter, RowField: scan.RowField, Value: scan.Value,
 	})
 	a.requests, a.status, a.bytes = res.Requests, res.Status, res.Bytes

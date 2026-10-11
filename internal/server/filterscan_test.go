@@ -695,3 +695,129 @@ func TestTheRowsOfAScanAreClippedAndCutAtTheResultSizeCapLikeAnyResult(t *testin
 		}
 	})
 }
+
+// unmeteredLangfuse serves a list of total rows like pagedLangfuse, but sends
+// no counts (meta is empty) and never more than perPage rows a page, whatever
+// limit is asked: an older or odd Langfuse that caps the page size silently.
+func unmeteredLangfuse(t *testing.T, total, perPage int, row func(i int) map[string]any) (*httptest.Server, *pagedFake) {
+	t.Helper()
+	fake := &pagedFake{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		page := atoiOr(q.Get("page"), 1)
+		fake.mu.Lock()
+		fake.queries = append(fake.queries, q)
+		fake.mu.Unlock()
+		rows := []map[string]any{}
+		for i := (page - 1) * perPage; i < min(page*perPage, total); i++ {
+			rows = append(rows, row(i))
+		}
+		body, err := json.Marshal(map[string]any{"data": rows, "meta": map[string]any{}})
+		if err != nil {
+			t.Errorf("marshal the fake page: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body) // a failed write fails the call on the client side
+	}))
+	t.Cleanup(srv.Close)
+	return srv, fake
+}
+
+// Without Langfuse's counts only an empty page proves the end of the list: a
+// short page may only mean a smaller page size, and a scan that called itself
+// complete on it would present a partial answer as complete.
+func TestAScanWithoutCountsIsCompleteOnlyOnceAnEmptyPageProvesTheEnd(t *testing.T) {
+	t.Parallel()
+	fake, seen := unmeteredLangfuse(t, 70, 30, scoreRow) // pages of 30, 30, 10, then none
+	cs := connectScanning(t, fake, slog.New(slog.DiscardHandler))
+
+	env := scanResult(t, scanScores(t, cs, map[string]any{"traceId": "t-target"}))
+
+	wantMeta := map[string]any{"filterScan": map[string]any{
+		"appliedBy": "server", "parameter": "traceId", "rowField": "traceId", "complete": true,
+		"pagesRead": 4.0, "rowsRead": 70.0, "rowsExist": 70.0, "rowsMatched": 3.0,
+	}}
+	if !reflect.DeepEqual(env.Data.Meta, wantMeta) {
+		t.Errorf("meta = %v, want %v", env.Data.Meta, wantMeta)
+	}
+	if got := len(seen.requests()); got != 4 {
+		t.Errorf("Langfuse received %d requests, want 4: the empty page after the 10 rows proves the end", got)
+	}
+}
+
+// A list that never ends and gives no counts stops at the page limit, incomplete,
+// and says so without inventing a number of rows that exist.
+func TestAScanWithoutCountsThatReachesItsPageLimitIsIncompleteAndClaimsNoTotal(t *testing.T) {
+	t.Parallel()
+	fake, seen := unmeteredLangfuse(t, 1_000_000, 100, scoreRow)
+	cs := connectScanning(t, fake, slog.New(slog.DiscardHandler))
+
+	env := scanResult(t, scanScores(t, cs, map[string]any{"traceId": "t-target"}))
+
+	wantMeta := map[string]any{"filterScan": map[string]any{
+		"appliedBy": "server", "parameter": "traceId", "rowField": "traceId", "complete": false,
+		"pagesRead": 10.0, "rowsRead": 1000.0, "rowsMatched": 40.0,
+	}}
+	if !reflect.DeepEqual(env.Data.Meta, wantMeta) {
+		t.Errorf("meta = %v, want no rowsExist: %v", env.Data.Meta, wantMeta)
+	}
+	if got := len(seen.requests()); got != 10 {
+		t.Errorf("Langfuse received %d requests, want 10", got)
+	}
+	if !strings.Contains(env.Hint, "when Langfuse counts them") {
+		t.Errorf("hint %q, want it to promise the total only when Langfuse gives one", env.Hint)
+	}
+}
+
+// The rows are compared after redaction, the value as it was sent: a value that
+// holds a Langfuse key matches nothing (it cannot match a redacted row), and the
+// key comes back nowhere.
+func TestAScannedValueThatHoldsAKeyMatchesNothingAndTheKeyComesBackNowhere(t *testing.T) {
+	t.Parallel()
+	page := jsonOf(t, map[string]any{"data": []map[string]any{
+		{"id": "s-1", "traceId": testSecretKey, "comment": "the key as the trace id"},
+		{"id": "s-2", "traceId": "t-target", "comment": "an ordinary row"},
+	}, "meta": map[string]any{"totalItems": 2, "totalPages": 1}})
+	fake, _ := fakeLangfuse(t, http.StatusOK, page)
+	var logs syncBuffer
+	cs := connectScanning(t, fake, slog.New(slog.NewJSONHandler(&logs, nil)))
+
+	res := scanScores(t, cs, map[string]any{"traceId": testSecretKey})
+
+	env := scanResult(t, res)
+	if len(env.Data.Data) != 0 {
+		t.Errorf("rows = %v, want none: the row's key is redacted before the comparison", idsOf(env.Data.Data))
+	}
+	if text := resultText(t, res); strings.Contains(text, testSecretKey) || strings.Contains(logs.String(), testSecretKey) {
+		t.Errorf("the key came back in the result or the log")
+	}
+}
+
+// go.md: every parser of untrusted input is fuzzed. Whatever Langfuse answers,
+// a filter scan returns an envelope within the result cap or a tool error,
+// never a broken session or a rows-and-complete claim from a non-page.
+func FuzzFilterScanLangfuseAnswer(f *testing.F) {
+	for _, seed := range []string{
+		`{"data":[{"id":"s-1","traceId":"t-target"}],"meta":{"totalItems":1,"totalPages":1}}`,
+		`{"data":[],"meta":{}}`, `{"data":[],"meta":{"totalItems":0,"totalPages":0}}`, `{"data":"x"}`, `[]`, `null`,
+		`{"data":[1,2]}`, `{"data":[null]}`, `{"data":[{"traceId":null}],"meta":{"totalPages":-1}}`,
+		`{"data":[{"traceId":["t-target"]}],"meta":{"totalItems":"many","totalPages":1.5}}`,
+		`{"data":[{"traceId":"t-target"}],"meta":{"totalPages":99999999999999999999}}`,
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, body string) {
+		if !json.Valid([]byte(body)) {
+			return // the client refuses a non-JSON answer before the flow sees it
+		}
+		fake, _ := fakeLangfuse(t, http.StatusOK, body)
+		cs := connectScanning(t, fake, slog.New(slog.DiscardHandler))
+		res := scanScores(t, cs, map[string]any{"traceId": "t-target"})
+		if !res.IsError && len(resultText(t, res)) > 64<<10 {
+			t.Fatalf("result of %d bytes exceeds the 64 KiB cap", len(resultText(t, res)))
+		}
+		if res.IsError && toolErrorOf(t, res).Error.Code != "internal_error" {
+			t.Fatalf("scan of %.200q = %s, want a result or internal_error", body, resultText(t, res))
+		}
+	})
+}

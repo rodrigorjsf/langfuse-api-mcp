@@ -26,9 +26,6 @@ type FilterScanInput struct {
 	// Query is the query of every page but the page number, which the scan adds;
 	// it holds no filter.
 	Query url.Values
-	// PageSize is the number of rows each page is asked for, the limit in Query;
-	// 0 when the operation takes no limit.
-	PageSize int
 	// Parameter names the filter, for the summary; RowField is the field of each
 	// row that Value is compared with. Both are catalog text.
 	Parameter, RowField string
@@ -85,7 +82,7 @@ type scanPayload struct {
 // FilterScan reads the list in.Path page by page, from page 1, for at most
 // MaxScanPages pages, and keeps the rows whose RowField equals Value. It stops
 // at the end of the list: the page that Langfuse's meta.totalPages says is the
-// last, or, when it gives none, the first short page. Each page is sanitized
+// last, or, when it gives none, the first empty page. Each page is sanitized
 // and redacted before its rows are compared, so a row is compared as the agent
 // would read it; the matching rows are returned as such, only data. A failed
 // page ends the scan with its error wrapped, the FilterScanResult's Requests,
@@ -126,7 +123,7 @@ func FilterScan(ctx context.Context, client *langfuse.Client, r sanitize.Redacto
 		if meta.totalItems != nil {
 			exist = *meta.totalItems
 		}
-		if endOfList(meta, len(rows), in.PageSize, page) {
+		if endOfList(meta, len(rows), page) {
 			sum.Complete = true
 			break
 		}
@@ -141,7 +138,7 @@ func FilterScan(ctx context.Context, client *langfuse.Client, r sanitize.Redacto
 	}
 	payload, err := encodeScanPayload(out)
 	if err != nil {
-		return res, err
+		return res, fmt.Errorf("filter scan: %w", err)
 	}
 	res.Payload, res.Complete = payload, sum.Complete
 	return res, nil
@@ -194,17 +191,14 @@ func rowField(fields map[string]json.RawMessage, name string) (string, bool) {
 	return s, true
 }
 
-// endOfList reports whether page, the page-th of rows rows asked for pageSize
-// each, is the last of the list. Langfuse's meta.totalPages decides when it is
-// there (it holds when the server caps the page size below the one asked for);
-// otherwise a page shorter than the page size is the last, and with no page
-// size an empty one.
-func endOfList(meta scanMeta, rows, pageSize, page int) bool {
-	switch {
-	case meta.totalPages != nil:
+// endOfList reports whether page, which held rows rows, is where the list ends.
+// Langfuse's meta.totalPages decides when it is there (it holds when the server
+// caps the page size below the one asked for). Without it only an empty page
+// proves the end: a short page may be a smaller page size, and calling the
+// scan complete on it could present a partial answer as complete.
+func endOfList(meta scanMeta, rows, page int) bool {
+	if meta.totalPages != nil {
 		return page >= *meta.totalPages
-	case pageSize > 0:
-		return rows < pageSize
 	}
 	return rows == 0
 }

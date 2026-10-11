@@ -6,12 +6,12 @@ import (
 	"strconv"
 )
 
-// FilterScan is one pair of the closed list of filters the server applies
+// ScannedFilter is one pair of the closed list of filters the server applies
 // itself on a deployment whose Langfuse version does not serve them (ADR-0012
 // amendment of 2026-10-10, ADR-0010 amendment): the operation, the filter
 // parameter, and the field of each row of the list that the filter's value is
 // compared with.
-type FilterScan struct {
+type ScannedFilter struct {
 	OperationID string
 	Parameter   string
 	// RowField is the field of a row that equals the filter's value when the
@@ -20,16 +20,18 @@ type FilterScan struct {
 	RowField string
 }
 
-// filterScans is the closed list: exactly the two filters the campaign
+// scannedFilters is the closed list: exactly the two filters the campaign
 // proved on Langfuse 3.80.0 (finding H1), which ignores each and answers the
 // unfiltered list. Adding a pair is a decision of its own, with its row field.
-var filterScans = []FilterScan{
+// An operation description lists only served parameters, so it does not show
+// these filters on a deployment that scans them (#199).
+var scannedFilters = []ScannedFilter{
 	{OperationID: "scores_get-many", Parameter: "traceId", RowField: "traceId"},
 	{OperationID: "legacy_observationsV1_getMany", Parameter: "level", RowField: "level"},
 }
 
-// FilterScans returns the closed list of filter scan pairs.
-func FilterScans() []FilterScan { return slices.Clone(filterScans) }
+// ScannedFilters returns the closed list of filter scan pairs.
+func ScannedFilters() []ScannedFilter { return slices.Clone(scannedFilters) }
 
 // ErrPageWithFilterScan marks a page chosen together with a filter the server
 // applies by reading the list from its first page; it also matches
@@ -46,15 +48,12 @@ type Scan struct {
 	// Parameter is the filter's name and RowField the field of each row its
 	// value is compared with; both are catalog text.
 	Parameter, RowField string
-	// PageSize is the number of rows each page is asked for, the limit of
-	// Request: MaxLimit; 0 when the operation takes no limit.
-	PageSize int
 	// Value is the filter's value, checked like a value that is sent.
 	Value string
 }
 
 // Scan reports whether the call needs a filter scan, and if so returns it: the
-// call carries a filter of the closed list (FilterScans) that this
+// call carries a filter of the closed list (ScannedFilters) that this
 // deployment's version does not serve. Where the version serves the filter, or
 // the call carries none, it reports false and the call is one ordinary request
 // (Request). The call is checked as if the deployment served the filter, so the
@@ -82,18 +81,16 @@ func (o Operation) Scan(params map[string]any) (Scan, bool, error) {
 	}
 	value := req.Query.Get(p.Name)
 	req.Query.Del(p.Name)
-	pageSize := 0
 	if o.HasQueryParam("limit") {
-		pageSize = MaxLimit
-		req.Query.Set("limit", strconv.Itoa(pageSize))
+		req.Query.Set("limit", strconv.Itoa(MaxLimit))
 	}
-	return Scan{Request: req, Parameter: f.Parameter, RowField: f.RowField, PageSize: pageSize, Value: value}, true, nil
+	return Scan{Request: req, Parameter: f.Parameter, RowField: f.RowField, Value: value}, true, nil
 }
 
 // scannedFilter returns the pair of the closed list, and the parameter it names,
 // that the call carries and this deployment does not serve.
-func (o Operation) scannedFilter(params map[string]any) (FilterScan, Param, bool) {
-	for _, f := range filterScans {
+func (o Operation) scannedFilter(params map[string]any) (ScannedFilter, Param, bool) {
+	for _, f := range scannedFilters {
 		if f.OperationID != o.ID || params[f.Parameter] == nil {
 			continue
 		}
@@ -101,5 +98,5 @@ func (o Operation) scannedFilter(params map[string]any) (FilterScan, Param, bool
 			return f, p, true
 		}
 	}
-	return FilterScan{}, Param{}, false
+	return ScannedFilter{}, Param{}, false
 }

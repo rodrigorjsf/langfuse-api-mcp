@@ -44,7 +44,7 @@ Platform-mandated locations are not design choices and need no ADR: `.github/` h
 | detecting the deployment profile: `/health` version, family sentinel probes | `internal/langfuse` | `catalog/` (catalog stays pure) |
 | regenerating the union catalog from Langfuse release specs | `scripts/` (maintainer script) | `internal/` |
 | cleaning or wrapping Langfuse payloads before the agent sees them | `internal/sanitize` | inline in handlers |
-| a multi-call read flow (trace tree, error triage, cost/latency spike) | `internal/workflows/<flow>.go` | `server/` (server only registers it) |
+| a multi-call read flow (trace tree, filter scan, error triage, cost/latency spike) | `internal/workflows/<flow>.go` | `server/` (server only registers it) |
 | tool names, descriptions, annotations, input/output schemas, `isError` shape, write gate | `internal/server` | anywhere else |
 | listening, tokens, Origin/Host validation, stdio setup | `internal/transport` | `server/` |
 | process wiring and exit codes | `cmd/langfuse-mcp` | — |

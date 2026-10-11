@@ -19,7 +19,7 @@ Contract: ADR-0008. The agent must always receive a structured tool error it can
 | Destructive write (DELETE, PUT, PATCH), client offers no form elicitation (none, or URL mode only; read per request) | `confirmation_unavailable`, static hint (use a client with form elicitation, or the Langfuse UI), not retryable; nothing is sent (#113) |
 | Destructive write the user declined or cancelled | `confirmation_declined`, static hint (do not call again unless the user asks again), not retryable; nothing is sent |
 | Destructive write re-sent with missing, forged, corrupted, expired or mismatched confirmation data (an accept sent before the server asked, other arguments, another process's state) | `confirmation_invalid`, static hint (call again without confirmation data to be asked afresh), not retryable; nothing is sent |
-| Langfuse HTTP error (on a page of a filter scan, #183, the scan ends there and returns no rows, never a partial answer) | map status (table below) |
+| Langfuse HTTP error (on a page of a filter scan, #183, the scan ends there and returns no rows, never a partial answer; a page that is not a page of row objects ends it with `internal_error`) | map status (table below) |
 | Network / TLS / timeout | classify with `errors.As` (e.g. `x509.UnknownAuthorityError`, `*tls.CertificateVerificationError`, `net.Error` timeout, `context.DeadlineExceeded`) |
 | Bug (panic) | recover at the tool-handler boundary → `internal_error`; stack only to stderr |
 
