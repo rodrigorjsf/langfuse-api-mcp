@@ -273,8 +273,9 @@ func redactAfterPlaces(s string, places []int, blanks droppedBlanks) string {
 		var start, end int // the span to replace
 		found := false     // whether a key or the token of a header starts at p
 		if keys && p >= written && !insideAMatch(keyMatches, p) {
-			start = p
-			end, found = keyAt(s, p)
+			if end, found = keyAt(s, p); found {
+				start = p // a key starts at the place; a token, after its keyword
+			}
 		}
 		if !found && headers {
 			start, end, found = tokenAt(s, p)
