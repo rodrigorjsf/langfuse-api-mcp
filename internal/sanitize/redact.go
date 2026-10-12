@@ -238,7 +238,10 @@ const keyPrefixLength = len("sk-lf-")
 // is left to it; so is a text with no place. A header is not left to
 // headerPattern when a place is inside a match of it: the token of an earlier
 // credential runs up to the next blank, so it swallows the keyword the removed
-// character glued to it, and the credential that keyword starts would stay.
+// character glued to it, and the credential that keyword starts would stay. The
+// same holds for a place inside a span replaced here, a key or a token found at
+// an earlier place: nothing new starts a key there, but a header keyword does,
+// and its token, which stands after the blank that ended the span, is replaced.
 func redactAfterPlaces(s string, places []int) string {
 	if len(places) == 0 {
 		return s
@@ -254,17 +257,14 @@ func redactAfterPlaces(s string, places []int) string {
 	var out strings.Builder
 	written := 0 // s[:written] is in out, a replaced key or token included
 	for _, p := range places {
-		if p < written {
-			continue
-		}
 		var start, end int // the span to replace; end is 0 when nothing starts at p
-		if keys && !insideAMatch(keyMatches, p) {
+		if keys && p >= written && !insideAMatch(keyMatches, p) {
 			start, end = keyAt(s, p)
 		}
 		if end == 0 && headers {
 			start, end = tokenAt(s, p)
 		}
-		if end == 0 {
+		if end == 0 || start < written {
 			continue
 		}
 		out.WriteString(s[written:start])

@@ -179,6 +179,8 @@ func FuzzRedactHeaderAfterEscapeOrPlace(f *testing.F) {
 	f.Add("tok", zeroWidthSpace, "Bearer "+escapeToken, "")
 	f.Add("v", bellChar, "Authorization: Basic "+escapeToken, " Bearer "+escapeToken)
 	f.Add("a ", escapeChar+"[31m", "Bearer "+escapeToken+zeroWidthSpace+"Bearer "+escapeToken, `"}`)
+	f.Add("x", zeroWidthSpace, "sk-lf-abc123"+zeroWidthSpace+"Bearer "+escapeToken, "")
+	f.Add("x", bellChar, "Bearer "+escapeToken+bellChar+"Authorization: Basic "+escapeToken, " y")
 	r := sanitize.NewRedactor("hunter2-hunter2")
 	f.Fuzz(func(t *testing.T, before, between, header, after string) {
 		in := before + between + header + after

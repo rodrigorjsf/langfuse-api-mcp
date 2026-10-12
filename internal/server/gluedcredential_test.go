@@ -166,6 +166,46 @@ func TestTheConfirmationRedactsTheCredentialOfEachLineWhenTheDroppedBreakGluesTh
 	}
 }
 
+// Three lines: a word, a short Langfuse key and a header credential. The first
+// dropped break makes the key a credential found at a place, and it runs up to
+// the next blank, through the keyword the second break glued to it. The place of
+// that second break is still a start, so the token is replaced too.
+func TestTheConfirmationRedactsAHeaderCredentialOnTheLineAfterAKeyThatFollowsADroppedBreak(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct{ text, want string }{
+		"a word, a short key, a Bearer line": {
+			"word%ssk-lf-abc123%sBearer " + otherBearerToken,
+			"word[REDACTED] [REDACTED]",
+		},
+		"a word, a short key, an Authorization line": {
+			"word%spk-lf-abc123%sAuthorization: Basic " + otherBearerToken,
+			"word[REDACTED]: Basic [REDACTED]",
+		},
+		"a word and two Bearer lines": {
+			"word%sBearer ABCDEFGHIJKLMNOPQRST%sBearer " + otherBearerToken,
+			"wordBearer [REDACTED] [REDACTED]",
+		},
+	}
+	for breakName, lineBreak := range lineBreaks {
+		for name, tc := range tests {
+			t.Run(breakName+"/"+name, func(t *testing.T) {
+				t.Parallel()
+
+				got, logs := questionAndLog(t, updateLabels(strings.ReplaceAll(tc.text, "%s", lineBreak)))
+
+				if want := `{"newLabels":["` + tc.want + `"]}`; !strings.Contains(got, want) {
+					t.Errorf("the confirmation lacks %q:\n%s", want, got)
+				}
+				assertNoGluedCredential(t, "the confirmation", got)
+				assertNoGluedCredential(t, "the audit log", logs)
+				if leak, ok := bearerPartOf("ABCDEFGHIJKLMNOPQRST", got+logs); ok {
+					t.Errorf("the confirmation or the audit log carries %q of a planted token:\n%s", leak, got)
+				}
+			})
+		}
+	}
+}
+
 // The summary is cut at 300 runes after the redaction: a credential the cut
 // would have left short of its length is replaced whole first.
 func TestTheConfirmationCutAfterALineBreakNeverLeavesPartOfACredential(t *testing.T) {
