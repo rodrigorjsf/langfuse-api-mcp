@@ -3,7 +3,7 @@
 An MCP server that gives AI agents access to the full [Langfuse](https://langfuse.com) public API. It works with **Langfuse Cloud** in any region and with **self-hosted** instances. It is built to run on corporate networks that re-sign TLS traffic with their own certificate authority (CA).
 
 > [!IMPORTANT]
-> **Status: pre-alpha, first release `v0.1.0`** (semver `0.x`: no stability promise yet). Everything below works today unless it is marked **Planned**, like the loopback HTTP transport.
+> **Status: pre-alpha, release `v0.2.0`** (semver `0.x`: no stability promise yet; the first release was `v0.1.0`). Everything below works today unless it is marked **Planned**, like the loopback HTTP transport.
 
 **Contents:** [What it is](#what-it-is) · [Tools](#tools) · [User skill](#user-skill) · [Install and run](#install-and-run) · [Client configuration](#client-configuration) · [Configuration](#configuration) · [Security model](#security-model) · [Troubleshooting](#troubleshooting) · [Learn more](#learn-more)
 
@@ -102,7 +102,7 @@ Configure the server in your MCP client as `npx -y langfuse-api-mcp` (pin a vers
 
 ### Release archive
 
-Every [GitHub release](https://github.com/rodrigorjsf/langfuse-api-mcp/releases) carries one archive per target, `langfuse-mcp_<version>_<os>_<arch>.tar.gz` (`.zip` on Windows), plus `checksums.txt`. Download with `gh` or `curl`, check the archive against `checksums.txt`, then extract it (Linux on amd64 shown; `<version>` is the release without the leading `v`, for example `0.1.0`):
+Every [GitHub release](https://github.com/rodrigorjsf/langfuse-api-mcp/releases) carries one archive per target, `langfuse-mcp_<version>_<os>_<arch>.tar.gz` (`.zip` on Windows), plus `checksums.txt`. Download with `gh` or `curl`, check the archive against `checksums.txt`, then extract it (Linux on amd64 shown; `<version>` is the release without the leading `v`, for example `0.2.0`):
 
 ```bash
 version=<version>
@@ -160,7 +160,7 @@ The dialog offers **no write-mode option** on purpose: to enable writes, set `LA
 
 ### go install
 
-Install a release (`@v0.1.0`, or `@latest`) or a commit (`@main` or a commit hash). With Go 1.21 or later (the module's `toolchain` directive fetches the Go 1.27 toolchain it needs):
+Install a release (`@v0.2.0`, or `@latest`) or a commit (`@main` or a commit hash). With Go 1.21 or later (the module's `toolchain` directive fetches the Go 1.27 toolchain it needs):
 
 ```bash
 go install github.com/rodrigorjsf/langfuse-api-mcp/cmd/langfuse-mcp@<version>

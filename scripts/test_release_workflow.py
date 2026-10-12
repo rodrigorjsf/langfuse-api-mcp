@@ -10,7 +10,9 @@
 #       and every setup-node step takes the one exact NODE_VERSION. Signing (#158): sign-blobs signs
 #       every archive, checksums.txt, the .mcpb and the skill ZIP with a pinned cosign and attests
 #       the same files; publish-image signs the image and its platform manifests by digest and
-#       attests it by digest.
+#       attests it by digest. npm trusted publishing (#186): publish-npm meets what npm's
+#       documentation (https://docs.npmjs.com/trusted-publishers) asks of a GitHub Actions
+#       publisher, and no packaging input holds a hand-written release version.
 # WHY:  a publish job reachable from a pull request or a branch would publish from an unreviewed
 #       ref (security gate, dangerous parameters); a Registry failure (preview) must never fail a
 #       release; an unpinned mcp-publisher would be an unchecked supply-chain dependency.
@@ -132,6 +134,92 @@ class Signing(unittest.TestCase):
         self.assertEqual(attest["with"]["subject-name"], "${{ env.IMAGE }}")
         self.assertEqual(attest["with"]["subject-digest"], "${{ steps.push.outputs.digest }}")
         self.assertIs(attest["with"]["push-to-registry"], True)
+
+
+def version_tuple(text):
+    return tuple(int(part) for part in text.split("."))
+
+
+class NpmTrustedPublishing(unittest.TestCase):
+    """publish-npm authenticates through npm trusted publishing (OIDC), the first release to do so
+    being v0.2.0. What npm asks of a GitHub Actions publisher (docs.npmjs.com/trusted-publishers):
+    npm CLI 11.5.1 or later and Node 22.14.0 or later, the permission `id-token: write`, a
+    GitHub-hosted runner, a workflow file named exactly as the publisher names it, and the
+    package.json `repository.url` matching the repository. The settings on npmjs.com are not
+    visible here: the wizard (scripts/release-wizard.sh, stage 5) has the maintainer look at them."""
+
+    def setUp(self):
+        self.wf = load()
+        self.job = self.wf["jobs"]["publish-npm"]
+
+    def test_the_job_asks_for_the_oidc_token_and_nothing_else(self):
+        self.assertEqual(self.job["permissions"], {"id-token": "write"})
+
+    def test_it_runs_on_a_github_hosted_runner_in_the_release_environment(self):
+        self.assertEqual(self.job["runs-on"], "ubuntu-latest")
+        self.assertEqual(self.job["environment"], "release")
+
+    def test_the_workflow_file_is_named_the_way_the_npm_publishers_name_it(self):
+        # The publisher names the file, with its extension, case-sensitively.
+        self.assertEqual(os.path.basename(WORKFLOW), "release.yml")
+
+    def test_the_pinned_node_is_new_enough_and_ships_an_npm_with_trusted_publishing(self):
+        # Node 22.14.0 is npm's floor for the feature; the npm that Node ships must be 11.5.1 or
+        # later, which Node 24.6 and later do (v24.21.0 ships npm 11.19.0, nodejs.org/dist/index.json).
+        node = version_tuple(self.wf["env"]["NODE_VERSION"])
+        self.assertGreaterEqual(node, (22, 14, 0))
+        self.assertGreaterEqual(node, (24, 6, 0))
+        step = step_using(self.job, "actions/setup-node")
+        self.assertEqual(step["with"]["node-version"], "${{ env.NODE_VERSION }}")
+        self.assertEqual(step["with"]["registry-url"], "https://registry.npmjs.org")
+
+    def test_the_publish_step_reads_the_fallback_token_from_the_release_environment_secret_only(self):
+        # Empty while the secret does not exist, and then npm 11.19.0 exchanges the OIDC token
+        # before it looks at any configured one. The line is what makes the wizard's token
+        # fallback (stage 8) work after the tag: a re-run of the job uses the workflow as tagged.
+        publish = next(s for s in self.job["steps"] if "npm publish" in s.get("run", ""))
+        self.assertEqual(publish["env"]["NODE_AUTH_TOKEN"], "${{ secrets.NPM_TOKEN }}")
+        for wf, job, step in workflow_steps():
+            if "NPM_TOKEN" in json.dumps(step):
+                self.assertEqual((wf, job), ("release.yml", "publish-npm"))
+
+    def test_it_publishes_publicly_with_provenance_and_skips_a_version_already_there(self):
+        run = "\n".join(s.get("run", "") for s in self.job["steps"])
+        self.assertIn("npm publish --access public --provenance", run)
+        self.assertIn('npm view "$name@$VERSION" version', run)
+
+    def test_every_package_names_the_repository_npm_checks(self):
+        with open(os.path.join(ROOT, "packaging", "npm", "pack.mjs"), encoding="utf-8") as f:
+            self.assertIn("git+https://github.com/rodrigorjsf/langfuse-api-mcp.git", f.read())
+
+
+class PackagingHoldsNoReleaseVersion(unittest.TestCase):
+    """Every channel takes its version from the tag (RELEASE_VERSION in .goreleaser.yaml, then the
+    MCPB manifest, the Registry entry and the npm packages are rendered with it), so no packaging
+    input carries a hand-written release version: only the placeholder."""
+
+    PLACEHOLDER = "0.0.0-dev"
+
+    def test_the_registry_entry_template_carries_the_placeholder_everywhere(self):
+        with open(os.path.join(ROOT, "packaging", "server.json"), encoding="utf-8") as f:
+            entry = json.load(f)
+        self.assertEqual(entry["version"], self.PLACEHOLDER)
+        self.assertGreater(len(entry["packages"]), 0)
+        # The npm package names its version, the image its tag; every dotted number in the file
+        # is the placeholder's 0.0.0, so no release version was typed in.
+        self.assertEqual(entry["packages"][0]["version"], self.PLACEHOLDER)
+        self.assertTrue(entry["packages"][1]["identifier"].endswith(":" + self.PLACEHOLDER))
+        self.assertEqual(set(re.findall(r"\d+\.\d+\.\d+", json.dumps(entry))), {"0.0.0"})
+
+    def test_the_mcpb_manifest_carries_the_placeholder(self):
+        with open(os.path.join(ROOT, "packaging", "mcpb", "manifest.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["version"], self.PLACEHOLDER)
+
+    def test_goreleaser_takes_the_release_version_from_the_environment(self):
+        with open(os.path.join(ROOT, "packaging", ".goreleaser.yaml"), encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+        self.assertIn('envOrDefault "RELEASE_VERSION"', config["snapshot"]["version_template"])
+        self.assertEqual(config["version"], 2)  # GoReleaser's schema version, not the release's
 
 
 def workflow_steps():
