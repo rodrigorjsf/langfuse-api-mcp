@@ -367,3 +367,32 @@ func BenchmarkPayload(b *testing.B) {
 		})
 	}
 }
+
+// A Langfuse key takes every key character after its prefix, a hyphen and the
+// letters of a keyword included, so a header keyword glued to a key through a
+// hyphen is read before the key is replaced: the token goes with it.
+func TestRedactReplacesTheTokenOfAHeaderWhoseKeywordAKeyRunsInto(t *testing.T) {
+	t.Parallel()
+	const token = "abcdefghijklmnopqrstuvwx"
+	tests := map[string]struct{ in, want string }{
+		"Bearer after a key and a hyphen":         {in: "x sk-lf-abc123-Bearer " + token, want: "x [REDACTED] [REDACTED]"},
+		"Authorization after a key and a hyphen":  {in: "x sk-lf-abc123-Authorization: Basic " + token + " end", want: "x [REDACTED]: Basic [REDACTED] end"},
+		"a header name after a generated key":     {in: "pk-lf-0a1b2c3d-1111-2222-3333-444455556666-Proxy-Authorization: Basic " + token, want: "[REDACTED]: Basic [REDACTED]"},
+		"a key that is the token of a header":     {in: "Bearer sk-lf-abc123-def456-ghi789", want: "Bearer [REDACTED]"},
+		"a short key under a header, as before":   {in: "Authorization: Basic sk-lf-abc123", want: "Authorization: Basic [REDACTED]"},
+		"a key and a separate header, as before":  {in: "sk-lf-abc123 Bearer " + token, want: "[REDACTED] Bearer [REDACTED]"},
+		"a key into a keyword with a short token": {in: "x sk-lf-abc123-Bearer short", want: "x [REDACTED] short"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			got := (sanitize.Redactor{}).Redact(tc.in)
+			if got != tc.want {
+				t.Fatalf("Redact(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+			if again := (sanitize.Redactor{}).Redact(got); again != got {
+				t.Fatalf("Redact(%q) = %q, want it unchanged", got, again)
+			}
+		})
+	}
+}

@@ -208,18 +208,22 @@ func (r Redactor) Redact(s string) string {
 	return s
 }
 
-// redact is Redact for a text that is already clean.
+// redact is Redact for a text that is already clean. The headers are read
+// before the keys: a key takes every key character after its prefix, a hyphen
+// and the letters of a keyword included (sk-lf-abc-Bearer <token>), so once the
+// key is replaced the keyword that led to the token is gone and the token would
+// stay.
 func (r Redactor) redact(s string) string {
 	for _, secret := range r.secrets {
 		s = strings.ReplaceAll(s, secret, Redacted)
 	}
-	if strings.Contains(s, "k-lf-") { // the common case skips the regular expression
-		s = keyPattern.ReplaceAllString(s, "${1}"+Redacted)
+	if mentionsHeader(s) { // the common case skips the regular expression
+		s = headerPattern.ReplaceAllString(s, "${1}"+Redacted)
 	}
-	if !mentionsHeader(s) {
+	if !strings.Contains(s, "k-lf-") { // and this one
 		return s
 	}
-	return headerPattern.ReplaceAllString(s, "${1}"+Redacted)
+	return keyPattern.ReplaceAllString(s, "${1}"+Redacted)
 }
 
 // keyPrefixLength is the length of "pk-lf-" and "sk-lf-".
