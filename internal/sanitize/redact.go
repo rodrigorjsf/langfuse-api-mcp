@@ -245,7 +245,8 @@ const keyPrefixLength = len("sk-lf-")
 // character glued to it, and the credential that keyword starts would stay. The
 // same holds for a place inside a span replaced here, a key or a token found at
 // an earlier place: nothing new starts a key there, but a header keyword does,
-// and its token, which stands after the blank that ended the span, is replaced.
+// and its token, which stands after the span (a token ends at a blank, a key
+// also at a colon or any other character that is none of a key), is replaced.
 //
 // blanks are the places where a blank of the header rule was dropped (a tab,
 // which Line drops and Text keeps): the token that stood after its scheme
