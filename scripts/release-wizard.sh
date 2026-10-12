@@ -227,10 +227,11 @@ ENV_FILE=/dev/null
 
 TOTAL_STAGES=11
 
-AFTER_TAG=0   # becomes 1 once the tag is pushed: from then on a re-run stops in the preflight
+AFTER_TAG=0     # becomes 1 once the tag is pushed: from then on a re-run stops in the preflight
+TOKEN_STORED=0  # 1 while the secret NPM_TOKEN sits in the release environment (stage 8)
 RUN_ID=""
 RUN_URL=""
-TRANSCRIPT="${TMPDIR:-/tmp}/lfmcp-$TAG-release-proofs.txt"
+TRANSCRIPT=""   # set in stage 10, inside a private directory
 NPM_PACKAGES=(
   langfuse-api-mcp
   langfuse-api-mcp-linux-x64 langfuse-api-mcp-linux-arm64
@@ -240,6 +241,23 @@ NPM_PACKAGES=(
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Whatever ends the wizard (a refused command, Ctrl-C, "no"), a stored token and a pushed tag are
+# never left without a word about what is still to do.
+on_exit() {
+  local rc=$?
+  if (( TOKEN_STORED )); then
+    printf '\n'
+    warn "The secret NPM_TOKEN is still stored in the release environment of $REPO. Delete it: gh secret delete NPM_TOKEN --env release -R $REPO"
+    warn "and revoke the token on npmjs.com."
+  fi
+  if (( AFTER_TAG && rc != 0 )); then
+    printf '\n'
+    warn "$TAG is tagged and the wizard stopped. Continue by hand with docs/development/release-pipeline.md (\"If the wizard stops after the tag\")."
+  fi
+}
+trap on_exit EXIT
+trap 'exit 130' INT TERM
+
 die() { warn "$1"; exit 1; }
 
 # stop_unless "question" — a confirmation that ends the wizard on "no" (or on no answer at all).
@@ -248,7 +266,7 @@ stop_unless() {
   if confirm "$1"; then return 0; fi
   printf '\n'
   if (( AFTER_TAG )); then
-    warn "stopped. $TAG is tagged: a re-run stops in the preflight. Continue by hand with docs/development/release-pipeline.md (\"If the wizard stops after the tag\")."
+    warn "stopped."
   else
     warn "stopped, nothing further was changed. Re-run: scripts/release-wizard.sh $VERSION"
   fi
@@ -258,6 +276,35 @@ stop_unless() {
 # job_conclusion NAME — the conclusion of a job of the latest attempt of the Release run (empty while it runs).
 job_conclusion() {
   gh run view "$RUN_ID" -R "$REPO" --json jobs --jq ".jobs[] | select(.name == \"$1\") | .conclusion" 2>/dev/null | head -n 1 || true
+}
+
+# show_conclusions — what the two jobs with a fallback ended as.
+show_conclusions() {
+  say "publish-npm: $(job_conclusion publish-npm)    publish-registry: $(job_conclusion publish-registry)"
+}
+
+# show_open_tickets — the tickets of the milestone that are still open.
+show_open_tickets() {
+  gh issue list -R "$REPO" --milestone "$MILESTONE" --state open --json number,title --jq '.[] | "    #\(.number)  \(.title)"' 2>/dev/null || true
+}
+
+# rerun_job NAME — re-run one job of the run, and the jobs that depend on it, then wait until GitHub
+# has started the new attempt. Not --failed: that would also re-run any other failed job, a
+# publish-image that stage 7 let pass included, and the confirmation names one job.
+rerun_job() {
+  local name="$1" id before="" now="" i
+  id=$(gh run view "$RUN_ID" -R "$REPO" --json jobs --jq ".jobs[] | select(.name == \"$name\") | .databaseId" 2>/dev/null | head -n 1 || true)
+  [[ -n "$id" ]] || { warn "could not find the job $name in run $RUN_ID."; return 1; }
+  before=$(gh run view "$RUN_ID" -R "$REPO" --json attempt --jq .attempt 2>/dev/null || true)
+  gh run rerun "$RUN_ID" -R "$REPO" --job "$id" || { warn "GitHub refused the re-run of $name."; return 1; }
+  for i in $(seq 1 12); do
+    now=$(gh run view "$RUN_ID" -R "$REPO" --json attempt --jq .attempt 2>/dev/null || true)
+    if [[ -z "$before" || -z "$now" ]]; then sleep 15; return 0; fi
+    if (( now > before )); then return 0; fi
+    sleep 5
+  done
+  warn "the run did not start a new attempt within a minute: look at $RUN_URL"
+  return 1
 }
 
 # watch_run — print the state of the release jobs every 15 seconds until the run ends.
@@ -288,18 +335,25 @@ watch_run() {
 wait_green() {
   local wf="$1" status conclusion url
   while :; do
-    read -r status conclusion url < <(gh run list -R "$REPO" -w "$wf" --branch main --commit "$MAIN_SHA" --limit 1 --json status,conclusion,url --jq 'if length == 0 then "none - -" else .[0] | "\(.status) \(.conclusion | if . == null or . == "" then "-" else . end) \(.url)" end' 2>/dev/null || echo "unknown - -")
+    status=unknown conclusion=- url=-
+    read -r status conclusion url < <(gh run list -R "$REPO" -w "$wf" --branch main --commit "$MAIN_SHA" --limit 1 --json status,conclusion,url --jq 'if length == 0 then "none - -" else .[0] | "\(.status) \(.conclusion | if . == null or . == "" then "-" else . end) \(.url)" end' 2>/dev/null || echo "unknown - -") || true
     if [[ "$status" == completed && "$conclusion" == success ]]; then
       printf '  %s✓ %s%s succeeded: %s\n' "$GREEN" "$wf" "$RESET" "$url"
       return 0
     fi
     if [[ "$status" == none && "$wf" == ci.yml ]]; then
-      warn "$wf has no run for the head of main. CI starts none for a change that only touches docs (header of .github/workflows/ci.yml). The latest run of $wf on main:"
-      gh run list -R "$REPO" -w "$wf" --branch main --limit 1 --json headSha,status,conclusion,url --jq '.[] | "    \(.headSha[0:7]) \(.status) \(.conclusion) \(.url)"' 2>/dev/null || true
-      stop_unless "Is that latest run of $wf on main good enough?"
-      return 0
+      # CI starts no run for a change that only touches docs (header of .github/workflows/ci.yml):
+      # then the latest run on main stands in for it, and only a successful one does.
+      local head_sha="" latest_status=unknown latest_conclusion=- latest_url=-
+      read -r head_sha latest_status latest_conclusion latest_url < <(gh run list -R "$REPO" -w "$wf" --branch main --limit 1 --json headSha,status,conclusion,url --jq 'if length == 0 then "- none - -" else .[0] | "\(.headSha[0:7]) \(.status) \(.conclusion | if . == null or . == "" then "-" else . end) \(.url)" end' 2>/dev/null || echo "- unknown - -") || true
+      warn "$wf has no run for the head of main. The latest run of $wf on main: ${head_sha} $latest_status / $latest_conclusion ${latest_url#-}"
+      if [[ "$latest_status" == completed && "$latest_conclusion" == success ]]; then
+        stop_unless "Is that latest successful run of $wf on main good enough for the head of main?"
+        return 0
+      fi
+    else
+      warn "$wf for the head of main: $status / $conclusion ${url#-}"
     fi
-    warn "$wf for the head of main: $status / $conclusion ${url#-}"
     stop_unless "Check $wf again? (answer no to stop; a stage does not go on while a run is not successful)"
   done
 }
@@ -310,7 +364,7 @@ banner "Release $TAG on every channel"
 stage "Preflight: can $TAG be cut from this machine?"
 say "This stage only reads. It changes nothing."
 missing=()
-for tool in git gh jq cosign node npx curl; do
+for tool in git gh jq cosign node npm npx curl; do
   have "$tool" || missing+=("$tool")
 done
 if (( ${#missing[@]} )); then
@@ -353,8 +407,11 @@ shopt -s nullglob
 reports=(docs/research/raw/*e2e-langfuse-*.md)
 shopt -u nullglob
 if (( ${#reports[@]} )); then
-  say "Campaign reports in this checkout (the newest are the exit checks):"
-  for f in "${reports[@]: -4}"; do printf '    %s\n' "$f"; done
+  say "The newest report of each campaign in this checkout (one per Langfuse version and mode; for v0.2.0 these are the exit checks on 3.80.0 and on 4.46.0 dual):"
+  # The names sort by date, so the last of each version suffix is its newest.
+  printf '%s\n' "${reports[@]}" | awk -F'e2e-langfuse-' '{ last[$2] = $0 } END { for (k in last) print last[k] }' | sort | while IFS= read -r f; do
+    printf '    %s\n      %s\n' "$f" "$(head -n 1 "$f")"
+  done
 else
   note "This checkout holds no campaign report yet: they reach main with the pull request of stage 3 (Files changed → docs/research/raw)."
 fi
@@ -380,7 +437,8 @@ if [[ -n "$PR_NUMBER" ]]; then
   step "Review it (Files changed), wait for its checks to be green, then press 'Merge pull request'."
   pause "Merged? Press Enter and the wizard checks"
   while :; do
-    read -r pr_state pr_sha < <(gh pr view "$PR_NUMBER" -R "$REPO" --json state,mergeCommit --jq '"\(.state) \(.mergeCommit.oid // "-")"' 2>/dev/null || echo "unknown -")
+    pr_state=unknown pr_sha=-
+    read -r pr_state pr_sha < <(gh pr view "$PR_NUMBER" -R "$REPO" --json state,mergeCommit --jq '"\(.state) \(.mergeCommit.oid // "-")"' 2>/dev/null || echo "unknown -") || true
     if [[ "$pr_state" == MERGED ]]; then break; fi
     warn "pull request #$PR_NUMBER is $pr_state, not merged."
     stop_unless "Check again?"
@@ -394,7 +452,7 @@ else
   stop_unless "Is everything of this release already on origin/main?"
 fi
 say "Tickets of $MILESTONE still open (closed by the merge that says Closes #N):"
-gh issue list -R "$REPO" --milestone "$MILESTONE" --state open --json number,title --jq '.[] | "    #\(.number)  \(.title)"' 2>/dev/null || true
+show_open_tickets
 pause "Press Enter for stage 4"
 
 # ── 4 ────────────────────────────────────────────────────────────────────
@@ -475,16 +533,16 @@ RUN_URL="https://github.com/$REPO/actions/runs/$RUN_ID"
 open_url "$RUN_URL"
 say "Waiting for the run to end. If a job waits for an approval of the release environment, this says where to give it."
 watch_run
-failed=$(gh run view "$RUN_ID" -R "$REPO" --json jobs --jq '[.jobs[] | select(.conclusion == "failure") | .name] | join(" ")' 2>/dev/null || true)
+failed=$(gh run view "$RUN_ID" -R "$REPO" --json jobs --jq '.jobs[] | select(.conclusion == "failure") | .name' 2>/dev/null || true)
 other=""
-for j in $failed; do
-  case "$j" in publish-npm | publish-registry) ;; *) other="$other $j" ;; esac
-done
+while IFS= read -r j; do
+  case "$j" in "" | publish-npm | publish-registry) ;; *) other="$other [$j]" ;; esac
+done <<< "$failed"
 if [[ -n "$other" ]]; then
   warn "Failed jobs outside the two with a fallback:$other. Read their logs at $RUN_URL; the wizard cannot repair them."
   stop_unless "Go on to the checks anyway?"
 fi
-say "publish-npm: $(job_conclusion publish-npm)    publish-registry: $(job_conclusion publish-registry)"
+show_conclusions
 pause "Press Enter for stage 8"
 
 # ── 8 ────────────────────────────────────────────────────────────────────
@@ -508,18 +566,24 @@ else
   ask_secret NPM_TOKEN "Paste the token (hidden; it goes only to the release environment secret):"
   [[ -n "$NPM_TOKEN" ]] || die "no token entered."
   stop_unless "Store the token as the secret NPM_TOKEN of the 'release' environment of $REPO?"
+  # From here until it is deleted, an exit of any kind reminds you that the secret is stored.
+  TOKEN_STORED=1
   printf '%s' "$NPM_TOKEN" | gh secret set NPM_TOKEN --env release -R "$REPO"
   unset NPM_TOKEN
-  if confirm "Re-run the failed jobs of run $RUN_ID (publish-npm and the jobs after it) now?"; then
-    gh run rerun "$RUN_ID" -R "$REPO" --failed
-    sleep 10
-    watch_run
-    say "publish-npm: $(job_conclusion publish-npm)    publish-registry: $(job_conclusion publish-registry)"
+  note "(unverified) gh run rerun --job re-runs that job and the jobs that depend on it (github-release, publish-registry), nothing else."
+  if confirm "Re-run the job publish-npm of run $RUN_ID, and the jobs that depend on it (github-release, publish-registry), now?"; then
+    if rerun_job publish-npm; then
+      watch_run
+      show_conclusions
+    else
+      warn "the job was not re-run."
+    fi
   else
     warn "not re-run: the failed jobs stay failed."
   fi
   if confirm "Delete the secret NPM_TOKEN from the release environment now?"; then
     gh secret delete NPM_TOKEN --env release -R "$REPO"
+    TOKEN_STORED=0
   else
     SKIPPED+=("delete the secret NPM_TOKEN of the release environment: gh secret delete NPM_TOKEN --env release -R $REPO")
   fi
@@ -535,12 +599,15 @@ case "$reg_job" in
   failure)
     warn "publish-registry failed. The Registry is in preview: the release itself is complete without it."
     open_url "$RUN_URL"
-    if confirm "Re-run the failed job (publish-registry) of run $RUN_ID now?"; then
-      gh run rerun "$RUN_ID" -R "$REPO" --failed
-      sleep 10
-      watch_run
+    note "(unverified) The job is marked continue-on-error, so the run may have ended successful; gh run rerun --job names the job itself and does not depend on that."
+    if confirm "Re-run the job publish-registry of run $RUN_ID now?"; then
+      if rerun_job publish-registry; then
+        watch_run
+      else
+        warn "the job was not re-run."
+      fi
     else
-      SKIPPED+=("re-run publish-registry: gh run rerun $RUN_ID -R $REPO --failed")
+      SKIPPED+=("re-run publish-registry: re-run the job from $RUN_URL")
     fi
     say "publish-registry: $(job_conclusion publish-registry)"
     open_url "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.rodrigorjsf/langfuse-api-mcp"
@@ -559,6 +626,9 @@ say "Runs the commands of \"Verify what you run\" (docs/reference/security-model
 say "Every output goes to a transcript file. No key is written there, or anywhere."
 WORK=$(mktemp -d)
 chmod 700 "$WORK"
+ASSETS="$WORK/assets"
+mkdir "$ASSETS"
+TRANSCRIPT="$WORK/$TAG-release-proofs.txt"
 IDENTITY="https://github.com/$REPO/.github/workflows/release.yml@refs/tags/$TAG"
 OIDC_ISSUER="https://token.actions.githubusercontent.com"
 {
@@ -573,11 +643,16 @@ PASSED=()
 FAILED=()
 
 # check "label" command… — run in the download directory; its output goes to the transcript.
+# release_blobs — the files of the release that carry a Sigstore bundle.
+release_blobs() {
+  printf '%s\n' "langfuse-mcp_${VERSION}_"*.tar.gz "langfuse-mcp_${VERSION}_"*.zip checksums.txt "langfuse-mcp_${VERSION}.mcpb" "langfuse-api-mcp-skill_${VERSION}.zip"
+}
+
 check() {
   local label="$1"
   shift
   { printf '\n== %s\n$ %s\n' "$label" "$*"; } >> "$TRANSCRIPT"
-  if ( cd "$WORK" && "$@" ) >> "$TRANSCRIPT" 2>&1; then
+  if ( cd "$ASSETS" && "$@" ) >> "$TRANSCRIPT" 2>&1; then
     PASSED+=("$label")
     printf '  %s✓%s %s\n' "$GREEN" "$RESET" "$label"
   else
@@ -592,16 +667,16 @@ sha256_check() {
 
 verify_blobs() {
   local f
-  for f in "langfuse-mcp_${VERSION}_"*.tar.gz "langfuse-mcp_${VERSION}_"*.zip checksums.txt "langfuse-mcp_${VERSION}.mcpb" "langfuse-api-mcp-skill_${VERSION}.zip"; do
+  while IFS= read -r f; do
     cosign verify-blob --bundle "$f.sigstore.json" --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$OIDC_ISSUER" "$f" || return 1
-  done
+  done < <(release_blobs)
 }
 
 attest_blobs() {
   local f
-  for f in "langfuse-mcp_${VERSION}_"*.tar.gz "langfuse-mcp_${VERSION}_"*.zip checksums.txt "langfuse-mcp_${VERSION}.mcpb" "langfuse-api-mcp-skill_${VERSION}.zip"; do
+  while IFS= read -r f; do
     gh attestation verify "$f" -R "$REPO" || return 1
-  done
+  done < <(release_blobs)
   gh attestation verify "oci://ghcr.io/$REPO:$VERSION" -R "$REPO"
 }
 
@@ -627,7 +702,7 @@ LF_URL=""
 LF_PK=""
 LF_SK=""
 ask LF_URL "Langfuse base URL (for example https://cloud.langfuse.com):"
-ask LF_PK "Langfuse public key (pk-lf-…):"
+ask_secret LF_PK "Langfuse public key (pk-lf-…, hidden: the project treats it as a credential too):"
 ask_secret LF_SK "Langfuse secret key (sk-lf-…, hidden; used by the one process below, written nowhere):"
 if [[ -n "$LF_URL" && -n "$LF_PK" && -n "$LF_SK" ]]; then
   init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"release-wizard","version":"0"}}}'
@@ -667,11 +742,15 @@ printf '    docs/research/INDEX.md; then update the sentences that say what pass
 printf '    (docs/reference/security-model.md "Verify what you run", ROADMAP.md) to name %s as well.\n\n' "$TAG"
 SKIPPED+=("the release-proofs record $RECORD from $TRANSCRIPT (request printed in stage 11)")
 milestone_number=$(gh api "repos/$REPO/milestones?state=open&per_page=100" 2>/dev/null | jq -r --arg t "$MILESTONE" '.[] | select(.title == $t) | .number' 2>/dev/null | head -n 1 || true)
-say "Spec #$SPEC_ISSUE: $(gh issue view "$SPEC_ISSUE" -R "$REPO" --json state,title --jq '"\(.state)  \(.title)"' 2>/dev/null || echo 'could not read it')"
-say "Tickets of $MILESTONE still open:"
-gh issue list -R "$REPO" --milestone "$MILESTONE" --state open --json number,title --jq '.[] | "    #\(.number)  \(.title)"' 2>/dev/null || true
+spec_state=$(gh issue view "$SPEC_ISSUE" -R "$REPO" --json state --jq .state 2>/dev/null || echo unknown)
+open_count=$(gh issue list -R "$REPO" --milestone "$MILESTONE" --state open --json number --jq length 2>/dev/null || echo unknown)
+say "Spec #$SPEC_ISSUE is $spec_state. Tickets of $MILESTONE still open: $open_count"
+show_open_tickets
+if [[ "$spec_state" != CLOSED || "$open_count" != 0 ]]; then
+  warn "The spec should be CLOSED and no ticket of the milestone open before it is closed (the merge of stage 3 closes them: Closes #N)."
+fi
 if [[ -n "$milestone_number" ]]; then
-  stop_unless "Close the milestone '$MILESTONE' now? (the spec and its tickets above should be closed)"
+  stop_unless "Close the milestone '$MILESTONE' now? (spec #$SPEC_ISSUE is $spec_state, $open_count ticket(s) still open)"
   gh api -X PATCH "repos/$REPO/milestones/$milestone_number" -f state=closed >/dev/null
   printf '  %s✓ closed the milestone%s %s\n' "$GREEN" "$RESET" "$MILESTONE"
 else

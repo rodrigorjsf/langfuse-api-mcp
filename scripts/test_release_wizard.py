@@ -352,7 +352,8 @@ OUTWARD = [
     (re.compile(r"\bgit tag -a\b"), "tag"),
     (re.compile(r"\bgit push\b"), "push"),
     (re.compile(r"\bgh secret (set|delete)\b"), "secret"),
-    (re.compile(r"\bgh run rerun\b"), "re-run"),
+    # rerun_job wraps the only `gh run rerun`; its callers are the outward actions.
+    (re.compile(r"\brerun_job\b"), "re-run"),
     (re.compile(r"\bgh api -X (PATCH|POST|PUT|DELETE)\b"), "milestone"),
     (re.compile(r"\bgh (pr merge|release (create|delete|edit)|issue (close|edit))\b"), "never"),
 ]
@@ -390,7 +391,7 @@ class Safety(unittest.TestCase):
                             self.assertNotEqual(word, "never", "this action is not allowed in the wizard")
                             self.assertTrue(any(word in q for q in confirmations),
                                             f"no confirmation naming {word!r} before: {line.strip()}")
-        self.assertGreaterEqual(seen_actions, 6)  # tag, push, secret set, rerun x2, secret delete, milestone
+        self.assertGreaterEqual(seen_actions, 7)  # tag, push, secret set, re-run x2, secret delete, milestone
 
     def test_the_preflight_and_the_checks_run_nothing_outward(self):
         blocks = dict(stage_blocks())
@@ -417,6 +418,30 @@ class Safety(unittest.TestCase):
             with self.subTest(stage=title):
                 self.assertRegex(before, r"job_conclusion " + job)
                 self.assertIsNotNone(re.search(guard, before, re.S), "the action is not behind the failure check")
+
+
+    def test_a_job_re_run_names_one_job_and_is_never_the_whole_failed_set(self):
+        # `--failed` would also re-run a publish-image that stage 7 let pass; one job is named instead.
+        code = "\n".join(code_lines(read(WIZARD)))
+        self.assertEqual(len(re.findall(r"gh run rerun", code)), 1)
+        self.assertIn('gh run rerun "$RUN_ID" -R "$REPO" --job "$id"', code)
+        self.assertNotIn("--failed", code)
+        calls = re.findall(r"rerun_job ([a-z-]+)", "\n".join(code_lines(stages_of(WIZARD))))
+        self.assertEqual(calls, ["publish-npm", "publish-registry"])
+
+    def test_a_stored_token_and_a_pushed_tag_are_never_left_without_a_word(self):
+        code = "\n".join(code_lines(read(WIZARD)))
+        self.assertRegex(code, r"(?m)^trap on_exit EXIT$")
+        self.assertRegex(code, r"(?m)^trap 'exit 130' INT TERM$")
+        # The flag is up before the secret is written and down only after it is deleted.
+        up = code.index("TOKEN_STORED=1")
+        set_ = code.index("gh secret set NPM_TOKEN")
+        delete = code.index("gh secret delete NPM_TOKEN")
+        down = code.index("TOKEN_STORED=0", delete)  # the first one is the declaration at the top
+        self.assertLess(up, set_)
+        self.assertLess(delete, down)
+        # What on_exit says is a warning line (not code): read it from the file's text.
+        self.assertRegex(read(WIZARD), r"(?s)on_exit\(\) \{.*TOKEN_STORED.*gh secret delete NPM_TOKEN --env release.*AFTER_TAG")
 
 
 class Secrets(unittest.TestCase):
@@ -451,6 +476,7 @@ class Secrets(unittest.TestCase):
     def test_the_langfuse_key_pair_is_read_for_one_process_and_written_nowhere(self):
         code = self.stage_code()
         self.assertEqual(len(re.findall(r'ask_secret LF_SK "', code)), 1)
+        self.assertEqual(len(re.findall(r'ask_secret LF_PK "', code)), 1)  # the project redacts pk-lf- too
         for line in code.split("\n"):
             if re.search(r"\$\{?LF_(SK|PK|URL)", line):
                 with self.subTest(line=line.strip()):
