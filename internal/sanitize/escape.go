@@ -37,8 +37,10 @@ const (
 // A sequence is complete only within MaxEscapeSequenceRunes characters. An
 // escape character that starts no complete sequence stays in the result for
 // the control-character rule of the caller to remove alone, and so does the
-// text after it. Text with no escape character comes back as it is.
-func withoutEscapeSequences(s string) string {
+// text after it. Text with no escape character comes back as it is. Each
+// sequence removed is replaced by marker (empty to drop it), so that a caller
+// that goes on removing characters can tell where a whole sequence stood.
+func withoutEscapeSequences(s, marker string) string {
 	i := nextIntroducer(s)
 	if i < 0 {
 		return s
@@ -52,6 +54,8 @@ func withoutEscapeSequences(s string) string {
 		if n == 0 {
 			n = introducerLen(s)
 			out.WriteString(s[:n])
+		} else {
+			out.WriteString(marker)
 		}
 		s = s[n:]
 	}

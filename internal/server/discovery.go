@@ -107,6 +107,11 @@ func operationIndexSchema() map[string]any {
 									"destructive": map[string]any{"type": "boolean", "description": "Whether the write operation is destructive " +
 										"(HTTP DELETE, PUT or PATCH) and so needs the user's confirmation, as describe_operation says; " +
 										"present only on a line that execute_write runs, so only in write mode."},
+									"note": map[string]any{"type": "string", "description": "A note, static text written by this server, " +
+										"not Langfuse text and not the description. Present only on the line of a legacy read operation " +
+										"whose preferred operation, named in the note, reads another operation family on this deployment: " +
+										"it says that operation can return less than this one, or nothing, for data written through the " +
+										"legacy APIs. Absent otherwise."},
 								},
 							},
 						},
@@ -155,6 +160,30 @@ type indexEntry struct {
 	// do.
 	Method      string `json:"method,omitempty"`
 	Destructive *bool  `json:"destructive,omitempty"`
+	// Note is static text written by this server, apart from the third-party
+	// description: set only on a legacy read operation whose preferred operation
+	// reads another operation family on this deployment (#212). The catalog decides
+	// it, from the operation families and the deployment profile fixed at startup;
+	// no argument, payload or client does.
+	Note string `json:"note,omitempty"`
+}
+
+// noteMarker starts the note on the text line of an entry, after the description
+// and the tool: the label keeps it apart from the description, which is
+// third-party text.
+const noteMarker = " | note from this server: "
+
+// otherStoreNote returns the note of an entry whose line prefers the operation
+// preferred, an operation ID of the catalog (#212). It is text compiled into the
+// binary plus that one ID: a deployment that has both the legacy family and the
+// family of the preferred operation keeps their data apart, so the preferred
+// operation may lack what was written through the legacy APIs (Observations v2
+// lacked 123 of 303 observations, experiments returned no legacy dataset run).
+// It states a possibility, not a fact.
+func otherStoreNote(preferred string) string {
+	return "On this deployment " + preferred + " reads another store and can return less than this operation, " +
+		"or nothing, for data written through the legacy APIs, so a result that is empty or shorter than expected " +
+		"is worth checking with this operation."
 }
 
 // newIndexEntry returns the index entry of op.
@@ -162,6 +191,9 @@ func newIndexEntry(op catalog.Operation) indexEntry {
 	e := indexEntry{OperationID: op.ID, Description: op.DescriptionLine, Tool: toolFor(op)}
 	if !op.IsRead() {
 		e.Method, e.Destructive = op.Method, new(op.IsDestructive())
+	}
+	if preferred := op.PreferredOfOtherFamily(); preferred != "" {
+		e.Note = otherStoreNote(preferred)
 	}
 	return e
 }
@@ -270,21 +302,31 @@ const (
 // #114): a v4 deployment has no Trace tag, so it names how trace
 // data is read instead; a deployment without the v4 read family names its
 // legacy trace reads, and get_trace_tree when the legacy family answers, which
-// builds the trace tree from the legacy list there (#187). It is static text
-// naming only the tools and operations this deployment offers, never the
-// query, and "" when it offers none of them.
+// builds the trace tree from the legacy list there (#187). A deployment that
+// serves both families adds one sentence naming the legacy reads it offers: the
+// v4 reads can lack data sent through the legacy ingestion API (#212). It is
+// static text naming only the tools and operations this deployment offers,
+// never the query, and "" when it offers none of them.
 func (d discovery) traceReadsHint() string {
-	var reads []string
+	var reads, alsoLegacy []string
 	if d.profile.On(catalog.V4ReadFamily) {
 		reads = d.v4TraceReads()
+		if d.profile.On(catalog.LegacyFamily) {
+			alsoLegacy = d.offeredLegacyReads()
+		}
 	} else {
 		reads = d.legacyTraceReads()
 	}
 	if len(reads) == 0 {
 		return ""
 	}
-	return "Trace data is read with: " + strings.Join(reads, "; ") +
+	hint := "Trace data is read with: " + strings.Join(reads, "; ") +
 		". " + toolDescribeOperation + " returns an operation's parameters."
+	if len(alsoLegacy) > 0 {
+		hint += " This deployment also serves the legacy reads, which may hold data sent through the legacy " +
+			"ingestion API that the reads above lack: " + strings.Join(alsoLegacy, "; ") + "."
+	}
+	return hint
 }
 
 // v4TraceReads lists the trace reads of a deployment with the v4 read family
@@ -309,6 +351,15 @@ func (d discovery) legacyTraceReads() []string {
 	if d.profile.On(catalog.LegacyFamily) {
 		reads = append(reads, "one trace as a trace tree: "+toolGetTraceTree)
 	}
+	return append(reads, d.offeredLegacyReads()...)
+}
+
+// offeredLegacyReads lists the legacy operations that read traces and that this
+// deployment offers, each with what it reads and the tool that runs it, each
+// only after its own catalog lookup. Unlike legacyTraceReads it never names
+// get_trace_tree.
+func (d discovery) offeredLegacyReads() []string {
+	var reads []string
 	for _, r := range []struct{ id, what string }{
 		{legacyTraceGet, "one trace by its ID"},
 		{legacyTraceList, "a filtered list of traces"},
@@ -429,6 +480,9 @@ func renderIndex(idx operationIndex, writeMode bool) (rendered, error) {
 				b.WriteString("- " + op.OperationID + " — " + op.Description)
 				if writeMode {
 					b.WriteString(" " + op.toolText())
+				}
+				if op.Note != "" {
+					b.WriteString(noteMarker + op.Note)
 				}
 				b.WriteString("\n")
 			}

@@ -3,17 +3,20 @@ package sanitize
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"maps"
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // Payload cleans a Langfuse JSON payload before the agent sees it: in every
 // string, keys included, invisible and bidirectional formatting characters are
 // dropped, and so are control characters other than tab, line feed and
 // carriage return, which are visible text; then r redacts its secrets.
-// Invalid UTF-8 becomes U+FFFD. The
+// Invalid UTF-8 becomes U+FFFD. A string that is JSON text (see cleanJSONText)
+// is decoded and cleaned the same way, down to MaxJSONTextLevels levels. The
 // result is compact JSON with object keys in sorted order and numbers kept
 // exact; payload must be valid JSON.
 func Payload(payload json.RawMessage, r Redactor) (json.RawMessage, error) {
@@ -33,39 +36,51 @@ func Payload(payload json.RawMessage, r Redactor) (json.RawMessage, error) {
 // Decode decodes one JSON value, keeping numbers exact as json.Number: an
 // ID-like 12345678901234567890 stays as is.
 func Decode(raw json.RawMessage) (any, error) {
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.UseNumber()
-	var v any
-	err := dec.Decode(&v)
+	_, v, err := decodeFirst(bytes.NewReader(raw))
 	return v, err
 }
 
-// clean returns v with every string cleaned by Text and redacted by r. The
-// text r gets is already clean, so it skips the cleaning Redact does.
+// decodeFirst decodes the first JSON value of r, keeping numbers exact, and
+// returns the decoder so that the caller can look at what follows.
+func decodeFirst(r io.Reader) (*json.Decoder, any, error) {
+	dec := json.NewDecoder(r)
+	dec.UseNumber()
+	var v any
+	err := dec.Decode(&v)
+	return dec, v, err
+}
+
+// clean returns v with every string cleaned and redacted by r (cleanString).
 func clean(v any, r Redactor) any {
-	return walk(v, func(s string) string { return r.redact(Text(s)) })
+	w := walker{f: func(s string) string { return r.cleanString(s, MaxJSONTextLevels) }}
+	return w.walk(v)
 }
 
 // redactHeaderMember returns value, the value of the member key of a payload's
 // object, with the token of a header credential replaced by Redacted when key
 // is an Authorization name: a string of the form "<scheme> <token>", or each
-// such string item of a list (#196). A value of another type, an item that is
-// not a string and the key itself stay as they are.
-func redactHeaderMember(key string, value any) any {
+// such string item of a list (#196); and whether it changed anything. A value of
+// another type, an item that is not a string and the key itself stay as they
+// are.
+func redactHeaderMember(key string, value any) (any, bool) {
 	if !isAuthorizationName(key) {
-		return value
+		return value, false
 	}
+	changed := false
 	switch v := value.(type) {
 	case string:
-		return redactHeaderValue(v)
+		out := redactHeaderValue(v)
+		return out, out != v
 	case []any:
 		for i, item := range v {
 			if s, ok := item.(string); ok {
-				v[i] = redactHeaderValue(s)
+				if out := redactHeaderValue(s); out != s {
+					v[i], changed = out, true
+				}
 			}
 		}
 	}
-	return value
+	return value, changed
 }
 
 // Line drops every control, invisible and bidirectional formatting character
@@ -81,22 +96,58 @@ func Line(s string) string {
 }
 
 // LineValue returns v, a decoded JSON value, with every string, keys
-// included, passed through Line, and the token of a header credential under an
-// Authorization name replaced by Redacted, as Payload does (#196). Keys that
-// read the same once cleaned keep one value by Payload's rule: the key that was
-// already clean, else the first in byte order.
-func LineValue(v any) any { return walk(v, Line) }
+// included, passed through Line and redacted by r, and the token of a header
+// credential under an Authorization name replaced by Redacted, as Payload does
+// (#196). A Langfuse key or a header keyword that directly follows a character
+// Line dropped, a line break included, is redacted as at a boundary, and one
+// that a dropped character splits is found whole (#211). Keys that read the same
+// once cleaned keep one value by Payload's rule: the key that was already
+// clean, else the first in byte order. A tab is a blank of the header rule and
+// Line drops it, so a token that stood after its scheme through a dropped tab
+// is redacted as if the blank were still there, in the text of a string and in
+// a value under an Authorization name (#211).
+func LineValue(v any, r Redactor) any {
+	w := walker{f: r.cleanLine, header: r.cleanHeaderLine}
+	return w.walk(v)
+}
+
+// cleanLine returns s as Line cleans it, redacted by r: the places where Line
+// dropped something go to the key and header rules before the secrets are
+// replaced, as cleanString does for Text.
+func (r Redactor) cleanLine(s string) string {
+	text, places, tabs := linePlaces(s)
+	return r.redact(redactAfterPlaces(text, places, droppedBlanks{at: tabs}))
+}
+
+// cleanHeaderLine is cleanLine for a string that is the value of a member
+// under an Authorization name, or an item of its list: there a scheme alone
+// stands before the token (redactHeaderValue), so a token after a scheme and a
+// dropped tab is redacted with no keyword in the string.
+func (r Redactor) cleanHeaderLine(s string) string {
+	text, places, tabs := linePlaces(s)
+	return r.redact(redactAfterPlaces(text, places, droppedBlanks{at: tabs, headerValue: true}))
+}
+
+// walker passes the strings of a decoded JSON value through f, and remembers
+// whether that, or the header credential rule, changed anything.
+type walker struct {
+	f func(string) string
+	// header, when set, cleans instead of f a string that is the value of a
+	// member under an Authorization name, or an item of its list.
+	header  func(string) string
+	changed bool // a string, a key or a header member came back different, or a key was dropped
+}
 
 // walk returns v, a decoded JSON value, with every string, keys included,
 // passed through f; then the value of each object member is replaced by
 // redactHeaderMember(key, value), key being the cleaned key (#196).
-func walk(v any, f func(string) string) any {
+func (w *walker) walk(v any) any {
 	switch v := v.(type) {
 	case string:
-		return f(v)
+		return w.cleaned(v, w.f)
 	case []any:
 		for i, item := range v {
-			v[i] = walk(item, f)
+			v[i] = w.walk(item)
 		}
 		return v
 	case map[string]any:
@@ -104,15 +155,50 @@ func walk(v any, f func(string) string) any {
 		// Keys that clean to the same key keep one value, deterministically:
 		// the key that was already clean, else the first in byte order.
 		for _, k := range slices.Sorted(maps.Keys(v)) {
-			key := f(k)
+			key := w.f(k)
+			if key != k {
+				w.changed = true // renamed, or dropped below
+			}
 			if _, taken := out[key]; taken && key != k {
 				continue
 			}
-			out[key] = redactHeaderMember(key, walk(v[k], f))
+			value, redacted := redactHeaderMember(key, w.walkMember(key, v[k]))
+			w.changed = w.changed || redacted
+			out[key] = value
 		}
 		return out
 	}
 	return v // json.Number, bool, nil
+}
+
+// cleaned returns s passed through f, and remembers whether that changed it.
+func (w *walker) cleaned(s string, f func(string) string) string {
+	out := f(s)
+	w.changed = w.changed || out != s
+	return out
+}
+
+// walkMember is walk for v, the value of the member key of an object, key being
+// the cleaned key: under an Authorization name a string, and each string item of
+// a list, goes through header when the walker has one.
+func (w *walker) walkMember(key string, v any) any {
+	if w.header == nil || !isAuthorizationName(key) {
+		return w.walk(v)
+	}
+	switch v := v.(type) {
+	case string:
+		return w.cleaned(v, w.header)
+	case []any:
+		for i, item := range v {
+			if s, ok := item.(string); ok {
+				v[i] = w.cleaned(s, w.header)
+			} else {
+				v[i] = w.walk(item)
+			}
+		}
+		return v
+	}
+	return w.walk(v)
 }
 
 // Text drops the characters of s that hide or reorder text: invisible and
@@ -126,11 +212,102 @@ func Text(s string) string {
 		return s
 	}
 	return strings.Map(func(r rune) rune {
-		if hidden(r) || (unicode.IsControl(r) && r != '\t' && r != '\n' && r != '\r') {
+		if removed(r) {
 			return -1
 		}
 		return r
-	}, withoutEscapeSequences(strings.ToValidUTF8(s, "�")))
+	}, prepared(s, ""))
+}
+
+// replacement stands for each byte of invalid UTF-8.
+const replacement = "\ufffd"
+
+// prepared returns s as valid UTF-8 (invalid bytes become replacement) without
+// the terminal control sequences it holds, each replaced by marker: the text
+// Text, Message and removedPlaces then remove single characters from.
+func prepared(s, marker string) string {
+	return withoutEscapeSequences(strings.ToValidUTF8(s, replacement), marker)
+}
+
+// removed reports whether Text drops r: a hidden character, or a control
+// character other than tab, line feed and carriage return. ASCII is decided
+// here, in a body small enough to be inlined into the loop that calls it;
+// every other character goes to removedBeyondASCII.
+func removed(r rune) bool {
+	if r < utf8.RuneSelf {
+		return r < ' ' && r != '\t' && r != '\n' && r != '\r' || r == 0x7f
+	}
+	return removedBeyondASCII(r)
+}
+
+// removedBeyondASCII is removed for a character that is not ASCII.
+func removedBeyondASCII(r rune) bool {
+	return hidden(r) || unicode.IsControl(r)
+}
+
+// sequenceMarker stands in for each terminal control sequence that
+// textPlaces removes whole. It is a control character, so the pass that drops
+// the other control characters drops it too, and leaves a place behind.
+const sequenceMarker = "\x00"
+
+// textPlaces is Text that also reports the places where it removed something
+// (#210): each offset, in bytes of the result, is where a run of removed
+// characters (a hidden or control character, or a whole terminal control
+// sequence) stood, in ascending order. A Langfuse key or the keyword of a header
+// credential that starts at a place is one, whatever stands before the place
+// (see redactAfterPlaces). The result is Text(s); a text Text leaves as it is
+// has no place.
+func textPlaces(s string) (string, []int) {
+	// Text comes back as s itself when it removes nothing, which is nearly every
+	// text; only a text that lost something is read again, with the places
+	// recorded.
+	if Text(s) == s {
+		return s, nil
+	}
+	text, places, _ := removedPlaces(s, removed) // Text drops no tab
+	return text, places
+}
+
+// linePlaces is Line that also reports the places where it dropped something
+// (#211), as textPlaces does for Text: the characters Text removes, and the tab,
+// line feed and carriage return Line drops besides. The result is Line(s). tabs
+// are the places whose run of dropped characters held a tab, the one blank of
+// the header rule that Line drops (see redactAfterPlaces).
+func linePlaces(s string) (text string, places, tabs []int) {
+	if Line(s) == s {
+		return s, nil, nil
+	}
+	return removedPlaces(s, droppedByLine)
+}
+
+// droppedByLine reports whether Line drops r: what Text removes, and the tab,
+// line feed and carriage return besides.
+func droppedByLine(r rune) bool {
+	return r == '\t' || r == '\n' || r == '\r' || removed(r)
+}
+
+// removedPlaces is the second reading of a text that a cleaning changes: it
+// returns the text without the characters dropped reports (removed for Text,
+// droppedByLine for Line) and without its terminal control sequences, and where
+// each run of them stood; tabs are the places whose run held a tab.
+func removedPlaces(s string, dropped func(rune) bool) (text string, places, tabs []int) {
+	size, inRun := 0, false
+	text = strings.Map(func(r rune) rune {
+		if dropped(r) {
+			if !inRun {
+				places = append(places, size)
+				inRun = true
+			}
+			if r == '\t' && (len(tabs) == 0 || tabs[len(tabs)-1] != size) {
+				tabs = append(tabs, size)
+			}
+			return -1
+		}
+		inRun = false
+		size += utf8.RuneLen(r)
+		return r
+	}, prepared(s, sequenceMarker))
+	return text, places, tabs
 }
 
 // plain reports whether s is ASCII with no control character other than tab,

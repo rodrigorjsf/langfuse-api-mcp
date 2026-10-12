@@ -95,11 +95,34 @@ func (c Catalog) Resolve(p Profile) Catalog {
 			// The line must not send the agent to an operation this catalog
 			// does not offer.
 			o.DescriptionLine = o.plainLine
+		} else if byFamily {
+			o.otherFamilyPreferred = op.preferredOfOtherFamily(byID, p.Families)
 		}
 		out.byID[id] = o
 	}
 	out.bodyErr = joinBodyErrors(bodyErrs)
 	return out
+}
+
+// preferredOfOtherFamily returns the ID of the operation o's line prefers when
+// o is a read operation of the legacy family, that operation is a read
+// operation among offered, it belongs to an operation family other than the
+// legacy one, and both families are among the profile's families (#212);
+// otherwise "". The data of a family is another store than the legacy
+// family's, so the preferred operation can return less of what was written
+// through the legacy APIs.
+func (o rangedOperation) preferredOfOtherFamily(offered map[string]rangedOperation, families []Family) string {
+	if o.prefers == "" || !o.IsRead() || o.Family != LegacyFamily {
+		return ""
+	}
+	preferred, ok := offered[o.prefers]
+	if !ok || !preferred.IsRead() || preferred.Family == "" || preferred.Family == LegacyFamily {
+		return ""
+	}
+	if !slices.Contains(families, LegacyFamily) || !slices.Contains(families, preferred.Family) {
+		return ""
+	}
+	return o.prefers
 }
 
 // Unavailable is an operation the union catalog knows and a resolved catalog

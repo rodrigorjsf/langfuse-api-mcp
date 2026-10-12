@@ -8,7 +8,7 @@ _Avoid_: endpoint (when you mean a single method), route, action
 **Catalog**: the set of in-scope operations the server can execute for the connected deployment: the bundled union of Langfuse release specs, minus the exclusion list, filtered by the deployment profile; each write operation has the request body of the deployment's Langfuse version.
 _Avoid_: registry, tool list
 
-**Operation index**: the compact listing `search_operations` returns — one line per catalog operation (its ID and the first line of its description; for a legacy operation, what it does and its replacement; in write mode, for a write operation, its HTTP method and whether it is destructive), grouped by tag, optionally filtered by a query.
+**Operation index**: the compact listing `search_operations` returns — one line per catalog operation (its ID and the first line of its description; for a legacy operation, what it does and its replacement; in write mode, for a write operation, its HTTP method and whether it is destructive; on a deployment where the legacy family and the family of its replacement are both on, for a legacy read whose replacement belongs to another operation family, a note written by this server that the replacement can return less), grouped by tag, optionally filtered by a query.
 _Avoid_: API list, endpoint list
 
 **Operation description**: what `describe_operation` returns for one operation — every served parameter with its location, type, required flag, enum, bounds and default, and, apart from them, the filters the server applies itself on this deployment (its scanned filters).

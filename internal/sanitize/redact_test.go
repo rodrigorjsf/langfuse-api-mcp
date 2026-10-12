@@ -231,6 +231,27 @@ func FuzzRedact(f *testing.F) {
 	f.Add(`{'Proxy-Authorization': 'Digest dXNlcjpwYXNzd29yZDEyMzQ1Njc4'}`)
 	f.Add("HTTP_AUTHORIZATION: Basic dXNlcjpwYXNzd29yZDEyMzQ1Njc4 \"x authorization\": \"Token abcdefghijklmnop\"")
 	f.Add(`{"Authorization": "Basic [REDACTED]abcdefghijklmnop", "x": ["Authorization": 'Bearer abcdefghijklmnopq']}`)
+	// A Langfuse key directly after each JSON escape written as text, with one,
+	// two and four backslashes, alone and inside JSON text (#208).
+	f.Add(`{"output":"{\"a\":\"x\\nsk-lf-abc123\\ny\"}"}`)
+	f.Add(`"x\tsk-lf-abc\rpk-lf-def\bsk-lf-ghi\fpk-lf-jkl"`)
+	f.Add(`"\\u000ask-lf-abc \\\\u00E9pk-lf-def \\\\nsk-lf-ghi"`)
+	f.Add(`x\\nsk-lf-a\\\\tpk-lf-b\u000ask-lf-c`)
+	f.Add("\\n\\u200b\u200bsk-lf-abc\\nsk-lf-\\n")
+	// A Langfuse key directly after a place where the cleaning removed something:
+	// a hidden character, a control character, a whole terminal sequence (#210).
+	f.Add("token\u200bsk-lf-abc123 x\apk-lf-def x\x1b[31msk-lf-ghi")
+	f.Add("ta\u200bsk-lf-name sk-lf-abc\u202esk-lf-def \x00pk-lf-x")
+	f.Add("{\"k\":\"v\u200bsk-lf-abc\\n\x1b]8;;u\apk-lf-d\"}")
+	// A generated key glued to a word, a header keyword after each JSON escape
+	// written as text and after a place where the cleaning removed something, and
+	// the same inside JSON text (#211).
+	f.Add("xsk-lf-0a1b2c3d-1111-2222-3333-444455556666 KEY_pk-lf-0A1B2C3D-AAAA-BBBB-CCCC-DDDDEEEEFFFF-tail")
+	f.Add(`{"output":"{\"a\":\"1sk-lf-0a1b2c3d-1111-2222-3333-444455556666\\nBearer abcdefghijklmnopqrstuvwx\"}"}`)
+	f.Add(`x\nBearer abcdefghijklmnopqrst x\tAuthorization: Basic abcdefghijklmnopqrst \u000aBearer abcdefghijklmnop`)
+	f.Add(`x\\bBearer abcdefghijklmnopqrst x\\\\fProxy-Authorization: Digest abcdefghijklmnopqrst \rbearer abcdefghijklmnop`)
+	f.Add("x\u200bBearer abcdefghijklmnopqrst y\aAuthorization: Basic abcdefghijklmnopqrst z\x1b[31mBearer abcdefghijklmnop")
+	f.Add("Bearer abcdefghijklmnopqrst\u200bBearer abcdefghijklmnopqrst re\u200bauthorization: Basic abcdefghijklmnop")
 	r := sanitize.NewRedactor("hunter2-hunter2")
 	f.Fuzz(func(t *testing.T, s string) {
 		once := r.Redact(s)
@@ -252,6 +273,31 @@ func FuzzRedact(f *testing.F) {
 // header, so that the pattern runs over all of it, took 3.0 ms before the
 // quoted form and the name rule of #196 and takes 8.6 ms now (a header map:
 // 2.7 ms before, 8.2 ms now); the text with no header name is unchanged.
+// The key after an escape (#208) leaves the text with no "k-lf-" as it was
+// (ASCII 0.16 ms before and after, the other three within the noise of a run):
+// it skips the key pattern. Text made of nothing but keys, each pair with one
+// after an escape, took 1.8 ms before and takes 3.4 ms now, the cost of the
+// second way in to the key and of the group that keeps the escape. Since #210
+// the cleaning decides an ASCII character in a short test before the Unicode
+// tables (removed), so the text with non-ASCII letters takes 0.48 ms instead of
+// 1.16 ms (the other three: ASCII 0.14 ms, keys 3.5 ms, unchanged).
+// Since #211 the key pattern has a second way in (a generated key, the prefix and
+// a UUID, wherever it stands) and the two header keywords one more (an escape
+// written as text in front of them). Medians of 10 runs, the package before and
+// after in alternating runs (i7-10700K, go1.27.2), in ms: ASCII 0.159 before and
+// 0.172 after, non-ASCII 0.457 and 0.488 (the scan that decides both is the same
+// machine code at the same alignment, so the 7 to 8 percent is what another
+// binary costs, not the change); mentions the header 10.2 and 12.5 (+22 percent);
+// a header map 9.95 and 11.3 (+13); keys, some after an escape 3.68 and 4.95
+// (+34). The two new cases do work they did not do before, because the
+// credentials in them used to come back as they were: generated keys glued to
+// words 2.88 and 4.99, headers after an escape 7.95 and 10.7. A text with no
+// "k-lf-" still skips the key pattern and a text that names no header keyword
+// still skips the header pattern. The key pattern is larger, so the regular
+// expression engine reads with its fast backtracker only a text under 3 to 6 KB
+// where it did under 6 to 12 KB before (11.6 ns a byte against 38.8 for the
+// automaton); every text above that, the 64 KiB of the cases here included, goes
+// to the automaton as it did.
 func BenchmarkRedact(b *testing.B) {
 	for name, input := range map[string]string{
 		"ASCII":     `{"name":"checkout-flow","input":"the user asked about authorisation of a bearish, ok","n":12345},`,
@@ -260,6 +306,14 @@ func BenchmarkRedact(b *testing.B) {
 		// passes, so the pattern runs over every byte of it (#196).
 		"mentions the header": `{"name":"checkout-flow","input":"the Authorization header is required, send Basic or Bearer auth","n":12345},`,
 		"a header map":        `{"name":"checkout-flow","headers":{"Authorization":"Basic dXNlcjpwYXNzd29yZDEyMzQ1Njc4"},"n":12345},`,
+		// Text that holds Langfuse keys, so that the key pattern runs over all
+		// of it, with and without a JSON escape before the key (#208).
+		"keys, some after an escape": `{"name":"checkout-flow","input":"{\"k\":\"x\\nsk-lf-abc123 and pk-lf-def456\"}","n":12345},`,
+		// Generated keys glued to a word (#211) and header keywords after an escape
+		// written as text (#211): the second alternative of the key pattern, and the
+		// escape in front of the two header keywords.
+		"generated keys glued to words": `{"name":"checkout-flow","input":"id=xsk-lf-0a1b2c3d-1111-2222-3333-444455556666 and 1pk-lf-0A1B2C3D-AAAA-BBBB-CCCC-DDDDEEEEFFFF","n":12345},`,
+		"headers after an escape":       `{"name":"checkout-flow","input":"{\"k\":\"x\\nBearer abcdefghijklmnopqrstuvwx\\nAuthorization: Basic abcdefghijklmnopqrstuvwx\"}","n":12345},`,
 	} {
 		text := strings.Repeat(input, 64<<10/len(input)+1)
 		b.Run(name, func(b *testing.B) {
@@ -277,10 +331,29 @@ func BenchmarkRedact(b *testing.B) {
 // list of objects with and without a header map. On the machine of
 // BenchmarkRedact, rows with no header map took 2.75 ms before and take
 // 2.80 ms now; rows with a header map took 2.5 ms before and take 3.1 ms now.
+// With the JSON text of #210, taken on the same machine in alternating runs of
+// the package before and after: rows with no header map 2.90 ms before and
+// 2.94 ms after, rows with a header map 3.19 ms before and 3.22 ms after, about
+// 1 percent, as much as the runs differ from one another (a string that does
+// not start with a brace, a bracket or a quote costs one more byte read). The two rows whose input and output are JSON text are the cost of
+// reading it: with nothing to clean 1.59 ms before (the text was left as it
+// was) and 4.25 ms after, with a hidden character in each 1.50 ms before and
+// 5.36 ms after, which is about what a payload of the same bytes costs to
+// decode, walk and write. With #211, the package before and after in alternating
+// runs, every case within 1 percent (2.92 and 2.93, 3.19 and 3.23, 4.22 and
+// 4.18, 5.33 and 5.36 ms).
 func BenchmarkPayload(b *testing.B) {
 	for name, row := range map[string]string{
 		"rows with no header map": `{"name":"checkout-flow","input":"the user asked about a refund","n":12345,"tags":["a","b"]}`,
 		"rows with a header map":  `{"name":"checkout-flow","headers":{"Authorization":"Basic dXNlcjpwYXNzd29yZDEyMzQ1Njc4"},"n":12345}`,
+		// A page of Observations v2 rows: input and output are JSON text (#210).
+		// With nothing to clean in them the texts come back as they were; with
+		// a hidden character written as an escape in each, they are written
+		// again.
+		"rows with JSON text to keep": `{"name":"checkout-flow","input":"{\"messages\":[{\"role\":\"user\",\"content\":\"the user asked about a refund\"}]}",` +
+			`"output":"{\"answer\":\"a refund was issued\",\"ids\":[1,2,3]}","n":12345}`,
+		"rows with JSON text to clean": `{"name":"checkout-flow","input":"{\"messages\":[{\"role\":\"user\",\"content\":\"the user asked\\u200b about a refund\"}]}",` +
+			`"output":"{\"answer\":\"a refund was issued\\u001b[31m\",\"ids\":[1,2,3]}","n":12345}`,
 	} {
 		payload := json.RawMessage("[" + strings.TrimSuffix(strings.Repeat(row+",", 64<<10/len(row)+1), ",") + "]")
 		b.Run(name, func(b *testing.B) {
@@ -290,6 +363,35 @@ func BenchmarkPayload(b *testing.B) {
 				if _, err := sanitize.Payload(payload, r); err != nil {
 					b.Fatal(err)
 				}
+			}
+		})
+	}
+}
+
+// A Langfuse key takes every key character after its prefix, a hyphen and the
+// letters of a keyword included, so a header keyword glued to a key through a
+// hyphen is read before the key is replaced: the token goes with it.
+func TestRedactReplacesTheTokenOfAHeaderWhoseKeywordAKeyRunsInto(t *testing.T) {
+	t.Parallel()
+	const token = "abcdefghijklmnopqrstuvwx"
+	tests := map[string]struct{ in, want string }{
+		"Bearer after a key and a hyphen":         {in: "x sk-lf-abc123-Bearer " + token, want: "x [REDACTED] [REDACTED]"},
+		"Authorization after a key and a hyphen":  {in: "x sk-lf-abc123-Authorization: Basic " + token + " end", want: "x [REDACTED]: Basic [REDACTED] end"},
+		"a header name after a generated key":     {in: "pk-lf-0a1b2c3d-1111-2222-3333-444455556666-Proxy-Authorization: Basic " + token, want: "[REDACTED]: Basic [REDACTED]"},
+		"a key that is the token of a header":     {in: "Bearer sk-lf-abc123-def456-ghi789", want: "Bearer [REDACTED]"},
+		"a short key under a header, as before":   {in: "Authorization: Basic sk-lf-abc123", want: "Authorization: Basic [REDACTED]"},
+		"a key and a separate header, as before":  {in: "sk-lf-abc123 Bearer " + token, want: "[REDACTED] Bearer [REDACTED]"},
+		"a key into a keyword with a short token": {in: "x sk-lf-abc123-Bearer short", want: "x [REDACTED] short"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			got := (sanitize.Redactor{}).Redact(tc.in)
+			if got != tc.want {
+				t.Fatalf("Redact(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+			if again := (sanitize.Redactor{}).Redact(got); again != got {
+				t.Fatalf("Redact(%q) = %q, want it unchanged", got, again)
 			}
 		})
 	}

@@ -402,7 +402,7 @@ func TestLineValueRedactsTheTokenOfAnAuthorizationMemberWhateverItsScheme(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := json.Marshal(sanitize.LineValue(in))
+	out, err := json.Marshal(sanitize.LineValue(in, sanitize.Redactor{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -604,13 +604,15 @@ func TestAnInstructionBesideAHeaderMapIsNotChangedByTheRule(t *testing.T) {
 }
 
 // A header map nested in a payload is redacted at every depth and in every
-// form: in a list, in metadata, as stringified JSON inside a string.
+// form: in a list, in metadata, as stringified JSON inside a string. The JSON
+// text inside a string is decoded and its header map redacted as an object is
+// (#210), so the text comes back compact, as Payload writes a payload.
 func TestAHeaderMapIsRedactedAtEveryDepthAndInEveryForm(t *testing.T) {
 	t.Parallel()
 	stringified := `{\"headers\": {\"Authorization\": \"Basic ` + mapToken + `\"}}`
 	in := `{"input":"` + stringified + `","output":[{"metadata":{"a":[{"b":"` + stringified + `"}],"headers":{"authorization":"Token ` + mapToken + `"}}}]}`
-	want := `{"input":"{\"headers\": {\"Authorization\": \"Basic [REDACTED]\"}}",` +
-		`"output":[{"metadata":{"a":[{"b":"{\"headers\": {\"Authorization\": \"Basic [REDACTED]\"}}"}],"headers":{"authorization":"Token [REDACTED]"}}}]}`
+	want := `{"input":"{\"headers\":{\"Authorization\":\"Basic [REDACTED]\"}}",` +
+		`"output":[{"metadata":{"a":[{"b":"{\"headers\":{\"Authorization\":\"Basic [REDACTED]\"}}"}],"headers":{"authorization":"Token [REDACTED]"}}}]}`
 	if got := cleanedPayload(t, sanitize.Redactor{}, in); got != want {
 		t.Fatalf("Payload\n got %s\nwant %s", got, want)
 	}
@@ -711,6 +713,22 @@ func TestRedactionTimeGrowsInProportionToTheInput(t *testing.T) {
 		"quotes with no match": func(n int) string { return strings.Repeat(`"authorization `, n) },
 		"escapes with no match": func(n int) string {
 			return strings.Repeat(`\\\\\\\\\\\\"x authorization `, n)
+		},
+		// The key after an escape (#208): the key pattern runs on every text
+		// that holds "k-lf-", so a run of backslashes, of escapes and of "\u"
+		// with too few hex digits, each ending in a key, must cost no more per
+		// byte at 16 KiB than at 2 KiB.
+		"keys after escapes": func(n int) string {
+			return strings.Repeat(`x\nsk-lf-abc123\\tpk-lf-def456\\\\u000ask-lf-g `, n)
+		},
+		"backslashes before a key": func(n int) string {
+			return strings.Repeat(`\`, 8*n) + "sk-lf-abc123"
+		},
+		"line feed escapes before a key": func(n int) string {
+			return strings.Repeat(`\n`, 4*n) + "sk-lf-abc123"
+		},
+		"unicode escapes with too few hex digits": func(n int) string {
+			return strings.Repeat(`\u12 `, 2*n) + "pk-lf-abc123"
 		},
 	}
 	elapsed := func(f func()) time.Duration {

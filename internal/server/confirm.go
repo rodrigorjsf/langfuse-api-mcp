@@ -277,10 +277,12 @@ func jsonText(v any) string {
 
 // bodySummary returns the body as compact JSON with every string (keys
 // included) stripped and redacted by r, cut at maxSummaryRunes; cut reports
-// whether it was.
+// whether it was. The strings lose their tabs and line breaks, so each is
+// redacted where it is cleaned (sanitize.LineValue): a credential that stood
+// after a dropped character is not glued to the word before it (#211).
 func bodySummary(body json.RawMessage, r sanitize.Redactor) (summary string, cut bool) {
 	v, _ := sanitize.Decode(body) // body passed CheckBody: it is valid JSON
-	s := r.Redact(jsonText(sanitize.LineValue(v)))
+	s := r.Redact(jsonText(sanitize.LineValue(v, r)))
 	if utf8.RuneCountInString(s) <= maxSummaryRunes {
 		return s, false
 	}

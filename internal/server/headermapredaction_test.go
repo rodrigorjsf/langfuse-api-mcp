@@ -323,7 +323,9 @@ func TestAHeaderMapInAnObservationOfTheTraceTreeIsRedactedWhateverItsScheme(t *t
 	if got := jsonOf(t, row["input"]); got != `{"headers":{"Authorization":"Basic [REDACTED]"}}` {
 		t.Errorf("input = %s, want the token redacted", got)
 	}
-	if row["output"] != `{"headers": {"Authorization": "Token [REDACTED]"}}` {
+	// The output is JSON text: it is decoded and cleaned, and written again
+	// compact because the header map in it was redacted (#210).
+	if row["output"] != `{"headers":{"Authorization":"Token [REDACTED]"}}` {
 		t.Errorf("output = %v, want the token redacted", row["output"])
 	}
 	if got := jsonOf(t, row["metadata"]); got != `{"Proxy-Authorization":["Negotiate [REDACTED]"]}` {
