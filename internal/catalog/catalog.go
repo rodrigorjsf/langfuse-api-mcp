@@ -114,8 +114,9 @@ type Operation struct {
 	// the one to prefer over this one ("legacy: prefer X when it is
 	// available"); "" when it names none. plainLine is the operation's line
 	// without that mention, which Resolve uses where the catalog does not
-	// offer prefers. On a deployment with both read families the preferred
-	// operation can return less than this one (#212).
+	// offer prefers. Where the legacy family and the family of the preferred
+	// operation are both on, the preferred operation can return less than this
+	// one (#212).
 	prefers, plainLine string
 	// otherFamilyPreferred is prefers when, on the deployment profile the catalog
 	// was resolved for, this legacy read operation's preferred operation is a read
