@@ -245,22 +245,3 @@ func TestJSONTextThatCannotBeCleanedIsReturnedAsTextAndNeverFailsTheCall(t *test
 		}
 	}
 }
-
-// A documented limit, tracked in #211: the audit line cleans the operation ID
-// before the redactor reads it, so the redactor does not see the place where
-// the hidden character stood, and a key that follows it is glued to the word
-// before it. The tool error of the same call is redacted, because there the
-// redactor cleans the text itself.
-func TestAKeyAfterAHiddenCharacterInAnOperationIDIsRedactedInTheToolErrorAndShownInTheAuditLine(t *testing.T) {
-	t.Parallel()
-	cs, logs := connectLogged(t, idleLangfuse(t))
-
-	res := callExecuteRead(t, cs, map[string]any{"operationId": "x" + string(rune(0x200b)) + escapedSecretKey})
-
-	if got := toolErrorOf(t, res).Error.Message; got != `unknown operation ID "x[REDACTED]"` {
-		t.Errorf("message = %q, want the key redacted", got)
-	}
-	if !strings.Contains(logs.String(), `"operationId":"x`+escapedSecretKey+`"`) {
-		t.Fatalf("the audit line does not show the key glued to the word, the limit this test documents:\n%.600s", logs.String())
-	}
-}

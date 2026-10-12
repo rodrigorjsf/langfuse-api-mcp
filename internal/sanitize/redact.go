@@ -20,16 +20,27 @@ const Redacted = "[REDACTED]"
 // and no word boundary.
 const wordEndedEscape = `\\+(?:[bfnrt]|u[0-9A-Fa-f]{4})`
 
+// generatedKey is what follows the prefix of a key as Langfuse generates it
+// (#211): a UUID, 8, 4, 4, 4 and 12 hexadecimal digits with hyphens, in either
+// case. No word or slug has that shape, so a generated key needs no word
+// boundary before its prefix.
+const generatedKey = `[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}`
+
 // keyPattern matches any Langfuse API key, the configured pair or not:
 // pk-lf-… and sk-lf-…, at a word boundary (not a word that merely ends in "pk"
-// or "sk") or directly after a wordEndedEscape. The first group is the escape,
-// which stays: the text around the key keeps its meaning as JSON text. The
-// rule reads the text only. It does not decode it and does not count
-// backslashes, so a literal backslash and a letter before a key (C:\nsk-lf-…)
-// are taken for an escape, an over-redaction accepted for the sake of a rule
-// no payload can steer. The two alternatives never match the same key: a
-// letter or digit before the key is a word character, which has no boundary.
-var keyPattern = regexp.MustCompile(`(?:\b|(` + wordEndedEscape + `))[ps]k-lf-[A-Za-z0-9_-]+`)
+// or "sk") or directly after a wordEndedEscape, and, wherever it stands, a
+// generated key: the prefix and a UUID (#211), with every key character that
+// follows it. The first group is the escape, which stays: the text around the
+// key keeps its meaning as JSON text. The rule reads the text only. It does not
+// decode it and does not count backslashes, so a literal backslash and a letter
+// before a key (C:\nsk-lf-…) are taken for an escape, an over-redaction
+// accepted for the sake of a rule no payload can steer. A key that is no UUID
+// glued to a letter, digit or underscore is not found: "task-lf-name" is a word.
+// Where a boundary or an escape stands, the first alternative takes the key
+// whole, the generated one included; the second one only takes what the first
+// cannot reach, a generated key glued to a word character.
+var keyPattern = regexp.MustCompile(
+	`(?:\b|(` + wordEndedEscape + `))[ps]k-lf-[A-Za-z0-9_-]+|[ps]k-lf-` + generatedKey + `[A-Za-z0-9_-]*`)
 
 // letterEscapeKeyPattern matches a Langfuse key directly after the JSON escape
 // of an ASCII letter, digit or underscore, written as text: backslashes, then
@@ -90,8 +101,10 @@ const quotedName = space + `(?:[^"'\\]*[^A-Za-z0-9"'\\])?(?i:authorization)` + s
 // token of minTokenLength characters or more. The first group is what stays,
 // the scheme word with it; the token that follows is what Redact replaces:
 //   - the plain form (#180), "Authorization: <scheme> ", the word at the start
-//     of the text or after a character that is not an ASCII letter or digit;
-//   - "Bearer ", the word at the start of a word;
+//     of the text, after a character that is not an ASCII letter or digit, or
+//     directly after a wordEndedEscape (#211);
+//   - "Bearer ", the word at the start of a word or directly after a
+//     wordEndedEscape (#211);
 //   - the quoted form (#196), a quoted name that counts, a colon and a quoted
 //     value "<scheme> <token>", the value alone or the first item of a list:
 //     the JSON text of a header map, escaped or not, or its Python form.
@@ -101,16 +114,31 @@ const quotedName = space + `(?:[^"'\\]*[^A-Za-z0-9"'\\])?(?i:authorization)` + s
 // sees one string at a time: the value of a JSON header map that is an object
 // of a payload is the business of redactHeaderValue.
 var headerPattern = regexp.MustCompile(
-	`((?:^|[^A-Za-z0-9])(?i:authorization)[ \t]*:[ \t]*` + scheme + `[ \t]+` +
-		`|\b(?i:bearer)[ \t]+` +
+	`((?:^|[^A-Za-z0-9]|` + wordEndedEscape + `)` + plainHeader +
+		`|(?:\b|` + wordEndedEscape + `)` + bareHeader +
 		`|` + quote + quotedName + quote + space + `:` + space + `(?:\[` + space + `)?` + quote + space + scheme + `[ \t]+)` +
-		valueChar + `{` + strconv.Itoa(minTokenLength) + `,}`)
+		headerToken)
+
+// plainHeader is the plain form of a header credential after its start,
+// "Authorization: <scheme> ", and bareHeader the form "Bearer ".
+const (
+	plainHeader = `(?i:authorization)[ \t]*:[ \t]*` + scheme + `[ \t]+`
+	bareHeader  = `(?i:bearer)[ \t]+`
+)
+
+// headerToken is the token of a header credential: minTokenLength characters of
+// valueChar or more.
+var headerToken = valueChar + `{` + strconv.Itoa(minTokenLength) + `,}`
+
+// headerAtPlacePattern matches, at the start of a text, a header credential of
+// the plain form or of the form "Bearer ", up to its token (#211). The first
+// group is what stays. redactAfterPlaces reads it on the text from a place on.
+var headerAtPlacePattern = regexp.MustCompile(`^(` + plainHeader + `|` + bareHeader + `)` + headerToken)
 
 // headerValuePattern matches the value of a member of a header map: blanks, a
 // scheme, blanks and a token of minTokenLength characters or more (#196). The
 // first group is what stays.
-var headerValuePattern = regexp.MustCompile(
-	`^(` + space + scheme + `[ \t]+)` + valueChar + `{` + strconv.Itoa(minTokenLength) + `,}`)
+var headerValuePattern = regexp.MustCompile(`^(` + space + scheme + `[ \t]+)` + headerToken)
 
 // authorizationWord is the word the name rule looks for, in lower case.
 const authorizationWord = "authorization"
@@ -170,7 +198,7 @@ func NewRedactor(secrets ...string) Redactor {
 // secret comes back as it was.
 func (r Redactor) Redact(s string) string {
 	clean, places := textPlaces(s)
-	redacted := r.redact(redactKeysAfterPlaces(clean, places))
+	redacted := r.redact(redactAfterPlaces(clean, places))
 	if clean == s || redacted != clean {
 		return redacted
 	}
@@ -194,44 +222,91 @@ func (r Redactor) redact(s string) string {
 // keyPrefixLength is the length of "pk-lf-" and "sk-lf-".
 const keyPrefixLength = len("sk-lf-")
 
-// redactKeysAfterPlaces returns s, a clean text, with every Langfuse key that
-// starts at one of places replaced by Redacted (#210). A place is where the
-// cleaning removed a hidden or control character or a whole terminal control
-// sequence: the key rule reads the clean text, where that place is gone and the
-// word before it is glued to the key (token, a zero-width space and sk-lf-…
-// read tokensk-lf-…, which has no word boundary), so a place is a boundary of
-// its own, whatever stands before it. A key that keyPattern already finds, and
-// one that a place splits, are the business of keyPattern and are left to it;
-// so is a text with no place.
-func redactKeysAfterPlaces(s string, places []int) string {
-	if len(places) == 0 || !strings.Contains(s, "k-lf-") {
+// redactAfterPlaces returns s, a clean text, with every Langfuse key and the
+// token of every header credential that starts at one of places replaced by
+// Redacted (#210, #211). A place is where the cleaning removed a hidden or
+// control character or a whole terminal control sequence: the patterns read the
+// clean text, where that place is gone and the word before it is glued to what
+// follows (token, a zero-width space and sk-lf-… read tokensk-lf-…, x, a bell
+// and Bearer … read xBearer …), which has no word boundary, so a place is a
+// boundary of its own, whatever stands before it. A key goes whole; a header
+// keeps its keyword and scheme, as headerPattern leaves them. What keyPattern
+// or headerPattern already finds, and what a place splits, is the business of
+// the patterns and is left to them; so is a text with no place.
+func redactAfterPlaces(s string, places []int) string {
+	if len(places) == 0 {
 		return s
 	}
-	covered := keyPattern.FindAllStringIndex(s, -1)
+	keys, headers := strings.Contains(s, "k-lf-"), mentionsHeader(s)
+	if !keys && !headers {
+		return s
+	}
+	var keyMatches, headerMatches [][]int // what the patterns find on their own
+	if keys {
+		keyMatches = keyPattern.FindAllStringIndex(s, -1)
+	}
+	if headers {
+		headerMatches = headerPattern.FindAllStringIndex(s, -1)
+	}
 	var out strings.Builder
-	written := 0 // s[:written] is in out, a replaced key included
+	written := 0 // s[:written] is in out, a replaced key or token included
 	for _, p := range places {
-		if p < written || p+keyPrefixLength >= len(s) || !isKeyPrefix(s[p:p+keyPrefixLength]) {
+		if p < written {
 			continue
 		}
-		// The first match that ends after p; p is inside it if it starts at or before p.
-		i, _ := slices.BinarySearchFunc(covered, p+1, func(m []int, target int) int { return cmp.Compare(m[1], target) })
-		if i < len(covered) && covered[i][0] <= p {
-			continue // inside a key keyPattern replaces whole
+		var start, end int // the span to replace; end is 0 when nothing starts at p
+		if keys && !insideAMatch(keyMatches, p) {
+			start, end = keyAt(s, p)
 		}
-		n := keyCharsLength(s[p+keyPrefixLength:])
-		if n == 0 {
+		if end == 0 && headers && !insideAMatch(headerMatches, p) {
+			start, end = tokenAt(s, p)
+		}
+		if end == 0 {
 			continue
 		}
-		out.WriteString(s[written:p])
+		out.WriteString(s[written:start])
 		out.WriteString(Redacted)
-		written = p + keyPrefixLength + n
+		written = end
 	}
 	if written == 0 {
 		return s
 	}
 	out.WriteString(s[written:])
 	return out.String()
+}
+
+// insideAMatch reports whether p is inside one of matches, the sorted spans a
+// pattern found in a text: a place there is the pattern's business.
+func insideAMatch(matches [][]int, p int) bool {
+	// The first match that ends after p; p is inside it if it starts at or before p.
+	i, _ := slices.BinarySearchFunc(matches, p+1, func(m []int, target int) int { return cmp.Compare(m[1], target) })
+	return i < len(matches) && matches[i][0] <= p
+}
+
+// keyAt returns the span of the Langfuse key that starts at p of s, or an empty
+// span (end 0) when none does.
+func keyAt(s string, p int) (start, end int) {
+	if p+keyPrefixLength >= len(s) || !isKeyPrefix(s[p:p+keyPrefixLength]) {
+		return 0, 0
+	}
+	n := keyCharsLength(s[p+keyPrefixLength:])
+	if n == 0 {
+		return 0, 0
+	}
+	return p, p + keyPrefixLength + n
+}
+
+// tokenAt returns the span of the token of the header credential whose keyword
+// starts at p of s, or an empty span (end 0) when none does.
+func tokenAt(s string, p int) (start, end int) {
+	if !startsWithFold(s[p:], "bearer") && !startsWithFold(s[p:], authorizationWord) {
+		return 0, 0 // cheaper than the pattern, which fails on its first byte anyway
+	}
+	m := headerAtPlacePattern.FindStringSubmatchIndex(s[p:])
+	if m == nil {
+		return 0, 0
+	}
+	return p + m[3], p + m[1] // after the group that stays, to the end of the token
 }
 
 // isKeyPrefix reports whether s is "pk-lf-" or "sk-lf-".

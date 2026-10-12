@@ -243,6 +243,15 @@ func FuzzRedact(f *testing.F) {
 	f.Add("token\u200bsk-lf-abc123 x\apk-lf-def x\x1b[31msk-lf-ghi")
 	f.Add("ta\u200bsk-lf-name sk-lf-abc\u202esk-lf-def \x00pk-lf-x")
 	f.Add("{\"k\":\"v\u200bsk-lf-abc\\n\x1b]8;;u\apk-lf-d\"}")
+	// A generated key glued to a word, a header keyword after each JSON escape
+	// written as text and after a place where the cleaning removed something, and
+	// the same inside JSON text (#211).
+	f.Add("xsk-lf-0a1b2c3d-1111-2222-3333-444455556666 KEY_pk-lf-0A1B2C3D-AAAA-BBBB-CCCC-DDDDEEEEFFFF-tail")
+	f.Add(`{"output":"{\"a\":\"1sk-lf-0a1b2c3d-1111-2222-3333-444455556666\\nBearer abcdefghijklmnopqrstuvwx\"}"}`)
+	f.Add(`x\nBearer abcdefghijklmnopqrst x\tAuthorization: Basic abcdefghijklmnopqrst \u000aBearer abcdefghijklmnop`)
+	f.Add(`x\\bBearer abcdefghijklmnopqrst x\\\\fProxy-Authorization: Digest abcdefghijklmnopqrst \rbearer abcdefghijklmnop`)
+	f.Add("x\u200bBearer abcdefghijklmnopqrst y\aAuthorization: Basic abcdefghijklmnopqrst z\x1b[31mBearer abcdefghijklmnop")
+	f.Add("Bearer abcdefghijklmnopqrst\u200bBearer abcdefghijklmnopqrst re\u200bauthorization: Basic abcdefghijklmnop")
 	r := sanitize.NewRedactor("hunter2-hunter2")
 	f.Fuzz(func(t *testing.T, s string) {
 		once := r.Redact(s)
@@ -272,6 +281,23 @@ func FuzzRedact(f *testing.F) {
 // the cleaning decides an ASCII character in a short test before the Unicode
 // tables (removed), so the text with non-ASCII letters takes 0.48 ms instead of
 // 1.16 ms (the other three: ASCII 0.14 ms, keys 3.5 ms, unchanged).
+// Since #211 the key pattern has a second way in (a generated key, the prefix and
+// a UUID, wherever it stands) and the two header keywords one more (an escape
+// written as text in front of them). Medians of 10 runs, the package before and
+// after in alternating runs (i7-10700K, go1.27.2), in ms: ASCII 0.159 before and
+// 0.172 after, non-ASCII 0.457 and 0.488 (the scan that decides both is the same
+// machine code at the same alignment, so the 7 to 8 percent is what another
+// binary costs, not the change); mentions the header 10.2 and 12.5 (+22 percent);
+// a header map 9.95 and 11.3 (+13); keys, some after an escape 3.68 and 4.95
+// (+34). The two new cases do work they did not do before, because the
+// credentials in them used to come back as they were: generated keys glued to
+// words 2.88 and 4.99, headers after an escape 7.95 and 10.7. A text with no
+// "k-lf-" still skips the key pattern and a text that names no header keyword
+// still skips the header pattern. The key pattern is larger, so the regular
+// expression engine reads with its fast backtracker only a text under 3 to 6 KB
+// where it did under 6 to 12 KB before (11.6 ns a byte against 38.8 for the
+// automaton); every text above that, the 64 KiB of the cases here included, goes
+// to the automaton as it did.
 func BenchmarkRedact(b *testing.B) {
 	for name, input := range map[string]string{
 		"ASCII":     `{"name":"checkout-flow","input":"the user asked about authorisation of a bearish, ok","n":12345},`,
@@ -283,6 +309,11 @@ func BenchmarkRedact(b *testing.B) {
 		// Text that holds Langfuse keys, so that the key pattern runs over all
 		// of it, with and without a JSON escape before the key (#208).
 		"keys, some after an escape": `{"name":"checkout-flow","input":"{\"k\":\"x\\nsk-lf-abc123 and pk-lf-def456\"}","n":12345},`,
+		// Generated keys glued to a word (#211) and header keywords after an escape
+		// written as text (#211): the second alternative of the key pattern, and the
+		// escape in front of the two header keywords.
+		"generated keys glued to words": `{"name":"checkout-flow","input":"id=xsk-lf-0a1b2c3d-1111-2222-3333-444455556666 and 1pk-lf-0A1B2C3D-AAAA-BBBB-CCCC-DDDDEEEEFFFF","n":12345},`,
+		"headers after an escape":       `{"name":"checkout-flow","input":"{\"k\":\"x\\nBearer abcdefghijklmnopqrstuvwx\\nAuthorization: Basic abcdefghijklmnopqrstuvwx\"}","n":12345},`,
 	} {
 		text := strings.Repeat(input, 64<<10/len(input)+1)
 		b.Run(name, func(b *testing.B) {
@@ -308,7 +339,9 @@ func BenchmarkRedact(b *testing.B) {
 // reading it: with nothing to clean 1.59 ms before (the text was left as it
 // was) and 4.25 ms after, with a hidden character in each 1.50 ms before and
 // 5.36 ms after, which is about what a payload of the same bytes costs to
-// decode, walk and write.
+// decode, walk and write. With #211, the package before and after in alternating
+// runs, every case within 1 percent (2.92 and 2.93, 3.19 and 3.23, 4.22 and
+// 4.18, 5.33 and 5.36 ms).
 func BenchmarkPayload(b *testing.B) {
 	for name, row := range map[string]string{
 		"rows with no header map": `{"name":"checkout-flow","input":"the user asked about a refund","n":12345,"tags":["a","b"]}`,

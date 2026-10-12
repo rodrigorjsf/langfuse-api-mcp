@@ -96,13 +96,24 @@ func Line(s string) string {
 }
 
 // LineValue returns v, a decoded JSON value, with every string, keys
-// included, passed through Line, and the token of a header credential under an
-// Authorization name replaced by Redacted, as Payload does (#196). Keys that
-// read the same once cleaned keep one value by Payload's rule: the key that was
-// already clean, else the first in byte order.
-func LineValue(v any) any {
-	w := walker{f: Line}
+// included, passed through Line and redacted by r, and the token of a header
+// credential under an Authorization name replaced by Redacted, as Payload does
+// (#196). A Langfuse key or a header keyword that directly follows a character
+// Line dropped, a line break included, is redacted as at a boundary, and one
+// that a dropped character splits is found whole (#211). Keys that read the same
+// once cleaned keep one value by Payload's rule: the key that was already
+// clean, else the first in byte order.
+func LineValue(v any, r Redactor) any {
+	w := walker{f: r.cleanLine}
 	return w.walk(v)
+}
+
+// cleanLine returns s as Line cleans it, redacted by r: the places where Line
+// dropped something go to the key and header rules before the secrets are
+// replaced, as cleanString does for Text.
+func (r Redactor) cleanLine(s string) string {
+	text, places := linePlaces(s)
+	return r.redact(redactAfterPlaces(text, places))
 }
 
 // walker passes the strings of a decoded JSON value through f, and remembers
@@ -199,9 +210,10 @@ const sequenceMarker = "\x00"
 // textPlaces is Text that also reports the places where it removed something
 // (#210): each offset, in bytes of the result, is where a run of removed
 // characters (a hidden or control character, or a whole terminal control
-// sequence) stood, in ascending order. A Langfuse key that starts at a place
-// is a key, whatever stands before the place (see redactKeysAfterPlaces). The
-// result is Text(s); a text Text leaves as it is has no place.
+// sequence) stood, in ascending order. A Langfuse key or the keyword of a header
+// credential that starts at a place is one, whatever stands before the place
+// (see redactAfterPlaces). The result is Text(s); a text Text leaves as it is
+// has no place.
 func textPlaces(s string) (string, []int) {
 	// Text comes back as s itself when it removes nothing, which is nearly every
 	// text; only a text that lost something is read again, with the places
@@ -209,16 +221,28 @@ func textPlaces(s string) (string, []int) {
 	if Text(s) == s {
 		return s, nil
 	}
-	return removedPlaces(s)
+	return removedPlaces(s, false)
+}
+
+// linePlaces is Line that also reports the places where it dropped something
+// (#211), as textPlaces does for Text: the characters Text removes, and the tab,
+// line feed and carriage return Line drops besides. The result is Line(s).
+func linePlaces(s string) (string, []int) {
+	if Line(s) == s {
+		return s, nil
+	}
+	return removedPlaces(s, true)
 }
 
 // removedPlaces is textPlaces for a text that Text changes: the second reading,
-// which records where each run of removed characters stood.
-func removedPlaces(s string) (string, []int) {
+// which records where each run of removed characters stood. With lines it is
+// the second reading of Line: a tab, a line feed and a carriage return are
+// dropped too.
+func removedPlaces(s string, lines bool) (string, []int) {
 	var places []int
 	size, inRun := 0, false
 	text := strings.Map(func(r rune) rune {
-		if removed(r) {
+		if removed(r) || lines && (r == '\t' || r == '\n' || r == '\r') {
 			if !inRun {
 				places = append(places, size)
 				inRun = true

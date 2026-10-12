@@ -426,20 +426,3 @@ func TestNoArgumentOrParameterTurnsTheKeyRedactionOff(t *testing.T) {
 	}
 	assertNoLangfuseKey(t, res, logs)
 }
-
-// A documented limit (see the security rule): the confirmation shows the body
-// with its line breaks dropped, after the redaction has already read it, so a
-// key that stood after a real line feed is glued to the word before it and is
-// shown. The key rule does not see a character another function removes later.
-func TestAKeyAfterALineBreakThatTheConfirmationDropsIsShownGluedToTheWordBeforeIt(t *testing.T) {
-	t.Parallel()
-	label := "word\n" + escapedSecretKey
-
-	got := question(t, map[string]any{"operationId": "promptVersion_update",
-		"parameters": map[string]any{"name": "greeting", "version": 2},
-		"body":       map[string]any{"newLabels": []any{label}}})
-
-	if !strings.Contains(got, "word"+escapedSecretKey) {
-		t.Fatalf("the confirmation does not show the key glued to the word, the limit this test documents:\n%s", got)
-	}
-}

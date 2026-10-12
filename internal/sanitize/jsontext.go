@@ -22,13 +22,13 @@ const MaxJSONTextLevels = 4
 // cleanString returns s cleaned as a payload string is: Text drops the hidden
 // and control characters, r redacts its secrets, and a string that holds JSON
 // text has the text cleaned too while levels allows another decoding. The
-// places where Text removed something go to the key rule (removedPlaces); that
-// rule runs before the text is decoded, because the offsets of a place mean
-// nothing once the text is written again.
+// places where Text removed something go to the key and header rules
+// (redactAfterPlaces); that pass runs before the text is decoded, because the
+// offsets of a place mean nothing once the text is written again.
 func (r Redactor) cleanString(s string, levels int) string {
 	text, places := textPlaces(s)
 	if places != nil { // nearly every string has none
-		text = redactKeysAfterPlaces(text, places)
+		text = redactAfterPlaces(text, places)
 	}
 	// Nearly every string fails this test on its first byte; cleanJSONText
 	// looks at the last one.

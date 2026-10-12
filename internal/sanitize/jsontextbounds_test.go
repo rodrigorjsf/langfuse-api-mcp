@@ -152,6 +152,37 @@ func hostileStrings(t *testing.T) map[string]func(n int) string {
 		"JSON text in JSON text in a list": func(n int) string {
 			return `[` + strings.Repeat(quoteJSON(t, `{"b":"x`+uEsc("200b")+`"}`)+`,`, n) + `1]`
 		},
+		// The credentials of #211: a key prefix repeated, a glued prefix followed by
+		// the start of a UUID that never completes, the keywords of a header after
+		// an escape that is none, after an escape and after a removed character.
+		// The regexp engine of Go reads a text of a few kilobytes with its
+		// backtracker and a larger one with its slower automaton, the size where it
+		// switches depending on the size of the pattern. Both inputs of a pair in
+		// assertTimeInProportion must be on the automaton's side, or the pair would
+		// compare two engines, so the smaller one is built above that size.
+		"key prefixes": func(n int) string { return strings.Repeat("sk-lf-", 8*n) },
+		"glued prefixes followed by a UUID that never completes": func(n int) string {
+			return strings.Repeat("xsk-lf-0a1b2c3d-1111-", n)
+		},
+		"glued prefixes followed by a UUID that completes": func(n int) string {
+			return strings.Repeat("xsk-lf-"+generatedKeyBody+" ", n)
+		},
+		"Bearer after a written line feed": func(n int) string { return strings.Repeat(`\nBearer `, 2*n) },
+		"Bearer and a token after a written line feed": func(n int) string {
+			return strings.Repeat(`\nBearer `+escapeToken+" ", n)
+		},
+		"Bearer after a unicode escape of too few digits": func(n int) string {
+			return strings.Repeat(bs+"u12Bearer ", 2*n)
+		},
+		"Authorization after a written line feed": func(n int) string {
+			return strings.Repeat(`\nAuthorization: Basic `+escapeToken+" ", n)
+		},
+		"header keywords that a place hides": func(n int) string {
+			return strings.Repeat("x"+zeroWidthSpace+"Bearer "+escapeToken+" y"+bellChar+"Authorization: Basic ", n)
+		},
+		"a token that holds the next keyword": func(n int) string {
+			return strings.Repeat("Bearer "+escapeToken+zeroWidthSpace, n)
+		},
 	}
 }
 

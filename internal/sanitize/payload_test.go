@@ -44,6 +44,10 @@ func FuzzPayload(f *testing.F) {
 	// A repeated key whose first value holds what must go (#210).
 	f.Add(`{"output":"{\"a\":\"sec\\u200bret\\u0007\",\"a\":\"ok\"}"}`)
 	f.Add(`{"output":"{\"a\":{\"b\":\"x\\u202e\"},\"a\":[1],\"a\":null}"}`)
+	// A generated key glued to a word and a header keyword after a written line
+	// feed or after a removed character, in a string and in JSON text (#211).
+	f.Add(`{"a":"xsk-lf-0a1b2c3d-1111-2222-3333-444455556666","b":"x\\nBearer abcdefghijklmnopqrstuvwx","c":"y\u200bBearer abcdefghijklmnopqrst"}`)
+	f.Add(`{"output":"{\"a\":\"1pk-lf-0A1B2C3D-AAAA-BBBB-CCCC-DDDDEEEEFFFF\\u200bBearer abcdefghijklmnopqrstuvwx\",\"b\":\"x\\u200bAuthorization: Basic abcdefghijklmnopqrst\"}"}`)
 	f.Fuzz(func(t *testing.T, s string) {
 		if !json.Valid([]byte(s)) {
 			return // the client passes only valid JSON

@@ -52,7 +52,10 @@ func audited(log *slog.Logger, r sanitize.Redactor, handler auditedHandler) mcp.
 	return func(ctx context.Context, req *mcp.CallToolRequest) (res *mcp.CallToolResult, err error) {
 		start := time.Now()
 		// Redacted before any truncation: a secret cut short no longer matches.
-		operationID := r.Redact(sanitize.Text(operationIDOf(req)))
+		// The redactor reads the text before sanitize.Text drops its hidden
+		// characters: it cleans the text itself and sees where each one stood, so
+		// a credential that followed one is not glued to the word before it (#211).
+		operationID := sanitize.Text(r.Redact(operationIDOf(req)))
 		var a audit
 		var panicAttrs []any
 		defer func() {

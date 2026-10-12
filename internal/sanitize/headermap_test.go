@@ -402,7 +402,7 @@ func TestLineValueRedactsTheTokenOfAnAuthorizationMemberWhateverItsScheme(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := json.Marshal(sanitize.LineValue(in))
+	out, err := json.Marshal(sanitize.LineValue(in, sanitize.Redactor{}))
 	if err != nil {
 		t.Fatal(err)
 	}
