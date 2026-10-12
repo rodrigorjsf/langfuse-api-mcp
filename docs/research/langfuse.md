@@ -559,6 +559,12 @@ nothing here was measured on Langfuse Cloud, on 4.46.0 `events_only` or on 3.x.
   all their rows at 20:07:59: fresh data reaches Observations v2 whole, about ten minutes after ingestion.
 - **Cause.** A hypothesis, seen once: the seed was posted 15 seconds after the Langfuse worker started, and a start-up
   race may have lost its first rows. Whether a second load on a fresh stack loses rows again was not measured.
+- **Dataset runs created through the legacy API (campaign finding M2).** `[verified]` once, on one stack, not re-run for
+  the index note. On the same 4.46.0 `dual`, `experiments_list` and `experiments_listItems` with `fromStartTime`
+  `2026-10-01T00:00:00Z` returned `{"data":[],"meta":{}}`, while `datasets_getRuns` returned the two runs of
+  `support/eval/triage-cases` (source: `raw/2026-10-11-e2e-langfuse-4.46.0-dual.md`, M2). Dataset runs created through
+  the legacy API are not experiments on that deployment, which is a model difference of Langfuse, not a lag. Nothing
+  was measured on Langfuse Cloud or on 4.46.0 `events_only`.
 - **What it means for the server.** During the roughly ten minutes after any ingestion through the legacy API, a
   deployment that serves both read families shows an Observations v2 that lacks what the legacy reads hold, and in the
   run above it never caught up for 20 traces. The tree is read from Observations v2 whatever the legacy family's state
@@ -566,6 +572,11 @@ nothing here was measured on Langfuse Cloud, on 4.46.0 `events_only` or on 3.x.
   Langfuse answer. It says so instead: the hint of an empty tree on such a deployment names the legacy reads that may
   hold the trace, and the tool description says Observations v2 can lack observations the legacy ingestion API sent. A
   tree that holds some of a trace and not all of it shows no sign of the gap.
+  The operation index says the same where it can: on a deployment that serves both families, the ten legacy reads whose
+  preferred operation belongs to another operation family (`observations_getMany`, `metrics_metrics`,
+  `experiments_list`, `experiments_listItems`) carry a note that the preferred operation can return less, or nothing,
+  and the trace reads hint of a search about traces names the legacy reads too (`docs/reference/tools.md`). The note
+  states a possibility: once the dual write has caught up the preferred operation may hold everything.
 
 ---
 

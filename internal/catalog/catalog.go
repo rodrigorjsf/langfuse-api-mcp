@@ -117,6 +117,11 @@ type Operation struct {
 	// offer prefers. On a deployment with both read families the preferred
 	// operation can return less than this one (#212).
 	prefers, plainLine string
+	// otherFamilyPreferred is prefers when, on the deployment profile the catalog
+	// was resolved for, this legacy read operation's preferred operation is a read
+	// operation the catalog offers, of another operation family than the legacy
+	// one, and both families are on (Resolve, #212); "" otherwise.
+	otherFamilyPreferred string
 }
 
 // RequestBody is the JSON request body of a write operation, from the release
@@ -191,6 +196,16 @@ type Schema struct {
 
 // IsRead reports whether the operation is a read operation (HTTP GET).
 func (o Operation) IsRead() bool { return o.Method == http.MethodGet }
+
+// PreferredOfOtherFamily returns the ID of the operation this operation's line
+// prefers, when this is a read operation of the legacy family and, on the
+// deployment profile the catalog was resolved for, that operation is a read
+// operation the catalog offers, belongs to another operation family than the
+// legacy one, and both families are on (#212). The preferred operation then
+// reads other data than this one and can return less of what was written
+// through the legacy APIs. "" when any of that fails. It is decided by the
+// catalog's own data and the profile alone, never by a caller or a payload.
+func (o Operation) PreferredOfOtherFamily() string { return o.otherFamilyPreferred }
 
 // Load builds the catalog from the embedded union catalog, minus the excluded
 // operations. Until it is resolved for a deployment profile, it offers every

@@ -263,10 +263,12 @@ func TestEveryWriteLineOfTheOperationIndexAgreesWithDescribeOperation(t *testing
 }
 
 // A read line of the index has no method and no destructive flag, and keeps
-// the text it had in write mode.
+// the text it had in write mode. The note of #212, on the lines of a deployment
+// with both families, comes after it and apart from it, so it is left out here.
 func TestAReadLineOfTheOperationIndexGainsNothing(t *testing.T) {
 	t.Parallel()
 	entries, text := writeModeIndex(t, "")
+	text = regexp.MustCompile(regexp.QuoteMeta(noteMarker)+`[^\n]*`).ReplaceAllString(text, "")
 	reads := 0
 
 	for _, e := range entries {

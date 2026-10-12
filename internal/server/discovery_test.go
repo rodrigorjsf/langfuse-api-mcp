@@ -172,15 +172,17 @@ func TestSearchOperationsRanksTheV4FamilyBeforeTheLegacyFamily(t *testing.T) {
 }
 
 // Spec #68 story 12, ADR-0002, #79: listing every read operation of the
-// unresolved union catalog (68) stays within readIndexBudget: 7,081 bytes,
-// ~1.8k tokens, measured with the #82 third-party note. #87 raised the cap
-// from 7 KiB to leave a 1,111-byte margin, about 10 new read operations at the
-// current ~104-byte average line, for the weekly union-catalog regeneration.
-// A regeneration that crosses the cap updates this test, ADR-0002 and spec #68
-// story 12 with the new figure.
+// unresolved union catalog (68, which has every family on) stays within
+// readIndexBudget: 9,910 bytes, ~2.5k tokens, measured with the #82
+// third-party note and the ten notes of #212 (7,222 bytes without them). #87
+// raised the cap from 7 KiB to leave a margin for the weekly union-catalog
+// regeneration; #212 raised it from 8 KiB to 11 KiB for the notes and leaves a
+// 1,354-byte margin, about 13 new read operations at the current ~104-byte
+// average line. A regeneration that crosses the cap updates this test, ADR-0002
+// and spec #68 story 12 with the new figure.
 func TestSearchOperationsWithoutQueryListsTheReadIndexWithinItsBudget(t *testing.T) {
 	t.Parallel()
-	const readIndexBudget = 8 * 1024
+	const readIndexBudget = 11 * 1024
 	cs := connectOffline(t)
 
 	text := resultText(t, callTool(t, cs, "search_operations", map[string]any{}))
@@ -198,7 +200,11 @@ func TestSearchOperationsListsALegacyReadByWhatItDoesAndItsReplacement(t *testin
 
 	text := resultText(t, callTool(t, cs, "search_operations", map[string]any{"query": "trace"}))
 
-	if want := "- trace_list — Get list of traces (legacy: prefer observations_getMany when it is available)\n"; !strings.Contains(text, want) ||
+	// The unresolved catalog has every family on, so the line also carries the note
+	// of #212, after the description and apart from it; the description is
+	// what this test is about.
+	const want = "- trace_list — Get list of traces (legacy: prefer observations_getMany when it is available)"
+	if !strings.Contains(text, want+"\n") && !strings.Contains(text, want+noteMarker) ||
 		strings.Contains(text, "Deprecated") || strings.Contains(text, "https://") {
 		t.Errorf("text does not list trace_list by what it does and its replacement alone:\n%s", text)
 	}
