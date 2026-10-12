@@ -53,7 +53,7 @@ func startStdioWithConfigFile(t *testing.T, content string, env ...string) *stdi
 // none) and the extra environment entries (later entries win).
 func startCommand(t *testing.T, argv []string, content string, env ...string) *stdioSession {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), childBound)
 	t.Cleanup(cancel)
 	configEnv, path := userConfigLocation(t)
 	if content != "" {
