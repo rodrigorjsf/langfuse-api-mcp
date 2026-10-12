@@ -5,11 +5,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"log/slog"
 	"maps"
+	"os"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -156,6 +160,15 @@ func notesOf(t *testing.T, res *mcp.CallToolResult) map[string]string {
 	return out
 }
 
+// noteSegment matches the note on a text line, label included.
+var noteSegment = regexp.MustCompile(regexp.QuoteMeta(noteMarker) + `[^\n]*`)
+
+// wholeIndex is the option that lifts the result size cap above any index, so a
+// test reads the index whole.
+func wholeIndex(opts ...server.Option) []server.Option {
+	return append([]server.Option{server.WithMaxResultBytes(hugeCap)}, opts...)
+}
+
 // noteLines returns the text lines of a result that hold a note.
 func noteLines(text string) []string {
 	var out []string
@@ -173,6 +186,21 @@ func TestOnADeploymentWithBothFamiliesTheTextLineOfTraceGetCarriesTheNoteApartFr
 	got := resultText(t, searchOn(t, dualProfile, "trace_get"))
 
 	if want := indexHeader + "\nTrace\n" + traceGetLine + "\n"; got != want {
+		t.Fatalf("text = %q, want %q", got, want)
+	}
+}
+
+// In write mode the line keeps the parenthesis that names its tool, and the note
+// comes after it.
+func TestInWriteModeOnADeploymentWithBothFamiliesTheNoteComesAfterTheToolOfTheLine(t *testing.T) {
+	t.Parallel()
+
+	got := resultText(t, searchOn(t, dualProfile, "trace_get", server.WithWriteMode()))
+
+	want := indexHeader + "\nTrace\n" +
+		"- trace_get — Get a specific trace (legacy: prefer observations_getMany when it is available) (execute_read)" +
+		noteMarker + traceGetNote + "\n"
+	if got != want {
 		t.Fatalf("text = %q, want %q", got, want)
 	}
 }
@@ -207,7 +235,7 @@ func TestOnADeploymentWithBothFamiliesExactlyTenEntriesCarryTheNoteEachNamingIts
 	for name, opts := range map[string][]server.Option{"read mode": nil, "write mode": {server.WithWriteMode()}} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			res := searchOn(t, dualProfile, "", append([]server.Option{server.WithMaxResultBytes(hugeCap)}, opts...)...)
+			res := searchOn(t, dualProfile, "", wholeIndex(opts...)...)
 
 			notes := notesOf(t, res)
 
@@ -232,7 +260,7 @@ func TestOnADeploymentWithBothFamiliesExactlyTenEntriesCarryTheNoteEachNamingIts
 // no note: nothing was measured there.
 func TestOnADeploymentWithBothFamiliesTheEntriesThatPreferAnOperationWithNoFamilyHaveNoNote(t *testing.T) {
 	t.Parallel()
-	res := searchOn(t, dualProfile, "", server.WithMaxResultBytes(hugeCap), server.WithWriteMode())
+	res := searchOn(t, dualProfile, "", wholeIndex(server.WithWriteMode())...)
 
 	entries := map[string]notedEntry{}
 	for _, e := range entriesOf(t, res) {
@@ -251,47 +279,62 @@ func TestOnADeploymentWithBothFamiliesTheEntriesThatPreferAnOperationWithNoFamil
 	}
 }
 
-// Byte for byte: the descriptions and the order of the index on the profile
-// with every family on are what they were before the note, once the note is
-// taken out of the text and out of the structured content. The digests are
-// those of the output of the commit before #212 (3f17bbb).
-func TestOnADeploymentWithBothFamiliesTheDescriptionsAndTheOrderOfTheIndexAreWhatTheyWereWithoutTheNotes(t *testing.T) {
-	t.Parallel()
-	notePart := regexp.MustCompile(regexp.QuoteMeta(noteMarker) + `[^\n]*`)
-	for _, tc := range []struct {
-		name       string
-		opts       []server.Option
-		text, json string
-	}{
-		{"read mode", nil,
-			"0a92e55583e1431e900296f16324af9d1b52ef20ca70272e7be9ab803659a6fd",
-			"f6665c8ec597a505134a1749ff3173a4a7755ac32d4986994a7f8eb9abb2b8fe"},
-		{"write mode", []server.Option{server.WithWriteMode()},
-			"88082c762c3df3be0e426a9fd6bd00839723c7d8c0b346264e57a900729d5990",
-			"ae538107da50e75edb66c34302eab20ab6d3fb1bf4190109cee3a96e35c0b4c8"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			res := searchOn(t, dualProfile, "", append([]server.Option{server.WithMaxResultBytes(hugeCap)}, tc.opts...)...)
+// Golden file of the byte-for-byte checks below: the SHA-256 of the text and of
+// the structured content of search_operations, by case. Regenerate it only on
+// purpose, after reading what changed in the index, with
+//
+//	go test ./internal/server -run 'TestTheIndex' -update
+//
+// (a weekly union-catalog regeneration that adds an operation is such a
+// change). The values committed with #212 are those of the output of the
+// commit before it (3f17bbb), which this change must not alter.
+const indexDigestsGolden = "testdata/search-operations-digests.json"
 
-			text := notePart.ReplaceAllString(resultText(t, res), "")
-			var doc map[string]any
-			if err := json.Unmarshal([]byte(mustJSON(t, res.StructuredContent)), &doc); err != nil {
-				t.Fatal(err)
-			}
-			for _, g := range doc["groups"].([]any) {
-				for _, e := range g.(map[string]any)["operations"].([]any) {
-					delete(e.(map[string]any), "note")
-				}
-			}
+var updateGolden = flag.Bool("update", false, "rewrite the golden files of the tests that name them")
 
-			if got := digest(text); got != tc.text {
-				t.Errorf("text without the notes has digest %s, want %s", got, tc.text)
-			}
-			if got := digest(mustJSON(t, doc)); got != tc.json {
-				t.Errorf("structuredContent without the notes has digest %s, want %s", got, tc.json)
-			}
-		})
+// goldenMu serializes the writes of -update across the tests that share the file.
+var goldenMu sync.Mutex
+
+type indexDigest struct {
+	Text       string `json:"text"`
+	Structured string `json:"structured"`
+}
+
+// checkIndexDigests compares got with the golden file, case by case, or merges
+// it into the file under -update.
+func checkIndexDigests(t *testing.T, got map[string]indexDigest) {
+	t.Helper()
+	goldenMu.Lock()
+	defer goldenMu.Unlock()
+	want := map[string]indexDigest{}
+	if raw, err := os.ReadFile(indexDigestsGolden); err == nil {
+		if err := json.Unmarshal(raw, &want); err != nil {
+			t.Fatalf("%s: %v", indexDigestsGolden, err)
+		}
+	} else if !*updateGolden {
+		t.Fatalf("read %s: %v", indexDigestsGolden, err)
+	}
+	if *updateGolden {
+		maps.Copy(want, got)
+		raw, err := json.MarshalIndent(want, "", "  ") // map keys are written in sorted order
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(indexDigestsGolden, append(raw, '\n'), 0o644); err != nil { //nolint:gosec // a test fixture, not a secret
+			t.Fatal(err)
+		}
+		return
+	}
+	for name, g := range got {
+		w, ok := want[name]
+		switch {
+		case !ok:
+			t.Errorf("%s: no golden digest in %s", name, indexDigestsGolden)
+		case g.Text != w.Text:
+			t.Errorf("%s: the text of the index is not what the golden file holds (%s, want %s); if the change is intended, run with -update", name, g.Text, w.Text)
+		case g.Structured != w.Structured:
+			t.Errorf("%s: the structured content of the index is not what the golden file holds (%s, want %s); if the change is intended, run with -update", name, g.Structured, w.Structured)
+		}
 	}
 }
 
@@ -300,71 +343,71 @@ func digest(s string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// Byte for byte: the descriptions and the order of the index on the profile
+// with every family on are what they were before the note, once the note is
+// taken out of the text and out of the structured content.
+func TestTheIndexOfADeploymentWithBothFamiliesIsWhatItWasWithoutTheNotes(t *testing.T) {
+	got := map[string]indexDigest{}
+	for _, write := range []bool{false, true} {
+		opts := []server.Option{server.WithMaxResultBytes(hugeCap)}
+		mode := "read mode"
+		if write {
+			opts, mode = append(opts, server.WithWriteMode()), "write mode"
+		}
+		res := searchOn(t, dualProfile, "", opts...)
+
+		text := noteSegment.ReplaceAllString(resultText(t, res), "")
+		var doc map[string]any
+		if err := json.Unmarshal([]byte(mustJSON(t, res.StructuredContent)), &doc); err != nil {
+			t.Fatal(err)
+		}
+		for _, g := range doc["groups"].([]any) {
+			for _, e := range g.(map[string]any)["operations"].([]any) {
+				delete(e.(map[string]any), "note")
+			}
+		}
+		got["4.46.0-dual without notes, "+mode] = indexDigest{digest(text), digest(mustJSON(t, doc))}
+	}
+	checkIndexDigests(t, got)
+}
+
 // Byte for byte: on a deployment without both families, and with no detected
 // version and no families, the text content and the structured content of
 // search_operations, with no query and with a query about traces, in read mode
-// and in write mode, are what they were before #212. The digests are those of
-// the output of the commit before it (3f17bbb).
-func TestOnADeploymentWithoutBothFamiliesTheIndexIsWhatItWasBeforeTheNote(t *testing.T) {
-	t.Parallel()
-	type want struct{ text, structured string }
+// and in write mode, are what they were before #212, and no line carries a note.
+func TestTheIndexOfADeploymentWithoutBothFamiliesIsWhatItWasBeforeTheNote(t *testing.T) {
 	profiles := map[string]catalog.Profile{
 		"3.80.0":             pinnedDeployments["3.80.0"],
 		"3.225.11":           pinnedDeployments["3.225.11"],
 		"4.46.0-events_only": pinnedDeployments["4.46.0-events_only"],
 		"undetected":         {},
 	}
-	// profile, write mode, query -> digests of the text and of the structured content.
-	cases := []struct {
-		profile string
-		write   bool
-		query   string
-		want
-	}{
-		{"3.80.0", false, "", want{"639f95bdc1dcbbef7dc58c9d81a6908f4b5ff993bef78787ec1ae6c54a86b2cf", "48baf1535d2a138bc37feddda84d8cd8920cf7fd94578cf98c049e6a14c83078"}},
-		{"3.80.0", false, "traces", want{"943b355d453220e43b9869729149cff0abf22eadcd6babc376c6af9e348fa108", "e6a9cf1348514509972b019343b08e6dceaa6e4afa921fd95218ca7c113e219d"}},
-		{"3.80.0", true, "", want{"1a3e0c1c1fce615c60b26e587125c29a2240553d433362951910500fa66460b2", "2babde22b07d128c7ec318474201bfda092fc9477854a8c06d58ab4480e8b6c8"}},
-		{"3.80.0", true, "traces", want{"b0da75de5d3cbab4ab856acf5deafb61c670048c218f5901cb47a3f2dbf5dc55", "9d9faf6b41dbc3ebcf949519f388feddb397e2466908e8503497be55b69e476b"}},
-		{"3.225.11", false, "", want{"806a5fca608fc694920ac6ce0cf729a3c5ae838f708306387f27ee922216d303", "58f194e78a6ac3d0859936b8c5b50ec3be3d6a9c90c197afdcd20b7658de8bad"}},
-		{"3.225.11", false, "traces", want{"943b355d453220e43b9869729149cff0abf22eadcd6babc376c6af9e348fa108", "e6a9cf1348514509972b019343b08e6dceaa6e4afa921fd95218ca7c113e219d"}},
-		{"3.225.11", true, "", want{"2b4017fea3bdc7ec96c53ca93b0934243abf61061b76d0b6a9f024e2f8d99bf5", "ef9f796f5cfce2d59ec30513ab1343577a8f4aa4e6add021e0ca3390daf1d351"}},
-		{"3.225.11", true, "traces", want{"b0da75de5d3cbab4ab856acf5deafb61c670048c218f5901cb47a3f2dbf5dc55", "9d9faf6b41dbc3ebcf949519f388feddb397e2466908e8503497be55b69e476b"}},
-		{"4.46.0-events_only", false, "", want{"f28fb3586346e172cc860d9d70525871ad5afb46191f11d41512dc3df520921a", "5b107c402fc78aea7f3772463c45c72f5765bd47de4c3eefbea819c48e89f058"}},
-		{"4.46.0-events_only", false, "traces", want{"41b66dce1879e101571f567bd44b5f51d4073259ca37c14536d7110c43f36f71", "632e2f846a76cc991cac05e24880dc49bab47bdfc62b765df46661877323af57"}},
-		{"4.46.0-events_only", true, "", want{"cee67c4ff223d0c50f4573f86952c6b79483bd23fddda668cd4f52551b11dba9", "1976c7d422d29fea286461779e09ff2f6d54903c0aa6f9a155ba5e5817a727be"}},
-		{"4.46.0-events_only", true, "traces", want{"3e0dc1866f0578ed0b410d3ca90e65702fb6768c3950858bc4f879d50bf305c0", "645db0b0b7f02d810d570cd1819e888c1a9e95b47b7842b841796d2ae7e38b75"}},
-		{"undetected", false, "", want{"05310ca7071cacd0877f80bf9bbece92e63b37f3bd7728d67644524ee244ff56", "f4ba0e916089ec0ad9e4ad74cccd5df0aa10517e6e895737e2f426a97ea305e1"}},
-		{"undetected", false, "traces", want{"d31a025ec87600364c0fc19b40433c82d67a54d086ae1eb978264a3d5b9479ee", "2c11730ff3394ea3c93d5b847ce2190c61599ad6844b161313821bfe35a0cfe7"}},
-		{"undetected", true, "", want{"2e854efc0e943eeb0eb2d1424eedd32aa68d33b9e08c2dc070eda502534139ea", "9a4142e2fcb88238750450e7b2186a2bd8615d11b2d3cd41da9348bd3af879b7"}},
-		{"undetected", true, "traces", want{"22afe7c375b74b0f221cd3f7541658153857c1ab9062082448227fc9e6f0343b", "d9d953db5c8da1d3432b33fa949a75571e9ad506faccc0f40d136f8d8dd028ea"}},
-	}
-	for _, tc := range cases {
-		mode := "read mode"
-		var opts []server.Option
-		if tc.write {
-			mode, opts = "write mode", []server.Option{server.WithWriteMode()}
-		}
-		t.Run(tc.profile+" "+mode+" query "+tc.query, func(t *testing.T) {
-			t.Parallel()
-			res := searchOn(t, profiles[tc.profile], tc.query, opts...)
+	got := map[string]indexDigest{}
+	for name, p := range profiles {
+		for _, write := range []bool{false, true} {
+			for _, query := range []string{"", "traces"} {
+				var opts []server.Option
+				mode := "read mode"
+				if write {
+					opts, mode = append(opts, server.WithWriteMode()), "write mode"
+				}
+				res := searchOn(t, p, query, opts...)
 
-			if got := digest(resultText(t, res)); got != tc.text {
-				t.Errorf("text has digest %s, want %s", got, tc.text)
+				key := name + ", " + mode + ", query " + strconv.Quote(query)
+				got[key] = indexDigest{digest(resultText(t, res)), digest(mustJSON(t, res.StructuredContent))}
+				if lines := noteLines(resultText(t, res)); len(lines) != 0 {
+					t.Errorf("%s: lines carry a note: %v", key, lines)
+				}
 			}
-			if got := digest(mustJSON(t, res.StructuredContent)); got != tc.structured {
-				t.Errorf("structuredContent has digest %s, want %s", got, tc.structured)
-			}
-			if lines := noteLines(resultText(t, res)); len(lines) != 0 {
-				t.Errorf("lines carry a note: %v", lines)
-			}
-		})
+		}
 	}
+	checkIndexDigests(t, got)
 }
 
 func TestWithTheExperimentsFamilyOffTheSevenReadsThatPreferAV4ReadOperationCarryTheNoteAndTheDatasetRunLinesDropTheMention(t *testing.T) {
 	t.Parallel()
 	p := catalog.Profile{Version: "4.46.0", Families: []catalog.Family{catalog.LegacyFamily, catalog.V4ReadFamily}}
-	res := searchOn(t, p, "", server.WithMaxResultBytes(hugeCap))
+	res := searchOn(t, p, "", wholeIndex()...)
 
 	notes := notesOf(t, res)
 
@@ -546,7 +589,7 @@ func TestAHostileQueryChangesNoNoteAndNoHintAndIsEchoedNowhere(t *testing.T) {
 
 func TestTheNotesOfAFilteredIndexAreThoseOfTheSameEntriesInTheFullIndex(t *testing.T) {
 	t.Parallel()
-	full := notesOf(t, searchOn(t, dualProfile, "", server.WithMaxResultBytes(hugeCap)))
+	full := notesOf(t, searchOn(t, dualProfile, "", wholeIndex()...))
 	if len(full) != len(tenWithANote) {
 		t.Fatalf("the full index has %d notes, want %d", len(full), len(tenWithANote))
 	}
@@ -567,6 +610,39 @@ func TestTheNotesOfAFilteredIndexAreThoseOfTheSameEntriesInTheFullIndex(t *testi
 			if _, listed := got[e.id()]; !listed && full[e.id()] != "" {
 				t.Errorf("query %q: %s has a note in the full index and none here", query, e.id())
 			}
+		}
+	}
+}
+
+// A query that reads like a note or like the line of an entry, and that does
+// match noted entries, changes no note: every entry listed has the note it has in
+// the full index, and an entry never gets one that is not its own.
+func TestAQueryThatLooksLikeANoteOrALineAndMatchesNotedEntriesChangesNoNote(t *testing.T) {
+	t.Parallel()
+	full := notesOf(t, searchOn(t, dualProfile, "", wholeIndex()...))
+
+	for _, query := range []string{
+		"prefer observations_getMany when it is available",
+		"(legacy: prefer",
+		"legacy: prefer experiments_list when it is available",
+		"prefer get",
+	} {
+		res := searchOn(t, dualProfile, query)
+
+		got := notesOf(t, res)
+		if len(got) == 0 {
+			t.Errorf("query %q matches no noted entry, want the test to cover some", query)
+		}
+		for id, n := range got {
+			if n != full[id] {
+				t.Errorf("query %q: note of %s = %q, want %q", query, id, n, full[id])
+			}
+		}
+		if lines := noteLines(resultText(t, res)); len(lines) != len(got) {
+			t.Errorf("query %q: %d text lines carry a note, the structured content has %d", query, len(lines), len(got))
+		}
+		if strings.Contains(resultText(t, res), query+noteMarker) {
+			t.Errorf("query %q is echoed next to a note", query)
 		}
 	}
 }
@@ -666,7 +742,7 @@ func TestEveryEntryThatCarriesTheNoteMeetsEveryConditionOfIt(t *testing.T) {
 			if write {
 				opts = append(opts, server.WithWriteMode())
 			}
-			res := searchOn(t, p, "", append([]server.Option{server.WithMaxResultBytes(hugeCap)}, opts...)...)
+			res := searchOn(t, p, "", wholeIndex(opts...)...)
 			for id, note := range notesOf(t, res) {
 				op, ok := cat.Lookup(id)
 				if !ok {
@@ -706,7 +782,7 @@ func TestAtTheSmallestCapTheIndexOfADeploymentWithBothFamiliesFitsAndKeepsEachNo
 	for name, opts := range map[string][]server.Option{"read mode": nil, "write mode": {server.WithWriteMode()}} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			wholeCount := operationCount(t, searchOn(t, dualProfile, "", append([]server.Option{server.WithMaxResultBytes(hugeCap)}, opts...)...))
+			wholeCount := operationCount(t, searchOn(t, dualProfile, "", wholeIndex(opts...)...))
 
 			a := answerFrom(t, connectProfileCatalog(t, dualProfile, append([]server.Option{server.WithMaxResultBytes(smallestCap)}, opts...)...),
 				"search_operations", map[string]any{})

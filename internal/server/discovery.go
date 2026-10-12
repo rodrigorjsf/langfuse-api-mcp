@@ -312,7 +312,7 @@ func (d discovery) traceReadsHint() string {
 	if d.profile.On(catalog.V4ReadFamily) {
 		reads = d.v4TraceReads()
 		if d.profile.On(catalog.LegacyFamily) {
-			alsoLegacy = d.legacyReadOperations()
+			alsoLegacy = d.offeredLegacyReads()
 		}
 	} else {
 		reads = d.legacyTraceReads()
@@ -351,13 +351,14 @@ func (d discovery) legacyTraceReads() []string {
 	if d.profile.On(catalog.LegacyFamily) {
 		reads = append(reads, "one trace as a trace tree: "+toolGetTraceTree)
 	}
-	return append(reads, d.legacyReadOperations()...)
+	return append(reads, d.offeredLegacyReads()...)
 }
 
-// legacyReadOperations lists the legacy operations that read traces and that
-// this deployment offers, each with what it reads and the tool that runs it,
-// each only after its own catalog lookup.
-func (d discovery) legacyReadOperations() []string {
+// offeredLegacyReads lists the legacy operations that read traces and that this
+// deployment offers, each with what it reads and the tool that runs it, each
+// only after its own catalog lookup. Unlike legacyTraceReads it never names
+// get_trace_tree.
+func (d discovery) offeredLegacyReads() []string {
 	var reads []string
 	for _, r := range []struct{ id, what string }{
 		{legacyTraceGet, "one trace by its ID"},

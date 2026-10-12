@@ -268,7 +268,7 @@ func TestEveryWriteLineOfTheOperationIndexAgreesWithDescribeOperation(t *testing
 func TestAReadLineOfTheOperationIndexGainsNothing(t *testing.T) {
 	t.Parallel()
 	entries, text := writeModeIndex(t, "")
-	text = regexp.MustCompile(regexp.QuoteMeta(noteMarker)+`[^\n]*`).ReplaceAllString(text, "")
+	text = noteSegment.ReplaceAllString(text, "")
 	reads := 0
 
 	for _, e := range entries {
