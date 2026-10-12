@@ -225,7 +225,9 @@ func (ex executor) selectTraceTreeSource() (traceTreeSource, bool) {
 // The choice is made from the deployment profile and the catalog only, at the
 // time the source is selected, so it is static text that no argument, payload
 // or client changes and that holds nothing of the call. The tree is still read
-// from Observations v2 alone: a Langfuse answer never selects the source.
+// from Observations v2 alone: a Langfuse answer never selects the source. A tree
+// that holds some of the trace and not all of it shows no sign of the gap, and a
+// fallback to the legacy list needs a superseding ADR-0002 amendment (#213).
 func (ex executor) v4TraceTreeEmptyHint() string {
 	if !ex.profile.On(catalog.LegacyFamily) {
 		return traceTreeEmptyHint
