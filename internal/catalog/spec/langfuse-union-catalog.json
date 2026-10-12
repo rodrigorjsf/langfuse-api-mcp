@@ -597,6 +597,9 @@
        {
         "x-introduced": "3.0.0",
         "x-removed": "4.33.0"
+       },
+       {
+        "x-introduced": "4.55.0"
        }
       ]
      },
@@ -651,7 +654,8 @@
       "required": true,
       "x-spans": [
        {
-        "x-introduced": "4.33.0"
+        "x-introduced": "4.33.0",
+        "x-removed": "4.55.0"
        }
       ]
      }
@@ -3742,14 +3746,14 @@
         "schema": {
          "properties": {
           "accessKeyId": {
-           "description": "Access key ID for authentication",
+           "description": "Access key ID for authentication. Not used for GOOGLE_CLOUD_STORAGE.",
            "type": [
             "string",
             "null"
            ]
           },
           "bucketName": {
-           "description": "Name of the storage bucket. For AZURE_BLOB_STORAGE, must be a valid Azure container name (3-63 chars, lowercase letters, numbers, and hyphens only, must start and end with a letter or number, no consecutive hyphens).",
+           "description": "Name of the storage bucket. For AZURE_BLOB_STORAGE, must be a valid Azure container name (3-63 chars, lowercase letters, numbers, and hyphens only, must start and end with a letter or number, no consecutive hyphens). For GOOGLE_CLOUD_STORAGE with default credentials, the bucket must be listed in `LANGFUSE_BLOB_STORAGE_GCS_ALLOWED_BUCKETS`.",
            "type": "string"
           },
           "compressed": {
@@ -3764,7 +3768,7 @@
            "type": "boolean"
           },
           "endpoint": {
-           "description": "Custom endpoint URL (required for S3_COMPATIBLE type)",
+           "description": "Custom endpoint URL (required for S3_COMPATIBLE type). Ignored for GOOGLE_CLOUD_STORAGE.",
            "type": [
             "string",
             "null"
@@ -3863,11 +3867,11 @@
            "type": "string"
           },
           "region": {
-           "description": "Storage region used by S3-compatible clients (AWS, GCS, Cloudflare R2, MinIO, Azure location IDs such as eastus, OCI). Leading and trailing whitespace is removed. The remaining value must be 1-63 letters, numbers, or hyphens, and cannot start or end with a hyphen. Examples: us-east-1, europe-west1, eastus, auto.",
+           "description": "Storage region used by S3-compatible clients (AWS, GCS, Cloudflare R2, MinIO, Azure location IDs such as eastus, OCI). Leading and trailing whitespace is removed. The remaining value must be 1-63 letters, numbers, or hyphens, and cannot start or end with a hyphen. Examples: us-east-1, europe-west1, eastus, auto. Not used by GOOGLE_CLOUD_STORAGE; pass auto.",
            "type": "string"
           },
           "secretAccessKey": {
-           "description": "Secret access key for authentication (will be encrypted when stored)",
+           "description": "Secret access key for authentication (will be encrypted when stored). When omitted on update, the stored secret is kept, unless the type changes between GOOGLE_CLOUD_STORAGE and another type.\n\nFor GOOGLE_CLOUD_STORAGE, a GCP service account JSON key. On self-hosted deployments, pass `__GCS_DEFAULT_CREDENTIALS__` instead to use the deployment's Application Default Credentials; the bucket must then be listed in `LANGFUSE_BLOB_STORAGE_GCS_ALLOWED_BUCKETS`. Default credentials are not available on Langfuse Cloud.",
            "type": [
             "string",
             "null"
@@ -3877,7 +3881,8 @@
            "enum": [
             "S3",
             "S3_COMPATIBLE",
-            "AZURE_BLOB_STORAGE"
+            "AZURE_BLOB_STORAGE",
+            "GOOGLE_CLOUD_STORAGE"
            ],
            "title": "BlobStorageIntegrationType",
            "type": "string"
@@ -5739,7 +5744,8 @@
        "nullable": true,
        "type": "string"
       },
-      "x-introduced": "4.33.0"
+      "x-introduced": "4.33.0",
+      "x-removed": "4.55.0"
      }
     ],
     "tags": [
@@ -6128,12 +6134,7 @@
                     "description": "Start time in nanoseconds since Unix epoch"
                    },
                    "status": {
-                    "additionalProperties": true,
-                    "description": "Span status object",
-                    "type": [
-                     "object",
-                     "null"
-                    ]
+                    "description": "Span status object"
                    },
                    "traceId": {
                     "description": "Trace ID (16 bytes, hex-encoded string in JSON or Buffer in binary)"
@@ -6350,8 +6351,24 @@
        "application/json": {
         "schema": {
          "properties": {
+          "expiresAt": {
+           "description": "Optional expiration timestamp in ISO 8601 format. Must be in the future. Omit or set to null for a key that does not expire.",
+           "format": "date-time",
+           "type": [
+            "string",
+            "null"
+           ]
+          },
+          "name": {
+           "description": "Optional name for the API key. Cannot be provided together with note, even if either value is an empty string.",
+           "type": [
+            "string",
+            "null"
+           ]
+          },
           "note": {
-           "description": "Optional note for the API key",
+           "deprecated": true,
+           "description": "Deprecated alias for name. Cannot be provided together with name, even if either value is an empty string.",
            "type": [
             "string",
             "null"
@@ -6662,6 +6679,7 @@
            "type": "object"
           },
           "password": {
+           "deprecated": true,
            "description": "Ignored. Accepted only for compatibility with identity providers that always send a password on user creation (Okta sends a placeholder value even when password sync is disabled). No credential is created for the user; provisioned users authenticate via SSO or set a password themselves through the password reset flow.",
            "type": [
             "string",
@@ -7239,7 +7257,7 @@
     "x-removed": "3.53.0"
    },
    "post": {
-    "description": "Create a score (supports trace, observation, session, and dataset run scores)",
+    "description": "Create scores asynchronously. Single score: 200 with ID. Batch: 202 if accepted, or 207 with accepted/rejected counts and error messages. Do not automatically retry a 207 batch. The generated reference shows only 200; batches return 202 or 207.",
     "operationId": "scores_create",
     "parameters": [],
     "tags": [
@@ -8475,7 +8493,271 @@
       "required": true,
       "x-spans": [
        {
-        "x-introduced": "3.188.0"
+        "x-introduced": "3.188.0",
+        "x-removed": "4.55.0"
+       }
+      ]
+     },
+     {
+      "content": {
+       "application/json": {
+        "schema": {
+         "oneOf": [
+          {
+           "properties": {
+            "comment": {
+             "type": [
+              "string",
+              "null"
+             ]
+            },
+            "configId": {
+             "description": "Reference a score config on a score. The unique langfuse identifier of a score config. When passing this field, the dataType and stringValue fields are automatically populated.",
+             "type": [
+              "string",
+              "null"
+             ]
+            },
+            "dataType": {
+             "description": "The data type of the score. When passing a configId this field is inferred. Otherwise, this field must be passed or will default to numeric.",
+             "enum": [
+              "NUMERIC",
+              "BOOLEAN",
+              "CATEGORICAL",
+              "CORRECTION",
+              "TEXT",
+              null
+             ],
+             "title": "ScoreDataType",
+             "type": [
+              "string",
+              "null"
+             ]
+            },
+            "datasetRunId": {
+             "type": [
+              "string",
+              "null"
+             ]
+            },
+            "environment": {
+             "description": "The environment of the score. Can be any lowercase alphanumeric string with hyphens and underscores that does not start with 'langfuse'.",
+             "type": [
+              "string",
+              "null"
+             ]
+            },
+            "id": {
+             "type": [
+              "string",
+              "null"
+             ]
+            },
+            "metadata": {
+             "additionalProperties": true,
+             "type": [
+              "object",
+              "null"
+             ]
+            },
+            "name": {
+             "type": "string"
+            },
+            "observationId": {
+             "type": [
+              "string",
+              "null"
+             ]
+            },
+            "queueId": {
+             "description": "The annotation queue referenced by the score. Indicates if score was initially created while processing annotation queue.",
+             "type": [
+              "string",
+              "null"
+             ]
+            },
+            "sessionId": {
+             "type": [
+              "string",
+              "null"
+             ]
+            },
+            "source": {
+             "description": "The source of the score. Defaults to API. Set to ANNOTATION to prefill scores (e.g. from an LLM) for a human reviewer to verify in an annotation queue. When source is ANNOTATION, a configId is required unless dataType is CORRECTION. EVAL is reserved for internal evaluator outputs and is not accepted on this endpoint.",
+             "enum": [
+              "API",
+              "ANNOTATION",
+              null
+             ],
+             "title": "CreateScoreSource",
+             "type": [
+              "string",
+              "null"
+             ]
+            },
+            "traceId": {
+             "type": [
+              "string",
+              "null"
+             ]
+            },
+            "value": {
+             "description": "The value of the score. Must be passed as string for categorical and text scores, and numeric for boolean and numeric scores. Boolean score values must equal either 1 or 0 (true or false). Text score values must be between 1 and 500 characters.",
+             "oneOf": [
+              {
+               "format": "double",
+               "title": "DoubleNumber",
+               "type": "number"
+              },
+              {
+               "title": "String",
+               "type": "string"
+              }
+             ],
+             "title": "CreateScoreValue"
+            }
+           },
+           "required": [
+            "name",
+            "value"
+           ],
+           "title": "CreateScoreRequest",
+           "type": "object"
+          },
+          {
+           "items": {
+            "properties": {
+             "comment": {
+              "type": [
+               "string",
+               "null"
+              ]
+             },
+             "configId": {
+              "description": "Reference a score config on a score. The unique langfuse identifier of a score config. When passing this field, the dataType and stringValue fields are automatically populated.",
+              "type": [
+               "string",
+               "null"
+              ]
+             },
+             "dataType": {
+              "description": "The data type of the score. When passing a configId this field is inferred. Otherwise, this field must be passed or will default to numeric.",
+              "enum": [
+               "NUMERIC",
+               "BOOLEAN",
+               "CATEGORICAL",
+               "CORRECTION",
+               "TEXT",
+               null
+              ],
+              "title": "ScoreDataType",
+              "type": [
+               "string",
+               "null"
+              ]
+             },
+             "datasetRunId": {
+              "type": [
+               "string",
+               "null"
+              ]
+             },
+             "environment": {
+              "description": "The environment of the score. Can be any lowercase alphanumeric string with hyphens and underscores that does not start with 'langfuse'.",
+              "type": [
+               "string",
+               "null"
+              ]
+             },
+             "id": {
+              "type": [
+               "string",
+               "null"
+              ]
+             },
+             "metadata": {
+              "additionalProperties": true,
+              "type": [
+               "object",
+               "null"
+              ]
+             },
+             "name": {
+              "type": "string"
+             },
+             "observationId": {
+              "type": [
+               "string",
+               "null"
+              ]
+             },
+             "queueId": {
+              "description": "The annotation queue referenced by the score. Indicates if score was initially created while processing annotation queue.",
+              "type": [
+               "string",
+               "null"
+              ]
+             },
+             "sessionId": {
+              "type": [
+               "string",
+               "null"
+              ]
+             },
+             "source": {
+              "description": "The source of the score. Defaults to API. Set to ANNOTATION to prefill scores (e.g. from an LLM) for a human reviewer to verify in an annotation queue. When source is ANNOTATION, a configId is required unless dataType is CORRECTION. EVAL is reserved for internal evaluator outputs and is not accepted on this endpoint.",
+              "enum": [
+               "API",
+               "ANNOTATION",
+               null
+              ],
+              "title": "CreateScoreSource",
+              "type": [
+               "string",
+               "null"
+              ]
+             },
+             "traceId": {
+              "type": [
+               "string",
+               "null"
+              ]
+             },
+             "value": {
+              "description": "The value of the score. Must be passed as string for categorical and text scores, and numeric for boolean and numeric scores. Boolean score values must equal either 1 or 0 (true or false). Text score values must be between 1 and 500 characters.",
+              "oneOf": [
+               {
+                "format": "double",
+                "title": "DoubleNumber",
+                "type": "number"
+               },
+               {
+                "title": "String",
+                "type": "string"
+               }
+              ],
+              "title": "CreateScoreValue"
+             }
+            },
+            "required": [
+             "name",
+             "value"
+            ],
+            "title": "CreateScoreRequest",
+            "type": "object"
+           },
+           "title": "CreateScoreBatchRequest",
+           "type": "array"
+          }
+         ],
+         "title": "CreateScoresRequest"
+        }
+       }
+      },
+      "required": true,
+      "x-spans": [
+       {
+        "x-introduced": "4.55.0"
        }
       ]
      }
@@ -22957,6 +23239,9 @@
        {
         "x-introduced": "3.128.0",
         "x-removed": "4.45.2"
+       },
+       {
+        "x-introduced": "4.55.0"
        }
       ]
      },
@@ -23003,7 +23288,8 @@
       "required": true,
       "x-spans": [
        {
-        "x-introduced": "4.45.2"
+        "x-introduced": "4.45.2",
+        "x-removed": "4.55.0"
        }
       ]
      }
@@ -23687,7 +23973,632 @@
       "required": true,
       "x-spans": [
        {
-        "x-introduced": "4.23.0"
+        "x-introduced": "4.23.0",
+        "x-removed": "4.55.0"
+       }
+      ]
+     },
+     {
+      "content": {
+       "application/json": {
+        "schema": {
+         "properties": {
+          "enabled": {
+           "description": "Whether live execution should start immediately. Enabled rules require at least one evaluator assignment.",
+           "type": "boolean"
+          },
+          "evaluatorAssignments": {
+           "description": "Evaluators to attach to this rule. Disabled rules may use an empty list as a draft.",
+           "items": {
+            "properties": {
+             "evaluatorId": {
+              "description": "Stable evaluator identifier. The rule automatically uses that evaluator's latest version.",
+              "type": "string"
+             },
+             "variableMapping": {
+              "description": "Rule-specific prompt-variable mapping.\n\nSet to `null` or omit to inherit the evaluator's latest default mapping. Code evaluators use the fixed runtime mapping and should use `null`.",
+              "items": {
+               "description": "Connects one prompt variable to data from an observation or experiment.\n\nManual mappings are used for `llm_as_judge` evaluators. `code` evaluators use a fixed runtime mapping managed by Langfuse.\n\nHow to build a valid mapping list:\n1. Create the evaluator or fetch it with `GET /evaluators/{id}`.\n2. Read the evaluator `variables` array.\n3. Add exactly one mapping object for each variable in that array.\n4. Use the variable name exactly as returned, without braces such as `{{` or `}}`.\n5. Choose the source field that should populate the variable.\n\n`jsonPath` is optional. Use it only when the selected source is a JSON object and you want to extract one nested field before inserting it into the evaluator prompt.\n\nInvalid, missing, or duplicate mappings return a validation error. Malformed JSONPath expressions are also rejected.",
+               "properties": {
+                "jsonPath": {
+                 "description": "Optional JSONPath selector applied to the selected source before it is passed to the evaluator prompt.\n\nRequirements:\n- Must start with `$`\n- Must be a syntactically valid JSONPath expression\n- Most useful with `source=metadata`",
+                 "type": [
+                  "string",
+                  "null"
+                 ]
+                },
+                "source": {
+                 "description": "Source field that should populate the prompt variable.\n\nAvailable sources are `input`, `output`, `metadata`, `tool_calls`, `expected_output`, and `experiment_item_metadata`.",
+                 "enum": [
+                  "input",
+                  "output",
+                  "metadata",
+                  "tool_calls",
+                  "expected_output",
+                  "experiment_item_metadata"
+                 ],
+                 "title": "PromptVariableMappingSource",
+                 "type": "string"
+                },
+                "variable": {
+                 "description": "Prompt variable name without braces.\n\nExample: for the prompt `Judge {{input}} against {{output}}`, use `input` and `output`.",
+                 "type": "string"
+                }
+               },
+               "required": [
+                "variable",
+                "source"
+               ],
+               "title": "PromptVariableMappingInput",
+               "type": "object"
+              },
+              "type": [
+               "array",
+               "null"
+              ]
+             }
+            },
+            "required": [
+             "evaluatorId"
+            ],
+            "title": "EvaluationRuleEvaluatorAssignmentInput",
+            "type": "object"
+           },
+           "type": "array"
+          },
+          "filter": {
+           "description": "Conditions used to select observations. Defaults to an empty list, which matches every incoming observation.",
+           "items": {
+            "description": "One filter condition used to decide whether a live-ingested observation should be evaluated.\n\nAll filters must be satisfied for the rule to run. Experiment scope is expressed with filters rather than a separate target field:\n- `isExperimentItemRootSpan = true` limits execution to experiment item roots.\n- `datasetId` limits execution to experiments for the selected datasets. Use dataset IDs from `GET /api/public/v2/datasets`.\n\nPick the filter `type` first, as it determines the required fields and value shape. Use `key` only for object filters such as `metadata`.\n\nOperator quick reference by filter `type`:\n- `string`: `\"=\"`, `contains`, `does not contain`, `starts with`, `ends with`\n- `number`: `\"=\"`, `\">\"`, `\"<\"`, `\">=\"`, `\"<=\"`\n- `datetime`: `\"=\"`, `\">\"`, `\"<\"`, `\">=\"`, `\"<=\"`\n- `stringOptions`: `any of`, `none of`\n- `arrayOptions`: `any of`, `none of`, `all of`\n- `stringObject`: `\"=\"`, `contains`, `does not contain`, `starts with`, `ends with`, `is set`, `is not set` (use `is set` / `is not set` for key presence; an empty value for `contains`, `starts with`, or `ends with` is treated as `is set`)\n- `boolean`: `\"=\"`, `\"<>\"`\n- `null`: `is null`, `is not null`\n\nSupported columns. Each column accepts exactly one filter `type`; sending a column with a different `type` is rejected with `400`.\n- `type`: `stringOptions`, values `SPAN`, `EVENT`, `GENERATION`, `AGENT`, `TOOL`, `CHAIN`, `RETRIEVER`, `EVALUATOR`, `EMBEDDING`, `GUARDRAIL`\n- `name`: `stringOptions`\n- `environment`: `stringOptions`\n- `level`: `stringOptions`, values `DEBUG`, `DEFAULT`, `WARNING`, `ERROR`\n- `version`: `string`\n- `traceName`: `stringOptions`\n- `userId`: `string`\n- `sessionId`: `string`\n- `tags`: `arrayOptions`\n- `metadata`: `stringObject`, requires `key`\n- `isRootObservation`: `boolean`; true when the observation has no parent or is explicitly marked as an application root\n- `parentObservationId`: `null`\n- `experimentId`: `stringOptions`\n- `isExperimentItemRootSpan`: `boolean`\n- `calledToolNames`: `arrayOptions`\n- `toolCalls`: `number`, the number of tool calls on the observation\n- `datasetId`: `stringOptions`. Use dataset `id` values from `GET /api/public/v2/datasets`, not dataset names.",
+            "oneOf": [
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "datetime"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Column to filter on.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "description": "Comparison operator for datetime values.",
+                  "enum": [
+                   "=",
+                   ">",
+                   "<",
+                   ">=",
+                   "<="
+                  ],
+                  "title": "EvaluationRuleNumberFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "description": "Datetime value to compare against.",
+                  "format": "date-time",
+                  "type": "string"
+                 }
+                },
+                "required": [
+                 "column",
+                 "operator",
+                 "value"
+                ],
+                "title": "DateTimeEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "DateTimeEvaluationRuleFilter",
+              "type": "object"
+             },
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "string"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Column to filter on.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "enum": [
+                   "=",
+                   "contains",
+                   "does not contain",
+                   "starts with",
+                   "ends with"
+                  ],
+                  "title": "EvaluationRuleStringFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "type": "string"
+                 }
+                },
+                "required": [
+                 "column",
+                 "operator",
+                 "value"
+                ],
+                "title": "StringEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "StringEvaluationRuleFilter",
+              "type": "object"
+             },
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "number"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Column to filter on.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "enum": [
+                   "=",
+                   ">",
+                   "<",
+                   ">=",
+                   "<="
+                  ],
+                  "title": "EvaluationRuleNumberFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "format": "double",
+                  "type": "number"
+                 }
+                },
+                "required": [
+                 "column",
+                 "operator",
+                 "value"
+                ],
+                "title": "NumberEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "NumberEvaluationRuleFilter",
+              "type": "object"
+             },
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "stringOptions"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Column to filter on.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "enum": [
+                   "any of",
+                   "none of"
+                  ],
+                  "title": "EvaluationRuleOptionsFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "description": "One or more allowed string values.",
+                  "items": {
+                   "type": "string"
+                  },
+                  "type": "array"
+                 }
+                },
+                "required": [
+                 "column",
+                 "operator",
+                 "value"
+                ],
+                "title": "StringOptionsEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "StringOptionsEvaluationRuleFilter",
+              "type": "object"
+             },
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "categoryOptions"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Object-valued column to filter on.",
+                  "type": "string"
+                 },
+                 "key": {
+                  "description": "Key inside the object-valued column to filter on.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "enum": [
+                   "any of",
+                   "none of"
+                  ],
+                  "title": "EvaluationRuleOptionsFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "items": {
+                   "type": "string"
+                  },
+                  "type": "array"
+                 }
+                },
+                "required": [
+                 "column",
+                 "key",
+                 "operator",
+                 "value"
+                ],
+                "title": "CategoryOptionsEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "CategoryOptionsEvaluationRuleFilter",
+              "type": "object"
+             },
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "arrayOptions"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Column to filter on.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "enum": [
+                   "any of",
+                   "none of",
+                   "all of"
+                  ],
+                  "title": "EvaluationRuleArrayOptionsFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "description": "One or more array elements to match.",
+                  "items": {
+                   "type": "string"
+                  },
+                  "type": "array"
+                 }
+                },
+                "required": [
+                 "column",
+                 "operator",
+                 "value"
+                ],
+                "title": "ArrayOptionsEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "ArrayOptionsEvaluationRuleFilter",
+              "type": "object"
+             },
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "stringObject"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Object-valued column to filter on. Currently only `metadata` is supported.",
+                  "type": "string"
+                 },
+                 "key": {
+                  "description": "Top-level key inside the object-valued column to filter on.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "description": "Use `is set` / `is not set` to filter on key presence.",
+                  "enum": [
+                   "=",
+                   "contains",
+                   "does not contain",
+                   "starts with",
+                   "ends with",
+                   "is set",
+                   "is not set"
+                  ],
+                  "title": "EvaluationRuleStringObjectFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "description": "Value to compare against. Ignored for `is set` / `is not set`; send `\"\"`.",
+                  "type": "string"
+                 }
+                },
+                "required": [
+                 "column",
+                 "key",
+                 "operator",
+                 "value"
+                ],
+                "title": "StringObjectEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "StringObjectEvaluationRuleFilter",
+              "type": "object"
+             },
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "numberObject"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Object-valued column to filter on.",
+                  "type": "string"
+                 },
+                 "key": {
+                  "description": "Key inside the object-valued column to filter on.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "enum": [
+                   "=",
+                   ">",
+                   "<",
+                   ">=",
+                   "<="
+                  ],
+                  "title": "EvaluationRuleNumberFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "format": "double",
+                  "type": "number"
+                 }
+                },
+                "required": [
+                 "column",
+                 "key",
+                 "operator",
+                 "value"
+                ],
+                "title": "NumberObjectEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "NumberObjectEvaluationRuleFilter",
+              "type": "object"
+             },
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "boolean"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Column to filter on.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "enum": [
+                   "=",
+                   "<>"
+                  ],
+                  "title": "EvaluationRuleBooleanFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "type": "boolean"
+                 }
+                },
+                "required": [
+                 "column",
+                 "operator",
+                 "value"
+                ],
+                "title": "BooleanEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "BooleanEvaluationRuleFilter",
+              "type": "object"
+             },
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "null"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Column to filter on, for example `parentObservationId`.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "enum": [
+                   "is null",
+                   "is not null"
+                  ],
+                  "title": "EvaluationRuleNullFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "const": "",
+                  "description": "Required empty-string placeholder used by the runtime filter contract.",
+                  "type": "string"
+                 }
+                },
+                "required": [
+                 "column",
+                 "operator",
+                 "value"
+                ],
+                "title": "NullEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "NullEvaluationRuleFilter",
+              "type": "object"
+             }
+            ],
+            "title": "EvaluationRuleFilter"
+           },
+           "type": [
+            "array",
+            "null"
+           ]
+          },
+          "name": {
+           "description": "Human-readable rule name. Names are not identifiers and do not need to be unique.",
+           "type": "string"
+          },
+          "sampling": {
+           "description": "Fraction of matching observations to evaluate. Omit this field to use the default of `1`, which evaluates every match. `null` is not accepted.",
+           "format": "double",
+           "type": [
+            "number",
+            "null"
+           ]
+          }
+         },
+         "required": [
+          "name",
+          "enabled",
+          "evaluatorAssignments"
+         ],
+         "title": "CreateEvaluationRuleRequest",
+         "type": "object"
+        }
+       }
+      },
+      "required": true,
+      "x-spans": [
+       {
+        "x-introduced": "4.55.0"
        }
       ]
      }
@@ -24373,7 +25284,637 @@
       "required": true,
       "x-spans": [
        {
-        "x-introduced": "4.23.0"
+        "x-introduced": "4.23.0",
+        "x-removed": "4.55.0"
+       }
+      ]
+     },
+     {
+      "content": {
+       "application/json": {
+        "schema": {
+         "description": "At least one field must be provided.",
+         "properties": {
+          "enabled": {
+           "description": "New desired live-execution state.",
+           "type": [
+            "boolean",
+            "null"
+           ]
+          },
+          "evaluatorAssignments": {
+           "description": "Complete replacement assignment list. An empty list disables the rule.",
+           "items": {
+            "properties": {
+             "evaluatorId": {
+              "description": "Stable evaluator identifier. The rule automatically uses that evaluator's latest version.",
+              "type": "string"
+             },
+             "variableMapping": {
+              "description": "Rule-specific prompt-variable mapping.\n\nSet to `null` or omit to inherit the evaluator's latest default mapping. Code evaluators use the fixed runtime mapping and should use `null`.",
+              "items": {
+               "description": "Connects one prompt variable to data from an observation or experiment.\n\nManual mappings are used for `llm_as_judge` evaluators. `code` evaluators use a fixed runtime mapping managed by Langfuse.\n\nHow to build a valid mapping list:\n1. Create the evaluator or fetch it with `GET /evaluators/{id}`.\n2. Read the evaluator `variables` array.\n3. Add exactly one mapping object for each variable in that array.\n4. Use the variable name exactly as returned, without braces such as `{{` or `}}`.\n5. Choose the source field that should populate the variable.\n\n`jsonPath` is optional. Use it only when the selected source is a JSON object and you want to extract one nested field before inserting it into the evaluator prompt.\n\nInvalid, missing, or duplicate mappings return a validation error. Malformed JSONPath expressions are also rejected.",
+               "properties": {
+                "jsonPath": {
+                 "description": "Optional JSONPath selector applied to the selected source before it is passed to the evaluator prompt.\n\nRequirements:\n- Must start with `$`\n- Must be a syntactically valid JSONPath expression\n- Most useful with `source=metadata`",
+                 "type": [
+                  "string",
+                  "null"
+                 ]
+                },
+                "source": {
+                 "description": "Source field that should populate the prompt variable.\n\nAvailable sources are `input`, `output`, `metadata`, `tool_calls`, `expected_output`, and `experiment_item_metadata`.",
+                 "enum": [
+                  "input",
+                  "output",
+                  "metadata",
+                  "tool_calls",
+                  "expected_output",
+                  "experiment_item_metadata"
+                 ],
+                 "title": "PromptVariableMappingSource",
+                 "type": "string"
+                },
+                "variable": {
+                 "description": "Prompt variable name without braces.\n\nExample: for the prompt `Judge {{input}} against {{output}}`, use `input` and `output`.",
+                 "type": "string"
+                }
+               },
+               "required": [
+                "variable",
+                "source"
+               ],
+               "title": "PromptVariableMappingInput",
+               "type": "object"
+              },
+              "type": [
+               "array",
+               "null"
+              ]
+             }
+            },
+            "required": [
+             "evaluatorId"
+            ],
+            "title": "EvaluationRuleEvaluatorAssignmentInput",
+            "type": "object"
+           },
+           "type": [
+            "array",
+            "null"
+           ]
+          },
+          "filter": {
+           "description": "Complete replacement filter list. An empty list matches every incoming observation.",
+           "items": {
+            "description": "One filter condition used to decide whether a live-ingested observation should be evaluated.\n\nAll filters must be satisfied for the rule to run. Experiment scope is expressed with filters rather than a separate target field:\n- `isExperimentItemRootSpan = true` limits execution to experiment item roots.\n- `datasetId` limits execution to experiments for the selected datasets. Use dataset IDs from `GET /api/public/v2/datasets`.\n\nPick the filter `type` first, as it determines the required fields and value shape. Use `key` only for object filters such as `metadata`.\n\nOperator quick reference by filter `type`:\n- `string`: `\"=\"`, `contains`, `does not contain`, `starts with`, `ends with`\n- `number`: `\"=\"`, `\">\"`, `\"<\"`, `\">=\"`, `\"<=\"`\n- `datetime`: `\"=\"`, `\">\"`, `\"<\"`, `\">=\"`, `\"<=\"`\n- `stringOptions`: `any of`, `none of`\n- `arrayOptions`: `any of`, `none of`, `all of`\n- `stringObject`: `\"=\"`, `contains`, `does not contain`, `starts with`, `ends with`, `is set`, `is not set` (use `is set` / `is not set` for key presence; an empty value for `contains`, `starts with`, or `ends with` is treated as `is set`)\n- `boolean`: `\"=\"`, `\"<>\"`\n- `null`: `is null`, `is not null`\n\nSupported columns. Each column accepts exactly one filter `type`; sending a column with a different `type` is rejected with `400`.\n- `type`: `stringOptions`, values `SPAN`, `EVENT`, `GENERATION`, `AGENT`, `TOOL`, `CHAIN`, `RETRIEVER`, `EVALUATOR`, `EMBEDDING`, `GUARDRAIL`\n- `name`: `stringOptions`\n- `environment`: `stringOptions`\n- `level`: `stringOptions`, values `DEBUG`, `DEFAULT`, `WARNING`, `ERROR`\n- `version`: `string`\n- `traceName`: `stringOptions`\n- `userId`: `string`\n- `sessionId`: `string`\n- `tags`: `arrayOptions`\n- `metadata`: `stringObject`, requires `key`\n- `isRootObservation`: `boolean`; true when the observation has no parent or is explicitly marked as an application root\n- `parentObservationId`: `null`\n- `experimentId`: `stringOptions`\n- `isExperimentItemRootSpan`: `boolean`\n- `calledToolNames`: `arrayOptions`\n- `toolCalls`: `number`, the number of tool calls on the observation\n- `datasetId`: `stringOptions`. Use dataset `id` values from `GET /api/public/v2/datasets`, not dataset names.",
+            "oneOf": [
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "datetime"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Column to filter on.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "description": "Comparison operator for datetime values.",
+                  "enum": [
+                   "=",
+                   ">",
+                   "<",
+                   ">=",
+                   "<="
+                  ],
+                  "title": "EvaluationRuleNumberFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "description": "Datetime value to compare against.",
+                  "format": "date-time",
+                  "type": "string"
+                 }
+                },
+                "required": [
+                 "column",
+                 "operator",
+                 "value"
+                ],
+                "title": "DateTimeEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "DateTimeEvaluationRuleFilter",
+              "type": "object"
+             },
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "string"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Column to filter on.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "enum": [
+                   "=",
+                   "contains",
+                   "does not contain",
+                   "starts with",
+                   "ends with"
+                  ],
+                  "title": "EvaluationRuleStringFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "type": "string"
+                 }
+                },
+                "required": [
+                 "column",
+                 "operator",
+                 "value"
+                ],
+                "title": "StringEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "StringEvaluationRuleFilter",
+              "type": "object"
+             },
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "number"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Column to filter on.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "enum": [
+                   "=",
+                   ">",
+                   "<",
+                   ">=",
+                   "<="
+                  ],
+                  "title": "EvaluationRuleNumberFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "format": "double",
+                  "type": "number"
+                 }
+                },
+                "required": [
+                 "column",
+                 "operator",
+                 "value"
+                ],
+                "title": "NumberEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "NumberEvaluationRuleFilter",
+              "type": "object"
+             },
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "stringOptions"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Column to filter on.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "enum": [
+                   "any of",
+                   "none of"
+                  ],
+                  "title": "EvaluationRuleOptionsFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "description": "One or more allowed string values.",
+                  "items": {
+                   "type": "string"
+                  },
+                  "type": "array"
+                 }
+                },
+                "required": [
+                 "column",
+                 "operator",
+                 "value"
+                ],
+                "title": "StringOptionsEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "StringOptionsEvaluationRuleFilter",
+              "type": "object"
+             },
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "categoryOptions"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Object-valued column to filter on.",
+                  "type": "string"
+                 },
+                 "key": {
+                  "description": "Key inside the object-valued column to filter on.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "enum": [
+                   "any of",
+                   "none of"
+                  ],
+                  "title": "EvaluationRuleOptionsFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "items": {
+                   "type": "string"
+                  },
+                  "type": "array"
+                 }
+                },
+                "required": [
+                 "column",
+                 "key",
+                 "operator",
+                 "value"
+                ],
+                "title": "CategoryOptionsEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "CategoryOptionsEvaluationRuleFilter",
+              "type": "object"
+             },
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "arrayOptions"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Column to filter on.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "enum": [
+                   "any of",
+                   "none of",
+                   "all of"
+                  ],
+                  "title": "EvaluationRuleArrayOptionsFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "description": "One or more array elements to match.",
+                  "items": {
+                   "type": "string"
+                  },
+                  "type": "array"
+                 }
+                },
+                "required": [
+                 "column",
+                 "operator",
+                 "value"
+                ],
+                "title": "ArrayOptionsEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "ArrayOptionsEvaluationRuleFilter",
+              "type": "object"
+             },
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "stringObject"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Object-valued column to filter on. Currently only `metadata` is supported.",
+                  "type": "string"
+                 },
+                 "key": {
+                  "description": "Top-level key inside the object-valued column to filter on.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "description": "Use `is set` / `is not set` to filter on key presence.",
+                  "enum": [
+                   "=",
+                   "contains",
+                   "does not contain",
+                   "starts with",
+                   "ends with",
+                   "is set",
+                   "is not set"
+                  ],
+                  "title": "EvaluationRuleStringObjectFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "description": "Value to compare against. Ignored for `is set` / `is not set`; send `\"\"`.",
+                  "type": "string"
+                 }
+                },
+                "required": [
+                 "column",
+                 "key",
+                 "operator",
+                 "value"
+                ],
+                "title": "StringObjectEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "StringObjectEvaluationRuleFilter",
+              "type": "object"
+             },
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "numberObject"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Object-valued column to filter on.",
+                  "type": "string"
+                 },
+                 "key": {
+                  "description": "Key inside the object-valued column to filter on.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "enum": [
+                   "=",
+                   ">",
+                   "<",
+                   ">=",
+                   "<="
+                  ],
+                  "title": "EvaluationRuleNumberFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "format": "double",
+                  "type": "number"
+                 }
+                },
+                "required": [
+                 "column",
+                 "key",
+                 "operator",
+                 "value"
+                ],
+                "title": "NumberObjectEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "NumberObjectEvaluationRuleFilter",
+              "type": "object"
+             },
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "boolean"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Column to filter on.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "enum": [
+                   "=",
+                   "<>"
+                  ],
+                  "title": "EvaluationRuleBooleanFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "type": "boolean"
+                 }
+                },
+                "required": [
+                 "column",
+                 "operator",
+                 "value"
+                ],
+                "title": "BooleanEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "BooleanEvaluationRuleFilter",
+              "type": "object"
+             },
+             {
+              "allOf": [
+               {
+                "properties": {
+                 "type": {
+                  "enum": [
+                   "null"
+                  ],
+                  "type": "string"
+                 }
+                },
+                "type": "object"
+               },
+               {
+                "properties": {
+                 "column": {
+                  "description": "Column to filter on, for example `parentObservationId`.",
+                  "type": "string"
+                 },
+                 "operator": {
+                  "enum": [
+                   "is null",
+                   "is not null"
+                  ],
+                  "title": "EvaluationRuleNullFilterOperator",
+                  "type": "string"
+                 },
+                 "value": {
+                  "const": "",
+                  "description": "Required empty-string placeholder used by the runtime filter contract.",
+                  "type": "string"
+                 }
+                },
+                "required": [
+                 "column",
+                 "operator",
+                 "value"
+                ],
+                "title": "NullEvaluationRuleFilter",
+                "type": "object"
+               }
+              ],
+              "required": [
+               "type"
+              ],
+              "title": "NullEvaluationRuleFilter",
+              "type": "object"
+             }
+            ],
+            "title": "EvaluationRuleFilter"
+           },
+           "type": [
+            "array",
+            "null"
+           ]
+          },
+          "name": {
+           "description": "New human-readable rule name.",
+           "type": [
+            "string",
+            "null"
+           ]
+          },
+          "sampling": {
+           "description": "New fraction of matching observations to evaluate. Omit to keep the current value.",
+           "format": "double",
+           "type": [
+            "number",
+            "null"
+           ]
+          }
+         },
+         "title": "UpdateEvaluationRuleRequest",
+         "type": "object"
+        }
+       }
+      },
+      "required": true,
+      "x-spans": [
+       {
+        "x-introduced": "4.55.0"
        }
       ]
      }
@@ -27957,9 +29498,9 @@
    }
   }
  },
- "x-distinct-specs": 118,
+ "x-distinct-specs": 120,
  "x-generated-by": "scripts/gen-union-catalog.py",
- "x-newest-version": "4.50.0",
+ "x-newest-version": "4.56.0",
  "x-oldest-version": "3.0.0",
- "x-releases": 403
+ "x-releases": 409
 }
