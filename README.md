@@ -444,6 +444,7 @@ Every failure reaches the agent as a structured error with a stable `code` (e.g.
 | Tool error `timeout` with `retryable: false` | Langfuse did not answer within the 60 s request deadline | Narrow the query by what the operation takes: fewer field groups in `fields`, a lower `limit` or a shorter time window (the hint names only those the operation has). An operation with none of them, such as `trace_get` on Langfuse 3.80.0 or `legacy_observationsV1_get`, cannot be made cheaper through this server: the hint says to tell the user |
 | The agent says it cannot change data; `execute_write` is not in its tool list | Write mode is off (the default): `execute_write` is not registered, and the discovery tools hide write operations | Set `LANGFUSE_MCP_ALLOW_WRITES=true` (environment or config file) and restart the server: the tool set is fixed at startup |
 | A delete or update fails with `confirmation_unavailable` | The client cannot show a form (no MCP form elicitation), so the server cannot ask you to confirm the destructive call; nothing was sent | Use a client that supports form elicitation. No setting skips the confirmation |
+| A delete or update fails with `confirmation_declined` and you saw no form | The client answered the server's form by itself. Seen on 2026-10-11 in the Code tab of the Claude desktop app (2.1.295); the Claude Code terminal CLI (2.1.296) showed the form. Nothing was sent | Run the call from a client that shows the form, such as the Claude Code terminal CLI, or make the change in the Langfuse UI |
 
 ## Learn more
 
