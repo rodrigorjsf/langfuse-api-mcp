@@ -41,6 +41,9 @@ func FuzzPayload(f *testing.F) {
 	}
 	f.Add(`{"output":"[\"a\\u200bb\",{\"k\":\"sec\\u0007ret\"}]","n":1}`)
 	f.Add(`["{\"a\":\"x\"} {\"b\":\"\\u200b\"}", "\"x\\u001b[31my\"", "{\"a\":"]`)
+	// A repeated key whose first value holds what must go (#210).
+	f.Add(`{"output":"{\"a\":\"sec\\u200bret\\u0007\",\"a\":\"ok\"}"}`)
+	f.Add(`{"output":"{\"a\":{\"b\":\"x\\u202e\"},\"a\":[1],\"a\":null}"}`)
 	f.Fuzz(func(t *testing.T, s string) {
 		if !json.Valid([]byte(s)) {
 			return // the client passes only valid JSON
@@ -71,50 +74,65 @@ func FuzzPayload(f *testing.F) {
 // assertCleanAtEveryLevel checks a decoded result the way the agent could read
 // it: no string, key or value, keeps a hidden character or the planted secret,
 // and a string that is JSON text (exactly one object, list or string, as the
-// sanitizer reads it) is decoded and checked the same way, for as many levels
-// as the sanitizer decodes.
+// sanitizer reads it) is read token by token and checked the same way, for as
+// many levels as the sanitizer decodes. Reading tokens, not decoding into a map,
+// shows the value that a repeated key shadows too.
 func assertCleanAtEveryLevel(t *testing.T, v any, levels int) {
 	t.Helper()
-	check := func(s string) {
-		t.Helper()
-		for _, r := range s {
-			if unicode.Is(unicode.Cf, r) || (r >= 0xE0000 && r <= 0xE007F) ||
-				unicode.In(r, unicode.Variation_Selector, unicode.Other_Default_Ignorable_Code_Point) ||
-				(unicode.IsControl(r) && !strings.ContainsRune("\t\n\r", r)) {
-				t.Fatalf("a string of the result keeps the hidden character %U: %q", r, s)
-			}
-		}
-		if strings.Contains(s, "secret") {
-			t.Fatalf("a string of the result keeps the planted secret: %q", s)
-		}
-	}
 	switch v := v.(type) {
 	case string:
-		check(v)
-		if levels == 0 {
-			return
-		}
-		dec := json.NewDecoder(strings.NewReader(v))
-		dec.UseNumber()
-		var inner any
-		if dec.Decode(&inner) != nil {
-			return
-		}
-		if _, err := dec.Token(); err != io.EOF {
-			return
-		}
-		switch inner.(type) {
-		case map[string]any, []any, string:
-			assertCleanAtEveryLevel(t, inner, levels-1)
-		}
+		assertCleanString(t, v, levels)
 	case []any:
 		for _, item := range v {
 			assertCleanAtEveryLevel(t, item, levels)
 		}
 	case map[string]any:
 		for k, item := range v {
-			check(k)
+			assertCleanString(t, k, 0)
 			assertCleanAtEveryLevel(t, item, levels)
+		}
+	}
+}
+
+// assertCleanString checks one string of a result, and the JSON text it holds
+// while levels allows another decoding.
+func assertCleanString(t *testing.T, s string, levels int) {
+	t.Helper()
+	for _, r := range s {
+		if unicode.Is(unicode.Cf, r) || (r >= 0xE0000 && r <= 0xE007F) ||
+			unicode.In(r, unicode.Variation_Selector, unicode.Other_Default_Ignorable_Code_Point) ||
+			(unicode.IsControl(r) && !strings.ContainsRune("\t\n\r", r)) {
+			t.Fatalf("a string of the result keeps the hidden character %U: %q", r, s)
+		}
+	}
+	if strings.Contains(s, "secret") {
+		t.Fatalf("a string of the result keeps the planted secret: %q", s)
+	}
+	if levels == 0 {
+		return
+	}
+	dec := json.NewDecoder(strings.NewReader(s))
+	dec.UseNumber()
+	var one any
+	if dec.Decode(&one) != nil {
+		return
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return
+	}
+	switch one.(type) {
+	case map[string]any, []any, string:
+	default:
+		return
+	}
+	tokens := json.NewDecoder(strings.NewReader(s))
+	for {
+		token, err := tokens.Token()
+		if err != nil {
+			return
+		}
+		if text, ok := token.(string); ok {
+			assertCleanString(t, text, levels-1)
 		}
 	}
 }

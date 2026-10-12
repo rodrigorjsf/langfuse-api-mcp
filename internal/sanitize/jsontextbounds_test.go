@@ -163,7 +163,10 @@ func TestPayloadAndRedactEndOnAMegabyteOfHostileTextAtNoMoreThanTwiceItsSize(t *
 	for name, build := range hostileStrings(t) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			text := build(1 << 17) // about a megabyte or more of text
+			text := build(1 << 17)
+			for n := 1 << 16; len(text) > 1<<20; n /= 2 { // a megabyte, not several
+				text = build(n)
+			}
 			in := outputPayload(quoteJSON(t, text))
 			asLevels := outputPayload(nested(t, text, 2))
 
@@ -191,12 +194,13 @@ func TestPayloadAndRedactEndOnAMegabyteOfHostileTextAtNoMoreThanTwiceItsSize(t *
 	}
 }
 
-// The time grows in proportion to the size. Each family is timed small and
-// eight times larger; the best of each over the rounds is compared, and the
-// rounds stop at the first that shows the proportion (see
-// TestRedactionTimeGrowsInProportionToTheInput for why).
-func TestPayloadTimeGrowsInProportionToTheSizeOfHostileText(t *testing.T) {
-	// Not parallel: the other tests would share the processor with the timing.
+// assertTimeInProportion fails the test unless run takes time in proportion to
+// the size of its input. The input is built small and eight times larger; the
+// best of each over the rounds is compared, and the rounds stop at the first
+// that shows the proportion (see TestRedactionTimeGrowsInProportionToTheInput
+// for why).
+func assertTimeInProportion(t *testing.T, name string, build func(n int) string, run func(string)) {
+	t.Helper()
 	const (
 		smallCount = 250
 		largeCount = 2000 // eight times the small input
@@ -208,31 +212,39 @@ func TestPayloadTimeGrowsInProportionToTheSizeOfHostileText(t *testing.T) {
 		f()
 		return time.Since(start)
 	}
-	run := func(payload string) {
-		if _, err := sanitize.Payload(json.RawMessage(payload), sanitize.Redactor{}); err != nil {
-			t.Fatal(err)
+	small, large := build(smallCount), build(largeCount)
+	timeSmall, timeLarge := time.Duration(1<<63-1), time.Duration(1<<63-1)
+	for range rounds {
+		timeSmall = min(timeSmall, elapsed(func() {
+			for range largeCount / smallCount {
+				run(small)
+			}
+		}))
+		timeLarge = min(timeLarge, elapsed(func() { run(large) }))
+		if timeLarge <= bound*timeSmall {
+			return
 		}
 	}
+	t.Errorf("%s: %d inputs of %d bytes took %v, one of %d bytes took %v: more than linear",
+		name, largeCount/smallCount, len(small), timeSmall, len(large), timeLarge)
+}
+
+// The time of Payload grows in proportion to the size of every hostile string.
+func TestPayloadTimeGrowsInProportionToTheSizeOfHostileText(t *testing.T) {
+	// Not parallel: the other tests would share the processor with the timing.
 	for name, build := range hostileStrings(t) {
-		small, large := outputPayload(quoteJSON(t, build(smallCount))), outputPayload(quoteJSON(t, build(largeCount)))
-		timeSmall, timeLarge := time.Duration(1<<63-1), time.Duration(1<<63-1)
-		inProportion := false
-		for range rounds {
-			timeSmall = min(timeSmall, elapsed(func() {
-				for range largeCount / smallCount {
-					run(small)
-				}
-			}))
-			timeLarge = min(timeLarge, elapsed(func() { run(large) }))
-			if timeLarge <= bound*timeSmall {
-				inProportion = true
-				break
+		assertTimeInProportion(t, name, func(n int) string { return outputPayload(quoteJSON(t, build(n))) }, func(payload string) {
+			if _, err := sanitize.Payload(json.RawMessage(payload), sanitize.Redactor{}); err != nil {
+				t.Fatal(err)
 			}
-		}
-		if !inProportion {
-			t.Errorf("%s: %d payloads of %d bytes took %v, one of %d bytes took %v: more than linear",
-				name, largeCount/smallCount, len(small), timeSmall, len(large), timeLarge)
-		}
+		})
+	}
+}
+
+// So does the time of Redact, which reads the same strings as text.
+func TestRedactTimeGrowsInProportionToTheSizeOfHostileText(t *testing.T) {
+	for name, build := range hostileStrings(t) {
+		assertTimeInProportion(t, name, build, func(text string) { sanitize.Redactor{}.Redact(text) })
 	}
 }
 

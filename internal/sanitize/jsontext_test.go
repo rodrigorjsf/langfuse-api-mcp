@@ -153,14 +153,24 @@ func TestPayloadCleansAStringHoldingJSONTextStringifiedTwoThreeAndFourTimes(t *t
 	}
 }
 
-// Level two, written out: the escapes of the inner text have two backslashes.
-func TestPayloadCleansAStringHoldingJSONTextStringifiedTwiceAndWritesItAgain(t *testing.T) {
+// Levels one to four, written out: the escapes of the inner text have one, two,
+// four and eight backslashes. The expected texts are literals, written by an
+// encoder other than the one under test (Python's json.dumps, applied to the
+// cleaned inner text once for each level).
+func TestPayloadCleansAStringHoldingJSONTextAtLevelsOneToFourAndWritesItAgain(t *testing.T) {
 	t.Parallel()
 	inner := `{"a":"x` + hiddenAsEscapes() + `\t` + `y"}`
+	want := []string{
+		`{"output":"{\"a\":\"x\\ty\"}"}`,
+		`{"output":"\"{\\\"a\\\":\\\"x\\\\ty\\\"}\""}`,
+		`{"output":"\"\\\"{\\\\\\\"a\\\\\\\":\\\\\\\"x\\\\\\\\ty\\\\\\\"}\\\"\""}`,
+		`{"output":"\"\\\"\\\\\\\"{\\\\\\\\\\\\\\\"a\\\\\\\\\\\\\\\":\\\\\\\\\\\\\\\"x\\\\\\\\\\\\\\\\ty\\\\\\\\\\\\\\\"}\\\\\\\"\\\"\""}`,
+	}
+	for n, wanted := range want {
+		got := cleaned(t, outputPayload(nested(t, inner, n+1)))
 
-	got := cleaned(t, outputPayload(nested(t, inner, 2)))
-
-	if want := `{"output":"\"{\\\"a\\\":\\\"x\\\\ty\\\"}\""}`; got != want {
-		t.Fatalf("Payload = %s, want %s", got, want)
+		if got != wanted {
+			t.Errorf("level %d: Payload = %s, want %s", n+1, got, wanted)
+		}
 	}
 }

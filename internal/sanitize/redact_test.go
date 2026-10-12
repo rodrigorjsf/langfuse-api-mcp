@@ -301,10 +301,10 @@ func BenchmarkRedact(b *testing.B) {
 // BenchmarkRedact, rows with no header map took 2.75 ms before and take
 // 2.80 ms now; rows with a header map took 2.5 ms before and take 3.1 ms now.
 // With the JSON text of #210, taken on the same machine in alternating runs of
-// the package before and after: rows with no header map 2.89 ms before and
-// 2.91 ms after, rows with a header map 3.17 ms before and 3.18 ms after (a
-// string that does not start with a brace, a bracket or a quote costs one more
-// byte read). The two rows whose input and output are JSON text are the cost of
+// the package before and after: rows with no header map 2.90 ms before and
+// 2.94 ms after, rows with a header map 3.19 ms before and 3.22 ms after, about
+// 1 percent, as much as the runs differ from one another (a string that does
+// not start with a brace, a bracket or a quote costs one more byte read). The two rows whose input and output are JSON text are the cost of
 // reading it: with nothing to clean 1.59 ms before (the text was left as it
 // was) and 4.25 ms after, with a hidden character in each 1.50 ms before and
 // 5.36 ms after, which is about what a payload of the same bytes costs to
