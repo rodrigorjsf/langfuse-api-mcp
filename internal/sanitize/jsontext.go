@@ -87,7 +87,8 @@ func (r Redactor) cleanJSONText(text string, levels int) string {
 
 // mayShadowSomething reports whether a value that a repeated key shadows could
 // hold what the cleaning changes: the escape of a hidden or control character
-// (a backslash then u, b or f) or a name that may be an Authorization name.
+// (a backslash then u, b or f) or a header keyword, authorization or bearer
+// (mentionsHeader).
 // Without either, reading the text again for repeated keys cannot find
 // anything the walk did not, which is nearly every JSON text.
 func mayShadowSomething(text string) bool {
