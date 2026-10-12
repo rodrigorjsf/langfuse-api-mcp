@@ -509,6 +509,7 @@ func FuzzRedactKeyAfterEscape(f *testing.F) {
 	f.Add("a ", `\\\\u000a`, "sk-lf-a", `\"`)
 	f.Add("{\"k\":\"", `\r`, "pk-lf-b_c-d", `\n"}`)
 	f.Add("v", `\b`, "sk-lf-x", `\fpk-lf-y`)
+	f.Add("KEY_", `\n`, "sk-lf-0a1b2c3d-1111-2222-3333-444455556666", "xpk-lf-0A1B2C3D-1111-2222-3333-444455556666-z")
 	r := sanitize.NewRedactor("hunter2-hunter2")
 	f.Fuzz(func(t *testing.T, before, escape, key, after string) {
 		if !strings.HasPrefix(key, "sk-lf-") && !strings.HasPrefix(key, "pk-lf-") {

@@ -126,20 +126,64 @@ func TestTheConfirmationRedactsACredentialThatALineBreakSplits(t *testing.T) {
 	}
 }
 
+// Two credentials on two lines: the dropped line break glues the second keyword
+// to the token of the first, which ends at the next blank. The keyword after the
+// break is still a start, so the second token is replaced too.
+func TestTheConfirmationRedactsTheCredentialOfEachLineWhenTheDroppedBreakGluesThemTogether(t *testing.T) {
+	t.Parallel()
+	const second = "ABCDEFGHIJKLMNOPQRST" //nolint:gosec // G101: a fake token for the fake Langfuse
+	tests := map[string]struct{ text, want string }{
+		"two Bearer lines": {
+			"Bearer " + otherBearerToken + "%s" + "Bearer " + second,
+			"Bearer [REDACTED] [REDACTED]",
+		},
+		"two Authorization lines": {
+			"Authorization: Basic " + otherBearerToken + "%s" + "Authorization: Basic " + second,
+			"Authorization: Basic [REDACTED] Basic [REDACTED]",
+		},
+		"Authorization, then Proxy-Authorization": {
+			"Authorization: Basic " + otherBearerToken + "%s" + "Proxy-Authorization: Basic " + second,
+			"Authorization: Basic [REDACTED] Basic [REDACTED]",
+		},
+	}
+	for breakName, lineBreak := range lineBreaks {
+		for name, tc := range tests {
+			t.Run(breakName+"/"+name, func(t *testing.T) {
+				t.Parallel()
+
+				got, logs := questionAndLog(t, updateLabels(strings.Replace(tc.text, "%s", lineBreak, 1)))
+
+				if want := `{"newLabels":["` + tc.want + `"]}`; !strings.Contains(got, want) {
+					t.Errorf("the confirmation lacks %q:\n%s", want, got)
+				}
+				for _, planted := range []string{otherBearerToken, second} {
+					if leak, ok := bearerPartOf(planted, got+logs); ok {
+						t.Errorf("the confirmation or the audit log carries %q of a planted token:\n%s", leak, got)
+					}
+				}
+			})
+		}
+	}
+}
+
 // The summary is cut at 300 runes after the redaction: a credential the cut
 // would have left short of its length is replaced whole first.
 func TestTheConfirmationCutAfterALineBreakNeverLeavesPartOfACredential(t *testing.T) {
 	t.Parallel()
+	credentials := map[string]string{"a generated key": gluedSecretKey, "a Bearer token": "Bearer " + otherBearerToken}
 	for pad := 240; pad <= 290; pad++ {
-		for name, credential := range map[string]string{"a generated key": gluedSecretKey, "a Bearer token": "Bearer " + otherBearerToken} {
-			got, _ := questionAndLog(t, updateLabels(strings.Repeat("a", pad)+"\n"+credential))
+		for name, credential := range credentials {
+			// Not parallel: a subtest ends, and closes its session, before the next opens.
+			t.Run(name+"/"+strconv.Itoa(pad), func(t *testing.T) {
+				got, _ := questionAndLog(t, updateLabels(strings.Repeat("a", pad)+"\n"+credential))
 
-			if leak, ok := bearerPartOf(gluedKeyBody, got); ok || aKeyPattern.MatchString(got) {
-				t.Fatalf("%s after %d bytes of padding: the confirmation carries a key (%q):\n%s", name, pad, leak, got)
-			}
-			if leak, ok := bearerPartOf(otherBearerToken, got); ok {
-				t.Fatalf("%s after %d bytes of padding: the confirmation carries %q of the token:\n%s", name, pad, leak, got)
-			}
+				if leak, ok := bearerPartOf(gluedKeyBody, got); ok || aKeyPattern.MatchString(got) {
+					t.Fatalf("the confirmation carries a key (%q):\n%s", leak, got)
+				}
+				if leak, ok := bearerPartOf(otherBearerToken, got); ok {
+					t.Fatalf("the confirmation carries %q of the token:\n%s", leak, got)
+				}
+			})
 		}
 	}
 }
@@ -325,8 +369,9 @@ func TestAGluedKeyAndABearerInAValueThatARefusalCouldEchoAreNotShown(t *testing.
 
 // The audit line takes the operation ID cleaned of hidden characters, and the
 // redactor must read it before the characters are dropped, as the tool error
-// does: a credential that stood after a hidden character is redacted in both.
-func TestACredentialAfterAHiddenCharacterInAnOperationIDIsRedactedInTheToolErrorAndTheAuditLine(t *testing.T) {
+// does: a credential that stood after a hidden character, or glued to a word,
+// is redacted in both.
+func TestACredentialGluedToAnOperationIDIsRedactedInTheToolErrorAndTheAuditLine(t *testing.T) {
 	t.Parallel()
 	zwsp := string(rune(0x200b))
 	for name, tc := range map[string]struct{ id, wantMessage, wantAudit string }{
@@ -335,6 +380,9 @@ func TestACredentialAfterAHiddenCharacterInAnOperationIDIsRedactedInTheToolError
 		},
 		"a glued generated key": {
 			"x" + gluedSecretKey, `unknown operation ID "x[REDACTED]"`, "x[REDACTED]",
+		},
+		"a generated key after a hidden character": {
+			"x" + zwsp + gluedSecretKey, `unknown operation ID "x[REDACTED]"`, "x[REDACTED]",
 		},
 		"a Bearer token": {
 			"x" + zwsp + "Bearer " + otherBearerToken, `unknown operation ID "xBearer [REDACTED]"`, "xBearer [REDACTED]",

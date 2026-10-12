@@ -117,7 +117,7 @@ var headerPattern = regexp.MustCompile(
 	`((?:^|[^A-Za-z0-9]|` + wordEndedEscape + `)` + plainHeader +
 		`|(?:\b|` + wordEndedEscape + `)` + bareHeader +
 		`|` + quote + quotedName + quote + space + `:` + space + `(?:\[` + space + `)?` + quote + space + scheme + `[ \t]+)` +
-		headerToken)
+		headerToken())
 
 // plainHeader is the plain form of a header credential after its start,
 // "Authorization: <scheme> ", and bareHeader the form "Bearer ".
@@ -126,22 +126,25 @@ const (
 	bareHeader  = `(?i:bearer)[ \t]+`
 )
 
-// headerToken is the token of a header credential: minTokenLength characters of
-// valueChar or more.
-var headerToken = valueChar + `{` + strconv.Itoa(minTokenLength) + `,}`
+// headerToken returns the token of a header credential as a pattern:
+// minTokenLength characters of valueChar or more.
+func headerToken() string { return valueChar + `{` + strconv.Itoa(minTokenLength) + `,}` }
 
 // headerAtPlacePattern matches, at the start of a text, a header credential of
 // the plain form or of the form "Bearer ", up to its token (#211). The first
 // group is what stays. redactAfterPlaces reads it on the text from a place on.
-var headerAtPlacePattern = regexp.MustCompile(`^(` + plainHeader + `|` + bareHeader + `)` + headerToken)
+var headerAtPlacePattern = regexp.MustCompile(`^(` + plainHeader + `|` + bareHeader + `)` + headerToken())
 
 // headerValuePattern matches the value of a member of a header map: blanks, a
 // scheme, blanks and a token of minTokenLength characters or more (#196). The
 // first group is what stays.
-var headerValuePattern = regexp.MustCompile(`^(` + space + scheme + `[ \t]+)` + headerToken)
+var headerValuePattern = regexp.MustCompile(`^(` + space + scheme + `[ \t]+)` + headerToken())
 
 // authorizationWord is the word the name rule looks for, in lower case.
 const authorizationWord = "authorization"
+
+// bearerWord is the keyword of the bearer form, in lower case.
+const bearerWord = "bearer"
 
 // isAuthorizationName is the name rule (#196): whether name, with invisible
 // and control characters stripped, surrounding blanks dropped and case
@@ -231,8 +234,11 @@ const keyPrefixLength = len("sk-lf-")
 // and Bearer … read xBearer …), which has no word boundary, so a place is a
 // boundary of its own, whatever stands before it. A key goes whole; a header
 // keeps its keyword and scheme, as headerPattern leaves them. What keyPattern
-// or headerPattern already finds, and what a place splits, is the business of
-// the patterns and is left to them; so is a text with no place.
+// finds on its own, and what a place splits, is the business of the pattern and
+// is left to it; so is a text with no place. A header is not left to
+// headerPattern when a place is inside a match of it: the token of an earlier
+// credential runs up to the next blank, so it swallows the keyword the removed
+// character glued to it, and the credential that keyword starts would stay.
 func redactAfterPlaces(s string, places []int) string {
 	if len(places) == 0 {
 		return s
@@ -241,12 +247,9 @@ func redactAfterPlaces(s string, places []int) string {
 	if !keys && !headers {
 		return s
 	}
-	var keyMatches, headerMatches [][]int // what the patterns find on their own
+	var keyMatches [][]int // what keyPattern finds on its own
 	if keys {
 		keyMatches = keyPattern.FindAllStringIndex(s, -1)
-	}
-	if headers {
-		headerMatches = headerPattern.FindAllStringIndex(s, -1)
 	}
 	var out strings.Builder
 	written := 0 // s[:written] is in out, a replaced key or token included
@@ -258,7 +261,7 @@ func redactAfterPlaces(s string, places []int) string {
 		if keys && !insideAMatch(keyMatches, p) {
 			start, end = keyAt(s, p)
 		}
-		if end == 0 && headers && !insideAMatch(headerMatches, p) {
+		if end == 0 && headers {
 			start, end = tokenAt(s, p)
 		}
 		if end == 0 {
@@ -296,17 +299,56 @@ func keyAt(s string, p int) (start, end int) {
 	return p, p + keyPrefixLength + n
 }
 
+// maxKeywordReach is how many bytes after a place tokenAt looks for the keyword
+// of a header credential, so that a header name in front of "authorization"
+// (Proxy-Authorization, X-Upstream-Authorization, http.request.header.…) is
+// found and the work per place stays bounded: a name that puts the word farther
+// away than this is the business of headerPattern.
+const maxKeywordReach = 64
+
 // tokenAt returns the span of the token of the header credential whose keyword
-// starts at p of s, or an empty span (end 0) when none does.
+// starts at p of s, or in the unbroken run of token characters that starts at p
+// and has the keyword within maxKeywordReach bytes, after a character that
+// headerPattern accepts before it (a place is a start itself, whatever stands
+// before it); or an empty span (end 0) when none does.
 func tokenAt(s string, p int) (start, end int) {
-	if !startsWithFold(s[p:], "bearer") && !startsWithFold(s[p:], authorizationWord) {
-		return 0, 0 // cheaper than the pattern, which fails on its first byte anyway
+	rest := s[p:]
+	for i := 0; i < len(rest) && i <= maxKeywordReach; i++ {
+		if i > 0 && !isValueChar(rest[i-1]) {
+			break // the run the keyword would have to be part of is over
+		}
+		// Cheaper than the tests below: most bytes start neither word.
+		if b := rest[i] | 0x20; b != 'a' && b != 'b' {
+			continue
+		}
+		if !keywordStartsAt(rest, i) {
+			continue
+		}
+		if m := headerAtPlacePattern.FindStringSubmatchIndex(rest[i:]); m != nil {
+			return p + i + m[3], p + i + m[1] // after the group that stays, to the end of the token
+		}
 	}
-	m := headerAtPlacePattern.FindStringSubmatchIndex(s[p:])
-	if m == nil {
-		return 0, 0
+	return 0, 0
+}
+
+// keywordStartsAt reports whether s[i:] starts with "authorization" or "bearer"
+// where headerPattern would start the keyword of a credential: at i == 0, the
+// place; else "authorization" after a character that is not an ASCII letter or
+// digit, and "bearer" at the start of a word.
+func keywordStartsAt(s string, i int) bool {
+	switch {
+	case startsWithFold(s[i:], authorizationWord):
+		return i == 0 || !isASCIIAlnum(s[i-1])
+	case startsWithFold(s[i:], bearerWord):
+		return i == 0 || !isASCIIAlnum(s[i-1]) && s[i-1] != '_'
 	}
-	return p + m[3], p + m[1] // after the group that stays, to the end of the token
+	return false
+}
+
+// isValueChar reports whether b is a character of valueChar, the class a token
+// is made of: printable ASCII other than space, the quotes and the backslash.
+func isValueChar(b byte) bool {
+	return b > ' ' && b < 0x7f && b != '"' && b != '\'' && b != '`' && b != '\\'
 }
 
 // isKeyPrefix reports whether s is "pk-lf-" or "sk-lf-".
@@ -330,9 +372,9 @@ func mentionsHeader(s string) bool {
 		// An ASCII letter in lower case, and the second letter of the word,
 		// before the comparison of the whole word.
 		switch {
-		case s[i]|0x20 == 'b' && s[i+1]|0x20 == 'e' && startsWithFold(s[i:], "bearer"):
+		case s[i]|0x20 == 'b' && s[i+1]|0x20 == 'e' && startsWithFold(s[i:], bearerWord):
 			return true
-		case s[i]|0x20 == 'a' && s[i+1]|0x20 == 'u' && startsWithFold(s[i:], "authorization"):
+		case s[i]|0x20 == 'a' && s[i+1]|0x20 == 'u' && startsWithFold(s[i:], authorizationWord):
 			return true
 		}
 	}

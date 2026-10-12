@@ -183,6 +183,14 @@ func hostileStrings(t *testing.T) map[string]func(n int) string {
 		"a token that holds the next keyword": func(n int) string {
 			return strings.Repeat("Bearer "+escapeToken+zeroWidthSpace, n)
 		},
+		// The reach of tokenAt after a place is bounded: a run of token characters
+		// with a place at every other byte, and names that put the keyword out of reach.
+		"token characters, a place at every other byte": func(n int) string {
+			return "Bearer " + strings.Repeat("a"+zeroWidthSpace, 4*n)
+		},
+		"names that put the keyword out of reach of a place": func(n int) string {
+			return strings.Repeat(strings.Repeat("a-", 40)+zeroWidthSpace+"authorization ", n)
+		},
 	}
 }
 

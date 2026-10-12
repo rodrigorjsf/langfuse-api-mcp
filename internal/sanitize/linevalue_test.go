@@ -3,6 +3,7 @@ package sanitize_test
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/sanitize"
@@ -155,6 +156,30 @@ func FuzzLinePlaces(f *testing.F) {
 			if p < 0 || p > len(got) || (i > 0 && p <= places[i-1]) {
 				t.Fatalf("LinePlaces(%q) places %v are not ascending offsets inside %q", s, places, got)
 			}
+		}
+	})
+}
+
+// FuzzLineValue checks, for any text put around a break and a credential, that
+// LineValue leaves no tab, line feed or carriage return in a string, and that
+// passing its result through it again changes nothing.
+func FuzzLineValue(f *testing.F) {
+	f.Add("word", "\n", "sk-lf-0a1b2c3d-1111-2222-3333-444455556666", "")
+	f.Add("a", "\r\n", "Bearer "+escapeToken, " Bearer "+escapeToken)
+	f.Add("x", "\t", "Authorization: Basic "+escapeToken, "\nProxy-Authorization: Basic "+escapeToken)
+	f.Add("tok", zeroWidthSpace+"\n", "pk-lf-abc", "hunter2-hunter2")
+	r := sanitize.NewRedactor("hunter2-hunter2")
+	f.Fuzz(func(t *testing.T, before, between, credential, after string) {
+		in := before + between + credential + after
+		once, ok := sanitize.LineValue(in, r).(string)
+		if !ok {
+			t.Fatalf("LineValue(%q) is not a string", in)
+		}
+		if strings.ContainsAny(once, "\t\n\r") {
+			t.Fatalf("LineValue(%q) = %q, which holds a tab or a line break", in, once)
+		}
+		if twice := sanitize.LineValue(once, r); twice != once {
+			t.Fatalf("LineValue(%q) = %q, but passing it through again gives %q", in, once, twice)
 		}
 	})
 }

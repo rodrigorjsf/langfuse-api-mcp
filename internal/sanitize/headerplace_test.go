@@ -2,6 +2,7 @@ package sanitize_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/rodrigorjsf/langfuse-api-mcp/internal/sanitize"
@@ -52,6 +53,24 @@ func TestRedactReplacesTheTokenOfAHeaderWhoseKeywordDirectlyFollowsACharacterThe
 			in:   `a\nBearer ` + escapeToken + " b" + bellChar + "Bearer " + escapeToken,
 			want: `a\nBearer [REDACTED] bBearer [REDACTED]`,
 		},
+		// The token of the first credential runs up to the keyword of the second,
+		// which the removed character glued to it: the keyword is still a start.
+		"Bearer after a place that ends the token of another Bearer": {
+			in:   "Bearer abcdefghijklmnopqrst" + zeroWidthSpace + "Bearer " + escapeToken,
+			want: "Bearer [REDACTED] [REDACTED]",
+		},
+		"Authorization after a place that ends the token of another one": {
+			in:   "Authorization: Basic " + escapeToken + bellChar + "Authorization: Basic ABCDEFGHIJKLMNOPQRSTUVWX",
+			want: "Authorization: Basic [REDACTED] Basic [REDACTED]",
+		},
+		"Proxy-Authorization after a place that ends the token of Authorization": {
+			in:   "Authorization: Basic " + escapeToken + bellChar + "Proxy-Authorization: Basic ABCDEFGHIJKLMNOPQRSTUVWX",
+			want: "Authorization: Basic [REDACTED] Basic [REDACTED]",
+		},
+		"a dotted name after a place that ends the token of Bearer": {
+			in:   "Bearer " + escapeToken + zeroWidthSpace + "http.request.header.authorization: Digest ABCDEFGHIJKLMNOPQRSTUVWX",
+			want: "Bearer [REDACTED] Digest [REDACTED]",
+		},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -90,15 +109,19 @@ func TestRedactKeepsTheRulesOfAHeaderWhereNothingIsRemovedOrNoCredentialFollowsT
 		"a place in a text with no keyword": {
 			in: "x" + zeroWidthSpace + "y", want: "x" + zeroWidthSpace + "y",
 		},
+		"a name that only holds the word, after a token": {
+			in:   "Bearer " + escapeToken + bellChar + "reauthorization: Basic ABCDEFGHIJKLMNOPQRSTUVWX",
+			want: "Bearer [REDACTED] Basic ABCDEFGHIJKLMNOPQRSTUVWX",
+		},
+		"a name longer than the bound, after a token": {
+			in:   "Bearer " + escapeToken + bellChar + strings.Repeat("a-", 40) + "authorization: Basic ABCDEFGHIJKLMNOPQRSTUVWX",
+			want: "Bearer [REDACTED] Basic ABCDEFGHIJKLMNOPQRSTUVWX",
+		},
 		"a place before a word that ends in bearer": {
 			in: "x" + zeroWidthSpace + "NotBearer " + escapeToken, want: "x" + zeroWidthSpace + "NotBearer " + escapeToken,
 		},
 		"a place after a blank, the pattern's own": {
 			in: "x " + zeroWidthSpace + "Bearer " + escapeToken, want: "x Bearer [REDACTED]",
-		},
-		"a place inside a token the pattern replaces whole": {
-			in:   "Bearer abcdefghijklmnopqrst" + zeroWidthSpace + "Bearer " + escapeToken,
-			want: "Bearer [REDACTED] " + escapeToken,
 		},
 	}
 	for name, tc := range tests {
