@@ -160,10 +160,11 @@ func TestGetTraceTreeOnAProfileWithBothReadFamiliesOverACatalogThatOffersNeither
 // completenessSentence is the one sentence #209 adds to the get_trace_tree
 // description. It is the only signal for a tree that is short and not empty,
 // which the server cannot see without a second read.
-const completenessSentence = "Where a deployment serves both the v4 read APIs and the legacy APIs, the tree is built from " +
-	"Observations v2, which can lack observations that were sent through the legacy ingestion API (late, or not at " +
-	"all), so a tree that is empty or shorter than expected can be checked against the legacy observations list " +
-	"through execute_read (legacy_observationsV1_getMany with traceId)."
+// It is kept this short on purpose: the longer paragraph it replaced made the
+// small-model eval lose three intents (docs/research/raw/
+// 2026-10-12-small-model-eval-trace-tree-description.md).
+const completenessSentence = "On a deployment that serves both, Observations v2 can lack observations sent through the " +
+	"legacy ingestion API: check an empty or short tree with legacy_observationsV1_getMany (traceId)."
 
 // The description is one text for every deployment
 // (TestGetTraceTreeKeepsOneStaticDescriptionOnEveryDeployment), so each pinned
