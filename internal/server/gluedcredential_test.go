@@ -444,3 +444,36 @@ func TestACredentialGluedToAnOperationIDIsRedactedInTheToolErrorAndTheAuditLine(
 		})
 	}
 }
+
+// A tab between the scheme and the token is a blank of the header rule, and the
+// confirmation text drops it before the body summary is read as one line: the
+// token would stand glued to the scheme, with no blank before it. The place of
+// the dropped tab is read as the blank it was, so the token is replaced and
+// nothing of it is shown or logged.
+func TestTheConfirmationRedactsATokenThatFollowsItsSchemeThroughATabItDrops(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct{ label, want string }{
+		"a Bearer token":           {"Bearer\t" + otherBearerToken, "Bearer[REDACTED]"},
+		"an Authorization header":  {"Authorization: Basic\t" + otherBearerToken, "Authorization: Basic[REDACTED]"},
+		"a word before the header": {"send Proxy-Authorization:\tBasic\t" + otherBearerToken + " now", "send Proxy-Authorization:Basic[REDACTED] now"},
+		"a token a second tab splits": {
+			"Bearer\t" + otherBearerToken[:6] + "\t" + otherBearerToken[6:], "Bearer[REDACTED]",
+		},
+		"the text of a header map": {
+			`{"Authorization": "Basic` + "\t" + otherBearerToken + `"}`, `{\"Authorization\": \"Basic[REDACTED]\"}`,
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got, logs := questionAndLog(t, updateLabels(tc.label))
+
+			if want := `{"newLabels":["` + tc.want + `"]}`; !strings.Contains(got, want) {
+				t.Errorf("the confirmation lacks %q:\n%s", want, got)
+			}
+			assertNoGluedCredential(t, "the confirmation", got)
+			assertNoGluedCredential(t, "the audit log", logs)
+		})
+	}
+}

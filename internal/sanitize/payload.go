@@ -102,9 +102,12 @@ func Line(s string) string {
 // Line dropped, a line break included, is redacted as at a boundary, and one
 // that a dropped character splits is found whole (#211). Keys that read the same
 // once cleaned keep one value by Payload's rule: the key that was already
-// clean, else the first in byte order.
+// clean, else the first in byte order. A tab is a blank of the header rule and
+// Line drops it, so a token that stood after its scheme through a dropped tab
+// is redacted as if the blank were still there, in the text of a string and in
+// a value under an Authorization name (#211).
 func LineValue(v any, r Redactor) any {
-	w := walker{f: r.cleanLine}
+	w := walker{f: r.cleanLine, header: r.cleanHeaderLine}
 	return w.walk(v)
 }
 
@@ -112,14 +115,26 @@ func LineValue(v any, r Redactor) any {
 // dropped something go to the key and header rules before the secrets are
 // replaced, as cleanString does for Text.
 func (r Redactor) cleanLine(s string) string {
-	text, places := linePlaces(s)
-	return r.redact(redactAfterPlaces(text, places))
+	text, places, tabs := linePlaces(s)
+	return r.redact(redactAfterPlaces(text, places, droppedBlanks{at: tabs}))
+}
+
+// cleanHeaderLine is cleanLine for a string that is the value of a member
+// under an Authorization name, or an item of its list: there a scheme alone
+// stands before the token (redactHeaderValue), so a token after a scheme and a
+// dropped tab is redacted with no keyword in the string.
+func (r Redactor) cleanHeaderLine(s string) string {
+	text, places, tabs := linePlaces(s)
+	return r.redact(redactAfterPlaces(text, places, droppedBlanks{at: tabs, headerValue: true}))
 }
 
 // walker passes the strings of a decoded JSON value through f, and remembers
 // whether that, or the header credential rule, changed anything.
 type walker struct {
-	f       func(string) string
+	f func(string) string
+	// header, when set, cleans instead of f a string that is the value of a
+	// member under an Authorization name, or an item of its list.
+	header  func(string) string
 	changed bool // a string, a key or a header member came back different, or a key was dropped
 }
 
@@ -129,9 +144,7 @@ type walker struct {
 func (w *walker) walk(v any) any {
 	switch v := v.(type) {
 	case string:
-		out := w.f(v)
-		w.changed = w.changed || out != v
-		return out
+		return w.cleaned(v, w.f)
 	case []any:
 		for i, item := range v {
 			v[i] = w.walk(item)
@@ -149,13 +162,43 @@ func (w *walker) walk(v any) any {
 			if _, taken := out[key]; taken && key != k {
 				continue
 			}
-			value, redacted := redactHeaderMember(key, w.walk(v[k]))
+			value, redacted := redactHeaderMember(key, w.walkMember(key, v[k]))
 			w.changed = w.changed || redacted
 			out[key] = value
 		}
 		return out
 	}
 	return v // json.Number, bool, nil
+}
+
+// cleaned returns s passed through f, and remembers whether that changed it.
+func (w *walker) cleaned(s string, f func(string) string) string {
+	out := f(s)
+	w.changed = w.changed || out != s
+	return out
+}
+
+// walkMember is walk for v, the value of the member key of an object, key being
+// the cleaned key: under an Authorization name a string, and each string item of
+// a list, goes through header when the walker has one.
+func (w *walker) walkMember(key string, v any) any {
+	if w.header == nil || !isAuthorizationName(key) {
+		return w.walk(v)
+	}
+	switch v := v.(type) {
+	case string:
+		return w.cleaned(v, w.header)
+	case []any:
+		for i, item := range v {
+			if s, ok := item.(string); ok {
+				v[i] = w.cleaned(s, w.header)
+			} else {
+				v[i] = w.walk(item)
+			}
+		}
+		return v
+	}
+	return w.walk(v)
 }
 
 // Text drops the characters of s that hide or reorder text: invisible and
@@ -221,15 +264,18 @@ func textPlaces(s string) (string, []int) {
 	if Text(s) == s {
 		return s, nil
 	}
-	return removedPlaces(s, removed)
+	text, places, _ := removedPlaces(s, removed) // Text drops no tab
+	return text, places
 }
 
 // linePlaces is Line that also reports the places where it dropped something
 // (#211), as textPlaces does for Text: the characters Text removes, and the tab,
-// line feed and carriage return Line drops besides. The result is Line(s).
-func linePlaces(s string) (string, []int) {
+// line feed and carriage return Line drops besides. The result is Line(s). tabs
+// are the places whose run of dropped characters held a tab, the one blank of
+// the header rule that Line drops (see redactAfterPlaces).
+func linePlaces(s string) (text string, places, tabs []int) {
 	if Line(s) == s {
-		return s, nil
+		return s, nil, nil
 	}
 	return removedPlaces(s, droppedByLine)
 }
@@ -243,15 +289,17 @@ func droppedByLine(r rune) bool {
 // removedPlaces is the second reading of a text that a cleaning changes: it
 // returns the text without the characters dropped reports (removed for Text,
 // droppedByLine for Line) and without its terminal control sequences, and where
-// each run of them stood.
-func removedPlaces(s string, dropped func(rune) bool) (string, []int) {
-	var places []int
+// each run of them stood; tabs are the places whose run held a tab.
+func removedPlaces(s string, dropped func(rune) bool) (text string, places, tabs []int) {
 	size, inRun := 0, false
-	text := strings.Map(func(r rune) rune {
+	text = strings.Map(func(r rune) rune {
 		if dropped(r) {
 			if !inRun {
 				places = append(places, size)
 				inRun = true
+			}
+			if r == '\t' && (len(tabs) == 0 || tabs[len(tabs)-1] != size) {
+				tabs = append(tabs, size)
 			}
 			return -1
 		}
@@ -259,7 +307,7 @@ func removedPlaces(s string, dropped func(rune) bool) (string, []int) {
 		size += utf8.RuneLen(r)
 		return r
 	}, prepared(s, sequenceMarker))
-	return text, places
+	return text, places, tabs
 }
 
 // plain reports whether s is ASCII with no control character other than tab,

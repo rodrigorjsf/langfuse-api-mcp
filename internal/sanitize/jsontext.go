@@ -28,7 +28,7 @@ const MaxJSONTextLevels = 4
 func (r Redactor) cleanString(s string, levels int) string {
 	text, places := textPlaces(s)
 	if places != nil { // nearly every string has none
-		text = redactAfterPlaces(text, places)
+		text = redactAfterPlaces(text, places, droppedBlanks{})
 	}
 	// Nearly every string fails this test on its first byte; cleanJSONText
 	// looks at the last one.

@@ -168,6 +168,8 @@ func FuzzLineValue(f *testing.F) {
 	f.Add("a", "\r\n", "Bearer "+escapeToken, " Bearer "+escapeToken)
 	f.Add("x", "\t", "Authorization: Basic "+escapeToken, "\nProxy-Authorization: Basic "+escapeToken)
 	f.Add("tok", zeroWidthSpace+"\n", "pk-lf-abc", "hunter2-hunter2")
+	f.Add("Authorization: Basic", "\t", escapeToken, "\tBearer\t"+escapeToken)
+	f.Add("x\nsk-lf-Bearer", "\t", "abc."+escapeToken, "")
 	r := sanitize.NewRedactor("hunter2-hunter2")
 	f.Fuzz(func(t *testing.T, before, between, credential, after string) {
 		in := before + between + credential + after
@@ -182,4 +184,86 @@ func FuzzLineValue(f *testing.F) {
 			t.Fatalf("LineValue(%q) = %q, but passing it through again gives %q", in, once, twice)
 		}
 	})
+}
+
+// A tab is a blank of the header rule (spec #172, ticket #211): Line drops it,
+// so the token that stood after it is glued to the scheme. The place of a
+// dropped tab is read as the blank it was: the token goes, whole, and the
+// keyword and the scheme stay.
+func TestLineValueRedactsATokenThatFollowsItsSchemeThroughATabLineDrops(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct{ in, want string }{
+		"Bearer, a tab and the token":        {in: `["Bearer\t` + escapeToken + `"]`, want: `["Bearer[REDACTED]"]`},
+		"an Authorization header":            {in: `["Authorization: Basic\t` + escapeToken + `"]`, want: `["Authorization: Basic[REDACTED]"]`},
+		"a tab around the colon too":         {in: `["Proxy-Authorization\t:\tBasic\t` + escapeToken + ` end"]`, want: `["Proxy-Authorization:Basic[REDACTED] end"]`},
+		"a tab and a hidden character":       {in: `["Bearer\t` + zeroWidthSpace + `\t` + escapeToken + `"]`, want: `["Bearer[REDACTED]"]`},
+		"a token a second tab splits":        {in: `["Bearer\tabcdefgh\tijklmnopqr end"]`, want: `["Bearer[REDACTED] end"]`},
+		"a token a line feed splits":         {in: `["BEARER\tabcdefgh\nijklmnopqr end"]`, want: `["BEARER[REDACTED] end"]`},
+		"a word before the keyword":          {in: `["send Bearer\t` + escapeToken + ` now"]`, want: `["send Bearer[REDACTED] now"]`},
+		"two credentials, each after a tab":  {in: `["Bearer\t` + escapeToken + ` Bearer\tABCDEFGHIJKLMNOPQRST"]`, want: `["Bearer[REDACTED] Bearer[REDACTED]"]`},
+		"the keyword after a line feed":      {in: `["x\nBearer\t` + escapeToken + `"]`, want: `["xBearer[REDACTED]"]`},
+		"a header on the line after another": {in: `["Bearer ABCDEFGHIJKLMNOPQRST\nProxy-Authorization: Basic\t` + escapeToken + `"]`, want: `["Bearer [REDACTED] Basic[REDACTED]"]`},
+		"the text of a header map":           {in: `["{\"Authorization\": \"Basic\t` + escapeToken + `\"}"]`, want: `["{\"Authorization\": \"Basic[REDACTED]\"}"]`},
+		"a header map":                       {in: `{"Authorization":"Basic\t` + escapeToken + `"}`, want: `{"Authorization":"Basic[REDACTED]"}`},
+		"a header map with a list":           {in: `{"Proxy-Authorization":["Basic\t` + escapeToken + `","x"]}`, want: `{"Proxy-Authorization":["Basic[REDACTED]","x"]}`},
+		"a header map, blanks before scheme": {in: `{"authorization":" \tBasic\t` + escapeToken + `"}`, want: `{"authorization":" Basic[REDACTED]"}`},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if got := lineValueOf(t, tc.in); got != tc.want {
+				t.Fatalf("LineValue(%s) = %s, want %s", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// The token rule is unchanged where the dropped tab was no blank before a
+// token: a shorter token, a keyword glued to a letter, a line break (no blank of
+// the plain form) and a value under another name stay as Line leaves them.
+func TestLineValueKeepsTheTextAfterADroppedTabThatTheHeaderRuleWouldNotTake(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct{ in, want string }{
+		"a token of 15 characters":        {in: `["Bearer\tabcdefghijklmno"]`, want: `["Bearerabcdefghijklmno"]`},
+		"a keyword glued to a letter":     {in: `["xBearer\t` + escapeToken + `"]`, want: `["xBearer` + escapeToken + `"]`},
+		"a line feed, not a tab":          {in: `["Bearer\n` + escapeToken + `"]`, want: `["Bearer` + escapeToken + `"]`},
+		"a word that is no keyword":       {in: `["word\t` + escapeToken + `"]`, want: `["word` + escapeToken + `"]`},
+		"a scheme under another name":     {in: `{"note":"Basic\t` + escapeToken + `"}`, want: `{"note":"Basic` + escapeToken + `"}`},
+		"no scheme under the name":        {in: `{"Authorization":"\t` + escapeToken + `"}`, want: `{"Authorization":"` + escapeToken + `"}`},
+		"a name that only holds the word": {in: `["authorizationMode: Basic\t` + escapeToken + `"]`, want: `["authorizationMode: Basic` + escapeToken + `"]`},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if got := lineValueOf(t, tc.in); got != tc.want {
+				t.Fatalf("LineValue(%s) = %s, want %s", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// 1 MiB of headers whose token follows a dropped tab, and 1 MiB of the same with
+// a keyword that is none: each place is read within a bound, so the work grows
+// with the size, every token of a real header is replaced and no other text is.
+func TestLineValueOfAMegabyteOfTokensAfterDroppedTabsEndsAndShowsNoToken(t *testing.T) {
+	t.Parallel()
+	const size = 1 << 20
+	tests := map[string]struct{ unit, want string }{
+		"a header each":  {unit: "Bearer\t" + escapeToken + " ", want: "Bearer[REDACTED] "},
+		"no header each": {unit: "xBearer\t" + escapeToken + " ", want: "xBearer" + escapeToken + " "},
+		"one long token": {unit: "\ta", want: "a"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			in := strings.Repeat(tc.unit, size/len(tc.unit))
+			want := strings.Repeat(tc.want, size/len(tc.unit))
+
+			got, _ := sanitize.LineValue(in, sanitize.Redactor{}).(string)
+
+			if got != want {
+				t.Fatalf("LineValue of %d bytes ended %q, want the rule's answer ending %q", len(in), tail(got, 48), tail(want, 48))
+			}
+		})
+	}
 }

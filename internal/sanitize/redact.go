@@ -201,7 +201,7 @@ func NewRedactor(secrets ...string) Redactor {
 // secret comes back as it was.
 func (r Redactor) Redact(s string) string {
 	clean, places := textPlaces(s)
-	redacted := r.redact(redactAfterPlaces(clean, places))
+	redacted := r.redact(redactAfterPlaces(clean, places, droppedBlanks{}))
 	if clean == s || redacted != clean {
 		return redacted
 	}
@@ -242,12 +242,19 @@ const keyPrefixLength = len("sk-lf-")
 // same holds for a place inside a span replaced here, a key or a token found at
 // an earlier place: nothing new starts a key there, but a header keyword does,
 // and its token, which stands after the blank that ended the span, is replaced.
-func redactAfterPlaces(s string, places []int) string {
+//
+// blanks are the places where a blank of the header rule was dropped (a tab,
+// which Line drops and Text keeps): the token that stood after its scheme
+// through that blank is glued to the scheme, where no pattern takes it, so the
+// place is read as the blank it was (schemeEndsAt) and the run of token
+// characters that starts there is replaced, whole, whatever else was dropped
+// inside it.
+func redactAfterPlaces(s string, places []int, blanks droppedBlanks) string {
 	if len(places) == 0 {
 		return s
 	}
 	keys, headers := strings.Contains(s, "k-lf-"), mentionsHeader(s)
-	if !keys && !headers {
+	if !keys && !headers && !blanks.headerValue {
 		return s
 	}
 	var keyMatches [][]int // what keyPattern finds on its own
@@ -256,7 +263,8 @@ func redactAfterPlaces(s string, places []int) string {
 	}
 	var out strings.Builder
 	written := 0 // s[:written] is in out, a replaced key or token included
-	for _, p := range places {
+	runEnd := 0  // where the run of token characters around the last blank read ends
+	for i, p := range places {
 		var start, end int // the span to replace
 		found := false     // whether a key or the token of a header starts at p
 		if keys && p >= written && !insideAMatch(keyMatches, p) {
@@ -265,6 +273,15 @@ func redactAfterPlaces(s string, places []int) string {
 		}
 		if !found && headers {
 			start, end, found = tokenAt(s, p)
+		}
+		if !found && blanks.dropped(p) {
+			if p >= runEnd { // else p is inside the run read last, which ends where it did
+				runEnd = p + valueCharsLength(s[p:])
+			}
+			// What an earlier span left of the run, a key that ended inside it, goes too.
+			if runEnd > written && runEnd-p >= minTokenLength && schemeEndsAt(s, places[:i], p, headers, blanks.headerValue) {
+				start, end, found = max(p, written), runEnd, true
+			}
 		}
 		if !found || start < written {
 			continue
@@ -278,6 +295,81 @@ func redactAfterPlaces(s string, places []int) string {
 	}
 	out.WriteString(s[written:])
 	return out.String()
+}
+
+// droppedBlanks says where a cleaning dropped a blank of the header rule.
+type droppedBlanks struct {
+	// at holds the places, offsets in the clean text, where a tab was dropped;
+	// ascending, each one of the places given with it.
+	at []int
+	// headerValue says the text is the value of a member under an Authorization
+	// name, or an item of its list, where a scheme alone stands before the token.
+	headerValue bool
+}
+
+// dropped reports whether a blank was dropped at p.
+func (b droppedBlanks) dropped(p int) bool {
+	_, found := slices.BinarySearch(b.at, p)
+	return found
+}
+
+// maxBlankReach is how many bytes before a dropped blank schemeEndsAt reads to
+// find the header a token there belongs to: more than any header name and
+// scheme in use, and a bound on the work per place.
+const maxBlankReach = 128
+
+// schemeEndsAt reports whether a blank at p of s, a clean text with a run of at
+// least minTokenLength token characters from p on, would make that run the token
+// of a header credential: whether headerPattern, or with headerValue the pattern
+// of a value under an Authorization name, takes the text with a space put back
+// at p up to that space. The rule is the patterns' own; only the last
+// maxBlankReach bytes before p are read, and the value form only when it starts
+// within them. One of earlier, the places before p, is a start for the keyword
+// as it is everywhere (tokenAt). headers says whether s mentions a header
+// keyword at all.
+func schemeEndsAt(s string, earlier []int, p int, headers, headerValue bool) bool {
+	if p == 0 || !isSchemeChar(s[p-1]) {
+		return false // no scheme ends here: cheaper than the patterns below
+	}
+	lo := max(0, p-maxBlankReach)
+	local := s[lo:p] + " " + s[p:p+minTokenLength]
+	token := p - lo + 1 // where the token starts in local
+	if headerValue && lo == 0 {
+		if m := headerValuePattern.FindStringSubmatchIndex(local); m != nil && m[3] == token {
+			return true
+		}
+	}
+	if !headers || !mentionsHeader(local) {
+		return false
+	}
+	for _, m := range headerPattern.FindAllStringSubmatchIndex(local, -1) {
+		if m[3] == token {
+			return true
+		}
+	}
+	for i := len(earlier) - 1; i >= 0 && earlier[i] >= lo; i-- {
+		// The place in local: the keyword starts there, or within reach in the
+		// run it starts, which the token of an earlier credential would swallow.
+		if start, _, ok := tokenAt(local, earlier[i]-lo); ok && start == token {
+			return true
+		}
+	}
+	return false
+}
+
+// isSchemeChar reports whether b is a character of scheme.
+func isSchemeChar(b byte) bool {
+	return isASCIIAlnum(b) || b == '_' || b == '.' || b == '+' || b == '-'
+}
+
+// valueCharsLength returns the length of the run of token characters
+// (valueChar) that s starts with.
+func valueCharsLength(s string) int {
+	n := 0
+	for n < len(s) && isValueChar(s[n]) {
+		n++
+	}
+	return n
 }
 
 // insideAMatch reports whether p is inside one of matches, the sorted spans a
