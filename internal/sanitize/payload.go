@@ -221,7 +221,7 @@ func textPlaces(s string) (string, []int) {
 	if Text(s) == s {
 		return s, nil
 	}
-	return removedPlaces(s, false)
+	return removedPlaces(s, removed)
 }
 
 // linePlaces is Line that also reports the places where it dropped something
@@ -231,18 +231,24 @@ func linePlaces(s string) (string, []int) {
 	if Line(s) == s {
 		return s, nil
 	}
-	return removedPlaces(s, true)
+	return removedPlaces(s, droppedByLine)
 }
 
-// removedPlaces is textPlaces for a text that Text changes: the second reading,
-// which records where each run of removed characters stood. With lines it is
-// the second reading of Line: a tab, a line feed and a carriage return are
-// dropped too.
-func removedPlaces(s string, lines bool) (string, []int) {
+// droppedByLine reports whether Line drops r: what Text removes, and the tab,
+// line feed and carriage return besides.
+func droppedByLine(r rune) bool {
+	return r == '\t' || r == '\n' || r == '\r' || removed(r)
+}
+
+// removedPlaces is the second reading of a text that a cleaning changes: it
+// returns the text without the characters dropped reports (removed for Text,
+// droppedByLine for Line) and without its terminal control sequences, and where
+// each run of them stood.
+func removedPlaces(s string, dropped func(rune) bool) (string, []int) {
 	var places []int
 	size, inRun := 0, false
 	text := strings.Map(func(r rune) rune {
-		if removed(r) || lines && (r == '\t' || r == '\n' || r == '\r') {
+		if dropped(r) {
 			if !inRun {
 				places = append(places, size)
 				inRun = true
