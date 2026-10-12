@@ -85,6 +85,41 @@ func TestReleaseServerJSONListsTheBundleWithItsHashOnlyWhenTheReleaseHoldsIt(t *
 	}
 }
 
+// Every channel takes its version from the tag (#186): whatever vX.Y.Z is cut, it reaches the npm
+// package, the image tag, the bundle address and the entry itself, and the template's placeholder
+// is left nowhere. 0.2.0 is the release the wizard of scripts/release-wizard.sh cuts first.
+func TestAReleaseVersionReachesEveryVersionFieldAndLeavesNoPlaceholder(t *testing.T) {
+	for _, version := range []string{"0.2.0", "1.0.0", "0.10.13"} {
+		t.Run(version, func(t *testing.T) {
+			bundle := &mcpbBundle{Name: "langfuse-mcp_" + version + ".mcpb", Content: []byte("not really a bundle")}
+			out, err := render(template(t), version, bundle)
+			if err != nil {
+				t.Fatalf("render(%q): %v", version, err)
+			}
+			if strings.Contains(string(out), "0.0.0-dev") {
+				t.Errorf("the placeholder is left in the entry:\n%s", out)
+			}
+			var r rendered
+			if err := json.Unmarshal(out, &r); err != nil {
+				t.Fatal(err)
+			}
+			got := []string{r.Version}
+			for _, p := range r.Packages {
+				got = append(got, p.RegistryType+" "+p.Identifier+" "+p.Version)
+			}
+			want := []string{
+				version,
+				"npm langfuse-api-mcp " + version,
+				"oci ghcr.io/rodrigorjsf/langfuse-api-mcp:" + version + " ",
+				"mcpb https://github.com/rodrigorjsf/langfuse-api-mcp/releases/download/v" + version + "/langfuse-mcp_" + version + ".mcpb ",
+			}
+			if strings.Join(got, "\n") != strings.Join(want, "\n") {
+				t.Errorf("version fields:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+			}
+		})
+	}
+}
+
 func TestSnapshotVersionRendersAValidServerJSON(t *testing.T) {
 	r := mustRender(t, template(t), "0.0.0-SNAPSHOT-0a1b2c3", nil)
 	if r.Version != "0.0.0-SNAPSHOT-0a1b2c3" {

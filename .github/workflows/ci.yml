@@ -4,8 +4,8 @@
 # The generator job runs the union catalog generator's offline unit tests (#89).
 # Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current.
 # The generator job also runs the user skill check (#134, spec #132 S3), the skill ZIP pack
-# script's tests (#139, S4), the release workflow's tag-only job tests (#154) and the offline docs
-# check of the security mapping's Status column (#155).
+# script's tests (#139, S4), the release workflow's tag-only job tests (#154), the release wizard's
+# tests (#186) and the offline docs check of the security mapping's Status column (#155).
 # A push or pull request that only changes docs (Markdown, docs/, .claude/, LICENSE) starts no run:
 # nothing in those paths is compiled or embedded (the only go:embed is internal/catalog/spec/*.json).
 # The user skill's Markdown under skills/ is the exception: the skill check guards it, so an edit
@@ -144,6 +144,13 @@ jobs:
         run: |
           set -euo pipefail
           "$RUNNER_TEMP/venv/bin/python" scripts/test_release_workflow.py
+      # The release wizard (#186, scripts/release-wizard.sh): its usage and preflight against stand-ins
+      # for git, gh and the rest, and its safety rules read from its text. Standard library only; it
+      # opens no browser and calls no service.
+      - name: Test the release wizard
+        run: |
+          set -euo pipefail
+          python3 scripts/test_release_wizard.py
       # The small-model eval's offline matcher tests (#105): standard library only, no model.
       - name: Test the small-model eval matcher
         run: |

@@ -48,7 +48,7 @@ The release workflow signs and publishes **only on a `v*` release tag**, never o
 Every release carries: `checksums.txt` (SHA-256 of every archive and of its SBOM); one SPDX JSON SBOM per archive and one for the image; a cosign keyless signature, as a Sigstore bundle `<file>.sigstore.json`, and GitHub build provenance for every archive, `checksums.txt`, the `.mcpb` and the skill ZIP; the multi-arch image signed by digest (each platform image too) and attested by digest. The archive SBOMs are covered through `checksums.txt`, which lists them and is itself signed. The `.mcpb` and the skill ZIP are not in `checksums.txt` (GoReleaser writes that file before they are packed): check them by their signatures (step 2). The image SBOM (`langfuse-mcp_<version>_image.sbom.json`) is covered by no signature yet: neither `checksums.txt` nor a bundle or attestation lists it. A signature is valid only when its certificate names this repository's release workflow at the release tag, issued to GitHub Actions. Step 4 needs a GitHub CLI with the `gh attestation` command (the Ubuntu package's 2.45.0 lacks it; 2.101.0 has it). With the release files downloaded into the current directory (see [Release archive](installation.md#release-archive)):
 
 ```bash
-version=<version>   # without the leading v, for example 0.1.0
+version=<version>   # without the leading v, for example 0.2.0
 archive="langfuse-mcp_${version}_linux_amd64.tar.gz"   # the archive you downloaded
 
 # 1. The archive is the one in checksums.txt (Windows: compare Get-FileHash, see Release archive).

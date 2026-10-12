@@ -4,12 +4,12 @@ What each distribution channel ships, how it is built and tested, and the versio
 
 ## Versions and channels
 
-Every build reports the version it was built with: `initialize` returns it as the server version, and the startup log line `server started` names it. A build without an injected version reports the module version Go recorded, without the leading `v`, only when it is a release tag (a `go install …@v0.1.0` build reports `0.1.0`); anything else reports `0.0.0-dev`: a pseudo-version, `(devel)` or a `+dirty` version, which is what a `go build` in a checkout gets unless it sits, clean, exactly on a release tag.
+Every build reports the version it was built with: `initialize` returns it as the server version, and the startup log line `server started` names it. A build without an injected version reports the module version Go recorded, without the leading `v`, only when it is a release tag (a `go install …@v0.2.0` build reports `0.2.0`); anything else reports `0.0.0-dev`: a pseudo-version, `(devel)` or a `+dirty` version, which is what a `go build` in a checkout gets unless it sits, clean, exactly on a release tag.
 
 | Channel | Status |
 |---|---|
 | [Release archive](#release-archive) (Linux, macOS, Windows × amd64, arm64) | published with every release, signed; built and smoke-tested on every change to packaging or the executable |
-| [`go install`](#go-install) | `@v0.1.0` (or `@latest`) reports its release version; a commit (`@main`) reports `0.0.0-dev` |
+| [`go install`](#go-install) | `@v0.2.0` (or `@latest`) reports its release version; a commit (`@main`) reports `0.0.0-dev` |
 | [Docker](#docker) (linux/amd64, linux/arm64; stdio only) | `ghcr.io/rodrigorjsf/langfuse-api-mcp:<version>`, public, signed by digest; built and smoke-tested on every change to packaging or the executable |
 | [Claude Desktop (MCPB)](#claude-desktop-mcpb) (macOS, Windows) | attached to every release, signed; built and smoke-tested on every change to packaging or the executable; its install in Claude Desktop itself is not recorded yet |
 | [npx](#npx) (Linux, macOS, Windows × x64, arm64) | built on every change to packaging or the executable, and smoke-tested on Linux x64, macOS arm64 and Windows x64 (the other three platform packages are built, not CI-tested); published to npmjs.org with npm provenance at every release |
@@ -22,7 +22,7 @@ Every [GitHub release](https://github.com/rodrigorjsf/langfuse-api-mcp/releases)
 
 One archive per target: `langfuse-mcp_<version>_<os>_<arch>.tar.gz` (`.zip` on Windows), with `os` one of `linux`, `darwin`, `windows` and `arch` one of `amd64`, `arm64`. Each holds the `langfuse-mcp` binary (`langfuse-mcp.exe` on Windows), `LICENSE` and this README. Next to them: `checksums.txt` (SHA-256 of every archive and of its SBOM) and one SPDX JSON SBOM per archive (`<archive>.sbom.json`). `windows/arm64` is **built, not CI-tested**: no runner proves it; on Windows on Arm you can also run the `windows/amd64` build under emulation.
 
-Download with `gh` or `curl`, check the archive against `checksums.txt`, then extract it (Linux on amd64 shown; `<version>` is the release without the leading `v`, for example `0.1.0`):
+Download with `gh` or `curl`, check the archive against `checksums.txt`, then extract it (Linux on amd64 shown; `<version>` is the release without the leading `v`, for example `0.2.0`):
 
 ```bash
 version=<version>
@@ -48,13 +48,13 @@ Then point your MCP client at the extracted binary (see [Client configuration](c
 
 ## go install
 
-Install a release (`@v0.1.0`, or `@latest`) or a commit (`@main` or a commit hash). With Go 1.21 or later (the module's `toolchain` directive fetches the Go 1.27 toolchain it needs):
+Install a release (`@v0.2.0`, or `@latest`) or a commit (`@main` or a commit hash). With Go 1.21 or later (the module's `toolchain` directive fetches the Go 1.27 toolchain it needs):
 
 ```bash
 go install github.com/rodrigorjsf/langfuse-api-mcp/cmd/langfuse-mcp@<version>
 ```
 
-The binary lands in `$(go env GOPATH)/bin`. A `go install …@<version>` build of a release tag reports that version without the leading `v` (`@v0.1.0` reports `0.1.0`), taken from the module version Go records in the binary. `@latest` resolves to the latest release tag and reports it the same way; a build at a commit that is no release tag (`@main`, a commit hash) reports `0.0.0-dev`. `go install …@v0.1.0` reporting `0.1.0` in `initialize` is recorded ([record](../research/raw/2026-09-30-v0.1.0-release-proofs.md)).
+The binary lands in `$(go env GOPATH)/bin`. A `go install …@<version>` build of a release tag reports that version without the leading `v` (`@v0.2.0` reports `0.2.0`), taken from the module version Go records in the binary. `@latest` resolves to the latest release tag and reports it the same way; a build at a commit that is no release tag (`@main`, a commit hash) reports `0.0.0-dev`. `go install …@v0.1.0` reporting `0.1.0` in `initialize` is recorded ([record](../research/raw/2026-09-30-v0.1.0-release-proofs.md)).
 
 ## Docker
 

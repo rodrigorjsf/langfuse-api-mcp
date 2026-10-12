@@ -23,7 +23,7 @@
 # github-release (the GitHub release holding the archives, SBOMs, checksums, bundle, skill ZIP and
 # signatures), then publish-registry (the MCP Registry entry, #154; allowed to fail). Each is gated by a job `if` on the tag, so a snapshot run shows it skipped, and holds only the permissions it needs; the
 # publish jobs run in the `release` environment, restricted to `v*` tags (docs/development/release-pipeline.md "Cutting a
-# release"), which alone holds the npm token until npm trusted publishing replaces it.
+# release"), which holds no npm token: publish-npm authenticates through npm trusted publishing (OIDC).
 # Actions are pinned by commit SHA; Dependabot (.github/dependabot.yml) keeps them current. Tool
 # versions (GoReleaser, syft) are pinned below and in packaging/.goreleaser.yaml's header; Node and
 # cosign in `env` below,
@@ -701,10 +701,14 @@ jobs:
 
   # `npm publish` of the six platform packages, then the main package that depends on them, from the
   # tarballs the npx smoke installed. Authentication: npm trusted publishing (OIDC, id-token),
-  # configured on npmjs.com after v0.1.0, which used a short-lived NPM_TOKEN; that secret is deleted,
-  # so NODE_AUTH_TOKEN is empty and npm uses OIDC (docs/development/release-pipeline.md "Cutting a release"). npm
-  # adds provenance either way. A package version already on the registry is
-  # skipped, so a re-run after a partial failure finishes the set instead of failing on it.
+  # configured on npmjs.com after v0.1.0, which used a short-lived NPM_TOKEN; that secret is deleted.
+  # v0.2.0 is the first release to publish through OIDC (docs/development/release-pipeline.md "Cutting a
+  # release" has the check against npm's documentation). npm 11.19.0, the one Node 24.21.0 ships,
+  # asks the registry for an OIDC token exchange before it reads any configured credential, so the
+  # empty NODE_AUTH_TOKEN below (no such secret exists) does not stop it. The line stays so that the
+  # token fallback of scripts/release-wizard.sh (stage 8) works: a re-run of this job after the tag
+  # uses this workflow as tagged. npm adds provenance either way. A package version already on the
+  # registry is skipped, so a re-run after a partial failure finishes the set instead of failing on it.
   publish-npm:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [snapshot, sign-blobs]
