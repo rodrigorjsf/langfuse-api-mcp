@@ -19,7 +19,7 @@ const truncatedMarker = "… [truncated]"
 // control sequence goes whole, as in Text.
 func Message(s string) string {
 	clean := make([]rune, 0, min(len(s), 4*MaxMessageRunes))
-	for _, r := range withoutEscapeSequences(strings.ToValidUTF8(s, "�")) {
+	for _, r := range withoutEscapeSequences(strings.ToValidUTF8(s, "�"), "") {
 		switch {
 		case unicode.IsControl(r):
 			clean = append(clean, ' ')

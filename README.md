@@ -413,7 +413,7 @@ The startup log line `CA sources loaded` lists which CA sources were loaded (pat
 - **Read-only unless you opt in.** Without `LANGFUSE_MCP_ALLOW_WRITES=true` the write tool does not exist; `execute_read` runs GET operations only. The tool set is fixed at startup.
 - **Write mode confirms every destructive call.** With writes on, creates (POST) run directly, and every DELETE, PUT and PATCH runs only after you confirm that exact call in your client's form. A client without form elicitation cannot run destructive operations at all; no setting skips the confirmation. A write is never retried automatically.
 - **Your keys stay with the server.** Read only from the server's environment, never accepted from the agent, never logged, never returned in a result.
-- **Untrusted data is labelled.** Langfuse content reaches the agent inside an envelope marking it as data, cleaned of hidden Unicode and control characters.
+- **Untrusted data is labelled.** Langfuse content reaches the agent inside an envelope marking it as data, cleaned of hidden Unicode and control characters, also when they are written as escapes inside the JSON text of a trace input or output.
 - **Verified TLS only.** OS store + your CAs, TLS 1.2+, no skip-verify option.
 
 Recommendations: create a dedicated Langfuse key for the agent, set an expiry date on it, and keep writes off unless you need them.

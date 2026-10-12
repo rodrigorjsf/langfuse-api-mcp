@@ -604,13 +604,15 @@ func TestAnInstructionBesideAHeaderMapIsNotChangedByTheRule(t *testing.T) {
 }
 
 // A header map nested in a payload is redacted at every depth and in every
-// form: in a list, in metadata, as stringified JSON inside a string.
+// form: in a list, in metadata, as stringified JSON inside a string. The JSON
+// text inside a string is decoded and its header map redacted as an object is
+// (#210), so the text comes back compact, as Payload writes a payload.
 func TestAHeaderMapIsRedactedAtEveryDepthAndInEveryForm(t *testing.T) {
 	t.Parallel()
 	stringified := `{\"headers\": {\"Authorization\": \"Basic ` + mapToken + `\"}}`
 	in := `{"input":"` + stringified + `","output":[{"metadata":{"a":[{"b":"` + stringified + `"}],"headers":{"authorization":"Token ` + mapToken + `"}}}]}`
-	want := `{"input":"{\"headers\": {\"Authorization\": \"Basic [REDACTED]\"}}",` +
-		`"output":[{"metadata":{"a":[{"b":"{\"headers\": {\"Authorization\": \"Basic [REDACTED]\"}}"}],"headers":{"authorization":"Token [REDACTED]"}}}]}`
+	want := `{"input":"{\"headers\":{\"Authorization\":\"Basic [REDACTED]\"}}",` +
+		`"output":[{"metadata":{"a":[{"b":"{\"headers\":{\"Authorization\":\"Basic [REDACTED]\"}}"}],"headers":{"authorization":"Token [REDACTED]"}}}]}`
 	if got := cleanedPayload(t, sanitize.Redactor{}, in); got != want {
 		t.Fatalf("Payload\n got %s\nwant %s", got, want)
 	}

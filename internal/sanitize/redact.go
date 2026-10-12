@@ -31,6 +31,26 @@ const wordEndedEscape = `\\+(?:[bfnrt]|u[0-9A-Fa-f]{4})`
 // letter or digit before the key is a word character, which has no boundary.
 var keyPattern = regexp.MustCompile(`(?:\b|(` + wordEndedEscape + `))[ps]k-lf-[A-Za-z0-9_-]+`)
 
+// letterEscapeKeyPattern matches a Langfuse key directly after the JSON escape
+// of an ASCII letter, digit or underscore, written as text: backslashes, then
+// u00 and the two hexadecimal digits of 0-9, A-Z, _ or a-z (#210). Decoded, that
+// escape is a word character glued to the key, which keyPattern does not take;
+// the text, as keyPattern reads it, has the escape before the key and takes it.
+// The group is the escape, which stays.
+var letterEscapeKeyPattern = regexp.MustCompile(`(\\+u00(?i:3[0-9]|[46][1-9a-f]|5[0-9af]|7[0-9a]))[ps]k-lf-[A-Za-z0-9_-]+`)
+
+// redactKeysAfterLetterEscapes returns s, the text of a JSON text before it is
+// decoded, with every Langfuse key that directly follows the escape of an ASCII
+// letter, digit or underscore replaced by Redacted, the escape kept. Decoding and
+// writing the text again would turn that escape into the character and glue the
+// key to it, where #208's rule on the text no longer reads an escape.
+func redactKeysAfterLetterEscapes(s string) string {
+	if !strings.Contains(s, "k-lf-") {
+		return s
+	}
+	return letterEscapeKeyPattern.ReplaceAllString(s, "${1}"+Redacted)
+}
+
 // minTokenLength is the fewest characters a token must have for Redact to take
 // it for a credential (#180). It must stay above the length of Redacted, so
 // that redacting a redacted text changes nothing.
@@ -149,8 +169,8 @@ func NewRedactor(secrets ...string) Redactor {
 // characters Text drops are dropped from the result then; a text with no
 // secret comes back as it was.
 func (r Redactor) Redact(s string) string {
-	clean := Text(s)
-	redacted := r.redact(clean)
+	clean, places := textPlaces(s)
+	redacted := r.redact(redactKeysAfterPlaces(clean, places))
 	if clean == s || redacted != clean {
 		return redacted
 	}
@@ -169,6 +189,62 @@ func (r Redactor) redact(s string) string {
 		return s
 	}
 	return headerPattern.ReplaceAllString(s, "${1}"+Redacted)
+}
+
+// keyPrefixLength is the length of "pk-lf-" and "sk-lf-".
+const keyPrefixLength = len("sk-lf-")
+
+// redactKeysAfterPlaces returns s, a clean text, with every Langfuse key that
+// starts at one of places replaced by Redacted (#210). A place is where the
+// cleaning removed a hidden or control character or a whole terminal control
+// sequence: the key rule reads the clean text, where that place is gone and the
+// word before it is glued to the key (token, a zero-width space and sk-lf-…
+// read tokensk-lf-…, which has no word boundary), so a place is a boundary of
+// its own, whatever stands before it. A key that keyPattern already finds, and
+// one that a place splits, are the business of keyPattern and are left to it;
+// so is a text with no place.
+func redactKeysAfterPlaces(s string, places []int) string {
+	if len(places) == 0 || !strings.Contains(s, "k-lf-") {
+		return s
+	}
+	covered := keyPattern.FindAllStringIndex(s, -1)
+	var out strings.Builder
+	written := 0 // s[:written] is in out, a replaced key included
+	for _, p := range places {
+		if p < written || p+keyPrefixLength >= len(s) || !isKeyPrefix(s[p:p+keyPrefixLength]) {
+			continue
+		}
+		// The first match that ends after p; p is inside it if it starts at or before p.
+		i, _ := slices.BinarySearchFunc(covered, p+1, func(m []int, target int) int { return cmp.Compare(m[1], target) })
+		if i < len(covered) && covered[i][0] <= p {
+			continue // inside a key keyPattern replaces whole
+		}
+		n := keyCharsLength(s[p+keyPrefixLength:])
+		if n == 0 {
+			continue
+		}
+		out.WriteString(s[written:p])
+		out.WriteString(Redacted)
+		written = p + keyPrefixLength + n
+	}
+	if written == 0 {
+		return s
+	}
+	out.WriteString(s[written:])
+	return out.String()
+}
+
+// isKeyPrefix reports whether s is "pk-lf-" or "sk-lf-".
+func isKeyPrefix(s string) bool { return s == "pk-lf-" || s == "sk-lf-" }
+
+// keyCharsLength returns the length of the run of key characters
+// (A-Za-z0-9_-) that s starts with.
+func keyCharsLength(s string) int {
+	n := 0
+	for n < len(s) && (isASCIIAlnum(s[n]) || s[n] == '_' || s[n] == '-') {
+		n++
+	}
+	return n
 }
 
 // mentionsHeader reports whether s holds "bearer" or "authorization" in any

@@ -238,6 +238,11 @@ func FuzzRedact(f *testing.F) {
 	f.Add(`"\\u000ask-lf-abc \\\\u00E9pk-lf-def \\\\nsk-lf-ghi"`)
 	f.Add(`x\\nsk-lf-a\\\\tpk-lf-b\u000ask-lf-c`)
 	f.Add("\\n\\u200b\u200bsk-lf-abc\\nsk-lf-\\n")
+	// A Langfuse key directly after a place where the cleaning removed something:
+	// a hidden character, a control character, a whole terminal sequence (#210).
+	f.Add("token\u200bsk-lf-abc123 x\apk-lf-def x\x1b[31msk-lf-ghi")
+	f.Add("ta\u200bsk-lf-name sk-lf-abc\u202esk-lf-def \x00pk-lf-x")
+	f.Add("{\"k\":\"v\u200bsk-lf-abc\\n\x1b]8;;u\apk-lf-d\"}")
 	r := sanitize.NewRedactor("hunter2-hunter2")
 	f.Fuzz(func(t *testing.T, s string) {
 		once := r.Redact(s)
@@ -263,7 +268,10 @@ func FuzzRedact(f *testing.F) {
 // (ASCII 0.16 ms before and after, the other three within the noise of a run):
 // it skips the key pattern. Text made of nothing but keys, each pair with one
 // after an escape, took 1.8 ms before and takes 3.4 ms now, the cost of the
-// second way in to the key and of the group that keeps the escape.
+// second way in to the key and of the group that keeps the escape. Since #210
+// the cleaning decides an ASCII character in a short test before the Unicode
+// tables (removed), so the text with non-ASCII letters takes 0.48 ms instead of
+// 1.16 ms (the other three: ASCII 0.14 ms, keys 3.5 ms, unchanged).
 func BenchmarkRedact(b *testing.B) {
 	for name, input := range map[string]string{
 		"ASCII":     `{"name":"checkout-flow","input":"the user asked about authorisation of a bearish, ok","n":12345},`,
@@ -292,10 +300,27 @@ func BenchmarkRedact(b *testing.B) {
 // list of objects with and without a header map. On the machine of
 // BenchmarkRedact, rows with no header map took 2.75 ms before and take
 // 2.80 ms now; rows with a header map took 2.5 ms before and take 3.1 ms now.
+// With the JSON text of #210, taken on the same machine in alternating runs of
+// the package before and after: rows with no header map 2.89 ms before and
+// 2.91 ms after, rows with a header map 3.17 ms before and 3.18 ms after (a
+// string that does not start with a brace, a bracket or a quote costs one more
+// byte read). The two rows whose input and output are JSON text are the cost of
+// reading it: with nothing to clean 1.59 ms before (the text was left as it
+// was) and 4.25 ms after, with a hidden character in each 1.50 ms before and
+// 5.36 ms after, which is about what a payload of the same bytes costs to
+// decode, walk and write.
 func BenchmarkPayload(b *testing.B) {
 	for name, row := range map[string]string{
 		"rows with no header map": `{"name":"checkout-flow","input":"the user asked about a refund","n":12345,"tags":["a","b"]}`,
 		"rows with a header map":  `{"name":"checkout-flow","headers":{"Authorization":"Basic dXNlcjpwYXNzd29yZDEyMzQ1Njc4"},"n":12345}`,
+		// A page of Observations v2 rows: input and output are JSON text (#210).
+		// With nothing to clean in them the texts come back as they were; with
+		// a hidden character written as an escape in each, they are written
+		// again.
+		"rows with JSON text to keep": `{"name":"checkout-flow","input":"{\"messages\":[{\"role\":\"user\",\"content\":\"the user asked about a refund\"}]}",` +
+			`"output":"{\"answer\":\"a refund was issued\",\"ids\":[1,2,3]}","n":12345}`,
+		"rows with JSON text to clean": `{"name":"checkout-flow","input":"{\"messages\":[{\"role\":\"user\",\"content\":\"the user asked\\u200b about a refund\"}]}",` +
+			`"output":"{\"answer\":\"a refund was issued\\u001b[31m\",\"ids\":[1,2,3]}","n":12345}`,
 	} {
 		payload := json.RawMessage("[" + strings.TrimSuffix(strings.Repeat(row+",", 64<<10/len(row)+1), ",") + "]")
 		b.Run(name, func(b *testing.B) {

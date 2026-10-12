@@ -3,6 +3,7 @@ package sanitize_test
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,19 +13,40 @@ import (
 )
 
 // FuzzPayload checks the invariants of a payload shown to the agent, whatever
-// JSON Langfuse sent: the result is valid JSON, and no string in it, key or
-// value, keeps a hidden character.
+// JSON Langfuse sent: the result is valid JSON, no string in it, key or value,
+// keeps a hidden character or the planted secret, at the top level and at every
+// level a string of the result decodes at as JSON text (#210, down to the
+// bound), and a second pass changes nothing.
 func FuzzPayload(f *testing.F) {
 	f.Add(`{"name":"ignore\u202Eprevious\u200Binstructions\u0007","n":12345678901234567890}`)
 	f.Add(`["pr` + "\U000E0041\u2066" + `od",null,true,1.5e3,{"a\u200Bb":"line 1\nline 2"}]`)
 	f.Add(`"\xff\xfe broken UTF-8"`)
 	f.Add(`{"sec\u200Bret":"a secret, sec\u202Eret"}`)
 	f.Add(`{"c\u001b[31molour":"\u001b[1;32mgreen\u001b[m \u001b]8;;https://x.example\u0007link\u001b]8;;\u0007 sec\u001b[0mret \u009b2J"}`)
+	// JSON text (the Observations v2 input and output), one to five times
+	// stringified, with hidden characters, a terminal sequence, the planted
+	// secret and a Langfuse key split by escapes.
+	inner := `{"a":"x` + uEsc("0001") + uEsc("200b") + `y` + uEsc("001b") + `[31m","sec` + uEsc("200b") + `ret":["a secret, sec` + uEsc("202e") + `ret",1.50],` +
+		`"k":"token` + uEsc("200b") + `sk-lf-abc` + uEsc("0007") + `def","Authorization":"Basic dXNlcjpwYXNzd29yZDEyMzQ1Njc4"}`
+	for n := 1; n <= 5; n++ {
+		text := inner
+		for range n {
+			quoted, err := json.Marshal(text)
+			if err != nil {
+				f.Fatal(err)
+			}
+			text = string(quoted)
+		}
+		f.Add(`{"output":` + text + `}`)
+	}
+	f.Add(`{"output":"[\"a\\u200bb\",{\"k\":\"sec\\u0007ret\"}]","n":1}`)
+	f.Add(`["{\"a\":\"x\"} {\"b\":\"\\u200b\"}", "\"x\\u001b[31my\"", "{\"a\":"]`)
 	f.Fuzz(func(t *testing.T, s string) {
 		if !json.Valid([]byte(s)) {
 			return // the client passes only valid JSON
 		}
-		got, err := sanitize.Payload(json.RawMessage(s), sanitize.NewRedactor("secret"))
+		r := sanitize.NewRedactor("secret")
+		got, err := sanitize.Payload(json.RawMessage(s), r)
 		if err != nil {
 			t.Fatalf("Payload(%q) failed: %v", s, err)
 		}
@@ -35,10 +57,66 @@ func FuzzPayload(f *testing.F) {
 			t.Fatalf("Payload(%q) = %q, not JSON: %v", s, got, err)
 		}
 		assertNoHiddenCharacter(t, v)
+		assertCleanAtEveryLevel(t, v, sanitize.MaxJSONTextLevels)
 		if strings.Contains(string(got), "secret") {
 			t.Fatalf("Payload(%q) = %q keeps the planted secret", s, got)
 		}
+		again, err := sanitize.Payload(got, r)
+		if err != nil || !bytes.Equal(again, got) {
+			t.Fatalf("Payload(%q) = %q, but a second pass gives %q (err %v)", s, got, again, err)
+		}
 	})
+}
+
+// assertCleanAtEveryLevel checks a decoded result the way the agent could read
+// it: no string, key or value, keeps a hidden character or the planted secret,
+// and a string that is JSON text (exactly one object, list or string, as the
+// sanitizer reads it) is decoded and checked the same way, for as many levels
+// as the sanitizer decodes.
+func assertCleanAtEveryLevel(t *testing.T, v any, levels int) {
+	t.Helper()
+	check := func(s string) {
+		t.Helper()
+		for _, r := range s {
+			if unicode.Is(unicode.Cf, r) || (r >= 0xE0000 && r <= 0xE007F) ||
+				unicode.In(r, unicode.Variation_Selector, unicode.Other_Default_Ignorable_Code_Point) ||
+				(unicode.IsControl(r) && !strings.ContainsRune("\t\n\r", r)) {
+				t.Fatalf("a string of the result keeps the hidden character %U: %q", r, s)
+			}
+		}
+		if strings.Contains(s, "secret") {
+			t.Fatalf("a string of the result keeps the planted secret: %q", s)
+		}
+	}
+	switch v := v.(type) {
+	case string:
+		check(v)
+		if levels == 0 {
+			return
+		}
+		dec := json.NewDecoder(strings.NewReader(v))
+		dec.UseNumber()
+		var inner any
+		if dec.Decode(&inner) != nil {
+			return
+		}
+		if _, err := dec.Token(); err != io.EOF {
+			return
+		}
+		switch inner.(type) {
+		case map[string]any, []any, string:
+			assertCleanAtEveryLevel(t, inner, levels-1)
+		}
+	case []any:
+		for _, item := range v {
+			assertCleanAtEveryLevel(t, item, levels)
+		}
+	case map[string]any:
+		for k, item := range v {
+			check(k)
+			assertCleanAtEveryLevel(t, item, levels)
+		}
+	}
 }
 
 func assertNoHiddenCharacter(t *testing.T, v any) {

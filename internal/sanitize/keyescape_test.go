@@ -181,14 +181,14 @@ func TestRedactDoesNotRedactAKeyGluedToLettersDigitsOrAnIncompleteEscape(t *test
 }
 
 // Payload strips the invisible character first, so a key that stood after it is
-// then glued to the word before it: documented as not redacted until #210
-// decodes the cleaning into a boundary. A word that merely holds the prefix is
-// not a key either way.
-func TestPayloadDoesNotRedactAKeyThatTheStrippingOfAnInvisibleCharacterGluedToAWord(t *testing.T) {
+// then glued to the word before it. The place where the character stood is a
+// boundary of its own (#210), so that key is redacted; a word that merely holds
+// the prefix is not a key either way.
+func TestPayloadRedactsAKeyThatTheStrippingOfAnInvisibleCharacterGluedToAWordAndKeepsAWordThatHoldsThePrefix(t *testing.T) {
 	t.Parallel()
 	tests := map[string]struct{ in, want string }{
 		"a key after a word and a zero-width space": {
-			in: `{"a":"token\u200bsk-lf-abc123"}`, want: `{"a":"tokensk-lf-abc123"}`,
+			in: `{"a":"token\u200bsk-lf-abc123"}`, want: `{"a":"token[REDACTED]"}`,
 		},
 		"a word that holds the prefix after an escape and a zero-width space": {
 			in: `{"a":"x\\n\u200btask-lf-name"}`, want: `{"a":"x\\ntask-lf-name"}`,
@@ -413,12 +413,12 @@ func TestPayloadKeepsTheLayoutOfAStringHoldingCompactJSONText(t *testing.T) {
 }
 
 // A control or invisible character written as a JSON escape inside a string that
-// holds JSON text is not removed: the cleaning reads the string as plain text.
-// Documented as a limit of #208; #210 decodes and cleans such a string.
-func TestPayloadKeepsAControlCharacterWrittenAsAJSONEscapeInsideAStringHoldingJSONText(t *testing.T) {
+// holds JSON text is removed: the string is decoded and cleaned (#210). It was
+// the limit of #208 that the cleaning read such a string as plain text.
+func TestPayloadRemovesAControlCharacterWrittenAsAJSONEscapeInsideAStringHoldingJSONText(t *testing.T) {
 	t.Parallel()
 	in := `{"output":"{\"a\":\"x\\u001b[31my\\u200bz\"}"}`
-	assertPayloadIs(t, in, in)
+	assertPayloadIs(t, in, `{"output":"{\"a\":\"xyz\"}"}`)
 }
 
 // 1 MiB of backslashes, of "\n" runs and of "\u" followed by too few hex digits
