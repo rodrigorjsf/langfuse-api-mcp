@@ -247,6 +247,8 @@ const keyPrefixLength = len("sk-lf-")
 // an earlier place: nothing new starts a key there, but a header keyword does,
 // and its token, which stands after the span (a token ends at a blank, a key
 // also at a colon or any other character that is none of a key), is replaced.
+// A key found at a place that ran into a header keyword (tokenAfterKey) has
+// that keyword's token replaced as well.
 //
 // blanks are the places where a blank of the header rule was dropped (a tab,
 // which Line drops and Text keeps): the token that stood after its scheme
@@ -275,6 +277,14 @@ func redactAfterPlaces(s string, places []int, blanks droppedBlanks) string {
 		if keys && p >= written && !insideAMatch(keyMatches, p) {
 			if end, found = keyAt(s, p); found {
 				start = p // a key starts at the place; a token, after its keyword
+			}
+		}
+		if found && headers {
+			if tokenStart, tokenEnd, ok := tokenAfterKey(s, start, end); ok {
+				// The key goes first, then the token: what stands between them stays.
+				out.WriteString(s[written:start])
+				out.WriteString(Redacted)
+				written, start, end = end, tokenStart, tokenEnd
 			}
 		}
 		if !found && headers {
@@ -397,6 +407,29 @@ func keyAt(s string, p int) (end int, ok bool) {
 		return 0, false
 	}
 	return p + keyPrefixLength + n, true
+}
+
+// tokenAfterKey returns the span of the token of the header credential whose
+// keyword ends s[start:end], a Langfuse key found at a place; ok is false when
+// there is none. A key takes every key character after its prefix, so it runs
+// through a keyword glued to it by a hyphen or an underscore
+// (sk-lf-abc-Bearer <token>); the keyword goes with the key and would no longer
+// lead to its token, which Redactor.redact prevents by reading the headers
+// first where nothing was removed. A keyword leads to a token only when a blank
+// or a colon follows it, and neither is a key character, so the keyword is the
+// last word of the key: one test per word, whatever the length of the key.
+func tokenAfterKey(s string, start, end int) (tokenStart, tokenEnd int, ok bool) {
+	key := s[start:end]
+	for _, word := range [...]string{authorizationWord, bearerWord} {
+		i := len(key) - len(word)
+		if i < keyPrefixLength || !keywordStartsAt(key, i) {
+			continue
+		}
+		if m := headerAtPlacePattern.FindStringSubmatchIndex(s[start+i:]); m != nil {
+			return start + i + m[3], start + i + m[1], true
+		}
+	}
+	return 0, 0, false
 }
 
 // maxKeywordReach is how many bytes after a place tokenAt looks for the keyword
