@@ -147,7 +147,8 @@ func hostileStrings(t *testing.T) map[string]func(n int) string {
 			return nested(t, `{"a":"`+strings.Repeat(string(rune(0x2028)), 2*n)+uEsc("200b")+`"}`, 3)
 		},
 		"keys that a place hides": func(n int) string {
-			return `{"a":"` + strings.Repeat("x"+uEsc("200b")+"sk-lf-k ", n) + `"}`
+			// 8*n for the reason given below: both inputs on the automaton's side.
+			return `{"a":"` + strings.Repeat("x"+uEsc("200b")+"sk-lf-k ", 8*n) + `"}`
 		},
 		"JSON text in JSON text in a list": func(n int) string {
 			return `[` + strings.Repeat(quoteJSON(t, `{"b":"x`+uEsc("200b")+`"}`)+`,`, n) + `1]`
@@ -186,7 +187,7 @@ func hostileStrings(t *testing.T) map[string]func(n int) string {
 		// The reach of tokenAt after a place is bounded: a run of token characters
 		// with a place at every other byte, and names that put the keyword out of reach.
 		"token characters, a place at every other byte": func(n int) string {
-			return "Bearer " + strings.Repeat("a"+zeroWidthSpace, 4*n)
+			return "Bearer " + strings.Repeat("a"+zeroWidthSpace, 8*n)
 		},
 		"names that put the keyword out of reach of a place": func(n int) string {
 			return strings.Repeat(strings.Repeat("a-", 40)+zeroWidthSpace+"authorization ", n)
