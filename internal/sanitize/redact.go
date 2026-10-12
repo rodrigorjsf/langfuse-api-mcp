@@ -257,14 +257,16 @@ func redactAfterPlaces(s string, places []int) string {
 	var out strings.Builder
 	written := 0 // s[:written] is in out, a replaced key or token included
 	for _, p := range places {
-		var start, end int // the span to replace; end is 0 when nothing starts at p
+		var start, end int // the span to replace
+		found := false     // whether a key or the token of a header starts at p
 		if keys && p >= written && !insideAMatch(keyMatches, p) {
-			start, end = keyAt(s, p)
+			start = p
+			end, found = keyAt(s, p)
 		}
-		if end == 0 && headers {
-			start, end = tokenAt(s, p)
+		if !found && headers {
+			start, end, found = tokenAt(s, p)
 		}
-		if end == 0 || start < written {
+		if !found || start < written {
 			continue
 		}
 		out.WriteString(s[written:start])
@@ -286,17 +288,17 @@ func insideAMatch(matches [][]int, p int) bool {
 	return i < len(matches) && matches[i][0] <= p
 }
 
-// keyAt returns the span of the Langfuse key that starts at p of s, or an empty
-// span (end 0) when none does.
-func keyAt(s string, p int) (start, end int) {
+// keyAt returns where the Langfuse key that starts at p of s ends, and whether
+// one starts there.
+func keyAt(s string, p int) (end int, ok bool) {
 	if p+keyPrefixLength >= len(s) || !isKeyPrefix(s[p:p+keyPrefixLength]) {
-		return 0, 0
+		return 0, false
 	}
 	n := keyCharsLength(s[p+keyPrefixLength:])
 	if n == 0 {
-		return 0, 0
+		return 0, false
 	}
-	return p, p + keyPrefixLength + n
+	return p + keyPrefixLength + n, true
 }
 
 // maxKeywordReach is how many bytes after a place tokenAt looks for the keyword
@@ -310,8 +312,8 @@ const maxKeywordReach = 64
 // starts at p of s, or in the unbroken run of token characters that starts at p
 // and has the keyword within maxKeywordReach bytes, after a character that
 // headerPattern accepts before it (a place is a start itself, whatever stands
-// before it); or an empty span (end 0) when none does.
-func tokenAt(s string, p int) (start, end int) {
+// before it); ok is false when there is none.
+func tokenAt(s string, p int) (start, end int, ok bool) {
 	rest := s[p:]
 	for i := 0; i < len(rest) && i <= maxKeywordReach; i++ {
 		if i > 0 && !isValueChar(rest[i-1]) {
@@ -325,10 +327,10 @@ func tokenAt(s string, p int) (start, end int) {
 			continue
 		}
 		if m := headerAtPlacePattern.FindStringSubmatchIndex(rest[i:]); m != nil {
-			return p + i + m[3], p + i + m[1] // after the group that stays, to the end of the token
+			return p + i + m[3], p + i + m[1], true // after the group that stays, to the end of the token
 		}
 	}
-	return 0, 0
+	return 0, 0, false
 }
 
 // keywordStartsAt reports whether s[i:] starts with "authorization" or "bearer"
