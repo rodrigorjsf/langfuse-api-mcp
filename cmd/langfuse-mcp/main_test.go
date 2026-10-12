@@ -116,12 +116,19 @@ func testBinary(t *testing.T) []string {
 	return []string{exe, "-test.run=^$"}
 }
 
+// childBound is how long a child process started by a test may live before it
+// is killed. It is a guard against a child that hangs, not a measured property:
+// the child is this test binary, built with the race detector in CI, and on a
+// Windows runner that is also running the other packages' race suites it took
+// 28 s to start more than once (#224), so the bound leaves room for that.
+const childBound = 2 * time.Minute
+
 // runCommandOutput runs the launch command argv (never through a shell) as a
 // child with the hermetic environment plus the extra entries (later entries
 // win), and returns its stdout, stderr and exit error.
 func runCommandOutput(t *testing.T, argv, env []string) (stdout, stderr []byte, err error) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), childBound)
 	defer cancel()
 
 	cmd := newChildCommand(ctx, argv, env)
