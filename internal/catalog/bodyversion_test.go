@@ -16,8 +16,10 @@ import (
 // literals from the release specs (docs/research/langfuse.md, section 1.14):
 // CreateScoreRequest requires traceId and has neither sessionId nor
 // datasetRunId up to 3.52.0, gains sessionId in 3.53.0 (and stops requiring
-// traceId) and datasetRunId in 3.55.0; CreateModelRequest requires unit at
-// 3.0.0, does not and allows null from 3.8.0, and requires it again from 4.19.0.
+// traceId) and datasetRunId in 3.55.0, and from 4.55.0 the body is
+// CreateScoresRequest, a oneOf of one CreateScoreRequest and a list of them
+// (CreateScoreBatchRequest); CreateModelRequest requires unit at 3.0.0, does
+// not and allows null from 3.8.0, and requires it again from 4.19.0.
 
 // resolvedAt returns the operation as the catalog resolves it for a deployment
 // of the given version with every family on; "" is a version not detected.
@@ -32,8 +34,30 @@ func resolvedAt(t *testing.T, version, id string) catalog.Operation {
 
 // bodyShape is the part of a body schema the cases below compare.
 type bodyShape struct {
+	Type       any                        `json:"type"`
 	Required   []string                   `json:"required"`
 	Properties map[string]json.RawMessage `json:"properties"`
+	OneOf      []bodyShape                `json:"oneOf"`
+	Items      *bodyShape                 `json:"items"`
+}
+
+// object returns the object a body schema describes: the schema itself, or
+// its object alternative where it is a oneOf of an object and a list of them.
+func (s bodyShape) object() bodyShape {
+	for _, a := range s.OneOf {
+		if a.Type == "object" {
+			return a
+		}
+	}
+	return s
+}
+
+// takesAList reports whether the schema also accepts a list of the object it
+// describes.
+func (s bodyShape) takesAList() bool {
+	return slices.ContainsFunc(s.OneOf, func(a bodyShape) bool {
+		return a.Type == "array" && a.Items != nil && slices.Equal(a.Items.Required, s.object().Required)
+	})
 }
 
 func shapeOf(t *testing.T, op catalog.Operation) bodyShape {
@@ -57,21 +81,27 @@ func TestScoresCreateHasTheBodySchemaOfTheDeploymentsVersion(t *testing.T) {
 		sessionID, datasetRunID bool
 		traceIDRequired         bool
 		wantRequired            []string
+		list                    bool
 		description             string
 	}{
-		{"3.30.0", false, false, true, []string{"traceId", "name", "value"}, "before sessionId"},
-		{"3.52.0", false, false, true, []string{"traceId", "name", "value"}, "the last release before sessionId"},
-		{"3.53.0", true, false, false, []string{"name", "value"}, "the release that adds sessionId"},
-		{"3.54.1", true, false, false, []string{"name", "value"}, "sessionId and no datasetRunId"},
-		{"3.55.0", true, true, false, []string{"name", "value"}, "the release that adds datasetRunId"},
-		{"4.46.0", true, true, false, []string{"name", "value"}, "the 4.x pin"},
-		{"", true, true, false, []string{"name", "value"}, "a version not detected is the newest release"},
-		{"9.9.9", true, true, false, []string{"name", "value"}, "a version newer than any known one is the newest release"},
+		{"3.30.0", false, false, true, []string{"traceId", "name", "value"}, false, "before sessionId"},
+		{"3.52.0", false, false, true, []string{"traceId", "name", "value"}, false, "the last release before sessionId"},
+		{"3.53.0", true, false, false, []string{"name", "value"}, false, "the release that adds sessionId"},
+		{"3.54.1", true, false, false, []string{"name", "value"}, false, "sessionId and no datasetRunId"},
+		{"3.55.0", true, true, false, []string{"name", "value"}, false, "the release that adds datasetRunId"},
+		{"4.46.0", true, true, false, []string{"name", "value"}, false, "the 4.x pin"},
+		{"4.55.0", true, true, false, []string{"name", "value"}, true, "the release that adds the list of scores"},
+		{"", true, true, false, []string{"name", "value"}, true, "a version not detected is the newest release"},
+		{"9.9.9", true, true, false, []string{"name", "value"}, true, "a version newer than any known one is the newest release"},
 	} {
 		t.Run(tc.description, func(t *testing.T) {
 			t.Parallel()
 			op := resolvedAt(t, tc.version, "scores_create")
-			s := shapeOf(t, op)
+			whole := shapeOf(t, op)
+			if whole.takesAList() != tc.list {
+				t.Errorf("at %q: takes a list of scores %v, want %v", tc.version, whole.takesAList(), tc.list)
+			}
+			s := whole.object()
 			if s.has("sessionId") != tc.sessionID || s.has("datasetRunId") != tc.datasetRunID {
 				t.Errorf("at %q: sessionId %v, datasetRunId %v; want %v, %v", tc.version,
 					s.has("sessionId"), s.has("datasetRunId"), tc.sessionID, tc.datasetRunID)

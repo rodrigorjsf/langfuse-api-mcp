@@ -98,15 +98,31 @@ func joinOr(items []string) string {
 	return strings.Join(items[:len(items)-1], ", ") + " or " + items[len(items)-1]
 }
 
-// hasProperty reports whether the top level of the body schema declares the
-// property name.
+// hasProperty reports whether the object the body schema describes declares
+// the property name: at its top level, or in an alternative of its oneOf,
+// anyOf or allOf (from Langfuse 4.55.0 the score body is a oneOf of one score
+// object and a list of them, #225).
 func (b *RequestBody) hasProperty(name string) bool {
+	return declaresProperty(b.Schema, name)
+}
+
+func declaresProperty(schema json.RawMessage, name string) bool {
 	var s struct {
 		Properties map[string]json.RawMessage `json:"properties"`
+		OneOf      []json.RawMessage          `json:"oneOf"`
+		AnyOf      []json.RawMessage          `json:"anyOf"`
+		AllOf      []json.RawMessage          `json:"allOf"`
 	}
-	if json.Unmarshal(b.Schema, &s) != nil {
+	if json.Unmarshal(schema, &s) != nil {
 		return false
 	}
-	_, ok := s.Properties[name]
-	return ok
+	if _, ok := s.Properties[name]; ok {
+		return true
+	}
+	for _, alternatives := range [][]json.RawMessage{s.OneOf, s.AnyOf, s.AllOf} {
+		if slices.ContainsFunc(alternatives, func(a json.RawMessage) bool { return declaresProperty(a, name) }) {
+			return true
+		}
+	}
+	return false
 }

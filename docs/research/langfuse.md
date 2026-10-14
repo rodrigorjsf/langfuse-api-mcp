@@ -441,6 +441,16 @@ tags named in the rows (paths are in `langfuse/langfuse`), the Langfuse docs (`l
 | `sessionId` joins `CreateScoreRequest` in `v3.53.0` (`required` becomes `name`, `value`) and `datasetRunId` in `v3.55.0` | Spec at `v3.52.0` (neither), `v3.53.0` and `v3.54.0`/`v3.54.1` (`sessionId` only), `v3.55.0` (both) | From 3.53.0 the guidance names `sessionId` too, from 3.55.0 `datasetRunId` too |
 | A score needs exactly one target, and `observationId` needs `traceId` | Source `packages/shared/src/utils/scores.ts`. `v3.53.0` and `v3.54.1`: valid only with a `traceId` and no `sessionId`, or a `sessionId` and neither `traceId` nor `observationId`; message "Either provide traceId (with optional observationId) or sessionId, but not both. ObservationId requires traceId." `v3.55.0`, `v3.80.0`, `v3.112.0`, `v3.225.11`, `v4.46.0`, `v4.50.0` and `main`: the same with a `datasetRunId` as a third target; message "Provide exactly one of the following: traceId (with optional observationId), sessionId or datasetRunId. ObservationId requires traceId." Docs `/docs/evaluation/evaluation-methods/scores-via-sdk`: a trace or observation score needs `traceId` (an observation score gives both IDs), a session score gives only `sessionId`. Langfuse answers 400 (the campaign on 3.80.0; langfuse/langfuse#9323 shows the same message on a self-hosted 3.112.0) | The guidance says a score needs exactly one target (a single target before 3.53.0, where `traceId` is required), names the target properties the body schema and the deployment's version have (`traceId`, `sessionId`, `datasetRunId`; `observationId` with `traceId`), and says a body with none, or more than one, is refused with HTTP 400 |
 
+From `v4.55.0` the body is `CreateScoresRequest`, a `oneOf` of one `CreateScoreRequest` and `CreateScoreBatchRequest`, a
+list whose items are `CreateScoreRequest` (union catalog regenerated up to `v4.56.0`, PR #225: the newest stored body of
+`scores_create`, span from `v4.55.0`). The operation description of that release says a single score answers 200 with its
+ID, and a batch answers 202 if accepted or 207 with accepted and rejected counts, which should not be retried
+automatically; the generated reference shows only 200. What the server does with it (#225): where the deployment's body
+takes both, `execute_write` accepts a JSON object or a list and refuses any other top level before the schema check, every
+item is checked against the score schema (a refusal names the item's index, e.g. `at /1/name`), the guidance above is read
+from the object alternative and is unchanged, and an empty 202 answer is `data: null` like any empty answer to a write.
+A write is never retried, so a 207 is never sent again. Not run against a live Langfuse 4.55.0 or later.
+
 The unknown that remained here (#192) was that the body schema of every write operation was the newest release's, not the
 deployment's, so `describe_operation` returned and `execute_write` checked a schema with `sessionId` and `datasetRunId` and no
 required `traceId` for a deployment before 3.55.0. It is closed by #202, below.
