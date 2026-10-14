@@ -59,3 +59,4 @@ When something fails repeatedly, when User has to re-explain, or when a workarou
 - `.env.integration.selfhosted` names are `LANGFUSE_TEST_BASE_URL`, `LANGFUSE_TEST_PUBLIC_KEY`, `LANGFUSE_TEST_SECRET_KEY`; map them before curl.
 - Terminal CLI replies to a desktop-app session expire held; give the user a paste block.
 - Stack swapped under a running session: `/mcp` reconnect both servers before any campaign call.
+- Edit tool turns `\uXXXX` in test strings into raw characters; write escapes via script.

@@ -51,9 +51,10 @@ func executeWriteSchema() map[string]any {
 			},
 			"parameters": parametersProperty(),
 			"body": map[string]any{
-				"type": "object",
-				"description": "The operation's JSON request body, as its Langfuse schema describes it; leave it " +
-					"out for an operation that takes none. At most " + bodyCaps + ".",
+				"type": []any{"object", "array"},
+				"description": "The operation's JSON request body, as its Langfuse schema describes it: an object, " +
+					"or a list where that schema takes one (scores_create from Langfuse 4.55.0 takes one score or " +
+					"a list of them); leave it out for an operation that takes none. At most " + bodyCaps + ".",
 			},
 		},
 	}
@@ -81,7 +82,7 @@ func executeWriteTool() *mcp.Tool {
 const (
 	writeArgumentsHint = "call execute_write again with operationId, a Langfuse write operation ID such as " +
 		"scores_create, optionally parameters, an object of parameter name to value, and body, the JSON object " +
-		"the operation takes; describe_operation returns an operation's parameters"
+		"or list the operation takes; describe_operation returns an operation's parameters"
 	writeNotFoundHint = "call search_operations to find the write operation ID: without arguments it lists every " +
 		"operation with the tool that runs it; execute_write runs those marked execute_write"
 	// notRetriedNote starts the hint of a failed write that may have reached
