@@ -153,7 +153,14 @@ func bodyHint(op catalog.Operation) string {
 	if op.Body == nil {
 		return "call again without body: operation " + op.ID + " takes none"
 	}
-	return "send body as the JSON object operation " + op.ID + " takes, at most " + bodyCaps +
+	shape := "the JSON value"
+	switch op.Body.Shape() {
+	case "a JSON object":
+		shape = "the JSON object"
+	case "a JSON object or a list":
+		shape = "the JSON object or list"
+	}
+	return "send body as " + shape + " operation " + op.ID + " takes, at most " + bodyCaps +
 		", that fits its schema; " + toolDescribeOperation + " with operationId " + op.ID +
 		" returns the body schema"
 }

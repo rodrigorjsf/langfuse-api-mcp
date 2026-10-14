@@ -79,8 +79,8 @@ func (o Operation) CheckBody(body json.RawMessage) (json.RawMessage, error) {
 	if nestingDepth(out) > MaxBodyDepth {
 		return nil, invalidBodyf("nests deeper than %d levels of objects and arrays", MaxBodyDepth)
 	}
-	if out[0] != '{' && expectsObject(o.Body.Schema) {
-		return nil, invalidBodyf("want a JSON object, as the schema of operation %s asks", o.ID)
+	if shape := o.Body.Shape(); shape != "" && !acceptsTopLevel(o.Body.Schema, out[0]) {
+		return nil, invalidBodyf("want %s, as the schema of operation %s asks", shape, o.ID)
 	}
 	if o.Body.compiled == nil {
 		// BodyError told startup; a body is never checked against nothing.
@@ -122,9 +122,51 @@ func nestingDepth(doc []byte) int {
 	return deepest
 }
 
-// expectsObject reports whether the JSON schema only accepts an object: its
-// type is object, or every alternative of its oneOf, anyOf or allOf does.
-func expectsObject(schema json.RawMessage) bool {
+// Shape names what the top level of a body must be, as the refusal of a body
+// and the hint after it say it: "a JSON object" where the schema accepts only
+// an object, "a JSON object or a list" where it accepts only those two (the
+// single or batch score of scores_create from Langfuse 4.55.0), and "" where it
+// does not limit the top level to either, which this check then leaves to the
+// schema.
+func (b *RequestBody) Shape() string {
+	if b == nil {
+		return ""
+	}
+	switch topLevelKinds(b.Schema) {
+	case kindObject:
+		return "a JSON object"
+	case kindObject | kindArray:
+		return "a JSON object or a list"
+	}
+	return ""
+}
+
+// The top-level kinds of JSON value a body schema accepts, as bits.
+const (
+	kindObject = 1 << iota
+	kindArray
+	kindOther
+	kindAny = kindObject | kindArray | kindOther
+)
+
+// acceptsTopLevel reports whether the schema accepts a body whose compacted
+// JSON starts with the byte first.
+func acceptsTopLevel(schema json.RawMessage, first byte) bool {
+	kind := kindOther
+	switch first {
+	case '{':
+		kind = kindObject
+	case '[':
+		kind = kindArray
+	}
+	return topLevelKinds(schema)&kind != 0
+}
+
+// topLevelKinds returns the kinds of JSON value the schema accepts at its top
+// level: those its type names, narrowed by the union of its oneOf and of its
+// anyOf alternatives and by every allOf alternative. A schema it cannot read
+// accepts any kind, so the schema check decides.
+func topLevelKinds(schema json.RawMessage) int {
 	var s struct {
 		Type  any               `json:"type"`
 		OneOf []json.RawMessage `json:"oneOf"`
@@ -132,22 +174,47 @@ func expectsObject(schema json.RawMessage) bool {
 		AllOf []json.RawMessage `json:"allOf"`
 	}
 	if json.Unmarshal(schema, &s) != nil {
-		return false
+		return kindAny
 	}
-	if s.Type == "object" {
-		return true
-	}
-	for _, alternatives := range [][]json.RawMessage{s.OneOf, s.AnyOf, s.AllOf} {
-		if len(alternatives) == 0 {
+	kinds := typeKinds(s.Type)
+	for _, union := range [][]json.RawMessage{s.OneOf, s.AnyOf} {
+		if len(union) == 0 {
 			continue
 		}
-		all := true
-		for _, a := range alternatives {
-			all = all && expectsObject(a)
+		some := 0
+		for _, a := range union {
+			some |= topLevelKinds(a)
 		}
-		if all {
-			return true
+		kinds &= some
+	}
+	for _, a := range s.AllOf {
+		kinds &= topLevelKinds(a)
+	}
+	return kinds
+}
+
+// typeKinds returns the kinds a schema's type keyword names: a type name or a
+// list of them; no type accepts any kind.
+func typeKinds(t any) int {
+	var names []any
+	switch t := t.(type) {
+	case string:
+		names = []any{t}
+	case []any:
+		names = t
+	default:
+		return kindAny
+	}
+	kinds := 0
+	for _, n := range names {
+		switch n {
+		case "object":
+			kinds |= kindObject
+		case "array":
+			kinds |= kindArray
+		default:
+			kinds |= kindOther
 		}
 	}
-	return false
+	return kinds
 }
