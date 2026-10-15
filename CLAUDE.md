@@ -53,7 +53,8 @@ When something fails repeatedly, when User has to re-explain, or when a workarou
 - Wizard `template.sh` ships CRLF; `sed -i 's/\r$//'` before `bash -n`.
 - `gh issue view --comments`, `gh pr edit` fail (Projects-classic GraphQL); use `--json`, `gh api -X PATCH`.
 - `golangci-lint` not on bash PATH; run `~/go/bin/golangci-lint`.
-- System `gh` 2.45 lacks `gh attestation`; `go install github.com/cli/cli/v2/cmd/gh@latest` to scratch.
+- System `gh` 2.45 lacks `gh attestation`; use `~/go/bin/gh` (`go install …/cmd/gh@latest`).
+- Local `npm` is broken (missing `npm-cli.js`); run npm in a `node:22.11.0` container.
 - New `.claude/agents` and MCP registrations load only at Claude Code start; restart first.
 - Every `langfuse-selfhosted.sh up` makes new keys; restart MCP servers reading `.env.integration.selfhosted`.
 - `.env.integration.selfhosted` names are `LANGFUSE_TEST_BASE_URL`, `LANGFUSE_TEST_PUBLIC_KEY`, `LANGFUSE_TEST_SECRET_KEY`; map them before curl.
