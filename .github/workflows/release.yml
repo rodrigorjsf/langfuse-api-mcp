@@ -127,7 +127,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
       # GitHub's own artifact actions hand the archives, their SBOMs and the checksums file from this
       # job to the smoke jobs on other runners (no other way to share files between jobs).
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-archives
           path: |
@@ -161,7 +161,7 @@ jobs:
             count=$((count + 1))
           done
           [ "$count" -eq 7 ] || { echo "::error::want 7 npm packages, got $count"; exit 1; }
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-packages
           path: npm/*.tgz
@@ -202,13 +202,13 @@ jobs:
       # The container smoke and, on a tag, publish-image run on fresh runners from the saved images
       # (upload-artifact as above); on a tag github-release attaches the image SBOM, so it also gets
       # an artifact of its own.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: container-image
           path: image/
           if-no-files-found: error
           retention-days: 7
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: image-sbom
           path: image/*.sbom.json
@@ -272,7 +272,7 @@ jobs:
           jq -e --arg v "$VERSION" '.version == $v and ([.packages[].registryType] == ["npm", "oci", "mcpb"])' dist/server.json >/dev/null ||
             { echo "::error::dist/server.json: unexpected version or packages"; exit 1; }
       # The MCPB smoke unpacks the bundle on fresh macOS and Windows runners (upload-artifact as above).
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mcpb-bundle
           path: ${{ steps.mcpb.outputs.bundle }}
@@ -300,7 +300,7 @@ jobs:
           [ "$got" = "$want" ] || { echo "::error::skill ZIP holds '$got', want '$want'"; exit 1; }
           grep -qx 'langfuse-api-mcp/SKILL.md' <<<"$got" || { echo "::error::skill ZIP has no langfuse-api-mcp/SKILL.md"; exit 1; }
       # Only sign-blobs takes it, and only on a tag; a snapshot run attaches it nowhere.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: skill-zip
           path: ${{ steps.skill.outputs.zip }}
@@ -642,7 +642,7 @@ jobs:
             release/*.zip
             release/checksums.txt
             release/*.mcpb
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: signed-release
           path: release/
