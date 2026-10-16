@@ -338,7 +338,7 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.mod
       # The snapshot job's archives (see upload-artifact above).
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release-archives
           path: ${{ runner.temp }}/release
@@ -398,7 +398,7 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: go.mod
       # The snapshot job's saved image (see upload-artifact above).
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: container-image
           path: ${{ runner.temp }}/image
@@ -460,7 +460,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
       # The snapshot job's npm packages (see upload-artifact above).
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: npm-packages
           path: ${{ runner.temp }}/npm
@@ -551,7 +551,7 @@ jobs:
         working-directory: packaging/mcpb
         run: npm ci --ignore-scripts
       # The snapshot job's bundle (see upload-artifact above).
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: mcpb-bundle
           path: ${{ runner.temp }}/release
@@ -613,15 +613,15 @@ jobs:
       id-token: write # the OIDC token cosign and actions/attest exchange for a signing certificate
       attestations: write # store the build provenance attestations
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release-archives
           path: release
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: mcpb-bundle
           path: release
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: skill-zip
           path: release
@@ -666,7 +666,7 @@ jobs:
       IMAGE: ghcr.io/rodrigorjsf/langfuse-api-mcp # the image name in packaging/.goreleaser.yaml
       VERSION: ${{ needs.snapshot.outputs.version }}
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: container-image
           path: ${{ runner.temp }}/image
@@ -721,7 +721,7 @@ jobs:
       VERSION: ${{ needs.snapshot.outputs.version }}
       npm_config_ignore_scripts: "true"
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: npm-packages
           path: ${{ runner.temp }}/npm
@@ -765,11 +765,11 @@ jobs:
     env:
       VERSION: ${{ needs.snapshot.outputs.version }}
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: signed-release
           path: release
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: image-sbom
           path: release
