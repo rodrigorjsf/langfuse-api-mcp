@@ -913,8 +913,8 @@
     "tags": [
      "DatasetRunItems"
     ],
-    "x-family": "legacy",
     "x-introduced": "3.57.1",
+    "x-removed": "4.59.0",
     "x-summary": "List dataset run items (legacy: prefer experiments_listItems when it is available)"
    },
    "post": {
@@ -924,8 +924,8 @@
     "tags": [
      "DatasetRunItems"
     ],
-    "x-family": "legacy",
     "x-introduced": "3.0.0",
+    "x-removed": "4.59.0",
     "x-request-bodies": [
      {
       "content": {
@@ -1148,8 +1148,8 @@
     "tags": [
      "Datasets"
     ],
-    "x-family": "legacy",
     "x-introduced": "3.0.0",
+    "x-removed": "4.59.0",
     "x-summary": "Get dataset runs (legacy: prefer experiments_list when it is available)"
    }
   },
@@ -1180,8 +1180,8 @@
     "tags": [
      "Datasets"
     ],
-    "x-family": "legacy",
     "x-introduced": "3.35.1",
+    "x-removed": "4.59.0",
     "x-summary": "Delete a dataset run and all its run items. This action is irreversible. (legacy)"
    },
    "get": {
@@ -1210,8 +1210,8 @@
     "tags": [
      "Datasets"
     ],
-    "x-family": "legacy",
     "x-introduced": "3.0.0",
+    "x-removed": "4.59.0",
     "x-summary": "Get a dataset run and its items (legacy: prefer experiments_list when it is available)"
    }
   },
@@ -1543,9 +1543,9 @@
     "tags": [
      "Ingestion"
     ],
-    "x-family": "legacy",
     "x-introduced": "3.0.0",
     "x-newest-body-only": true,
+    "x-removed": "4.59.0",
     "x-request-bodies": [
      {
       "content": {
@@ -3775,9 +3775,9 @@
            ]
           },
           "exportFieldGroups": {
-           "description": "Field groups to include in each exported observation row. Applies to all export sources; must include `core` if provided. When omitted on create, the column default (all groups) applies. When omitted on update, the existing value is preserved.\n\n`exportFieldGroups` requires `exportSource` to be provided in the same request.",
+           "description": "Field groups to include in each exported observation and score row. Applies to all export sources; must include the observation `core` group if provided. Core score columns are always exported; score groups add columns on top. When omitted on create, all observation groups are selected and no score groups. When omitted on update, the existing value is preserved.\n\n`exportFieldGroups` requires `exportSource` to be provided in the same request.",
            "items": {
-            "description": "Field group selecting which observation columns are included in the export. Applies to all export sources; groups without a counterpart in the legacy data model (e.g. `trace_context`) are omitted from the legacy observations export.",
+            "description": "Field group selecting which columns are included in the export. Applies to all export sources.\n- Observation groups (`core` through `trace_context`) select observation columns; groups without a counterpart in the legacy data model (e.g. `trace_context`) are omitted from the legacy observations export.\n- Score groups (`score_` prefix) add optional columns to the scores export. The core score columns (`id`, `timestamp`, `trace_id`, `name`, `value`, …) are always exported and are not a selectable group; score groups add columns on top of them. `score_metadata` adds the score `metadata` column. `score_provenance` adds the references to where a score came from: `author_user_id`, `config_id`, `queue_id`, `evaluator_id`, `evaluation_rule_id`, `execution_trace_id`. Score groups are never selected by default.",
             "enum": [
              "core",
              "basic",
@@ -3789,7 +3789,9 @@
              "prompt",
              "metrics",
              "tools",
-             "trace_context"
+             "trace_context",
+             "score_metadata",
+             "score_provenance"
             ],
             "title": "BlobStorageExportFieldGroup",
             "type": "string"
@@ -4330,8 +4332,8 @@
     "tags": [
      "LegacyMetricsV1"
     ],
-    "x-family": "legacy",
     "x-introduced": "3.57.0",
+    "x-removed": "4.59.0",
     "x-summary": "Get metrics from the Langfuse project using a query object. (legacy: prefer metrics_metrics when it is available)"
    }
   },
@@ -5716,8 +5718,8 @@
     "tags": [
      "LegacyObservationsV1"
     ],
-    "x-family": "legacy",
     "x-introduced": "3.0.0",
+    "x-removed": "4.59.0",
     "x-summary": "Get a list of observations. (legacy: prefer observations_getMany when it is available)"
    }
   },
@@ -5751,8 +5753,8 @@
     "tags": [
      "LegacyObservationsV1"
     ],
-    "x-family": "legacy",
     "x-introduced": "3.0.0",
+    "x-removed": "4.59.0",
     "x-summary": "Get a observation (legacy: prefer observations_getMany when it is available)"
    }
   },
@@ -5765,6 +5767,157 @@
      "Organizations"
     ],
     "x-introduced": "3.124.0"
+   }
+  },
+  "/api/public/organizations/llm-connections": {
+   "get": {
+    "description": "Get all organization-level LLM connections. Requires an organization-scoped API key.",
+    "operationId": "llmConnections_listOrganization",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      },
+      "x-introduced": "4.60.0"
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      },
+      "x-introduced": "4.60.0"
+     }
+    ],
+    "tags": [
+     "LlmConnections"
+    ],
+    "x-introduced": "4.60.0"
+   },
+   "put": {
+    "description": "Create or update an organization-level LLM connection. The connection is upserted on provider and inherited by projects without a provider override. Requires an organization-scoped API key.",
+    "operationId": "llmConnections_upsertOrganization",
+    "parameters": [],
+    "tags": [
+     "LlmConnections"
+    ],
+    "x-introduced": "4.60.0",
+    "x-request-bodies": [
+     {
+      "content": {
+       "application/json": {
+        "schema": {
+         "description": "Request to create or update an LLM connection (upsert)",
+         "properties": {
+          "adapter": {
+           "description": "The adapter used to interface with the LLM",
+           "enum": [
+            "anthropic",
+            "openai",
+            "azure",
+            "bedrock",
+            "google-vertex-ai",
+            "google-ai-studio"
+           ],
+           "title": "LlmAdapter",
+           "type": "string"
+          },
+          "baseURL": {
+           "description": "Custom base URL for the LLM API",
+           "type": [
+            "string",
+            "null"
+           ]
+          },
+          "config": {
+           "additionalProperties": true,
+           "description": "Adapter-specific configuration. Validation rules: - **Bedrock**: Required. Must be `{\"region\": \"<aws-region>\"}` (e.g., `{\"region\":\"us-east-1\"}`) - **OpenAI**: Optional. If provided, must be `{\"useResponsesApi\": <boolean>}` to control whether Langfuse routes calls through OpenAI's Responses API. - **VertexAI**: Optional. If provided, must be `{\"location\": \"<gcp-location>\"}` (e.g., `{\"location\":\"us-central1\"}`) - **Other adapters**: Not supported. Omit this field or set to null.",
+           "type": [
+            "object",
+            "null"
+           ]
+          },
+          "customModels": {
+           "description": "List of custom model names",
+           "items": {
+            "type": "string"
+           },
+           "type": [
+            "array",
+            "null"
+           ]
+          },
+          "extraHeaders": {
+           "additionalProperties": {
+            "type": "string"
+           },
+           "description": "Extra headers to send with requests",
+           "type": [
+            "object",
+            "null"
+           ]
+          },
+          "provider": {
+           "description": "Provider name (e.g., 'openai', 'my-gateway'). Must be unique in project, used for upserting.",
+           "type": "string"
+          },
+          "secretKey": {
+           "description": "Secret key for the LLM API.",
+           "type": "string"
+          },
+          "withDefaultModels": {
+           "description": "Whether to include default models. Default is true.",
+           "type": [
+            "boolean",
+            "null"
+           ]
+          }
+         },
+         "required": [
+          "provider",
+          "adapter",
+          "secretKey"
+         ],
+         "title": "UpsertLlmConnectionRequest",
+         "type": "object"
+        }
+       }
+      },
+      "required": true,
+      "x-spans": [
+       {
+        "x-introduced": "4.60.0"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "/api/public/organizations/llm-connections/{id}": {
+   "delete": {
+    "description": "Delete an organization-level LLM connection by id. Evaluators in projects without an override for the provider are automatically paused. Requires an organization-scoped API key.",
+    "operationId": "llmConnections_deleteOrganization",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "id",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "x-introduced": "4.60.0"
+     }
+    ],
+    "tags": [
+     "LlmConnections"
+    ],
+    "x-introduced": "4.60.0"
    }
   },
   "/api/public/organizations/memberships": {
@@ -6929,7 +7082,7 @@
            ]
           },
           "name": {
-           "description": "Name of the score config. Max 35 characters. Only letters, numbers, underscores, spaces, periods, parentheses, and hyphens are allowed.",
+           "description": "Name of the score config. Max 80 characters. Only letters, numbers, underscores, spaces, periods, parentheses, and hyphens are allowed.",
            "type": "string"
           }
          },
@@ -7051,7 +7204,7 @@
            ]
           },
           "name": {
-           "description": "Name of the score config. Max 35 characters. Only letters, numbers, underscores, spaces, periods, parentheses, and hyphens are allowed.",
+           "description": "Name of the score config. Max 80 characters. Only letters, numbers, underscores, spaces, periods, parentheses, and hyphens are allowed.",
            "type": [
             "string",
             "null"
@@ -7257,7 +7410,7 @@
     "x-removed": "3.53.0"
    },
    "post": {
-    "description": "Create scores asynchronously. Single score: 200 with ID. Batch: 202 if accepted, or 207 with accepted/rejected counts and error messages. Do not automatically retry a 207 batch. The generated reference shows only 200; batches return 202 or 207.",
+    "description": "Create scores asynchronously from a list of scores. Returns 202 if all scores are accepted, or 207 with accepted/rejected counts and error messages. Do not automatically retry a 207 batch. The generated reference shows only 200; the endpoint returns 202 or 207.",
     "operationId": "scores_create",
     "parameters": [],
     "tags": [
@@ -8757,7 +8910,153 @@
       "required": true,
       "x-spans": [
        {
-        "x-introduced": "4.55.0"
+        "x-introduced": "4.55.0",
+        "x-removed": "4.59.0"
+       }
+      ]
+     },
+     {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "properties": {
+           "comment": {
+            "type": [
+             "string",
+             "null"
+            ]
+           },
+           "configId": {
+            "description": "Reference a score config on a score. The unique langfuse identifier of a score config. When passing this field, the dataType and stringValue fields are automatically populated.",
+            "type": [
+             "string",
+             "null"
+            ]
+           },
+           "dataType": {
+            "description": "The data type of the score. When passing a configId this field is inferred. Otherwise, this field must be passed or will default to numeric.",
+            "enum": [
+             "NUMERIC",
+             "BOOLEAN",
+             "CATEGORICAL",
+             "CORRECTION",
+             "TEXT",
+             null
+            ],
+            "title": "ScoreDataType",
+            "type": [
+             "string",
+             "null"
+            ]
+           },
+           "datasetRunId": {
+            "type": [
+             "string",
+             "null"
+            ]
+           },
+           "environment": {
+            "description": "The environment of the score. Can be any lowercase alphanumeric string with hyphens and underscores that does not start with 'langfuse'.",
+            "type": [
+             "string",
+             "null"
+            ]
+           },
+           "id": {
+            "type": [
+             "string",
+             "null"
+            ]
+           },
+           "metadata": {
+            "additionalProperties": true,
+            "type": [
+             "object",
+             "null"
+            ]
+           },
+           "name": {
+            "type": "string"
+           },
+           "observationId": {
+            "type": [
+             "string",
+             "null"
+            ]
+           },
+           "queueId": {
+            "description": "The annotation queue referenced by the score. Indicates if score was initially created while processing annotation queue.",
+            "type": [
+             "string",
+             "null"
+            ]
+           },
+           "sessionId": {
+            "type": [
+             "string",
+             "null"
+            ]
+           },
+           "source": {
+            "description": "The source of the score. Defaults to API. Set to ANNOTATION to prefill scores (e.g. from an LLM) for a human reviewer to verify in an annotation queue. When source is ANNOTATION, a configId is required unless dataType is CORRECTION. EVAL is reserved for internal evaluator outputs and is not accepted on this endpoint.",
+            "enum": [
+             "API",
+             "ANNOTATION",
+             null
+            ],
+            "title": "CreateScoreSource",
+            "type": [
+             "string",
+             "null"
+            ]
+           },
+           "timestamp": {
+            "description": "The timestamp of the score, as an ISO 8601 datetime with a timezone offset. Defaults to the time the request is received. To update an existing score, send it again with the same id and timestamp.",
+            "format": "date-time",
+            "type": [
+             "string",
+             "null"
+            ]
+           },
+           "traceId": {
+            "type": [
+             "string",
+             "null"
+            ]
+           },
+           "value": {
+            "description": "The value of the score. Must be passed as string for categorical and text scores, and numeric for boolean and numeric scores. Boolean score values must equal either 1 or 0 (true or false). Text score values must be between 1 and 500 characters.",
+            "oneOf": [
+             {
+              "format": "double",
+              "title": "DoubleNumber",
+              "type": "number"
+             },
+             {
+              "title": "String",
+              "type": "string"
+             }
+            ],
+            "title": "CreateScoreValue"
+           }
+          },
+          "required": [
+           "name",
+           "value"
+          ],
+          "title": "CreateScoreRequest",
+          "type": "object"
+         },
+         "title": "CreateScoresRequest",
+         "type": "array"
+        }
+       }
+      },
+      "required": true,
+      "x-spans": [
+       {
+        "x-introduced": "4.59.0"
        }
       ]
      }
@@ -8767,7 +9066,7 @@
   "/api/public/scores/{scoreId}": {
    "delete": {
     "description": "Delete a score (supports both trace and session scores)",
-    "operationId": "legacy_scoreV1_delete",
+    "operationId": "scores_delete",
     "parameters": [
      {
       "in": "path",
@@ -8780,7 +9079,7 @@
      }
     ],
     "tags": [
-     "LegacyScoreV1"
+     "Scores"
     ],
     "x-introduced": "3.0.0"
    },
@@ -8869,8 +9168,8 @@
     "tags": [
      "Sessions"
     ],
-    "x-family": "legacy",
     "x-introduced": "3.0.0",
+    "x-removed": "4.59.0",
     "x-summary": "Get sessions. (legacy: prefer observations_getMany when it is available)"
    }
   },
@@ -8892,9 +9191,382 @@
     "tags": [
      "Sessions"
     ],
-    "x-family": "legacy",
     "x-introduced": "3.0.0",
+    "x-removed": "4.59.0",
     "x-summary": "Get a session. (legacy: prefer observations_getMany when it is available)"
+   }
+  },
+  "/api/public/skills": {
+   "get": {
+    "description": "List skills with metadata and timestamps from their latest version, shared tags, and the version assigned to production when present.",
+    "operationId": "skills_list",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "name",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      },
+      "x-introduced": "4.65.0"
+     },
+     {
+      "in": "query",
+      "name": "search",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      },
+      "x-introduced": "4.65.0"
+     },
+     {
+      "in": "query",
+      "name": "tag",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      },
+      "x-introduced": "4.65.0"
+     },
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      },
+      "x-introduced": "4.65.0"
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      },
+      "x-introduced": "4.65.0"
+     },
+     {
+      "in": "query",
+      "name": "fromUpdatedAt",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      },
+      "x-introduced": "4.65.0"
+     },
+     {
+      "in": "query",
+      "name": "toUpdatedAt",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      },
+      "x-introduced": "4.65.0"
+     }
+    ],
+    "tags": [
+     "Skills"
+    ],
+    "x-introduced": "4.65.0"
+   },
+   "post": {
+    "description": "Create skill version",
+    "operationId": "skills_createVersion",
+    "parameters": [],
+    "tags": [
+     "Skills"
+    ],
+    "x-introduced": "4.65.0",
+    "x-request-bodies": [
+     {
+      "content": {
+       "application/json": {
+        "schema": {
+         "properties": {
+          "commitMessage": {
+           "type": [
+            "string",
+            "null"
+           ]
+          },
+          "files": {
+           "items": {
+            "description": "Provide exactly one of content or sha256Hash for each path.",
+            "oneOf": [
+             {
+              "properties": {
+               "content": {
+                "description": "UTF-8 text content. The server computes the hash and byte length.",
+                "type": "string"
+               },
+               "path": {
+                "type": "string"
+               }
+              },
+              "required": [
+               "path",
+               "content"
+              ],
+              "title": "SkillVersionFileInput",
+              "type": "object"
+             },
+             {
+              "properties": {
+               "path": {
+                "type": "string"
+               },
+               "sha256Hash": {
+                "description": "Canonical base64-encoded SHA-256 from a skill file manifest. The content must already exist in this project.",
+                "type": "string"
+               }
+              },
+              "required": [
+               "path",
+               "sha256Hash"
+              ],
+              "title": "SkillVersionFileReference",
+              "type": "object"
+             }
+            ],
+            "title": "SkillVersionFileCreateInput"
+           },
+           "type": "array"
+          }
+         },
+         "required": [
+          "files"
+         ],
+         "title": "CreateSkillVersionRequest",
+         "type": "object"
+        }
+       }
+      },
+      "required": true,
+      "x-spans": [
+       {
+        "x-introduced": "4.65.0"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "/api/public/skills/files/content": {
+   "get": {
+    "description": "Read a batch of text contents by canonical base64-encoded SHA-256 hashes.",
+    "operationId": "skills_getFileContents",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "sha256Hashes",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "x-introduced": "4.65.0"
+     }
+    ],
+    "tags": [
+     "Skills"
+    ],
+    "x-introduced": "4.65.0"
+   }
+  },
+  "/api/public/skills/{skillName}": {
+   "get": {
+    "description": "Resolve a skill's metadata and file manifest by version or label. Defaults to the production label. Set includeContent to return file contents inline, or use each file's sha256Hash with getFileContents.",
+    "operationId": "skills_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "skillName",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "x-introduced": "4.65.0"
+     },
+     {
+      "in": "query",
+      "name": "version",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      },
+      "x-introduced": "4.65.0"
+     },
+     {
+      "in": "query",
+      "name": "label",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      },
+      "x-introduced": "4.65.0"
+     },
+     {
+      "in": "query",
+      "name": "includeContent",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "boolean"
+      },
+      "x-introduced": "4.65.0"
+     }
+    ],
+    "tags": [
+     "Skills"
+    ],
+    "x-introduced": "4.65.0"
+   },
+   "patch": {
+    "description": "Replace the shared tags across all versions of a skill. An empty tags list clears all tags. Returns the latest skill version with the updated tags.",
+    "operationId": "skills_update",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "skillName",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "x-introduced": "4.65.0"
+     }
+    ],
+    "tags": [
+     "Skills"
+    ],
+    "x-introduced": "4.65.0",
+    "x-request-bodies": [
+     {
+      "content": {
+       "application/json": {
+        "schema": {
+         "properties": {
+          "tags": {
+           "description": "The complete set of tags to apply to every version of the skill. Pass an empty list to clear all tags.",
+           "items": {
+            "type": "string"
+           },
+           "type": "array"
+          }
+         },
+         "required": [
+          "tags"
+         ],
+         "title": "UpdateSkillRequest",
+         "type": "object"
+        }
+       }
+      },
+      "required": true,
+      "x-spans": [
+       {
+        "x-introduced": "4.65.0"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "/api/public/skills/{skillName}/versions/{skillVersion}": {
+   "delete": {
+    "description": "Delete one immutable skill version. Unreferenced blobs are retained for asynchronous cleanup.",
+    "operationId": "skills_deleteVersion",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "skillName",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "x-introduced": "4.65.0"
+     },
+     {
+      "in": "path",
+      "name": "skillVersion",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      },
+      "x-introduced": "4.65.0"
+     }
+    ],
+    "tags": [
+     "Skills"
+    ],
+    "x-introduced": "4.65.0"
+   },
+   "patch": {
+    "description": "Replace the labels on a skill version and atomically move them from other versions.",
+    "operationId": "skills_setLabels",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "skillName",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "x-introduced": "4.65.0"
+     },
+     {
+      "in": "path",
+      "name": "skillVersion",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      },
+      "x-introduced": "4.65.0"
+     }
+    ],
+    "tags": [
+     "Skills"
+    ],
+    "x-introduced": "4.65.0",
+    "x-request-bodies": [
+     {
+      "content": {
+       "application/json": {
+        "schema": {
+         "properties": {
+          "labels": {
+           "items": {
+            "type": "string"
+           },
+           "type": "array"
+          }
+         },
+         "required": [
+          "labels"
+         ],
+         "title": "UpdateSkillLabelsRequest",
+         "type": "object"
+        }
+       }
+      },
+      "required": true,
+      "x-spans": [
+       {
+        "x-introduced": "4.65.0"
+       }
+      ]
+     }
+    ]
    }
   },
   "/api/public/traces": {
@@ -9092,8 +9764,8 @@
     "tags": [
      "Trace"
     ],
-    "x-family": "legacy",
     "x-introduced": "3.0.0",
+    "x-removed": "4.59.0",
     "x-summary": "Get list of traces (legacy: prefer observations_getMany when it is available)"
    }
   },
@@ -9144,8 +9816,8 @@
     "tags": [
      "Trace"
     ],
-    "x-family": "legacy",
     "x-introduced": "3.0.0",
+    "x-removed": "4.59.0",
     "x-summary": "Get a specific trace (legacy: prefer observations_getMany when it is available)"
    }
   },
@@ -22828,7 +23500,8 @@
     "tags": [
      "UnstableSkills"
     ],
-    "x-introduced": "4.46.0"
+    "x-introduced": "4.46.0",
+    "x-removed": "4.65.0"
    },
    "post": {
     "description": "Create skill version",
@@ -22838,6 +23511,7 @@
      "UnstableSkills"
     ],
     "x-introduced": "4.46.0",
+    "x-removed": "4.65.0",
     "x-request-bodies": [
      {
       "content": {
@@ -22930,7 +23604,8 @@
     "tags": [
      "UnstableSkills"
     ],
-    "x-introduced": "4.48.0"
+    "x-introduced": "4.48.0",
+    "x-removed": "4.65.0"
    }
   },
   "/api/public/unstable/skills/files/{fileId}/content": {
@@ -22957,7 +23632,7 @@
   },
   "/api/public/unstable/skills/{skillName}": {
    "get": {
-    "description": "Resolve a skill's metadata and file manifest by version or label. Defaults to the production label. Use each file's sha256Hash with getFileContents, individually or in batches across manifests.",
+    "description": "Resolve a skill's metadata and file manifest by version or label. Defaults to the production label. Set includeContent to return file contents inline, or use each file's sha256Hash with getFileContents.",
     "operationId": "unstable_skills_get",
     "parameters": [
      {
@@ -22988,12 +23663,23 @@
        "type": "string"
       },
       "x-introduced": "4.46.0"
+     },
+     {
+      "in": "query",
+      "name": "includeContent",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "boolean"
+      },
+      "x-introduced": "4.60.0"
      }
     ],
     "tags": [
      "UnstableSkills"
     ],
-    "x-introduced": "4.46.0"
+    "x-introduced": "4.46.0",
+    "x-removed": "4.65.0"
    },
    "patch": {
     "description": "Replace the shared tags across all versions of a skill. An empty tags list clears all tags. Returns the latest skill version with the updated tags.",
@@ -23013,6 +23699,7 @@
      "UnstableSkills"
     ],
     "x-introduced": "4.46.0",
+    "x-removed": "4.65.0",
     "x-request-bodies": [
      {
       "content": {
@@ -23072,7 +23759,8 @@
     "tags": [
      "UnstableSkills"
     ],
-    "x-introduced": "4.46.0"
+    "x-introduced": "4.46.0",
+    "x-removed": "4.65.0"
    },
    "patch": {
     "description": "Replace the labels on a skill version and atomically move them from other versions.",
@@ -23101,6 +23789,7 @@
      "UnstableSkills"
     ],
     "x-introduced": "4.46.0",
+    "x-removed": "4.65.0",
     "x-request-bodies": [
      {
       "content": {
@@ -23130,6 +23819,193 @@
       ]
      }
     ]
+   }
+  },
+  "/api/public/unstable/topic-facets": {
+   "get": {
+    "description": "Unstable: Topics is in closed beta. The shape may change without notice.\n\nList the project's Topics facets. Only active facets (attached to the\nproject's Topics rule, or all facets if the project has no rule) are\nreturned unless `filter` contains an `active` condition.\n\n`filter` is a JSON array of filter conditions combined with AND.\nString matching is case-insensitive. Columns: `id` (stringOptions),\n`name` (string, stringOptions), `description` (string), `isBuiltIn`\n(boolean), `active` (boolean).",
+    "operationId": "unstable_topics_listFacets",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "filter",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      },
+      "x-introduced": "4.70.0"
+     },
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      },
+      "x-introduced": "4.70.0"
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      },
+      "x-introduced": "4.70.0"
+     }
+    ],
+    "tags": [
+     "UnstableTopics"
+    ],
+    "x-introduced": "4.70.0"
+   }
+  },
+  "/api/public/unstable/topic-facets/{facetId}": {
+   "get": {
+    "description": "Unstable: Topics is in closed beta. The shape may change without notice.\n\nGet one Topics facet by id, including inactive facets.",
+    "operationId": "unstable_topics_getFacet",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "facetId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "x-introduced": "4.70.0"
+     }
+    ],
+    "tags": [
+     "UnstableTopics"
+    ],
+    "x-introduced": "4.70.0"
+   }
+  },
+  "/api/public/unstable/topics": {
+   "get": {
+    "description": "Unstable: Topics is in closed beta. The shape may change without notice.\n\nList the topics of each active facet's current published map, with\nthe number of traces currently assigned to each topic in the window.\nRetired topics are not listed. `facets` holds per-facet trace counts\nby topic status.\n\nThe window applies to the trace start time. It defaults to the last\n7 days and can span at most 93 days.\n\n`filter` is a JSON array of filter conditions combined with AND.\nString matching is case-insensitive. Columns: `facetId`\n(stringOptions), `facetName` (string, stringOptions), `id`\n(stringOptions), `name` (string, stringOptions). Facet conditions also\nrestrict `facets`.",
+    "operationId": "unstable_topics_list",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "fromTimestamp",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      },
+      "x-introduced": "4.70.0"
+     },
+     {
+      "in": "query",
+      "name": "toTimestamp",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      },
+      "x-introduced": "4.70.0"
+     },
+     {
+      "in": "query",
+      "name": "filter",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "string"
+      },
+      "x-introduced": "4.70.0"
+     },
+     {
+      "in": "query",
+      "name": "orderBy",
+      "required": false,
+      "schema": {
+       "enum": [
+        "traceCount.desc",
+        "traceCount.asc",
+        "name.asc",
+        "name.desc"
+       ],
+       "nullable": true,
+       "title": "unstableTopicsOrderBy",
+       "type": "string"
+      },
+      "x-introduced": "4.70.0"
+     },
+     {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      },
+      "x-introduced": "4.70.0"
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "nullable": true,
+       "type": "integer"
+      },
+      "x-introduced": "4.70.0"
+     }
+    ],
+    "tags": [
+     "UnstableTopics"
+    ],
+    "x-introduced": "4.70.0"
+   }
+  },
+  "/api/public/unstable/topics/{topicId}": {
+   "get": {
+    "description": "Unstable: Topics is in closed beta. The shape may change without notice.\n\nGet one topic by its stable id. Topics on the current map are always\nfound. A retired topic is found while traces in the window are still\nassigned to it, with `inCurrentMap: false`.",
+    "operationId": "unstable_topics_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "topicId",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "x-introduced": "4.70.0"
+     },
+     {
+      "in": "query",
+      "name": "fromTimestamp",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      },
+      "x-introduced": "4.70.0"
+     },
+     {
+      "in": "query",
+      "name": "toTimestamp",
+      "required": false,
+      "schema": {
+       "format": "date-time",
+       "nullable": true,
+       "type": "string"
+      },
+      "x-introduced": "4.70.0"
+     }
+    ],
+    "tags": [
+     "UnstableTopics"
+    ],
+    "x-introduced": "4.70.0"
    }
   },
   "/api/public/v2/datasets": {
@@ -28646,6 +29522,7 @@
              ]
             },
             "name": {
+             "description": "The full prompt name, including any folder path, with at most 255 characters.",
              "type": "string"
             },
             "prompt": {
@@ -28753,6 +29630,7 @@
              ]
             },
             "name": {
+             "description": "The full prompt name, including any folder path, with at most 255 characters.",
              "type": "string"
             },
             "prompt": {
@@ -29253,9 +30131,9 @@
     "tags": [
      "Scores"
     ],
-    "x-family": "legacy",
     "x-introduced": "3.53.0",
-    "x-summary": "Get a list of scores (supports both trace and session scores) (legacy: prefer scoresV3_getManyV3 when it is available)"
+    "x-removed": "4.59.0",
+    "x-summary": "Get a list of scores (supports both trace and session scores) (legacy: prefer scores_getMany when it is available)"
    }
   },
   "/api/public/v2/scores/{scoreId}": {
@@ -29276,15 +30154,15 @@
     "tags": [
      "Scores"
     ],
-    "x-family": "legacy",
     "x-introduced": "3.53.0",
-    "x-summary": "Get a score (supports both trace and session scores) (legacy: prefer scoresV3_getManyV3 when it is available)"
+    "x-removed": "4.59.0",
+    "x-summary": "Get a score (supports both trace and session scores) (legacy: prefer scores_getMany when it is available)"
    }
   },
   "/api/public/v3/scores": {
    "get": {
     "description": "Get a list of scores with a polymorphic `value` field (v3).\n\nThe `value` field type depends on `dataType`:\n- `NUMERIC` → number\n- `BOOLEAN` → boolean\n- `CATEGORICAL`, `TEXT`, `CORRECTION` → string\n\nThe response always includes the core fields: id, projectId, name,\nvalue, dataType, source, timestamp, environment, createdAt, updatedAt.\n\nAdditional field groups can be requested via the `fields` parameter:\n- `details` — adds comment, configId, metadata\n- `subject` — adds the subject object describing the entity the score\n  is attached to: kind (trace, observation, session, or experiment),\n  id, and traceId for observation-level scores\n- `annotation` — adds authorUserId, queueId\n\nUnknown group names return HTTP 400.",
-    "operationId": "scoresV3_getManyV3",
+    "operationId": "scores_getMany",
     "parameters": [
      {
       "in": "query",
@@ -29492,15 +30370,15 @@
      }
     ],
     "tags": [
-     "ScoresV3"
+     "Scores"
     ],
     "x-introduced": "3.179.0"
    }
   }
  },
- "x-distinct-specs": 120,
+ "x-distinct-specs": 127,
  "x-generated-by": "scripts/gen-union-catalog.py",
- "x-newest-version": "4.56.0",
+ "x-newest-version": "4.70.1",
  "x-oldest-version": "3.0.0",
- "x-releases": 409
+ "x-releases": 427
 }
